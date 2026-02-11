@@ -109,7 +109,7 @@ class TestSeverity:
         assert Severity.INFO == "info"
 
     def test_icons(self):
-        from X_RAY_Claude import UNICODE_OK
+        from x_ray_claude import UNICODE_OK
         if UNICODE_OK:
             assert Severity.icon("critical") == "\U0001F534"
             assert Severity.icon("warning") == "\U0001F7E1"
@@ -1185,7 +1185,7 @@ class TestEdgeCases:
 class TestLLMHelper:
     def test_not_available_without_core(self, tmp_path):
         """LLMHelper should report not available if Core not found."""
-        from X_RAY_Claude import LLMHelper
+        from x_ray_claude import LLMHelper
         helper = LLMHelper(tmp_path)  # tmp_path has no Core/
         # Force re-check
         helper._available = None
@@ -1194,7 +1194,7 @@ class TestLLMHelper:
         _ = helper.available
 
     def test_query_sync_raises_without_llm(self, tmp_path):
-        from X_RAY_Claude import LLMHelper
+        from x_ray_claude import LLMHelper
         helper = LLMHelper(tmp_path)
         helper._available = False
         with pytest.raises(RuntimeError, match="not available"):
