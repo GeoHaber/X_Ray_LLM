@@ -1,0 +1,5 @@
+# X-Ray Claude — Dependencies
+# The analyzer itself has ZERO external dependencies (stdlib only).
+# These are only needed for development/testing.
+
+pytest>=7.0

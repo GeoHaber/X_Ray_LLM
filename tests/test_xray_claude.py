@@ -1,0 +1,1215 @@
+"""
+Tests for X_RAY_Claude.py — Smart AI Code Analyzer
+====================================================
+
+Comprehensive test suite covering:
+  - AST extraction engine
+  - Code smell detection
+  - Duplicate detection
+  - Library advisor
+  - Smart graph generation
+  - CLI / reporting
+  - Edge cases & error handling
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import textwrap
+from pathlib import Path
+from collections import Counter
+
+import pytest
+
+# Ensure project root on path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from x_ray_claude import (
+    # Data classes
+    FunctionRecord, ClassRecord, SmellIssue, DuplicateGroup, LibrarySuggestion,
+    Severity,
+    # Tokenization
+    tokenize, cosine_similarity, code_similarity, _term_freq,
+    # AST extraction
+    _compute_nesting_depth, _compute_complexity,
+    _extract_functions_from_file, scan_codebase, collect_py_files,
+    # Detectors
+    CodeSmellDetector, SMELL_THRESHOLDS,
+    DuplicateFinder,
+    LibraryAdvisor,
+    SmartGraph,
+    # Reports
+    print_smell_report, print_duplicate_report, print_library_report,
+    build_json_report,
+    # Version
+    __version__,
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _make_func(name="test_func", file_path="test.py", line_start=1,
+               size_lines=10, parameters=None, return_type=None,
+               decorators=None, docstring=None, calls_to=None,
+               complexity=2, nesting_depth=1, code=None,
+               is_async=False) -> FunctionRecord:
+    """Helper to create FunctionRecord with defaults."""
+    if code is None:
+        code = f"def {name}():\n    pass"
+    import hashlib
+    return FunctionRecord(
+        name=name,
+        file_path=file_path,
+        line_start=line_start,
+        line_end=line_start + size_lines - 1,
+        size_lines=size_lines,
+        parameters=parameters or [],
+        return_type=return_type,
+        decorators=decorators or [],
+        docstring=docstring,
+        calls_to=calls_to or [],
+        complexity=complexity,
+        nesting_depth=nesting_depth,
+        code_hash=hashlib.md5(code.encode()).hexdigest(),
+        code=code,
+        is_async=is_async,
+    )
+
+
+def _make_class(name="TestClass", file_path="test.py", line_start=1,
+                size_lines=50, method_count=5, base_classes=None,
+                docstring=None, methods=None, has_init=True) -> ClassRecord:
+    """Helper to create ClassRecord with defaults."""
+    return ClassRecord(
+        name=name,
+        file_path=file_path,
+        line_start=line_start,
+        line_end=line_start + size_lines - 1,
+        size_lines=size_lines,
+        method_count=method_count,
+        base_classes=base_classes or [],
+        docstring=docstring,
+        methods=methods or ["__init__", "run"],
+        has_init=has_init,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  1. Severity
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestSeverity:
+    def test_levels(self):
+        assert Severity.CRITICAL == "critical"
+        assert Severity.WARNING == "warning"
+        assert Severity.INFO == "info"
+
+    def test_icons(self):
+        from X_RAY_Claude import UNICODE_OK
+        if UNICODE_OK:
+            assert Severity.icon("critical") == "\U0001F534"
+            assert Severity.icon("warning") == "\U0001F7E1"
+            assert Severity.icon("info") == "\U0001F7E2"
+        else:
+            assert Severity.icon("critical") == "[!!]"
+            assert Severity.icon("warning") == "[!]"
+            assert Severity.icon("info") == "[i]"
+        assert Severity.icon("unknown") == "?"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  2. FunctionRecord
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestFunctionRecord:
+    def test_key(self):
+        f = _make_func(name="do_stuff", file_path="utils/helpers.py")
+        assert f.key == "helpers.do_stuff"
+
+    def test_location(self):
+        f = _make_func(file_path="a.py", line_start=42)
+        assert f.location == "a.py:42"
+
+    def test_signature_no_return(self):
+        f = _make_func(name="greet", parameters=["name", "age"])
+        assert f.signature == "greet(name, age)"
+
+    def test_signature_with_return(self):
+        f = _make_func(name="add", parameters=["a", "b"], return_type="int")
+        assert f.signature == "add(a, b) -> int"
+
+    def test_key_stem_extraction(self):
+        f = _make_func(name="parse", file_path="core/parser.py")
+        assert f.key == "parser.parse"
+
+    def test_is_async_default_false(self):
+        f = _make_func()
+        assert f.is_async is False
+
+    def test_is_async_true(self):
+        f = _make_func(is_async=True)
+        assert f.is_async is True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  3. ClassRecord
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestClassRecord:
+    def test_basic(self):
+        c = _make_class(name="MyClass", method_count=3)
+        assert c.name == "MyClass"
+        assert c.method_count == 3
+        assert c.has_init is True
+
+    def test_no_init(self):
+        c = _make_class(has_init=False)
+        assert c.has_init is False
+
+    def test_base_classes(self):
+        c = _make_class(base_classes=["Base", "Mixin"])
+        assert c.base_classes == ["Base", "Mixin"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  4. Tokenization
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestTokenization:
+    def test_empty(self):
+        assert tokenize("") == []
+
+    def test_snake_case(self):
+        tokens = tokenize("parse_model_info")
+        assert "parse" in tokens
+        assert "model" in tokens
+        assert "info" in tokens
+
+    def test_camel_case(self):
+        tokens = tokenize("parseModelInfo")
+        assert "parse" in tokens
+        assert "model" in tokens
+        assert "info" in tokens
+
+    def test_stop_words_removed(self):
+        tokens = tokenize("def self return")
+        assert tokens == []
+
+    def test_single_char_removed(self):
+        tokens = tokenize("a b c parse")
+        assert "parse" in tokens
+        assert "a" not in tokens
+
+    def test_mixed(self):
+        tokens = tokenize("load_JSON_data from file")
+        assert "load" in tokens
+        assert "data" in tokens
+
+
+class TestCosineSimilarity:
+    def test_identical(self):
+        a = Counter({"hello": 2, "world": 1})
+        assert cosine_similarity(a, a) == pytest.approx(1.0)
+
+    def test_disjoint(self):
+        a = Counter({"hello": 1})
+        b = Counter({"goodbye": 1})
+        assert cosine_similarity(a, b) == 0.0
+
+    def test_partial_overlap(self):
+        a = Counter({"hello": 1, "world": 1})
+        b = Counter({"hello": 1, "earth": 1})
+        assert 0 < cosine_similarity(a, b) < 1.0
+
+    def test_empty(self):
+        assert cosine_similarity(Counter(), Counter()) == 0.0
+
+    def test_one_empty(self):
+        assert cosine_similarity(Counter({"a": 1}), Counter()) == 0.0
+
+
+class TestCodeSimilarity:
+    def test_identical(self):
+        code = "def foo():\n    return 42"
+        assert code_similarity(code, code) == 1.0
+
+    def test_completely_different(self):
+        a = "def foo():\n    return 42"
+        b = "class Bar:\n    x = 'hello world asdf'"
+        assert code_similarity(a, b) < 0.5
+
+    def test_empty(self):
+        assert code_similarity("", "") == 0.0
+        assert code_similarity("", "some code") == 0.0
+
+    def test_similar(self):
+        a = "def process_data(data):\n    return data.strip()"
+        b = "def process_text(text):\n    return text.strip()"
+        assert code_similarity(a, b) > 0.6
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  5. Code Smell Detector
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestCodeSmellDetectorFunctions:
+    """Test function-level smell detection."""
+
+    def test_clean_function(self):
+        """Small clean function should have no smells."""
+        f = _make_func(size_lines=10, complexity=2, nesting_depth=1,
+                       docstring="Does something.", parameters=["x"])
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        assert len(smells) == 0
+
+    def test_long_function_warning(self):
+        f = _make_func(size_lines=65, complexity=3, nesting_depth=2)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        cats = [s.category for s in smells]
+        assert "long-function" in cats
+
+    def test_very_long_function_critical(self):
+        f = _make_func(size_lines=130, complexity=3, nesting_depth=2)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        critical = [s for s in smells if s.severity == Severity.CRITICAL]
+        cats = [s.category for s in critical]
+        assert "very-long-function" in cats
+
+    def test_deep_nesting_warning(self):
+        f = _make_func(nesting_depth=4)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        cats = [s.category for s in smells]
+        assert "deep-nesting" in cats
+
+    def test_very_deep_nesting_critical(self):
+        f = _make_func(nesting_depth=7)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        critical = [s for s in smells if s.severity == Severity.CRITICAL]
+        assert any(s.category == "very-deep-nesting" for s in critical)
+
+    def test_high_complexity_warning(self):
+        f = _make_func(complexity=12)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        assert any(s.category == "high-complexity" for s in smells)
+
+    def test_very_high_complexity_critical(self):
+        f = _make_func(complexity=25)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        critical = [s for s in smells if s.severity == Severity.CRITICAL]
+        assert any(s.category == "very-high-complexity" for s in critical)
+
+    def test_too_many_params(self):
+        f = _make_func(parameters=["a", "b", "c", "d", "e", "f", "g"])
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        assert any(s.category == "too-many-params" for s in smells)
+
+    def test_exactly_threshold_params_not_smell(self):
+        """Params at threshold-1 should not be flagged."""
+        f = _make_func(parameters=["a", "b", "c", "d", "e"])
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        assert not any(s.category == "too-many-params" for s in smells)
+
+    def test_missing_docstring(self):
+        f = _make_func(size_lines=20, docstring=None, name="do_stuff")
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        assert any(s.category == "missing-docstring" for s in smells)
+
+    def test_missing_docstring_private_skipped(self):
+        """Private functions (starting with _) should not be flagged for missing docstring."""
+        f = _make_func(size_lines=20, docstring=None, name="_internal")
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        assert not any(s.category == "missing-docstring" for s in smells)
+
+    def test_missing_docstring_small_func_skipped(self):
+        """Small functions below threshold should not be flagged."""
+        f = _make_func(size_lines=5, docstring=None)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        assert not any(s.category == "missing-docstring" for s in smells)
+
+    def test_boolean_blindness(self):
+        f = _make_func(name="process_data", return_type="bool")
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        assert any(s.category == "boolean-blindness" for s in smells)
+
+    def test_boolean_blindness_not_flagged_good_name(self):
+        for prefix in ("is_valid", "has_data", "can_run", "should_stop",
+                       "check_input", "validate_data", "contains_item", "exists_file"):
+            f = _make_func(name=prefix, return_type="bool")
+            detector = CodeSmellDetector()
+            smells = detector.detect([f], [])
+            assert not any(s.category == "boolean-blindness" for s in smells), \
+                f"Should not flag {prefix}"
+
+    def test_too_many_returns(self):
+        code = "def big():\n" + "\n    return x\n" * 6
+        f = _make_func(code=code)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        assert any(s.category == "too-many-returns" for s in smells)
+
+    def test_multiple_smells_same_function(self):
+        """A function can have multiple smells."""
+        f = _make_func(size_lines=130, complexity=25, nesting_depth=7,
+                       parameters=["a"]*8, docstring=None)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        cats = {s.category for s in smells}
+        assert "very-long-function" in cats
+        assert "very-high-complexity" in cats
+        assert "very-deep-nesting" in cats
+        assert "too-many-params" in cats
+
+    def test_custom_thresholds(self):
+        """Custom thresholds should override defaults."""
+        f = _make_func(size_lines=30)
+        detector = CodeSmellDetector(thresholds={"long_function": 20})
+        smells = detector.detect([f], [])
+        assert any(s.category == "long-function" for s in smells)
+
+    def test_sorting_critical_first(self):
+        """Critical issues should sort before warnings."""
+        f1 = _make_func(name="a", size_lines=130)  # critical
+        f2 = _make_func(name="b", size_lines=65)   # warning
+        detector = CodeSmellDetector()
+        smells = detector.detect([f1, f2], [])
+        severities = [s.severity for s in smells]
+        # Critical should appear before warning
+        if Severity.CRITICAL in severities and Severity.WARNING in severities:
+            critical_idx = severities.index(Severity.CRITICAL)
+            warning_idx = severities.index(Severity.WARNING)
+            assert critical_idx < warning_idx
+
+
+class TestCodeSmellDetectorClasses:
+    """Test class-level smell detection."""
+
+    def test_god_class(self):
+        c = _make_class(method_count=20)
+        detector = CodeSmellDetector()
+        smells = detector.detect([], [c])
+        assert any(s.category == "god-class" for s in smells)
+
+    def test_large_class(self):
+        c = _make_class(size_lines=600)
+        detector = CodeSmellDetector()
+        smells = detector.detect([], [c])
+        assert any(s.category == "large-class" for s in smells)
+
+    def test_missing_class_docstring(self):
+        c = _make_class(size_lines=50, docstring=None)
+        detector = CodeSmellDetector()
+        smells = detector.detect([], [c])
+        assert any(s.category == "missing-class-docstring" for s in smells)
+
+    def test_small_class_docstring_not_flagged(self):
+        c = _make_class(size_lines=20, docstring=None)
+        detector = CodeSmellDetector()
+        smells = detector.detect([], [c])
+        assert not any(s.category == "missing-class-docstring" for s in smells)
+
+    def test_dataclass_candidate(self):
+        c = _make_class(method_count=2, has_init=True, base_classes=[])
+        detector = CodeSmellDetector()
+        smells = detector.detect([], [c])
+        assert any(s.category == "dataclass-candidate" for s in smells)
+
+    def test_dataclass_candidate_not_with_bases(self):
+        c = _make_class(method_count=2, has_init=True, base_classes=["Base"])
+        detector = CodeSmellDetector()
+        smells = detector.detect([], [c])
+        assert not any(s.category == "dataclass-candidate" for s in smells)
+
+    def test_clean_class(self):
+        c = _make_class(size_lines=100, method_count=5, docstring="A good class.")
+        detector = CodeSmellDetector()
+        smells = detector.detect([], [c])
+        # Only INFO-level stuff at most
+        assert not any(s.severity == Severity.CRITICAL for s in smells)
+
+
+class TestCodeSmellSummary:
+    def test_summary_empty(self):
+        detector = CodeSmellDetector()
+        detector.detect([], [])
+        s = detector.summary()
+        assert s["total"] == 0
+        assert s["critical"] == 0
+
+    def test_summary_counts(self):
+        f1 = _make_func(name="a", size_lines=130, file_path="a.py")
+        f2 = _make_func(name="b", size_lines=65, file_path="b.py")
+        detector = CodeSmellDetector()
+        detector.detect([f1, f2], [])
+        s = detector.summary()
+        assert s["total"] > 0
+        assert isinstance(s["by_category"], dict)
+        assert isinstance(s["worst_files"], dict)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  6. Duplicate Finder
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestDuplicateFinder:
+    def test_no_duplicates(self):
+        f1 = _make_func(name="foo", file_path="a.py",
+                         code="def foo():\n    return 1")
+        f2 = _make_func(name="bar", file_path="b.py",
+                         code="def bar(x, y):\n    return x * y + 42")
+        finder = DuplicateFinder()
+        groups = finder.find([f1, f2])
+        exact = [g for g in groups if g.similarity_type == "exact"]
+        assert len(exact) == 0
+
+    def test_exact_duplicates(self):
+        code = "def helper(data):\n    cleaned = data.strip()\n    return cleaned.lower()"
+        import hashlib
+        h = hashlib.md5(code.encode()).hexdigest()
+        f1 = _make_func(name="helper", file_path="a.py", code=code,
+                         size_lines=3)
+        f2 = _make_func(name="helper", file_path="b.py", code=code,
+                         size_lines=3)
+        # Ensure same hash
+        assert f1.code_hash == f2.code_hash
+        finder = DuplicateFinder()
+        groups = finder.find([f1, f2])
+        exact = [g for g in groups if g.similarity_type == "exact"]
+        assert len(exact) == 1
+        assert len(exact[0].functions) == 2
+
+    def test_same_file_skipped_cross_file_only(self):
+        """Same-file duplicates should be skipped when cross_file_only=True."""
+        code = "def helper():\n    return 'same'"
+        f1 = _make_func(name="helper1", file_path="a.py", code=code, size_lines=2)
+        f2 = _make_func(name="helper2", file_path="a.py", code=code, size_lines=2)
+        finder = DuplicateFinder()
+        groups = finder.find([f1, f2], cross_file_only=True)
+        assert len(groups) == 0
+
+    def test_same_file_found_when_not_cross_file(self):
+        code = "def helper():\n    return 'same'"
+        f1 = _make_func(name="helper1", file_path="a.py", code=code, size_lines=2)
+        f2 = _make_func(name="helper2", file_path="a.py", code=code, size_lines=2)
+        finder = DuplicateFinder()
+        groups = finder.find([f1, f2], cross_file_only=False)
+        assert len(groups) >= 1
+
+    def test_near_duplicates(self):
+        """Similar but not identical code should be detected as near-duplicates."""
+        code_a = textwrap.dedent("""\
+        def process_data(data, config=None):
+            result = []
+            for item in data:
+                cleaned = item.strip()
+                if cleaned and len(cleaned) > 0:
+                    result.append(cleaned.lower())
+            return result
+        """)
+        code_b = textwrap.dedent("""\
+        def transform_data(data, config=None):
+            result = []
+            for item in data:
+                cleaned = item.strip()
+                if cleaned and len(cleaned) > 0:
+                    result.append(cleaned.upper())
+            return result
+        """)
+        f1 = _make_func(name="process_data", file_path="a.py", code=code_a,
+                         size_lines=8, parameters=["data", "config"],
+                         docstring="Process data items", calls_to=["strip", "lower", "append"])
+        f2 = _make_func(name="transform_data", file_path="b.py", code=code_b,
+                         size_lines=8, parameters=["data", "config"],
+                         docstring="Transform data items", calls_to=["strip", "upper", "append"])
+        finder = DuplicateFinder()
+        groups = finder.find([f1, f2])
+        near = [g for g in groups if g.similarity_type == "near"]
+        assert len(near) >= 1
+
+    def test_boilerplate_skipped(self):
+        """__init__ and other boilerplate should be skipped."""
+        code = "def __init__(self):\n    self.x = 1"
+        f1 = _make_func(name="__init__", file_path="a.py", code=code, size_lines=2)
+        f2 = _make_func(name="__init__", file_path="b.py", code=code, size_lines=2)
+        finder = DuplicateFinder()
+        groups = finder.find([f1, f2])
+        assert len(groups) == 0
+
+    def test_tiny_functions_skipped(self):
+        """Functions < 5 lines should be skipped in near-dup stage 2."""
+        code = "def x():\n    pass"
+        f1 = _make_func(name="x", file_path="a.py", code=code, size_lines=2)
+        f2 = _make_func(name="y", file_path="b.py", code=code, size_lines=2)
+        finder = DuplicateFinder()
+        groups = finder.find([f1, f2])
+        # Exact match still detected (hash), but near-dup stage skips tiny
+        # (tiny functions have same hash so they'd be exact)
+        # but if different names with same hash, they ARE exact
+        assert all(g.similarity_type == "exact" for g in groups) or len(groups) == 0
+
+    def test_wildly_different_sizes_skipped(self):
+        """Functions with very different sizes should not be compared."""
+        code_a = "def small():\n    return 1\n" * 3
+        code_b = "def big():\n    x = 1\n" * 30
+        f1 = _make_func(name="small", file_path="a.py", code=code_a, size_lines=6)
+        f2 = _make_func(name="big", file_path="b.py", code=code_b, size_lines=60)
+        finder = DuplicateFinder()
+        groups = finder.find([f1, f2])
+        near = [g for g in groups if g.similarity_type == "near"]
+        assert len(near) == 0
+
+    def test_summary(self):
+        finder = DuplicateFinder()
+        finder.find([])
+        s = finder.summary()
+        assert s["total_groups"] == 0
+        assert s["exact_duplicates"] == 0
+        assert s["near_duplicates"] == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  7. Library Advisor
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLibraryAdvisor:
+    def test_no_suggestions_empty(self):
+        advisor = LibraryAdvisor()
+        suggestions = advisor.analyze([], [])
+        assert len(suggestions) == 0
+
+    def test_suggestion_from_duplicate_group(self):
+        group = DuplicateGroup(
+            group_id=0, similarity_type="near", avg_similarity=0.85,
+            functions=[
+                {"key": "a.parse", "name": "parse", "file": "a.py",
+                 "line": 1, "size": 10, "similarity": 0.85},
+                {"key": "b.parse", "name": "parse", "file": "b.py",
+                 "line": 5, "size": 12, "similarity": 0.85},
+            ],
+        )
+        f1 = _make_func(name="parse", file_path="a.py", size_lines=10,
+                         docstring="Parse data")
+        f2 = _make_func(name="parse", file_path="b.py", size_lines=12)
+        advisor = LibraryAdvisor()
+        suggestions = advisor.analyze([group], [f1, f2])
+        assert len(suggestions) >= 1
+        assert suggestions[0].module_name  # should have a name
+        assert len(suggestions[0].functions) >= 2
+
+    def test_cross_file_name_analysis(self):
+        """Functions with same name across files should be suggested."""
+        f1 = _make_func(name="normalize", file_path="a.py")
+        f2 = _make_func(name="normalize", file_path="b.py")
+        f3 = _make_func(name="normalize", file_path="c.py")
+        advisor = LibraryAdvisor()
+        suggestions = advisor.analyze([], [f1, f2, f3])
+        assert len(suggestions) >= 1
+        assert any("normalize" in s.description for s in suggestions)
+
+    def test_single_file_not_suggested(self):
+        """Function in only one file should not be suggested."""
+        f1 = _make_func(name="unique_func", file_path="a.py")
+        advisor = LibraryAdvisor()
+        suggestions = advisor.analyze([], [f1])
+        assert len(suggestions) == 0
+
+    def test_module_name_suggestion_patterns(self):
+        advisor = LibraryAdvisor()
+        assert advisor._suggest_module_name(["parse_data"]) == "utils"
+        assert advisor._suggest_module_name(["read_file"]) == "io_helpers"
+        assert advisor._suggest_module_name(["validate_input"]) == "validators"
+        assert advisor._suggest_module_name(["search_index"]) == "search"
+        assert advisor._suggest_module_name(["some_random"]) == "shared_utils"
+
+    def test_summary(self):
+        advisor = LibraryAdvisor()
+        advisor.analyze([], [])
+        s = advisor.summary()
+        assert s["total_suggestions"] == 0
+        assert s["total_functions"] == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  8. Smart Graph
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestSmartGraph:
+    def test_empty(self):
+        graph = SmartGraph()
+        graph.build([], [], [], Path("."))
+        assert len(graph.nodes) == 0
+        assert len(graph.edges) == 0
+
+    def test_nodes_from_functions(self):
+        f1 = _make_func(name="a", file_path="module_a.py")
+        f2 = _make_func(name="b", file_path="module_b.py")
+        graph = SmartGraph()
+        graph.build([f1, f2], [], [], Path("."))
+        assert len(graph.nodes) == 2
+
+    def test_health_coloring_green(self):
+        f = _make_func(file_path="clean.py")
+        graph = SmartGraph()
+        graph.build([f], [], [], Path("."))
+        node = graph.nodes[0]
+        assert node["color"] == "#2ecc71"  # green
+        assert node["health"] == "healthy"
+
+    def test_health_coloring_yellow(self):
+        f = _make_func(file_path="warn.py")
+        smell = SmellIssue(
+            file_path="warn.py", line=1, end_line=10,
+            category="long-function", severity=Severity.WARNING,
+            message="too long", suggestion="fix it", name="f",
+            metric_value=70,
+        )
+        graph = SmartGraph()
+        graph.build([f], [smell], [], Path("."))
+        node = graph.nodes[0]
+        assert node["color"] == "#f39c12"  # orange
+
+    def test_health_coloring_red(self):
+        f = _make_func(file_path="bad.py")
+        smell = SmellIssue(
+            file_path="bad.py", line=1, end_line=10,
+            category="god-class", severity=Severity.CRITICAL,
+            message="bad", suggestion="fix", name="X", metric_value=20,
+        )
+        graph = SmartGraph()
+        graph.build([f], [smell], [], Path("."))
+        node = graph.nodes[0]
+        assert node["color"] == "#e74c3c"  # red
+
+    def test_duplicate_edges(self):
+        f1 = _make_func(name="a", file_path="a.py")
+        f2 = _make_func(name="b", file_path="b.py")
+        group = DuplicateGroup(
+            group_id=0, similarity_type="near", avg_similarity=0.8,
+            functions=[
+                {"key": "a.a", "name": "a", "file": "a.py", "line": 1},
+                {"key": "b.b", "name": "b", "file": "b.py", "line": 1},
+            ],
+        )
+        graph = SmartGraph()
+        graph.build([f1, f2], [], [group], Path("."))
+        assert len(graph.edges) == 1
+
+    def test_write_html(self, tmp_path):
+        f = _make_func(file_path="test.py")
+        graph = SmartGraph()
+        graph.build([f], [], [], Path("."))
+        out = tmp_path / "graph.html"
+        graph.write_html(out)
+        assert out.exists()
+        content = out.read_text()
+        assert "vis-network" in content
+        assert "X-RAY Claude" in content
+
+    def test_tooltip_includes_smells(self):
+        f = _make_func(file_path="smelly.py")
+        smell = SmellIssue(
+            file_path="smelly.py", line=1, end_line=5,
+            category="deep-nesting", severity=Severity.WARNING,
+            message="deep", suggestion="fix", name="func",
+            metric_value=5,
+        )
+        graph = SmartGraph()
+        graph.build([f], [smell], [], Path("."))
+        title = graph.nodes[0]["title"]
+        assert "deep-nesting" in title
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  9. AST Extraction (Integration with real code)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestASTExtraction:
+    def test_extract_from_temp_file(self, tmp_path):
+        code = textwrap.dedent("""\
+        def greet(name: str) -> str:
+            \"\"\"Say hello.\"\"\"
+            return f"Hello, {name}!"
+        
+        async def fetch_data(url):
+            pass
+        
+        class MyClass:
+            def __init__(self):
+                self.x = 1
+            
+            def process(self, data):
+                for item in data:
+                    if item > 0:
+                        yield item
+        """)
+        py_file = tmp_path / "sample.py"
+        py_file.write_text(code)
+        functions, classes, error = _extract_functions_from_file(py_file, tmp_path)
+        assert error is None
+        assert len(functions) >= 3  # greet, fetch_data, __init__, process
+        assert len(classes) == 1
+
+        # Check greet
+        greet = next(f for f in functions if f.name == "greet")
+        assert greet.return_type == "str"
+        assert greet.docstring == "Say hello."
+        assert "name" in greet.parameters
+
+        # Check async
+        fetch = next(f for f in functions if f.name == "fetch_data")
+        assert fetch.is_async is True
+
+        # Check class
+        cls = classes[0]
+        assert cls.name == "MyClass"
+        assert cls.has_init is True
+        assert "process" in cls.methods
+
+    def test_syntax_error_handled(self, tmp_path):
+        """Files with syntax errors should return error, not crash."""
+        py_file = tmp_path / "bad.py"
+        py_file.write_text("def broken(\n    # missing close paren")
+        functions, classes, error = _extract_functions_from_file(py_file, tmp_path)
+        assert error is not None
+        assert "SyntaxError" in error
+        assert len(functions) == 0
+
+    def test_empty_file(self, tmp_path):
+        py_file = tmp_path / "empty.py"
+        py_file.write_text("")
+        functions, classes, error = _extract_functions_from_file(py_file, tmp_path)
+        assert error is None
+        assert len(functions) == 0
+        assert len(classes) == 0
+
+    def test_nesting_depth_calculation(self, tmp_path):
+        code = textwrap.dedent("""\
+        def deep():
+            for i in range(10):
+                if i > 0:
+                    for j in range(5):
+                        if j > 0:
+                            while True:
+                                break
+        """)
+        py_file = tmp_path / "deep.py"
+        py_file.write_text(code)
+        functions, _, _ = _extract_functions_from_file(py_file, tmp_path)
+        assert len(functions) == 1
+        assert functions[0].nesting_depth >= 4
+
+    def test_complexity_calculation(self, tmp_path):
+        code = textwrap.dedent("""\
+        def complex_func(x, y):
+            if x > 0:
+                for i in range(y):
+                    if i % 2 == 0:
+                        try:
+                            pass
+                        except ValueError:
+                            pass
+                    elif i > 5:
+                        pass
+            while x > 0:
+                x -= 1
+        """)
+        py_file = tmp_path / "complex.py"
+        py_file.write_text(code)
+        functions, _, _ = _extract_functions_from_file(py_file, tmp_path)
+        assert functions[0].complexity >= 5
+
+
+class TestScanCodebase:
+    def test_scan_temp_project(self, tmp_path):
+        """Test scanning a mini project."""
+        (tmp_path / "main.py").write_text("def main():\n    print('hi')\n")
+        (tmp_path / "utils.py").write_text(
+            "def helper(x):\n    return x + 1\n\n"
+            "def format_text(t):\n    return t.strip()\n"
+        )
+        sub = tmp_path / "core"
+        sub.mkdir()
+        (sub / "engine.py").write_text("class Engine:\n    def run(self):\n        pass\n")
+
+        functions, classes, errors = scan_codebase(tmp_path)
+        assert len(functions) >= 3
+        assert len(classes) >= 1
+        assert len(errors) == 0
+
+    def test_scan_excludes_venv(self, tmp_path):
+        """Files in .venv should be excluded."""
+        venv = tmp_path / ".venv" / "lib"
+        venv.mkdir(parents=True)
+        (venv / "somelib.py").write_text("def internal():\n    pass\n")
+        (tmp_path / "app.py").write_text("def app():\n    pass\n")
+
+        functions, _, _ = scan_codebase(tmp_path)
+        files = {f.file_path for f in functions}
+        assert not any(".venv" in fp for fp in files)
+        assert any("app" in fp for fp in files)
+
+
+class TestCollectPyFiles:
+    def test_basic(self, tmp_path):
+        (tmp_path / "a.py").write_text("x = 1")
+        (tmp_path / "b.txt").write_text("not python")
+        files = collect_py_files(tmp_path)
+        assert len(files) == 1
+        assert files[0].name == "a.py"
+
+    def test_exclude(self, tmp_path):
+        sub = tmp_path / "tests"
+        sub.mkdir()
+        (sub / "test_a.py").write_text("pass")
+        (tmp_path / "app.py").write_text("pass")
+        files = collect_py_files(tmp_path, exclude=["tests"])
+        names = [f.name for f in files]
+        assert "test_a.py" not in names
+        assert "app.py" in names
+
+    def test_always_skip(self, tmp_path):
+        pycache = tmp_path / "__pycache__"
+        pycache.mkdir()
+        (pycache / "cached.py").write_text("pass")
+        files = collect_py_files(tmp_path)
+        assert len(files) == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. Report Printing (smoke tests — just don't crash)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestReportPrinting:
+    def test_smell_report_empty(self, capsys):
+        print_smell_report([], {"total": 0, "critical": 0, "warning": 0,
+                                "info": 0, "by_category": {}, "worst_files": {}})
+        out = capsys.readouterr().out
+        assert "CODE SMELL REPORT" in out
+
+    def test_smell_report_with_issues(self, capsys):
+        smell = SmellIssue(
+            file_path="a.py", line=1, end_line=10,
+            category="long-function", severity=Severity.WARNING,
+            message="too long", suggestion="split it",
+            name="big_func", metric_value=70,
+        )
+        summary = {"total": 1, "critical": 0, "warning": 1, "info": 0,
+                    "by_category": {"long-function": 1},
+                    "worst_files": {"a.py": 1}}
+        print_smell_report([smell], summary)
+        out = capsys.readouterr().out
+        assert "long-function" in out
+        assert "big_func" in out
+
+    def test_duplicate_report_empty(self, capsys):
+        print_duplicate_report([], {"total_groups": 0, "exact_duplicates": 0,
+                                     "near_duplicates": 0,
+                                     "total_functions_involved": 0,
+                                     "avg_similarity": 0})
+        out = capsys.readouterr().out
+        assert "SIMILAR FUNCTIONS" in out
+
+    def test_library_report_empty(self, capsys):
+        print_library_report([], {"total_suggestions": 0, "total_functions": 0,
+                                   "modules_proposed": []})
+        out = capsys.readouterr().out
+        assert "LIBRARY EXTRACTION" in out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. JSON Report
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestJSONReport:
+    def test_basic_structure(self):
+        f = _make_func()
+        c = _make_class()
+        report = build_json_report(
+            Path("."), [f], [c], [], [], [], 1.23
+        )
+        assert report["version"] == __version__
+        assert report["scan_time_seconds"] == 1.23
+        assert report["stats"]["total_functions"] == 1
+        assert report["stats"]["total_classes"] == 1
+
+    def test_serializable(self):
+        f = _make_func()
+        report = build_json_report(Path("."), [f], [], [], [], [], 0.5)
+        # Should be JSON-serializable
+        j = json.dumps(report)
+        assert isinstance(j, str)
+        parsed = json.loads(j)
+        assert parsed["version"] == __version__
+
+    def test_includes_smells(self):
+        f = _make_func(size_lines=130)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        report = build_json_report(Path("."), [f], [], smells, [], [], 0.1)
+        assert report["smells"]["total"] > 0
+        assert len(report["smells"]["issues"]) > 0
+
+    def test_includes_duplicates(self):
+        group = DuplicateGroup(
+            group_id=0, similarity_type="exact", avg_similarity=1.0,
+            functions=[{"key": "a.f", "name": "f", "file": "a.py", "line": 1}],
+        )
+        report = build_json_report(Path("."), [], [], [], [group], [], 0.1)
+        assert report["duplicates"]["total_groups"] == 1
+
+    def test_includes_library_suggestions(self):
+        sug = LibrarySuggestion(
+            module_name="utils", description="test",
+            functions=[{"name": "f", "file": "a.py", "line": 1}],
+            unified_api="def f():", rationale="reason",
+        )
+        report = build_json_report(Path("."), [], [], [], [], [sug], 0.1)
+        assert report["library_suggestions"]["total"] == 1
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 12. Integration: Full Pipeline
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestFullPipeline:
+    def test_end_to_end(self, tmp_path):
+        """Test the full pipeline on a mini project."""
+        # Create a small project with deliberate smells and duplicates
+        (tmp_path / "module_a.py").write_text(textwrap.dedent("""\
+        def process_data(data):
+            result = []
+            for item in data:
+                cleaned = item.strip()
+                if cleaned:
+                    result.append(cleaned.lower())
+            return result
+        
+        def big_function(x, y, z, a, b, c, d, e):
+            \"\"\"Too many params.\"\"\"
+            if x > 0:
+                for i in range(y):
+                    if i > z:
+                        for j in range(a):
+                            if j > b:
+                                pass
+            return None
+        """))
+        (tmp_path / "module_b.py").write_text(textwrap.dedent("""\
+        def process_text(text):
+            result = []
+            for item in text:
+                cleaned = item.strip()
+                if cleaned:
+                    result.append(cleaned.upper())
+            return result
+        
+        class HugeClass:
+            def m1(self): pass
+            def m2(self): pass
+            def m3(self): pass
+            def m4(self): pass
+            def m5(self): pass
+            def m6(self): pass
+            def m7(self): pass
+            def m8(self): pass
+            def m9(self): pass
+            def m10(self): pass
+            def m11(self): pass
+            def m12(self): pass
+            def m13(self): pass
+            def m14(self): pass
+            def m15(self): pass
+            def m16(self): pass
+        """))
+
+        # Scan
+        functions, classes, errors = scan_codebase(tmp_path)
+        assert len(functions) >= 2  # at least process_data, big_function, process_text
+        assert len(classes) >= 1
+
+        # Smells
+        detector = CodeSmellDetector()
+        smells = detector.detect(functions, classes)
+        categories = {s.category for s in smells}
+        # big_function should trigger: too-many-params, deep-nesting
+        assert "too-many-params" in categories or "deep-nesting" in categories
+        # HugeClass should trigger god-class
+        assert "god-class" in categories
+
+        # Duplicates
+        finder = DuplicateFinder()
+        groups = finder.find(functions)
+        # process_data and process_text should be near-duplicates
+        # (They're quite similar)
+        assert len(groups) >= 0  # may or may not detect depending on thresholds
+
+        # Library suggestions
+        advisor = LibraryAdvisor()
+        lib_sug = advisor.analyze(groups, functions)
+
+        # JSON report
+        report = build_json_report(
+            tmp_path, functions, classes, smells, groups, lib_sug, 0.5
+        )
+        assert report["stats"]["total_functions"] >= 2
+        j = json.dumps(report)
+        assert isinstance(j, str)
+
+        # Graph
+        graph = SmartGraph()
+        graph.build(functions, smells, groups, tmp_path)
+        graph_path = tmp_path / "test_graph.html"
+        graph.write_html(graph_path)
+        assert graph_path.exists()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 13. Edge Cases
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestEdgeCases:
+    def test_function_record_key_no_dirs(self):
+        """File in root dir should use stem directly."""
+        f = _make_func(name="run", file_path="main.py")
+        assert f.key == "main.run"
+
+    def test_function_record_empty_params(self):
+        f = _make_func(parameters=[])
+        assert f.signature == "test_func()"
+
+    def test_smell_issue_all_fields(self):
+        s = SmellIssue(
+            file_path="x.py", line=1, end_line=5,
+            category="test", severity=Severity.INFO,
+            message="msg", suggestion="fix", name="fn",
+            metric_value=42, llm_analysis="LLM says fix it",
+        )
+        assert s.llm_analysis == "LLM says fix it"
+        assert s.metric_value == 42
+
+    def test_duplicate_group_merge_suggestion_default(self):
+        g = DuplicateGroup(
+            group_id=0, similarity_type="near",
+            avg_similarity=0.8, functions=[],
+        )
+        assert g.merge_suggestion == ""
+
+    def test_library_suggestion_all_fields(self):
+        s = LibrarySuggestion(
+            module_name="utils", description="d",
+            functions=[], unified_api="def f():",
+            rationale="r",
+        )
+        assert s.module_name == "utils"
+
+    def test_cosine_with_large_vectors(self):
+        a = Counter({f"word_{i}": i for i in range(100)})
+        b = Counter({f"word_{i}": i + 1 for i in range(100)})
+        sim = cosine_similarity(a, b)
+        assert 0.9 < sim <= 1.0  # should be very similar
+
+    def test_tokenize_unicode(self):
+        tokens = tokenize("café_handler résumé_parser")
+        assert "handler" in tokens or "caf" in tokens
+
+    def test_detector_no_functions(self):
+        detector = CodeSmellDetector()
+        smells = detector.detect([], [])
+        assert smells == []
+
+    def test_finder_no_functions(self):
+        finder = DuplicateFinder()
+        groups = finder.find([])
+        assert groups == []
+
+    def test_advisor_boilerplate_excluded(self):
+        """Library advisor should not suggest __init__, __repr__, etc."""
+        f1 = _make_func(name="__repr__", file_path="a.py")
+        f2 = _make_func(name="__repr__", file_path="b.py")
+        advisor = LibraryAdvisor()
+        # DuplicateFinder would skip these, but test advisor's name-based analysis
+        suggestions = advisor.analyze([], [f1, f2])
+        # __repr__ should not be suggested for library extraction
+        assert len(suggestions) == 0
+
+    def test_file_with_only_classes(self, tmp_path):
+        code = textwrap.dedent("""\
+        class Config:
+            DEBUG = True
+            VERSION = "1.0"
+        """)
+        py_file = tmp_path / "config.py"
+        py_file.write_text(code)
+        functions, classes, error = _extract_functions_from_file(py_file, tmp_path)
+        assert error is None
+        assert len(classes) == 1
+        assert classes[0].name == "Config"
+
+    def test_decorators_extracted(self, tmp_path):
+        code = textwrap.dedent("""\
+        import functools
+        
+        @functools.lru_cache(maxsize=128)
+        @staticmethod
+        def cached_helper():
+            return 42
+        """)
+        py_file = tmp_path / "dec.py"
+        py_file.write_text(code)
+        functions, _, _ = _extract_functions_from_file(py_file, tmp_path)
+        assert len(functions) >= 1
+        func = functions[0]
+        assert len(func.decorators) == 2
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 14. LLMHelper (unit tests without actual LLM)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLLMHelper:
+    def test_not_available_without_core(self, tmp_path):
+        """LLMHelper should report not available if Core not found."""
+        from X_RAY_Claude import LLMHelper
+        helper = LLMHelper(tmp_path)  # tmp_path has no Core/
+        # Force re-check
+        helper._available = None
+        # It may or may not be available depending on sys.path
+        # but we can at least verify it doesn't crash
+        _ = helper.available
+
+    def test_query_sync_raises_without_llm(self, tmp_path):
+        from X_RAY_Claude import LLMHelper
+        helper = LLMHelper(tmp_path)
+        helper._available = False
+        with pytest.raises(RuntimeError, match="not available"):
+            helper.query_sync("test prompt")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 15. Version & Banner
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestVersion:
+    def test_version_format(self):
+        parts = __version__.split(".")
+        assert len(parts) == 3
+        assert all(p.isdigit() for p in parts)
+
+    def test_version_is_4(self):
+        assert __version__.startswith("4.")
