@@ -29,11 +29,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from x_ray_claude import (
     # Data classes
     FunctionRecord, ClassRecord, SmellIssue, DuplicateGroup, LibrarySuggestion,
-    Severity,
-    # Tokenization
+    FunctionInfo, Severity,
+    # Tokenization & similarity
     tokenize, cosine_similarity, code_similarity, _term_freq,
+    name_similarity, signature_similarity, callgraph_overlap,
+    semantic_similarity,
     # AST extraction
-    _compute_nesting_depth, _compute_complexity,
+    _compute_nesting_depth, _compute_complexity, _walk_definitions,
     _extract_functions_from_file, scan_codebase, collect_py_files,
     # Detectors
     CodeSmellDetector, SMELL_THRESHOLDS,
@@ -74,7 +76,8 @@ def _make_func(name="test_func", file_path="test.py", line_start=1,
         calls_to=calls_to or [],
         complexity=complexity,
         nesting_depth=nesting_depth,
-        code_hash=hashlib.md5(code.encode()).hexdigest(),
+        code_hash=hashlib.sha256(code.encode()).hexdigest(),
+        structure_hash=hashlib.md5(code.encode()).hexdigest(),
         code=code,
         is_async=is_async,
     )
@@ -208,6 +211,18 @@ class TestTokenization:
         tokens = tokenize("load_JSON_data from file")
         assert "load" in tokens
         assert "data" in tokens
+
+    def test_digits_in_identifiers(self):
+        """Digits embedded in identifiers should be preserved as tokens."""
+        tokens = tokenize("base64_encoder")
+        assert "base" in tokens
+        assert "64" in tokens
+        assert "encoder" in tokens
+
+    def test_no_double_counting(self):
+        """Each word should appear only once per occurrence (no duplicate tokens)."""
+        tokens = tokenize("data")
+        assert tokens.count("data") == 1
 
 
 class TestCosineSimilarity:
@@ -581,6 +596,151 @@ class TestDuplicateFinder:
         assert s["total_groups"] == 0
         assert s["exact_duplicates"] == 0
         assert s["near_duplicates"] == 0
+        assert s["semantic_duplicates"] == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  6b. Semantic Similarity
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestNameSimilarity:
+    def test_identical_names(self):
+        assert name_similarity("load_config", "load_config") == 1.0
+
+    def test_similar_names(self):
+        """Names with shared tokens should have high similarity."""
+        sim = name_similarity("load_config", "read_config")
+        assert sim > 0.3  # 'config' token in common
+
+    def test_different_naming_style(self):
+        """camelCase vs snake_case with same meaning."""
+        sim = name_similarity("loadConfig", "load_config")
+        assert sim > 0.5
+
+    def test_completely_different(self):
+        sim = name_similarity("parse_xml", "render_image")
+        assert sim == 0.0
+
+    def test_empty_name(self):
+        assert name_similarity("", "something") == 0.0
+        assert name_similarity("", "") == 0.0
+
+
+class TestSignatureSimilarity:
+    def test_identical_signatures(self):
+        f1 = _make_func(parameters=["data", "config"], return_type="dict")
+        f2 = _make_func(parameters=["data", "config"], return_type="dict")
+        sim = signature_similarity(f1, f2)
+        assert sim > 0.8
+
+    def test_different_signatures(self):
+        f1 = _make_func(parameters=["x", "y"], return_type="int")
+        f2 = _make_func(parameters=["name", "age", "address"],
+                        return_type="str", is_async=True)
+        sim = signature_similarity(f1, f2)
+        assert sim < 0.4
+
+    def test_no_params_both(self):
+        f1 = _make_func(parameters=[])
+        f2 = _make_func(parameters=[])
+        sim = signature_similarity(f1, f2)
+        assert sim > 0.5  # both zero-param → match
+
+
+class TestCallgraphOverlap:
+    def test_same_calls(self):
+        f1 = _make_func(calls_to=["json.loads", "open", "strip"])
+        f2 = _make_func(calls_to=["json.loads", "open", "strip"])
+        assert callgraph_overlap(f1, f2) == 1.0
+
+    def test_partial_overlap(self):
+        f1 = _make_func(calls_to=["open", "read", "close"])
+        f2 = _make_func(calls_to=["open", "write", "close"])
+        overlap = callgraph_overlap(f1, f2)
+        assert 0.4 < overlap < 0.8  # 2/4 overlap
+
+    def test_no_overlap(self):
+        f1 = _make_func(calls_to=["parse"])
+        f2 = _make_func(calls_to=["render"])
+        assert callgraph_overlap(f1, f2) == 0.0
+
+    def test_empty_calls(self):
+        f1 = _make_func(calls_to=[])
+        f2 = _make_func(calls_to=[])
+        assert callgraph_overlap(f1, f2) == 0.0
+
+
+class TestSemanticSimilarity:
+    def test_functionally_similar(self):
+        """Functions with same name tokens, params, and calls should score high."""
+        f1 = _make_func(name="load_settings", parameters=["path", "defaults"],
+                        return_type="dict", calls_to=["open", "json.load", "update"],
+                        docstring="Load settings from a JSON file.")
+        f2 = _make_func(name="read_settings", parameters=["filepath", "defaults"],
+                        return_type="dict", calls_to=["open", "json.load", "merge"],
+                        docstring="Read settings from a config file.")
+        sim = semantic_similarity(f1, f2)
+        assert sim > 0.4
+
+    def test_completely_different_semantics(self):
+        """Unrelated functions should score low."""
+        f1 = _make_func(name="render_image", parameters=["pixels", "width"],
+                        return_type="bytes", calls_to=["encode", "compress"])
+        f2 = _make_func(name="send_email", parameters=["to", "subject", "body"],
+                        return_type="bool", calls_to=["smtp.connect", "send"],
+                        is_async=True)
+        sim = semantic_similarity(f1, f2)
+        assert sim < 0.2
+
+    def test_same_function(self):
+        f = _make_func(name="process", parameters=["data"],
+                       return_type="list", calls_to=["filter", "map"],
+                       docstring="Process data items.")
+        sim = semantic_similarity(f, f)
+        assert sim > 0.8
+
+
+class TestSemanticStageInDuplicateFinder:
+    def test_semantic_detection(self):
+        """Functions with different code but same purpose should be detected."""
+        f1 = _make_func(
+            name="load_config", file_path="a.py", size_lines=15,
+            parameters=["path", "defaults"],
+            return_type="dict",
+            calls_to=["open", "json.load", "update", "close"],
+            docstring="Load configuration from file.",
+            code="def load_config(path, defaults):\n    with open(path) as f:\n        data = json.load(f)\n    defaults.update(data)\n    return defaults\n" + "    # padding\n" * 10,
+        )
+        f2 = _make_func(
+            name="read_config", file_path="b.py", size_lines=15,
+            parameters=["filepath", "defaults"],
+            return_type="dict",
+            calls_to=["open", "json.load", "merge", "close"],
+            docstring="Read configuration from disk.",
+            code="def read_config(filepath, defaults):\n    fh = open(filepath, 'r')\n    cfg = json.load(fh)\n    fh.close()\n    return {**defaults, **cfg}\n" + "    # pad\n" * 10,
+        )
+        finder = DuplicateFinder()
+        groups = finder.find([f1, f2])
+        semantic = [g for g in groups if g.similarity_type == "semantic"]
+        assert len(semantic) >= 1
+
+    def test_semantic_skips_tiny_functions(self):
+        """Functions below SEMANTIC_MIN_LINES should not be semantic-matched."""
+        f1 = _make_func(name="load_data", file_path="a.py", size_lines=3,
+                        calls_to=["open", "read"])
+        f2 = _make_func(name="read_data", file_path="b.py", size_lines=3,
+                        calls_to=["open", "read"])
+        finder = DuplicateFinder()
+        groups = finder.find([f1, f2])
+        semantic = [g for g in groups if g.similarity_type == "semantic"]
+        assert len(semantic) == 0
+
+    def test_summary_includes_semantic(self):
+        finder = DuplicateFinder()
+        finder.find([])
+        s = finder.summary()
+        assert "semantic_duplicates" in s
+        assert s["semantic_duplicates"] == 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -834,6 +994,38 @@ class TestASTExtraction:
         functions, _, _ = _extract_functions_from_file(py_file, tmp_path)
         assert functions[0].complexity >= 5
 
+    def test_nested_functions_excluded(self, tmp_path):
+        """Nested functions inside other functions should NOT be extracted."""
+        code = textwrap.dedent("""\
+        def outer():
+            def inner():
+                return 42
+            return inner()
+        """)
+        py_file = tmp_path / "nested.py"
+        py_file.write_text(code)
+        functions, _, _ = _extract_functions_from_file(py_file, tmp_path)
+        names = [f.name for f in functions]
+        assert "outer" in names
+        assert "inner" not in names
+
+    def test_nested_in_method_excluded(self, tmp_path):
+        """Nested functions inside class methods should NOT be extracted."""
+        code = textwrap.dedent("""\
+        class MyClass:
+            def method(self):
+                def helper():
+                    return 1
+                return helper()
+        """)
+        py_file = tmp_path / "nested_method.py"
+        py_file.write_text(code)
+        functions, classes, _ = _extract_functions_from_file(py_file, tmp_path)
+        names = [f.name for f in functions]
+        assert "method" in names
+        assert "helper" not in names
+        assert len(classes) == 1
+
 
 class TestScanCodebase:
     def test_scan_temp_project(self, tmp_path):
@@ -920,6 +1112,8 @@ class TestReportPrinting:
     def test_duplicate_report_empty(self, capsys):
         print_duplicate_report([], {"total_groups": 0, "exact_duplicates": 0,
                                      "near_duplicates": 0,
+                                     "structural_duplicates": 0,
+                                     "semantic_duplicates": 0,
                                      "total_functions_involved": 0,
                                      "avg_similarity": 0})
         out = capsys.readouterr().out

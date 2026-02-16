@@ -50,7 +50,9 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict
+import asyncio
+import copy
 import concurrent.futures
 
 # === SAFE UNICODE OUTPUT ===
@@ -96,7 +98,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger("X_RAY_Claude")
 
-__version__ = "4.0.0"
+__version__ = "4.2.0"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  FunctionInfo TypedDict (for typed dict interfaces)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class FunctionInfo(TypedDict, total=False):
+    """Lightweight dict shape returned inside DuplicateGroup.functions."""
+    key: str
+    name: str
+    file: str
+    line: int
+    size: int
+    similarity: float
+    signature: str
 
 # Safe separator: always ASCII dash — renders correctly on every terminal/console
 SEP = "-"
@@ -154,7 +171,8 @@ class FunctionRecord:
     calls_to: List[str]
     complexity: int         # cyclomatic (if/for/while/try/except/assert/bool)
     nesting_depth: int      # max nesting level
-    code_hash: str          # MD5 of function body
+    code_hash: str          # SHA-256 of function body
+    structure_hash: str     # MD5 of normalized AST (for structural duplicates)
     code: str               # actual source code
     is_async: bool = False
 
@@ -244,7 +262,12 @@ def collect_py_files(root: Path, exclude: List[str] = None,
     exclude = exclude or []
     include = include or []
     results = []
-    for dirpath, dirnames, filenames in os.walk(root):
+    try:
+        walker = os.walk(root)
+    except PermissionError:
+        logger.warning(f"Permission denied: {root}")
+        return results
+    for dirpath, dirnames, filenames in walker:
         rel_dir = os.path.relpath(dirpath, root)
         # Prune dirs in-place
         dirnames[:] = [
@@ -299,6 +322,85 @@ def _compute_complexity(node: ast.AST) -> int:
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  AST Normalizer (for structural duplicate detection)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ASTNormalizer(ast.NodeTransformer):
+    """
+    Normalizes AST to detect structural duplicates.
+    1. Removes docstrings.
+    2. Renames all arguments to 'argN'.
+    3. Renames all local variables to 'varN' (simple scope-agnostic).
+    """
+    def __init__(self):
+        self.arg_map = {}
+        self.var_map = {}
+        self.arg_count = 0
+        self.var_count = 0
+
+    def visit_FunctionDef(self, node):
+        node.name = "func"
+        if (node.body and isinstance(node.body[0], ast.Expr)
+                and isinstance(node.body[0].value, ast.Constant)
+                and isinstance(node.body[0].value.value, str)):
+            node.body.pop(0)
+        for arg in node.args.args:
+            if arg.arg != 'self':
+                name = f"arg{self.arg_count}"
+                self.arg_map[arg.arg] = name
+                arg.arg = name
+                self.arg_count += 1
+        self.generic_visit(node)
+        return node
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_Name(self, node):
+        if isinstance(node.ctx, (ast.Store, ast.Load)):
+            if node.id in self.arg_map:
+                node.id = self.arg_map[node.id]
+            elif node.id not in self.var_map:
+                name = f"var{self.var_count}"
+                self.var_map[node.id] = name
+                self.var_count += 1
+                node.id = name
+            else:
+                node.id = self.var_map[node.id]
+        return node
+
+    def visit_arg(self, node):
+        if node.arg in self.arg_map:
+            node.arg = self.arg_map[node.arg]
+        return node
+
+
+def _compute_structure_hash(node: ast.AST) -> str:
+    """Compute MD5 of normalized AST dump."""
+    try:
+        normalized = ASTNormalizer().visit(copy.deepcopy(node))
+        return hashlib.md5(ast.dump(normalized).encode()).hexdigest()
+    except Exception:
+        return ""
+
+
+def _walk_definitions(node: ast.AST):
+    """Yield top-level and class-method function/class defs, skipping nested functions.
+
+    Does NOT recurse into function bodies, so nested/inner functions are excluded.
+    DOES recurse into class bodies (to find methods) and other compound statements
+    (if/try/with at module level).
+    """
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            yield child
+        elif isinstance(child, ast.ClassDef):
+            yield child
+            yield from _walk_definitions(child)
+        else:
+            yield from _walk_definitions(child)
+
+
 def _extract_functions_from_file(fpath: Path, root: Path) -> Tuple[
         List[FunctionRecord], List[ClassRecord], Optional[str]]:
     """Parse one file and extract all functions and classes."""
@@ -317,13 +419,13 @@ def _extract_functions_from_file(fpath: Path, root: Path) -> Tuple[
     functions = []
     classes = []
 
-    for node in ast.walk(tree):
+    for node in _walk_definitions(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # Skip nested functions (only top-level and class methods)
             start = max(node.lineno - 1, 0)
             end = node.end_lineno or start + 1
             code = "\n".join(lines[start:end])
-            code_hash = hashlib.md5(code.encode()).hexdigest()
+            code_hash = hashlib.sha256(code.encode()).hexdigest()
+            structure_hash = _compute_structure_hash(node)
 
             params = [a.arg for a in node.args.args if a.arg != "self"]
             ret = ast.unparse(node.returns) if node.returns and hasattr(ast, "unparse") else None
@@ -354,6 +456,7 @@ def _extract_functions_from_file(fpath: Path, root: Path) -> Tuple[
                 complexity=_compute_complexity(node),
                 nesting_depth=_compute_nesting_depth(node),
                 code_hash=code_hash,
+                structure_hash=structure_hash,
                 code=code,
                 is_async=isinstance(node, ast.AsyncFunctionDef),
             ))
@@ -425,7 +528,7 @@ _STOP_WORDS = frozenset(
     "range print open super init new call".split()
 )
 
-_SPLIT_RE = re.compile(r"[A-Z][a-z]+|[a-z]+|[A-Z]+(?=[A-Z]|$)")
+_SPLIT_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
 
 
 def tokenize(text: str) -> List[str]:
@@ -435,8 +538,10 @@ def tokenize(text: str) -> List[str]:
     cleaned = re.sub(r"[^a-zA-Z0-9]", " ", text)
     raw: List[str] = []
     for word in cleaned.split():
-        raw.extend(m.group().lower() for m in _SPLIT_RE.finditer(word))
-        if word.islower() or word.isupper():
+        parts = [m.group().lower() for m in _SPLIT_RE.finditer(word)]
+        if parts:
+            raw.extend(parts)
+        else:
             raw.append(word.lower())
     return [t for t in raw if len(t) > 1 and t not in _STOP_WORDS]
 
@@ -466,16 +571,121 @@ def code_similarity(code_a: str, code_b: str) -> float:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  Semantic Similarity (behavioral / functional matching)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def name_similarity(name_a: str, name_b: str) -> float:
+    """Semantic similarity between two function names (0–1).
+
+    Tokenizes both names (camelCase / snake_case aware) and computes
+    the Jaccard index over the resulting token sets.
+    """
+    ta = set(tokenize(name_a))
+    tb = set(tokenize(name_b))
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / len(ta | tb)
+
+
+def signature_similarity(func_a: "FunctionRecord",
+                         func_b: "FunctionRecord") -> float:
+    """Compare two function signatures — param names, count, return type (0–1).
+
+    Signals checked:
+      - Parameter name overlap  (Jaccard)
+      - Parameter count ratio   (min/max)
+      - Return-type match       (bool)
+      - Async-flag match        (bool)
+    """
+    scores: List[float] = []
+
+    # Param-name overlap (tokenised)
+    pa = set(tokenize(" ".join(func_a.parameters)))
+    pb = set(tokenize(" ".join(func_b.parameters)))
+    if pa or pb:
+        scores.append(len(pa & pb) / len(pa | pb) if (pa | pb) else 0.0)
+    else:
+        scores.append(1.0)   # both have zero params → match
+
+    # Param-count ratio
+    la, lb = len(func_a.parameters), len(func_b.parameters)
+    if max(la, lb) > 0:
+        scores.append(min(la, lb) / max(la, lb))
+    else:
+        scores.append(1.0)
+
+    # Return type match
+    ra = (func_a.return_type or "").lower()
+    rb = (func_b.return_type or "").lower()
+    if ra and rb:
+        scores.append(1.0 if ra == rb else 0.0)
+    elif not ra and not rb:
+        scores.append(0.5)   # both unknown
+    else:
+        scores.append(0.0)
+
+    # Async-flag match
+    scores.append(1.0 if func_a.is_async == func_b.is_async else 0.0)
+
+    return sum(scores) / len(scores) if scores else 0.0
+
+
+def callgraph_overlap(func_a: "FunctionRecord",
+                      func_b: "FunctionRecord") -> float:
+    """Jaccard overlap of functions each function calls.
+
+    Two functions that call the same helpers / stdlib APIs tend to perform
+    the same work, even if their code looks different.
+    """
+    ca = set(func_a.calls_to)
+    cb = set(func_b.calls_to)
+    if not ca and not cb:
+        return 0.0   # no calls → no signal
+    if not ca or not cb:
+        return 0.0
+    return len(ca & cb) / len(ca | cb)
+
+
+def semantic_similarity(func_a: "FunctionRecord",
+                        func_b: "FunctionRecord") -> float:
+    """Weighted composite of behavioural signals (0–1).
+
+    Combines four independent channels:
+      - Name meaning    (30%)  — do the names describe the same thing?
+      - Signature shape  (25%)  — same params / return type?
+      - Call-graph       (30%)  — calling the same helper functions?
+      - Docstring tokens (15%)  — docstrings describe similar purpose?
+    """
+    w_name = 0.30
+    w_sig  = 0.25
+    w_call = 0.30
+    w_doc  = 0.15
+
+    ns = name_similarity(func_a.name, func_b.name)
+    ss = signature_similarity(func_a, func_b)
+    cg = callgraph_overlap(func_a, func_b)
+
+    # Docstring similarity (token cosine)
+    da = _term_freq(tokenize(func_a.docstring or ""))
+    db = _term_freq(tokenize(func_b.docstring or ""))
+    ds = cosine_similarity(da, db) if (da and db) else 0.0
+
+    return w_name * ns + w_sig * ss + w_call * cg + w_doc * ds
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  LLM Helper (optional)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class LLMHelper:
     """Lazy-loading wrapper around Core.services.inference_engine."""
 
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, model_path: Optional[str] = None):
         self._root = root
         self._llm = None
         self._available = None
+        self._model_path = model_path
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     @property
     def available(self) -> bool:
@@ -498,17 +708,18 @@ class LLMHelper:
         from Core.services.inference_engine import FIFOLlamaCppInference
 
         # Smart model selection
-        model_path = None
-        possible_models = [
-            Path(r"C:\AI\Models\qwen2.5-coder-7b-instruct-q4_k_m.gguf"),
-            Path(r"C:\AI\Models\Qwen2.5-Coder-14B-Instruct-Q4_K_M.gguf"),
-            Path(r"C:\AI\Models\Phi-3.5-mini-instruct-Q4_K_M.gguf"),
-        ]
-        for m in possible_models:
-            if m.exists():
-                logger.info(f"LLM: Using {m.name}")
-                model_path = str(m)
-                break
+        model_path = self._model_path
+        if not model_path:
+            possible_models = [
+                Path(r"C:\AI\Models\qwen2.5-coder-7b-instruct-q4_k_m.gguf"),
+                Path(r"C:\AI\Models\Qwen2.5-Coder-14B-Instruct-Q4_K_M.gguf"),
+                Path(r"C:\AI\Models\Phi-3.5-mini-instruct-Q4_K_M.gguf"),
+            ]
+            for m in possible_models:
+                if m.exists():
+                    logger.info(f"LLM: Using {m.name}")
+                    model_path = str(m)
+                    break
 
         self._llm = FIFOLlamaCppInference(
             model_path=model_path, lazy_load=False, verbose=False
@@ -521,7 +732,6 @@ class LLMHelper:
                    temperature: float = 0.1) -> str:
         """Synchronous LLM query (collects streaming output)."""
         self._ensure_loaded()
-        import asyncio
 
         async def _run():
             text = ""
@@ -531,11 +741,15 @@ class LLMHelper:
                 text += chunk
             return text
 
-        loop = asyncio.new_event_loop()
-        try:
-            return loop.run_until_complete(_run())
-        finally:
-            loop.close()
+        if self._loop is None or self._loop.is_closed():
+            self._loop = asyncio.new_event_loop()
+        return self._loop.run_until_complete(_run())
+
+    def close(self):
+        """Clean up event loop."""
+        if self._loop and not self._loop.is_closed():
+            self._loop.close()
+            self._loop = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -675,8 +889,12 @@ class CodeSmellDetector:
                 suggestion="Add a docstring explaining purpose, parameters, and return value.",
             ))
 
-        # Too many return statements
-        return_count = func.code.count("\n    return ") + func.code.count("\nreturn ")
+        # Too many return statements (AST-based)
+        try:
+            _tree = ast.parse(func.code)
+            return_count = sum(1 for _n in ast.walk(_tree) if isinstance(_n, ast.Return))
+        except SyntaxError:
+            return_count = 0
         if return_count >= t["too_many_returns"]:
             self.smells.append(SmellIssue(
                 file_path=func.file_path, line=func.line_start,
@@ -801,10 +1019,11 @@ class DuplicateFinder:
     """
     Cross-file function similarity detector.
     
-    Three-stage pipeline:
-      1. Exact hash match  → identical code
-      2. Token cosine + SequenceMatcher pre-filter → near-duplicates
-      3. Optional LLM confirmation → semantic duplicates
+    Four-stage pipeline:
+      1a. Exact hash match  → identical code
+      1b. Structural hash   → same AST shape, different variable names
+      2.  Token cosine + SequenceMatcher pre-filter → near-duplicates
+      3.  Semantic similarity (name + signature + callgraph + docstring)
     """
 
     # Thresholds
@@ -812,6 +1031,8 @@ class DuplicateFinder:
     NEAR_DUP_THRESHOLD = 0.70
     TOKEN_PREFILTER = 0.25
     SIZE_RATIO_MIN = 0.35       # skip if sizes wildly different
+    SEMANTIC_THRESHOLD = 0.50   # semantic similarity threshold
+    SEMANTIC_MIN_LINES = 8      # min function size for semantic matching
 
     # Boilerplate to skip
     _BOILERPLATE = frozenset({
@@ -867,6 +1088,35 @@ class DuplicateFinder:
                      "similarity": 1.0}
                     for f in group
                 ],
+            ))
+            seen_keys.update(f.key for f in group)
+            group_id += 1
+
+        # Stage 1b: Structural hash matches (same AST, different variable names)
+        struct_groups: Dict[str, List[FunctionRecord]] = defaultdict(list)
+        for func in functions:
+            if func.key not in seen_keys and func.name not in self._BOILERPLATE:
+                if func.size_lines >= 4 and func.structure_hash:
+                    struct_groups[func.structure_hash].append(func)
+
+        for s_hash, group in struct_groups.items():
+            if len(group) < 2:
+                continue
+            if cross_file_only:
+                files = {f.file_path for f in group}
+                if len(files) < 2:
+                    continue
+            self.groups.append(DuplicateGroup(
+                group_id=group_id,
+                similarity_type="structural",
+                avg_similarity=1.0,
+                functions=[
+                    {"key": f.key, "name": f.name, "file": f.file_path,
+                     "line": f.line_start, "size": f.size_lines,
+                     "similarity": 1.0}
+                    for f in group
+                ],
+                merge_suggestion="Logic is identical. Rename variables to unify."
             ))
             seen_keys.update(f.key for f in group)
             group_id += 1
@@ -957,6 +1207,79 @@ class DuplicateFinder:
             ))
             group_id += 1
 
+        # Stage 3: Semantic similarity (functional matching)
+        # Catches functions that do the same thing but look different
+        seen_stage2 = set(seen_keys)
+        for root_key, members in clusters.items():
+            for func, _ in members:
+                seen_stage2.add(func.key)
+
+        semantic_list = [
+            f for f in functions
+            if f.key not in seen_stage2
+            and f.name not in self._BOILERPLATE
+            and f.size_lines >= self.SEMANTIC_MIN_LINES
+        ]
+
+        sem_pairs: List[Tuple[FunctionRecord, FunctionRecord, float]] = []
+        for i, f1 in enumerate(semantic_list):
+            for f2 in semantic_list[i + 1:]:
+                if cross_file_only and f1.file_path == f2.file_path:
+                    continue
+                sim = semantic_similarity(f1, f2)
+                if sim >= self.SEMANTIC_THRESHOLD:
+                    sem_pairs.append((f1, f2, sim))
+
+        if sem_pairs:
+            logger.info(f"Semantic stage: {len(sem_pairs)} functionally similar pairs")
+
+        # Cluster semantic pairs with union-find
+        sem_parent: Dict[str, str] = {}
+
+        def sem_find(x):
+            while sem_parent.get(x, x) != x:
+                sem_parent[x] = sem_parent.get(sem_parent[x], sem_parent[x])
+                x = sem_parent[x]
+            return x
+
+        def sem_union(a, b):
+            ra, rb = sem_find(a), sem_find(b)
+            if ra != rb:
+                sem_parent[ra] = rb
+
+        for f1, f2, sim in sem_pairs:
+            sem_parent.setdefault(f1.key, f1.key)
+            sem_parent.setdefault(f2.key, f2.key)
+            sem_union(f1.key, f2.key)
+
+        sem_clusters: Dict[str, List[Tuple[FunctionRecord, float]]] = defaultdict(list)
+        for f1, f2, sim in sem_pairs:
+            root = sem_find(f1.key)
+            if not any(x[0].key == f1.key for x in sem_clusters[root]):
+                sem_clusters[root].append((f1, 1.0))
+            if not any(x[0].key == f2.key for x in sem_clusters[root]):
+                sem_clusters[root].append((f2, sim))
+
+        for root_key, members in sem_clusters.items():
+            if len(members) < 2:
+                continue
+            sims = [s for _, s in members]
+            avg = sum(sims) / len(sims) if sims else 0
+
+            self.groups.append(DuplicateGroup(
+                group_id=group_id,
+                similarity_type="semantic",
+                avg_similarity=round(avg, 3),
+                functions=[
+                    {"key": f.key, "name": f.name, "file": f.file_path,
+                     "line": f.line_start, "size": f.size_lines,
+                     "similarity": round(sim, 3),
+                     "signature": f.signature}
+                    for f, sim in members
+                ],
+            ))
+            group_id += 1
+
         # Sort groups by avg similarity descending
         self.groups.sort(key=lambda g: g.avg_similarity, reverse=True)
         return self.groups
@@ -1004,11 +1327,15 @@ class DuplicateFinder:
         """Return a summary of duplicate findings."""
         exact = [g for g in self.groups if g.similarity_type == "exact"]
         near = [g for g in self.groups if g.similarity_type == "near"]
+        structural = [g for g in self.groups if g.similarity_type == "structural"]
+        semantic = [g for g in self.groups if g.similarity_type == "semantic"]
         total_funcs = sum(len(g.functions) for g in self.groups)
         return {
             "total_groups": len(self.groups),
             "exact_duplicates": len(exact),
+            "structural_duplicates": len(structural),
             "near_duplicates": len(near),
+            "semantic_duplicates": len(semantic),
             "total_functions_involved": total_funcs,
             "avg_similarity": (
                 round(sum(g.avg_similarity for g in self.groups) / len(self.groups), 3)
@@ -1672,9 +1999,10 @@ def print_duplicate_report(groups: List[DuplicateGroup],
     print(f"\n  {'='*58}")
     print(f"    SIMILAR FUNCTIONS REPORT")
     print(f"  {'='*58}")
-    print(f"    Groups found:     {summary['total_groups']}")
-    print(f"    Exact duplicates: {summary['exact_duplicates']}")
-    print(f"    Near duplicates:  {summary['near_duplicates']}")
+    print(f"    Groups found:      {summary['total_groups']}")
+    print(f"    Exact duplicates:  {summary['exact_duplicates']}")
+    print(f"    Near duplicates:   {summary['near_duplicates']}")
+    print(f"    Semantic matches:  {summary['semantic_duplicates']}")
     print(f"    Functions involved: {summary['total_functions_involved']}")
     print(f"  {SEP*58}")
 
@@ -1684,7 +2012,12 @@ def print_duplicate_report(groups: List[DuplicateGroup],
         return
 
     for group in groups[:20]:
-        type_icon = Severity.icon(Severity.CRITICAL) if group.similarity_type == "exact" else Severity.icon(Severity.WARNING)
+        if group.similarity_type == "exact":
+            type_icon = Severity.icon(Severity.CRITICAL)
+        elif group.similarity_type == "semantic":
+            type_icon = Severity.icon(Severity.INFO)
+        else:
+            type_icon = Severity.icon(Severity.WARNING)
         print(f"\n    {type_icon} Group #{group.group_id} [{group.similarity_type.upper()}] "
               f"(avg: {group.avg_similarity:.0%})")
         for func in group.functions:
@@ -1766,7 +2099,6 @@ def build_json_report(
             ),
         },
         "smells": {
-            "summary": CodeSmellDetector().detect(functions, classes) and None,  # just to get count
             "total": len(smells),
             "issues": [
                 {
@@ -1849,6 +2181,8 @@ def parse_args():
     # LLM options
     p.add_argument("--use-llm", action="store_true",
                    help="Enable LLM enrichment for deeper analysis (requires local model)")
+    p.add_argument("--model-path", type=str, default=None,
+                   help="Path to GGUF model file for LLM enrichment")
     p.add_argument("--max-llm-calls", type=int, default=20,
                    help="Max LLM calls per feature (default: 20)")
 
@@ -1894,13 +2228,37 @@ def main():
         args.duplicates = True
 
     # LLM helper (lazy)
-    llm = LLMHelper(root) if args.use_llm else None
+    llm = LLMHelper(root, model_path=getattr(args, 'model_path', None)) if args.use_llm else None
 
     start_time = time.time()
 
     # ── Step 1: Scan codebase ──
     print(f"  Scanning {root.name}/...")
-    functions, classes, errors = scan_codebase(root, args.exclude, args.include)
+    py_files = collect_py_files(root, args.exclude, args.include)
+    total_files = len(py_files)
+    all_functions: List[FunctionRecord] = []
+    all_classes: List[ClassRecord] = []
+    errors: List[str] = []
+    done = 0
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(_extract_functions_from_file, f, root): f
+            for f in py_files
+        }
+        for future in concurrent.futures.as_completed(futures):
+            funcs, clses, err = future.result()
+            all_functions.extend(funcs)
+            all_classes.extend(clses)
+            if err:
+                errors.append(f"{futures[future]}: {err}")
+            done += 1
+            if total_files > 20 and done % max(1, total_files // 10) == 0:
+                pct = done * 100 // total_files
+                print(f"    [{pct:3d}%] {done}/{total_files} files scanned...", flush=True)
+
+    functions = all_functions
+    classes = all_classes
     scan_time = time.time() - start_time
 
     print(f"  Found {len(functions)} functions, {len(classes)} classes "
@@ -2002,7 +2360,10 @@ def main():
               f"{Severity.icon(Severity.WARNING)}{smell_summary.get('warning', 0)} "
               f"{Severity.icon(Severity.INFO)}{smell_summary.get('info', 0)})")
     if duplicates:
-        print(f"    Duplicates: {len(duplicates):>6} groups")
+        print(f"    Duplicates: {len(duplicates):>6} groups  "
+              f"(exact:{dup_summary.get('exact_duplicates',0)} "
+              f"near:{dup_summary.get('near_duplicates',0)} "
+              f"semantic:{dup_summary.get('semantic_duplicates',0)})")
     if library_suggestions:
         print(f"    Library:    {len(library_suggestions):>6} suggestions")
     print(f"    LLM:        {'enabled' if args.use_llm else 'disabled'}")

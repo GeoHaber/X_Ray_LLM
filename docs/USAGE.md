@@ -29,11 +29,11 @@ pip install pytest
 | `--graph` | Generate interactive HTML graph |
 | `--report FILE` | Save full JSON report to FILE |
 | `--use-llm` | Enable LLM enrichment (requires Local LLM backend) |
+| `--model-path PATH` | Path to LLM model file (overrides `XRAY_MODEL_PATH` env var) |
+| `--max-llm-calls N` | Max LLM calls per feature (default: 20) |
 | `--exclude DIR` | Directories to exclude (repeatable) |
 | `--include DIR` | Only scan these directories (repeatable) |
-| `--top N` | Show top N results per category (default: 20) |
 | `-q, --quiet` | Minimal output |
-| `-v, --verbose` | Verbose output |
 
 ---
 
@@ -57,8 +57,8 @@ python x_ray_claude.py --duplicates --path ./my_project
 ```
 
 Detects three types of duplicates:
-- **Exact** — identical code (same MD5 hash)
-- **Near** — structurally similar (cosine > 0.7 AND SequenceMatcher > 0.6)
+- **Exact** — identical code (same SHA-256 hash)
+- **Near** — structurally similar (cosine > 0.25 pre-filter AND SequenceMatcher > 0.7)
 - **Semantic** — functionally similar (LLM-confirmed, requires `--use-llm`)
 
 ### 3. Library Extraction Suggestions
@@ -78,8 +78,8 @@ Groups related duplicates and suggests unified library modules with:
 python x_ray_claude.py --full-scan --graph --path ./my_project
 ```
 
-Generates an interactive HTML file (`smart_analysis_graph.html`) with three tabs:
-- **Graph** — D3.js force-directed graph with health-colored nodes
+Generates an interactive HTML file (`xray_claude_graph.html`) with three tabs:
+- **Graph** — vis-network force-directed graph with health-colored nodes
 - **Duplicates** — Searchable, sortable duplicate list
 - **Smells** — Filterable smell table
 
@@ -98,6 +98,9 @@ Produces a structured JSON report with all findings, suitable for:
 
 ```bash
 python x_ray_claude.py --full-scan --use-llm --path ./my_project
+
+# Or specify a model path directly
+python x_ray_claude.py --full-scan --use-llm --model-path /path/to/model.gguf --path ./my_project
 ```
 
 When `--use-llm` is enabled, the analyzer:
@@ -115,18 +118,17 @@ Requires a running Local LLM backend (`Core.services.inference_engine`).
 
 | Category | Description | Threshold |
 |---|---|---|
-| `long-function` | Function exceeds line limit | > 80 lines |
+| `long-function` | Function exceeds line limit | > 60 lines (warning) / > 120 (critical) |
 | `god-class` | Class with too many methods | > 15 methods |
-| `deep-nesting` | Excessive nesting depth | > 4 levels |
-| `high-complexity` | High cyclomatic complexity | > 12 |
+| `deep-nesting` | Excessive nesting depth | > 4 levels (warning) / > 6 (critical) |
+| `high-complexity` | High cyclomatic complexity | > 10 (warning) / > 20 (critical) |
 | `too-many-params` | Too many function parameters | > 6 params |
-| `missing-docstring` | Public function without docstring | — |
-| `dead-code` | Unreachable or unused code | — |
-| `magic-numbers` | Hard-coded numeric literals | — |
-| `feature-envy` | Function uses other module's data excessively | — |
-| `duplicate-code` | Nearly identical code blocks | > 0.85 similarity |
-| `long-parameter-list` | Excessive parameter count | > 8 params |
-| `data-class-smell` | Class that's just data with no behavior | — |
+| `missing-docstring` | Public function without docstring | functions > 15 lines |
+| `too-many-returns` | Too many return statements | > 5 returns |
+| `boolean-blindness` | Bool return without question-style name | — |
+| `large-class` | Class exceeds line limit | > 500 lines |
+| `missing-class-docstring` | Class without docstring | classes > 30 lines |
+| `dataclass-candidate` | Simple class that could be @dataclass | ≤ 3 methods, no bases |
 
 ### Similarity Scores
 
@@ -153,19 +155,20 @@ root = Path("./my_project")
 functions, classes, errors = scan_codebase(root)
 
 # Detect smells
-detector = CodeSmellDetector(functions, classes, root)
-smells = detector.detect_all()
+detector = CodeSmellDetector()
+smells = detector.detect(functions, classes)
+summary = detector.summary()
 
 # Find duplicates
-finder = DuplicateFinder(functions, root)
-duplicates = finder.find_all()
+finder = DuplicateFinder()
+duplicates = finder.find(functions)
 
 # Get library suggestions
-advisor = LibraryAdvisor(duplicates, root)
-suggestions = advisor.suggest()
+advisor = LibraryAdvisor()
+suggestions = advisor.analyze(duplicates, functions)
 
 # Build report
-report = build_json_report(root, functions, classes, smells, duplicates, suggestions)
+report = build_json_report(root, functions, classes, smells, duplicates, suggestions, 0.0)
 ```
 
 ---
