@@ -8,6 +8,7 @@ from typing import List, Tuple, Optional
 
 from Core.types import FunctionRecord, ClassRecord
 from Core.ast_helpers import compute_nesting_depth, compute_complexity
+from Analysis.ast_utils import collect_py_files
 
 # === AST Extraction Engine ===
 
@@ -25,6 +26,7 @@ class ASTNormalizer(ast.NodeTransformer):
         self.var_count = 0
 
     def visit_FunctionDef(self, node):
+        """Normalize function definition nodes for structural comparison."""
         # Rename function to generic placeholder for comparison
         node.name = "func"
 
@@ -205,46 +207,6 @@ def _extract_functions_from_file(fpath: Path, root: Path) -> Tuple[
             classes.append(_process_class_node(node, lines, rel_path))
 
     return functions, classes, None
-
-_ALWAYS_SKIP = frozenset({
-    ".git", ".hg", ".svn", "__pycache__", ".mypy_cache", ".pytest_cache",
-    ".tox", ".nox", ".eggs", "node_modules",
-    "venv", ".venv", "env", ".env",
-    "site-packages", "dist-packages",
-    "_archive", "_Old", "_old", "_bin",
-    "_scratch", ".github",
-    "portable", "target",
-})
-
-# Files containing intentional bad code for testing — skip during scanning
-_ALWAYS_SKIP_FILES = frozenset({"smell_factory.py", "bad_code_sample.py"})
-
-
-def collect_py_files(root: Path, exclude: List[str] = None,
-                     include: List[str] = None) -> List[Path]:
-    """Walk root and return .py files respecting include/exclude rules."""
-    exclude = exclude or []
-    include = include or []
-    results = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        rel_dir = os.path.relpath(dirpath, root)
-        # Prune dirs in-place
-        dirnames[:] = [
-            d for d in dirnames
-            if d not in _ALWAYS_SKIP
-            and not d.endswith(".egg-info")
-            and not (exclude and any(
-                (os.path.join(rel_dir, d) if rel_dir != "." else d).startswith(p)
-                for p in exclude))
-        ]
-        if include:
-            top = rel_dir.split(os.sep)[0] if rel_dir != "." else "."
-            if top != "." and not any(top.startswith(p) for p in include):
-                continue
-        for fn in filenames:
-            if fn.endswith(".py") and fn not in _ALWAYS_SKIP_FILES:
-                results.append(Path(dirpath) / fn)
-    return results
 
 
 def scan_codebase(root: Path, exclude: List[str] = None,

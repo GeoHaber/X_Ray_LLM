@@ -35,6 +35,56 @@ class UnionFind:
             self._parent[ra] = rb
 
 
+def _compute_max_similarities(pairs):
+    """Return dict mapping each function key to its maximum similarity."""
+    max_sim: Dict[str, float] = defaultdict(float)
+    for f1, f2, sim in pairs:
+        max_sim[f1.key] = max(max_sim[f1.key], sim)
+        max_sim[f2.key] = max(max_sim[f2.key], sim)
+    return max_sim
+
+
+def _cluster_by_root(pairs, uf, max_sim):
+    """Group function-records by union-find root."""
+    clusters: Dict[str, List[Tuple[FunctionRecord, float]]] = defaultdict(list)
+    for f1, f2, sim in pairs:
+        root = uf.find(f1.key)
+        if not any(x[0].key == f1.key for x in clusters[root]):
+            clusters[root].append((f1, max_sim[f1.key]))
+        if not any(x[0].key == f2.key for x in clusters[root]):
+            clusters[root].append((f2, max_sim[f2.key]))
+    return clusters
+
+
+def _collect_cluster_sims(pairs, uf):
+    """Collect per-cluster pair-similarity lists."""
+    cluster_pair_sims: Dict[str, List[float]] = defaultdict(list)
+    for f1, f2, sim in pairs:
+        cluster_pair_sims[uf.find(f1.key)].append(sim)
+    return cluster_pair_sims
+
+
+async def _enrich_group_async(item, llm, sem):
+    """Enrich a single duplicate group with LLM merge suggestion."""
+    group, f1, f2 = item
+    async with sem:
+        prompt = (
+            "You are a refactoring expert.\n"
+            f"Function A: {f1.name} ({f1.file_path}:{f1.line_start})\n"
+            f"```python\n{f1.code[:500]}\n```\n\n"
+            f"Function B: {f2.name} ({f2.file_path}:{f2.line_start})\n"
+            f"```python\n{f2.code[:500]}\n```\n\n"
+            "Should these be merged? If yes, suggest a unified function name "
+            "and signature. If no, explain why they're different.\n\n"
+            "Answer (2-3 sentences):"
+        )
+        try:
+            response = await llm.completion_async(prompt)
+            group.merge_suggestion = response.strip()
+        except Exception as e:
+            logger.debug(f"Async LLM merge suggestion failed: {e}")
+
+
 class DuplicateFinder:
     """
     Cross-file function similarity detector.
@@ -228,22 +278,9 @@ class DuplicateFinder:
         for f1, f2, _ in pairs:
             uf.union(f1.key, f2.key)
 
-        max_sim: Dict[str, float] = defaultdict(float)
-        for f1, f2, sim in pairs:
-            max_sim[f1.key] = max(max_sim[f1.key], sim)
-            max_sim[f2.key] = max(max_sim[f2.key], sim)
-
-        clusters: Dict[str, List[Tuple[FunctionRecord, float]]] = defaultdict(list)
-        for f1, f2, sim in pairs:
-            root = uf.find(f1.key)
-            if not any(x[0].key == f1.key for x in clusters[root]):
-                clusters[root].append((f1, max_sim[f1.key]))
-            if not any(x[0].key == f2.key for x in clusters[root]):
-                clusters[root].append((f2, max_sim[f2.key]))
-
-        cluster_pair_sims: Dict[str, List[float]] = defaultdict(list)
-        for f1, f2, sim in pairs:
-            cluster_pair_sims[uf.find(f1.key)].append(sim)
+        max_sim = _compute_max_similarities(pairs)
+        clusters = _cluster_by_root(pairs, uf, max_sim)
+        cluster_pair_sims = _collect_cluster_sims(pairs, uf)
 
         for root_key, members in clusters.items():
             if len(members) < 2:
@@ -328,27 +365,7 @@ class DuplicateFinder:
         logger.info(f"Enriching {len(candidates)} duplicate groups with AI (Async)...")
         
         sem = asyncio.Semaphore(5)
-
-        async def _process(item):
-            group, f1, f2 = item
-            async with sem:
-                prompt = (
-                    "You are a refactoring expert.\n"
-                    f"Function A: {f1.name} ({f1.file_path}:{f1.line_start})\n"
-                    f"```python\n{f1.code[:500]}\n```\n\n"
-                    f"Function B: {f2.name} ({f2.file_path}:{f2.line_start})\n"
-                    f"```python\n{f2.code[:500]}\n```\n\n"
-                    "Should these be merged? If yes, suggest a unified function name "
-                    "and signature. If no, explain why they're different.\n\n"
-                    "Answer (2-3 sentences):"
-                )
-                try:
-                    response = await llm.completion_async(prompt)
-                    group.merge_suggestion = response.strip()
-                except Exception as e:
-                    logger.debug(f"Async LLM merge suggestion failed: {e}")
-
-        tasks = [_process(c) for c in candidates]
+        tasks = [_enrich_group_async(c, llm, sem) for c in candidates]
         await asyncio.gather(*tasks)
 
     def summary(self) -> Dict[str, Any]:

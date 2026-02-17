@@ -24,6 +24,7 @@ def pure_python_normalize(code: str) -> str:
         return f"ERROR: {e}"
 
 def main():
+    """Generate parity test cases to verify Rust matches Python output."""
     print("🚀 Generating Parity Tests for Variable Renaming")
     
     gen = TestReferenceGenerator(pure_python_normalize)

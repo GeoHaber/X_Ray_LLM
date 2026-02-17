@@ -33,6 +33,7 @@ def _parse_func(src: str) -> ast.AST:
 # ════════════════════════════════════════════════════════════════════
 
 class TestNestingDepth:
+    """Tests for AST nesting depth computation."""
 
     def test_flat_function(self):
         node = _parse_func("def f():\n    return 1")
@@ -88,6 +89,7 @@ class TestNestingDepth:
 # ════════════════════════════════════════════════════════════════════
 
 class TestComplexity:
+    """Tests for cyclomatic complexity computation."""
 
     def test_empty_function(self):
         node = _parse_func("def f():\n    pass")
@@ -131,6 +133,7 @@ class TestComplexity:
 # ════════════════════════════════════════════════════════════════════
 
 class TestASTNormalizer:
+    """Tests for AST normalizer."""
 
     def test_renames_function(self):
         node = _parse_func("def my_func():\n    pass")
@@ -191,6 +194,7 @@ class TestASTNormalizer:
 # ════════════════════════════════════════════════════════════════════
 
 class TestStructureHash:
+    """Tests for structure hash computation."""
 
     def test_returns_hex_string(self):
         node = _parse_func("def f():\n    return 1")
@@ -228,6 +232,7 @@ class TestStructureHash:
 # ════════════════════════════════════════════════════════════════════
 
 class TestExtractFunctions:
+    """Tests for function extraction from AST."""
 
     def test_simple_file(self, tmp_path):
         src = "def greet(name):\n    return f'Hello {name}'\n"
@@ -276,6 +281,7 @@ class TestExtractFunctions:
         assert err is not None
 
     def test_decorated_function(self, tmp_path):
+        """Verify decorated functions are correctly extracted with decorator info."""
         src = textwrap.dedent("""\
         def my_decorator(f):
             return f
@@ -317,6 +323,7 @@ class TestExtractFunctions:
 # ════════════════════════════════════════════════════════════════════
 
 class TestCollectPyFiles:
+    """Tests for Python file collection."""
 
     def test_finds_py_files(self, tmp_path):
         (tmp_path / "a.py").write_text("x=1")

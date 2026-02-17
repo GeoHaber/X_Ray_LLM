@@ -37,15 +37,12 @@ class LLMHelper:
         return self.completion(prompt, **kwargs)
 
     def completion(self, prompt: str, system_prompt: str = "") -> str:
-        """
-        Get a completion from the LLM.
-        """
+        """Get a completion from the LLM."""
         url = f"{self.base_url}/chat/completions"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
+            "Authorization": f"Bearer {self.api_key}",
         }
-        
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -55,45 +52,52 @@ class LLMHelper:
             "model": self.model,
             "messages": messages,
             "temperature": LLM_CONFIG["temperature"],
-            "max_tokens": LLM_CONFIG["max_tokens"]
+            "max_tokens": LLM_CONFIG["max_tokens"],
         }
-        
-        for attempt in range(1, 4):  # Try 3 times
-            try:
-                req = urllib.request.Request(
-                    url, 
-                    data=json.dumps(data).encode('utf-8'), 
-                    headers=headers, 
-                    method='POST'
-                )
-                with urllib.request.urlopen(req, timeout=LLM_CONFIG["timeout"]) as response:
-                    if response.status == 200:
-                        result = json.loads(response.read().decode('utf-8'))
-                        return result["choices"][0]["message"]["content"]
-                    logger.error(f"LLM API Error: {response.status}")
-                    return ""
-            except urllib.error.HTTPError as e:
-                if e.code in (429, 500, 502, 503, 504) and attempt < 3:
-                    wait_time = 2 ** attempt
-                    logger.warning(f"LLM Error {e.code}, retrying in {wait_time}s...")
-                    import time
-                    time.sleep(wait_time)
-                    continue
-                logger.error(f"LLM API HTTP Error: {e.code} - {e.reason}")
-                return ""
-            except urllib.error.URLError as e:
-                if attempt < 3:
-                    wait_time = 2 ** attempt
-                    logger.warning(f"LLM Connection Failed: {e}, retrying in {wait_time}s...")
-                    import time
-                    time.sleep(wait_time)
-                    continue
-                logger.error(f"LLM Connection Failed after retries: {e}")
-                return ""
-            except Exception as e:
-                logger.error(f"LLM Helper Unexpected Error: {e}")
-                return ""
+
+        for attempt in range(1, 4):
+            result = self._attempt_request(url, data, headers, attempt)
+            if result is not None:
+                return result
         return ""
+
+    def _attempt_request(self, url: str, data: dict,
+                         headers: dict, attempt: int) -> Optional[str]:
+        """Execute a single LLM request attempt, returning text or *None* to retry."""
+        try:
+            req = urllib.request.Request(
+                url, data=json.dumps(data).encode("utf-8"),
+                headers=headers, method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=LLM_CONFIG["timeout"]) as response:
+                if response.status == 200:
+                    result = json.loads(response.read().decode("utf-8"))
+                    return result["choices"][0]["message"]["content"]
+                logger.error(f"LLM API Error: {response.status}")
+                return ""
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 500, 502, 503, 504) and attempt < 3:
+                self._backoff(attempt, f"LLM Error {e.code}")
+                return None
+            logger.error(f"LLM API HTTP Error: {e.code} - {e.reason}")
+            return ""
+        except urllib.error.URLError as e:
+            if attempt < 3:
+                self._backoff(attempt, f"LLM Connection Failed: {e}")
+                return None
+            logger.error(f"LLM Connection Failed after retries: {e}")
+            return ""
+        except Exception as e:
+            logger.error(f"LLM Helper Unexpected Error: {e}")
+            return ""
+
+    @staticmethod
+    def _backoff(attempt: int, reason: str) -> None:
+        """Sleep with exponential back-off and log the retry reason."""
+        import time
+        wait = 2 ** attempt
+        logger.warning(f"{reason}, retrying in {wait}s...")
+        time.sleep(wait)
 
     async def completion_async(self, prompt: str, system_prompt: str = "") -> str:
         """

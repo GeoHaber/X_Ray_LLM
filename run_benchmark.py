@@ -11,6 +11,7 @@ from Lang.python_ast import scan_codebase
 from Analysis.duplicates import DuplicateFinder
 
 def run_scan(target_dir: Path, label: str):
+    """Run a single scan benchmark and return timing results."""
     print(f"\n--- Running Benchmark: {label} ---")
     start_time = time.time()
     
@@ -43,6 +44,7 @@ def run_scan(target_dir: Path, label: str):
     }
 
 def main():
+    """Execute benchmark suite comparing scan performance across configurations."""
     target = Path("C:/Users/Yo930/Desktop/_Python/Local_LLM") # Scan the larger parent project!
     if not target.exists():
         target = Path(".") # Fallback to self

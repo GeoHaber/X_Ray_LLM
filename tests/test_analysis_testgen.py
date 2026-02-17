@@ -42,6 +42,7 @@ class TestInit:
 # ════════════════════════════════════════════════════════════════════
 
 class TestCaptureGroundTruth:
+    """Tests for ground-truth capture functionality."""
 
     def test_successful_execution(self):
         gen = TestReferenceGenerator(sample_add)

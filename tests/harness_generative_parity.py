@@ -49,6 +49,7 @@ class ScanPhaseSimulator:
 # Phase 2: The "Rewrite &Verify" Simulation
 # -----------------------------------------------------------------------------
 def mock_transpile_to_rust_v2(python_code: str) -> str:
+    """Generate mock Rust code from a Python function for parity testing."""
     if "def add(a, b):" in python_code:
         return r"""
         #[no_mangle]
@@ -66,7 +67,8 @@ def mock_transpile_to_rust_v2(python_code: str) -> str:
     raise NotImplementedError("Transpiler only supports 'add' and 'multiply'.")
 
 class GenerativeParityHarness(unittest.TestCase):
-    
+    """Generative parity test harness."""
+
     def compile_rust(self, rust_code: str) -> str:
         tmp_dir = Path(tempfile.mkdtemp())
         src_file = tmp_dir / "gen.rs"

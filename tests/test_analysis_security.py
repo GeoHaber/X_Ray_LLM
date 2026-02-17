@@ -122,6 +122,7 @@ class TestSecurityAvailability:
 # ════════════════════════════════════════════════════════════════════
 
 class TestSecuritySeverityMapping:
+    """Tests for security severity mapping."""
 
     def _mock_analyze(self, bandit_json: str) -> list:
         """Run analyze with mocked subprocess."""
@@ -159,6 +160,7 @@ class TestSecuritySeverityMapping:
 # ════════════════════════════════════════════════════════════════════
 
 class TestSecurityParsing:
+    """Tests for security result parsing."""
 
     def _mock_analyze(self, bandit_json: str) -> list:
         with patch("shutil.which", return_value="/usr/bin/bandit"):
@@ -250,8 +252,10 @@ class TestSecurityParsing:
 # ════════════════════════════════════════════════════════════════════
 
 class TestSecuritySummary:
+    """Tests for security summary generation."""
 
     def test_summary_counts(self):
+        """Verify security summary correctly counts issues by severity."""
         with patch("shutil.which", return_value="/usr/bin/bandit"):
             analyzer = SecurityAnalyzer()
 
@@ -414,6 +418,7 @@ class TestSecurityLiveIntegration:
 # ════════════════════════════════════════════════════════════════════
 
 class TestSecurityEdgeCases:
+    """Tests for security edge case handling."""
 
     def _mock_analyze(self, bandit_json: str) -> list:
         with patch("shutil.which", return_value="/usr/bin/bandit"):

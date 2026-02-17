@@ -148,6 +148,8 @@ class TestSeverity:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestFunctionRecord:
+    """Tests for FunctionRecord construction."""
+
     def test_key(self):
         f = _make_func(name="do_stuff", file_path="utils/helpers.py")
         assert f.key == "utils/helpers::do_stuff"
@@ -210,6 +212,8 @@ class TestClassRecord:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestTokenization:
+    """Tests for tokenization pipeline."""
+
     def test_empty(self):
         assert tokenize("") == []
 
@@ -644,6 +648,8 @@ class TestCodeSmellSummary:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestDuplicateFinder:
+    """Tests for duplicate function detection."""
+
     def test_no_duplicates(self):
         f1 = _make_func(name="foo", file_path="a.py",
                          code="def foo():\n    return 1")
@@ -655,6 +661,7 @@ class TestDuplicateFinder:
         assert len(exact) == 0
 
     def test_exact_duplicates(self):
+        """Verify exact duplicate detection identifies identical functions."""
         code = "def helper(data):\n    cleaned = data.strip()\n    return cleaned.lower()"
         import hashlib
         hashlib.sha256(code.encode()).hexdigest()
@@ -890,6 +897,8 @@ class TestSemanticSimilarity:
 
 
 class TestSemanticStageInDuplicateFinder:
+    """Tests for semantic stage in duplicate finder."""
+
     def test_semantic_detection(self):
         """Functions with different code but same purpose should be detected."""
         f1 = _make_func(
@@ -937,12 +946,15 @@ class TestSemanticStageInDuplicateFinder:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestLibraryAdvisor:
+    """Tests for library advisor suggestions."""
+
     def test_no_suggestions_empty(self):
         advisor = LibraryAdvisor()
         suggestions = advisor.analyze([], [])
         assert len(suggestions) == 0
 
     def test_suggestion_from_duplicate_group(self):
+        """Verify library suggestions are generated from duplicate groups."""
         group = DuplicateGroup(
             group_id=0, similarity_type="near", avg_similarity=0.85,
             functions=[
@@ -999,6 +1011,8 @@ class TestLibraryAdvisor:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestSmartGraph:
+    """Tests for smart graph visualization."""
+
     def test_empty(self):
         graph = SmartGraph()
         graph.build([], [], [], Path("."))
@@ -1089,7 +1103,10 @@ class TestSmartGraph:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestASTExtraction:
+    """Tests for AST extraction pipeline."""
+
     def test_extract_from_temp_file(self, tmp_path):
+        """Verify function extraction from temporary Python files."""
         code = textwrap.dedent("""\
         def greet(name: str) -> str:
             \"\"\"Say hello.\"\"\"
@@ -1148,6 +1165,7 @@ class TestASTExtraction:
         assert len(classes) == 0
 
     def test_nesting_depth_calculation(self, tmp_path):
+        """Verify nesting depth calculation for nested control structures."""
         code = textwrap.dedent("""\
         def deep():
             for i in range(10):
@@ -1164,6 +1182,7 @@ class TestASTExtraction:
         assert functions[0].nesting_depth >= 4
 
     def test_complexity_calculation(self, tmp_path):
+        """Verify cyclomatic complexity calculation for branching functions."""
         code = textwrap.dedent("""\
         def complex_func(x, y):
             if x > 0:
@@ -1277,6 +1296,8 @@ class TestCollectPyFiles:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestReportPrinting:
+    """Tests for report printing functions."""
+
     def test_smell_report_empty(self, capsys):
         print_smell_report([], {"total": 0, "critical": 0, "warning": 0,
                                 "info": 0, "by_category": {}, "worst_files": {}})
@@ -1320,6 +1341,8 @@ class TestReportPrinting:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestJSONReport:
+    """Tests for JSON report generation."""
+
     def test_basic_structure(self):
         f = _make_func()
         c = _make_class()
@@ -1371,6 +1394,8 @@ class TestJSONReport:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestFullPipeline:
+    """Tests for full analysis pipeline."""
+
     def test_end_to_end(self, tmp_path):
         """Test the full pipeline on a mini project."""
         # Create a small project with deliberate smells and duplicates
@@ -1467,6 +1492,8 @@ class TestFullPipeline:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestEdgeCases:
+    """Tests for edge case handling."""
+
     def test_function_record_key_no_dirs(self):
         """File in root dir should use stem directly."""
         f = _make_func(name="run", file_path="main.py")
@@ -1545,6 +1572,7 @@ class TestEdgeCases:
         assert classes[0].name == "Config"
 
     def test_decorators_extracted(self, tmp_path):
+        """Verify decorator information is preserved during extraction."""
         code = textwrap.dedent("""\
         import functools
         

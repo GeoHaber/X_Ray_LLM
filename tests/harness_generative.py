@@ -9,6 +9,7 @@ from Analysis.test_gen import TestGenerator
 
 # Re-use the mock transpiler from Phase 5 (in a real scenario, we'd import it)
 def mock_transpile_to_rust_v2(python_code: str) -> str:
+    """Generate mock Rust code from a Python function for transpilation testing."""
     # Slightly more advanced mock that handles 'add' and 'multiply'
     if "def add(a, b):" in python_code:
         return r"""
@@ -27,7 +28,8 @@ def mock_transpile_to_rust_v2(python_code: str) -> str:
     raise NotImplementedError("Transpiler only supports 'add' and 'multiply'.")
 
 class GenerativeTranspilationHarness(unittest.TestCase):
-    
+    """Generative transpilation test harness."""
+
     def setUp(self):
         self.generator = TestGenerator()
 
@@ -46,6 +48,7 @@ class GenerativeTranspilationHarness(unittest.TestCase):
         return str(out_file)
 
     def verify_function(self, py_source: str, func_name: str, py_func: callable):
+        """Verify transpiled Rust code compiles and produces correct output."""
         print(f"\n[Generative] Testing '{func_name}'...")
         
         # 1. Generate Inputs

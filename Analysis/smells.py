@@ -8,6 +8,39 @@ from Core.config import SMELL_THRESHOLDS
 from Core.inference import LLMHelper
 from Core.utils import logger
 
+_BOOL_PREFIXES = ("is_", "has_", "can_", "should_", "check_",
+                  "validate_", "contains_", "exists_")
+
+
+def _check_boolean_blindness(func: FunctionRecord, smells: list):
+    """Flag functions returning bool whose name doesn't indicate a question."""
+    if (func.return_type and 'bool' in func.return_type.lower()
+            and not any(func.name.startswith(p) for p in _BOOL_PREFIXES)):
+        smells.append(SmellIssue(
+            file_path=func.file_path, line=func.line_start,
+            end_line=func.line_end, category="boolean-blindness",
+            severity=Severity.INFO, name=func.name,
+            metric_value=0,
+            message=f"Function '{func.name}' returns bool but name doesn't indicate a question",
+            suggestion="Rename to is_/has_/can_/should_/check_ prefix for clarity.",
+        ))
+
+
+async def _enrich_smell_async(smell: SmellIssue, llm: LLMHelper,
+                              sem: asyncio.Semaphore):
+    """Enrich a single smell with LLM analysis (used by async enrichment)."""
+    async with sem:
+        prompt = (
+            f"Analyze this code smell: {smell.category} in {smell.name}.\n"
+            f"Message: {smell.message}\n"
+            f"Suggest a specific refactoring (2 sentences max)."
+        )
+        try:
+            suggestion = await llm.completion_async(prompt)
+            smell.llm_analysis = suggestion.strip()
+        except Exception as e:
+            logger.debug(f"Async LLM enrichment failed: {e}")
+
 
 class CodeSmellDetector:
     """
@@ -42,9 +75,21 @@ class CodeSmellDetector:
     check = detect
 
     def _check_function(self, func: FunctionRecord):
+        """Dispatch all per-function smell checks."""
         t = self.thresholds
+        self._check_long_function(func, t)
+        self._check_deep_nesting(func, t)
+        self._check_high_complexity(func, t)
+        self._check_too_many_params(func, t)
+        self._check_missing_docstring(func, t)
+        self._check_too_many_returns(func, t)
+        _check_boolean_blindness(func, self.smells)
+        self._check_too_many_branches(func, t)
 
-        # Long function
+    # -- individual smell checks -------------------------------------------
+
+    def _check_long_function(self, func: FunctionRecord, t: dict):
+        """Flag functions exceeding the line-count threshold."""
         if func.size_lines >= t["very_long_function"]:
             self.smells.append(SmellIssue(
                 file_path=func.file_path, line=func.line_start,
@@ -64,7 +109,8 @@ class CodeSmellDetector:
                 suggestion="Consider splitting into smaller functions.",
             ))
 
-        # Deep nesting
+    def _check_deep_nesting(self, func: FunctionRecord, t: dict):
+        """Flag functions with excessive nesting depth."""
         if func.nesting_depth >= t["very_deep_nesting"]:
             self.smells.append(SmellIssue(
                 file_path=func.file_path, line=func.line_start,
@@ -84,7 +130,8 @@ class CodeSmellDetector:
                 suggestion="Flatten with early returns or extract helper functions.",
             ))
 
-        # High cyclomatic complexity
+    def _check_high_complexity(self, func: FunctionRecord, t: dict):
+        """Flag functions with high cyclomatic complexity."""
         if func.complexity >= t["very_high_complexity"]:
             self.smells.append(SmellIssue(
                 file_path=func.file_path, line=func.line_start,
@@ -104,7 +151,8 @@ class CodeSmellDetector:
                 suggestion="Simplify branching logic. Consider lookup tables or strategy pattern.",
             ))
 
-        # Too many parameters
+    def _check_too_many_params(self, func: FunctionRecord, t: dict):
+        """Flag functions with too many parameters."""
         if len(func.parameters) >= t["too_many_params"]:
             self.smells.append(SmellIssue(
                 file_path=func.file_path, line=func.line_start,
@@ -115,7 +163,8 @@ class CodeSmellDetector:
                 suggestion="Group related parameters into a dataclass or config object.",
             ))
 
-        # Missing docstring (only for non-trivial functions)
+    def _check_missing_docstring(self, func: FunctionRecord, t: dict):
+        """Flag non-trivial public functions without docstrings."""
         if (not func.docstring
                 and func.size_lines >= t["missing_docstring_size"]
                 and not func.name.startswith("_")):
@@ -128,7 +177,8 @@ class CodeSmellDetector:
                 suggestion="Add a docstring explaining purpose, parameters, and return value.",
             ))
 
-        # Too many return statements (pre-computed from AST)
+    def _check_too_many_returns(self, func: FunctionRecord, t: dict):
+        """Flag functions with excessive return statements."""
         if func.return_count >= t["too_many_returns"]:
             self.smells.append(SmellIssue(
                 file_path=func.file_path, line=func.line_start,
@@ -139,9 +189,8 @@ class CodeSmellDetector:
                 suggestion="Consolidate exit points. Consider a result variable.",
             ))
 
-        self._check_boolean_blindness(func)
-
-        # Too many branches — excessive if/elif logic
+    def _check_too_many_branches(self, func: FunctionRecord, t: dict):
+        """Flag functions with excessive branch logic."""
         if func.branch_count >= t["too_many_branches"]:
             self.smells.append(SmellIssue(
                 file_path=func.file_path, line=func.line_start,
@@ -150,22 +199,6 @@ class CodeSmellDetector:
                 metric_value=func.branch_count,
                 message=f"Function '{func.name}' has {func.branch_count} branches (limit: {t['too_many_branches']})",
                 suggestion="Simplify with lookup tables, strategy pattern, or early returns.",
-            ))
-
-    _BOOL_PREFIXES = ("is_", "has_", "can_", "should_", "check_",
-                      "validate_", "contains_", "exists_")
-
-    def _check_boolean_blindness(self, func: FunctionRecord):
-        """Flag functions returning bool whose name doesn't indicate a question."""
-        if (func.return_type and 'bool' in func.return_type.lower()
-                and not any(func.name.startswith(p) for p in self._BOOL_PREFIXES)):
-            self.smells.append(SmellIssue(
-                file_path=func.file_path, line=func.line_start,
-                end_line=func.line_end, category="boolean-blindness",
-                severity=Severity.INFO, name=func.name,
-                metric_value=0,
-                message=f"Function '{func.name}' returns bool but name doesn't indicate a question",
-                suggestion="Rename to is_/has_/can_/should_/check_ prefix for clarity.",
             ))
 
     def _check_class(self, cls: ClassRecord):
@@ -262,22 +295,8 @@ class CodeSmellDetector:
 
         sem = asyncio.Semaphore(concurrency)
 
-        async def _process(smell: SmellIssue):
-            async with sem:
-                prompt = (
-                    f"Analyze this code smell: {smell.category} in {smell.name}.\n"
-                    f"Message: {smell.message}\n"
-                    f"Suggest a specific refactoring (2 sentences max)."
-                )
-                try:
-                    # Use completion_async
-                    suggestion = await llm.completion_async(prompt)
-                    smell.llm_analysis = suggestion.strip()
-                except Exception as e:
-                    logger.debug(f"Async LLM enrichment failed: {e}")
-
         logger.info(f"Enriching {len(candidates)} smells with AI (Async)...")
-        tasks = [_process(s) for s in candidates]
+        tasks = [_enrich_smell_async(smell, llm, sem) for smell in candidates]
         await asyncio.gather(*tasks)
 
     def summary(self) -> Dict[str, Any]:

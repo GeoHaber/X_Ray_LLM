@@ -17,6 +17,7 @@ def generate_garbage():
     return "def foo(:\n  return bar"
 
 def reproduce():
+    """Reproduce edge-case crashes for debugging AST extraction."""
     root = Path.cwd()
     fpath = root / "temp_garbage.py"
     fpath.write_text(generate_garbage(), encoding="utf-8")

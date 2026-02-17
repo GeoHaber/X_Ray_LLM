@@ -12,7 +12,8 @@ except ImportError:
     pytest.fail("Could not import x_ray_core extension. Is it built and in path?", pytrace=False)
 
 class TestXRayCoreComprehensive:
-    
+    """Comprehensive tests for X-Ray core module."""
+
     # --- Tokenization Tests ---
 
     def test_tokenize_basic(self):
@@ -28,6 +29,7 @@ class TestXRayCoreComprehensive:
         assert tokens == ["ID", "=", "STR", "+", "STR", "+", "STR"]
 
     def test_tokenize_python_3_12_syntax(self):
+        """Verify tokenizer handles Python 3.12+ syntax correctly."""
         # type alias
         code = "type Point = tuple[float, float]"
         tokens = x_ray_core.normalized_token_stream(code)
@@ -130,6 +132,7 @@ class TestXRayCoreExtended:
     # --- Batch Similarity Tests ---
 
     def test_batch_similarity_matrix_properties(self):
+        """Verify batch similarity matrix has correct mathematical properties."""
         codes = [
             "def a(): pass",
             "def b(): pass",
@@ -150,6 +153,7 @@ class TestXRayCoreExtended:
         assert matrix[0][2] == matrix[2][0]
 
     def test_normalization_stripping(self):
+        """Verify code normalization strips docstrings and renames variables."""
         code = """
 def foo():
     '''docstring'''

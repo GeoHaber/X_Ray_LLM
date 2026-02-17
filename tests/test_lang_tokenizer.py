@@ -12,6 +12,7 @@ from Lang.tokenizer import tokenize, term_freq, cosine_similarity
 # ════════════════════════════════════════════════════════════════════
 
 class TestTokenize:
+    """Tests for tokenizer functionality."""
 
     def test_empty_string(self):
         assert tokenize("") == []
@@ -86,6 +87,7 @@ class TestTermFreq:
 # ════════════════════════════════════════════════════════════════════
 
 class TestCosineSimilarity:
+    """Tests for cosine similarity computation."""
 
     def test_identical(self):
         a = Counter({"hello": 3, "world": 2})

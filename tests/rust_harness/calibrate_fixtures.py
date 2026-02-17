@@ -311,6 +311,7 @@ def _print_boundary_recommendations():
 
 
 def main():
+    """Calibrate test fixtures and report duplicate detection accuracy."""
     parser = argparse.ArgumentParser(description="Calibrate fixture scores")
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--generate-boundary", "-g", action="store_true",

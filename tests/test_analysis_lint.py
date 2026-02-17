@@ -129,6 +129,7 @@ class TestLintCategoryMapping:
 # ════════════════════════════════════════════════════════════════════
 
 class TestLintParsing:
+    """Tests for lint output parsing."""
 
     def _mock_analyze(self, ruff_json: str) -> list:
         """Run analyze with mocked subprocess."""
@@ -202,8 +203,10 @@ class TestLintParsing:
 # ════════════════════════════════════════════════════════════════════
 
 class TestLintSummary:
+    """Tests for lint summary generation."""
 
     def test_summary_counts(self):
+        """Verify lint summary correctly counts issues by severity."""
         with patch("shutil.which", return_value="/usr/bin/ruff"):
             analyzer = LintAnalyzer()
 

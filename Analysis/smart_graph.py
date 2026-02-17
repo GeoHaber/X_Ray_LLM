@@ -18,82 +18,71 @@ class SmartGraph:
         """Build the graph nodes and edges."""
         self.nodes = []
         self.edges = []
+        smell_map = self._build_smell_map(smells)
+        self.nodes = [self._make_node(f, smell_map.get(f.key, []))
+                      for f in functions]
+        self.edges = self._make_edges(duplicates)
 
-        # Map function key to smells
+    # -- private helpers (extracted from build) ------------------------------
+
+    @staticmethod
+    def _build_smell_map(smells: List[SmellIssue]) -> Dict[str, List[SmellIssue]]:
+        """Map ``file::name`` keys to their associated SmellIssue lists."""
         smell_map: Dict[str, List[SmellIssue]] = {}
         for s in smells:
-            # Since FunctionRecord.key format is "file::name", strictly we need to match that.
-            # SmellIssue doesn't store the exact key, but has file_path and name.
-            # Let's try to verify against function keys if possible, or build exact keys.
-            if s.name:
-                p = Path(s.file_path)
-                parent = str(p.parent).replace("\\", "/")
-                stem = p.stem
-                if parent == ".":
-                    k = f"{stem}::{s.name}"
-                else:
-                    k = f"{parent}/{stem}::{s.name}"
-                
-                if k not in smell_map:
-                    smell_map[k] = []
-                smell_map[k].append(s)
-
-        # Create Nodes
-        for f in functions:
-            f_smells = smell_map.get(f.key, [])
-            
-            # Determine health color
-            color = "#2ecc71" # Green (Healthy)
-            health = "healthy"
-            
-            critical_count = sum(1 for s in f_smells if s.severity == Severity.CRITICAL)
-            warning_count = sum(1 for s in f_smells if s.severity == Severity.WARNING)
-            
-            if critical_count > 0:
-                color = "#e74c3c" # Red
-                health = "critical"
-            elif warning_count > 0:
-                color = "#f39c12" # Orange/Yellow
-                health = "warning"
-
-            # Tooltip
-            tooltip = f"<b>{f.name}</b><br>{f.file_path}:{f.line_start}<br>"
-            if f_smells:
-                tooltip += "<br><b>Issues:</b><br>"
-                for s in f_smells:
-                    icon = Severity.icon(s.severity)
-                    tooltip += f"{icon} {s.category}: {s.message}<br>"
-
-            self.nodes.append({
-                "id": f.key,
-                "label": f.name,
-                "title": tooltip,
-                "color": color,
-                "health": health,
-                "size": f.size_lines, # Visual size based on LOC
-                "group": str(Path(f.file_path).parent) # Group by folder
-            })
-
-        # Create Edges (Duplicates)
-        for group in duplicates:
-            # Fully connected component for each group
-            # Or simplified: Connect first to all others, or ring.
-            # Let's do a chain or star to avoid clutter.
-            # "test_duplicate_edges" expects 1 edge for 2 functions.
-            funcs_in_group = group.functions
-            if len(funcs_in_group) < 2:
+            if not s.name:
                 continue
-                
-            for i in range(len(funcs_in_group)):
-                for j in range(i + 1, len(funcs_in_group)):
-                    u = funcs_in_group[i]["key"]
-                    v = funcs_in_group[j]["key"]
-                    self.edges.append({
-                        "from": u,
-                        "to": v,
-                        "value": group.avg_similarity, # Width
-                        "title": f"{group.similarity_type} duplicate ({group.avg_similarity:.2f})"
+            p = Path(s.file_path)
+            parent = str(p.parent).replace("\\", "/")
+            stem = p.stem
+            k = f"{stem}::{s.name}" if parent == "." else f"{parent}/{stem}::{s.name}"
+            smell_map.setdefault(k, []).append(s)
+        return smell_map
+
+    @staticmethod
+    def _make_node(f: FunctionRecord,
+                   f_smells: List[SmellIssue]) -> Dict[str, Any]:
+        """Create a single graph node dict for *f*."""
+        critical_count = sum(1 for s in f_smells if s.severity == Severity.CRITICAL)
+        warning_count = sum(1 for s in f_smells if s.severity == Severity.WARNING)
+
+        if critical_count > 0:
+            color, health = "#e74c3c", "critical"
+        elif warning_count > 0:
+            color, health = "#f39c12", "warning"
+        else:
+            color, health = "#2ecc71", "healthy"
+
+        tooltip = f"<b>{f.name}</b><br>{f.file_path}:{f.line_start}<br>"
+        if f_smells:
+            tooltip += "<br><b>Issues:</b><br>"
+            for s in f_smells:
+                icon = Severity.icon(s.severity)
+                tooltip += f"{icon} {s.category}: {s.message}<br>"
+
+        return {
+            "id": f.key, "label": f.name, "title": tooltip,
+            "color": color, "health": health,
+            "size": f.size_lines,
+            "group": str(Path(f.file_path).parent),
+        }
+
+    @staticmethod
+    def _make_edges(duplicates: List[DuplicateGroup]) -> List[Dict[str, Any]]:
+        """Generate pairwise edge dicts from DuplicateGroups."""
+        edges: List[Dict[str, Any]] = []
+        for group in duplicates:
+            funcs = group.functions
+            if len(funcs) < 2:
+                continue
+            for i in range(len(funcs)):
+                for j in range(i + 1, len(funcs)):
+                    edges.append({
+                        "from": funcs[i]["key"], "to": funcs[j]["key"],
+                        "value": group.avg_similarity,
+                        "title": f"{group.similarity_type} duplicate ({group.avg_similarity:.2f})",
                     })
+        return edges
 
     def write_html(self, output_path: Path):
         """Export the graph to an interactive HTML file using vis-network."""

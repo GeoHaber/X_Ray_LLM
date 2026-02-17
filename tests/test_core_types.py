@@ -42,6 +42,7 @@ def _cls(name="MyClass", **overrides):
 # ════════════════════════════════════════════════════════════════════
 
 class TestFunctionRecord:
+    """Tests for FunctionRecord data type."""
 
     def test_key_uses_stem(self):
         """Core.types uses full path with / and :: separator."""

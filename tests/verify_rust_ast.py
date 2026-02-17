@@ -15,10 +15,13 @@ except ImportError:
     sys.exit(1)
 
 class TestRustASTVerification(unittest.TestCase):
+    """Tests for Rust AST verification."""
+
     def setUp(self):
         self.fixtures_dir = Path(__file__).parent / "fixtures"
         
     def test_normalize_code_against_fixture(self):
+        """Verify Rust normalize_code matches expected fixture output."""
         fixture_path = self.fixtures_dir / "python_normalize_wrapper_verification.json"
         
         if not fixture_path.exists():

@@ -197,6 +197,26 @@ def _build_class_record(node: ast.ClassDef, rel_path: str) -> ClassRecord:
     )
 
 
+def _should_prune_dir(dirname: str, rel_dir: str, exclude: list) -> bool:
+    """Return True if *dirname* should be pruned from the file walk."""
+    if dirname in _ALWAYS_SKIP or dirname.endswith(".egg-info"):
+        return True
+    if exclude:
+        qualified = os.path.join(rel_dir, dirname) if rel_dir != "." else dirname
+        return any(qualified.startswith(p) for p in exclude)
+    return False
+
+
+def _matches_include_filter(rel_dir: str, include: list) -> bool:
+    """Return True if *rel_dir* passes the include filter (or no filter set)."""
+    if not include:
+        return True
+    top = rel_dir.split(os.sep)[0] if rel_dir != "." else "."
+    if top == ".":
+        return True
+    return any(top.startswith(p) for p in include)
+
+
 def collect_py_files(root: Path, exclude: List[str] = None,
                      include: List[str] = None) -> List[Path]:
     """Walk root and return .py files respecting include/exclude rules."""
@@ -210,19 +230,10 @@ def collect_py_files(root: Path, exclude: List[str] = None,
         return results
     for dirpath, dirnames, filenames in walker:
         rel_dir = os.path.relpath(dirpath, root)
-        # Prune dirs in-place
-        dirnames[:] = [
-            d for d in dirnames
-            if d not in _ALWAYS_SKIP
-            and not d.endswith(".egg-info")
-            and not (exclude and any(
-                (os.path.join(rel_dir, d) if rel_dir != "." else d).startswith(p)
-                for p in exclude))
-        ]
-        if include:
-            top = rel_dir.split(os.sep)[0] if rel_dir != "." else "."
-            if top != "." and not any(top.startswith(p) for p in include):
-                continue
+        dirnames[:] = [d for d in dirnames
+                       if not _should_prune_dir(d, rel_dir, exclude)]
+        if not _matches_include_filter(rel_dir, include):
+            continue
         for fn in filenames:
             if fn.endswith(".py") and fn not in _ALWAYS_SKIP_FILES:
                 results.append(Path(dirpath) / fn)

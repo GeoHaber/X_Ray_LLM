@@ -23,6 +23,7 @@ except ImportError as e:
 # --- AST Utils Tests ---
 
 def test_extract_functions():
+    """Verify function extraction from Python source files."""
     code = """
 def foo(x):
     return x + 1
@@ -82,6 +83,7 @@ def test_code_similarity_diff():
     assert code_similarity(s1, s2) < 0.5
 
 def test_semantic_similarity():
+    """Verify semantic similarity scoring between code snippets."""
     # Mock function records
     f1 = FunctionRecord(
         name="calculate_total", file_path="a.py", line_start=1, line_end=5,
@@ -104,6 +106,7 @@ def test_semantic_similarity():
 # --- Duplicate Finder Tests ---
 
 def test_duplicate_finder_exact():
+    """Verify exact duplicate detection across file boundaries."""
     f1 = FunctionRecord(
         name="foo", file_path="a.py", line_start=1, line_end=5,
         size_lines=5, parameters=[], return_type=None, decorators=[],
@@ -127,6 +130,7 @@ def test_duplicate_finder_exact():
 # --- Smell Detector Tests ---
 
 def test_smell_detection():
+    """Verify code smell detection for long and complex functions."""
     # Function with high complexity
     f = FunctionRecord(
         name="complex_func", file_path="a.py", line_start=1, line_end=100,

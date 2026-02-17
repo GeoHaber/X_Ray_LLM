@@ -41,6 +41,8 @@ FIXTURES_DIR = HARNESS_DIR / "fixtures"
 
 @dataclass
 class TimingResult:
+    """Container for benchmark timing results."""
+
     times_ms: List[float] = field(default_factory=list)
     peak_memory_kb: float = 0.0
 
@@ -355,6 +357,7 @@ def save_benchmark_json(suites: List[BenchmarkSuite], output_path: Path):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
+    """Run the Rust vs Python performance benchmark suite."""
     parser = argparse.ArgumentParser(description="Benchmark Python vs Rust X-Ray")
     parser.add_argument("--rust-bin", required=True, help="Path to Rust binary")
     parser.add_argument("--iterations", "-n", type=int, default=5,

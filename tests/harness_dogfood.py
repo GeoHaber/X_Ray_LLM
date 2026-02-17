@@ -11,7 +11,8 @@ from Analysis.test_gen import TestGenerator
 from Analysis.similarity import tokenize as py_tokenize
 
 class DogfoodHarness(unittest.TestCase):
-    
+    """Self-scan dogfood test harness."""
+
     @classmethod
     def setUpClass(cls):
         """Compile the Rust project once."""

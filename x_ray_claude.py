@@ -17,6 +17,8 @@ Usage::
     python X_RAY_Claude.py --security                   # Bandit security only
     python X_RAY_Claude.py --full-scan                  # everything (all 4 analyzers)
     python X_RAY_Claude.py --report scan_results.json   # save JSON report
+    python X_RAY_Claude.py --rustify                    # rank functions for Rust porting
+    python X_RAY_Claude.py --rustify --report rust.json  # save candidate report
 """
 
 from __future__ import annotations
@@ -103,13 +105,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--lint", action="store_true", help="Run Ruff linter analysis")
     parser.add_argument("--security", action="store_true", help="Run Bandit security scan")
     parser.add_argument("--full-scan", action="store_true", help="Run ALL analyses")
+    parser.add_argument("--rustify", action="store_true",
+                        help="Rank functions by Rust-porting suitability")
     parser.add_argument("--use-llm", action="store_true", help="Enable LLM enrichment")
     parser.add_argument("--report", help="Save JSON report to file")
     parser.add_argument("--exclude", nargs="*", help="Exclude directories")
     args = parser.parse_args()
 
     # Auto-select: if no specific flags, run smells + lint + security (not duplicates, it's slow)
-    has_specific = args.smell or args.duplicates or args.lint or args.security
+    has_specific = args.smell or args.duplicates or args.lint or args.security or args.rustify
     if args.full_scan or not has_specific:
         args.smell = True
         args.lint = True
@@ -186,8 +190,37 @@ def _run_security_phase(args, root):
     return None, []
 
 
+def _run_rustify(root: Path, args: argparse.Namespace) -> dict:
+    """Rank functions by Rust-porting suitability and print results."""
+    from Analysis.rust_advisor import RustAdvisor
+
+    print("\n  >> Scanning codebase for Rust candidates...")
+    functions, classes, errors = scan_codebase(root, exclude=args.exclude)
+    if not functions:
+        print("  No functions found.")
+        return {"rustify": {"candidates": []}}
+
+    advisor = RustAdvisor()
+    candidates = advisor.score(functions)
+    advisor.print_candidates(candidates)
+
+    results = {
+        "rustify": {
+            "total_functions": len(functions),
+            "scored": len(candidates),
+            "pure_count": sum(1 for c in candidates if c.is_pure),
+            "candidates": [c.to_dict() for c in candidates],
+        }
+    }
+    return results
+
+
 async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
     """Execute all requested scan phases and return the results dict."""
+    # ── Rustify mode: rank functions for Rust porting ──
+    if args.rustify:
+        return _run_rustify(root, args)
+
     llm = _init_llm(args, root)
     functions, classes, errors = _scan_codebase_phase(root, args)
 
@@ -244,6 +277,7 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
 
 
 async def main_async():
+    """Async entry point for X-Ray CLI scanner."""
     args = _parse_args()
     print(BANNER)
 

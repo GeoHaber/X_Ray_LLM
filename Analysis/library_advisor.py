@@ -12,71 +12,62 @@ class LibraryAdvisor:
         self._analyzed_count = 0
 
     def analyze(self, duplicates: List[DuplicateGroup], functions: List[FunctionRecord]) -> List[LibrarySuggestion]:
+        """Analyze duplicates and cross-file name repetition for library candidates."""
         self.suggestions = []
         self._analyzed_count = len(functions)
-        
-        # 1. Suggestions from explicit duplicates
+        self._from_duplicates(duplicates)
+        self._from_name_repetition(functions)
+        return self.suggestions
+
+    # -- private helpers (extracted from analyze) ----------------------------
+
+    def _from_duplicates(self, duplicates: List[DuplicateGroup]) -> None:
+        """Create suggestions from explicit duplicate groups."""
         for group in duplicates:
-            # Only suggest for substantial groups
             if len(group.functions) < 2 and group.similarity_type != "exact":
                 continue
-            
             names = [f["name"] for f in group.functions]
             most_common_name = max(set(names), key=names.count)
             module_name = self._suggest_module_name([most_common_name])
-            
-            sug = LibrarySuggestion(
+            self.suggestions.append(LibrarySuggestion(
                 module_name=module_name,
                 description=f"Cluster of {len(group.functions)} similar functions ({most_common_name})",
                 functions=group.functions,
                 unified_api=f"def {most_common_name}(...):",
-                rationale=f"Found {len(group.functions)} {group.similarity_type} duplicates."
-            )
-            self.suggestions.append(sug)
+                rationale=f"Found {len(group.functions)} {group.similarity_type} duplicates.",
+            ))
 
-        # 2. Suggestions from cross-file name repetition (if not already covered)
-        # Group functions by name (skip dunder/boilerplate methods)
-        name_map = defaultdict(list)
+    def _from_name_repetition(self, functions: List[FunctionRecord]) -> None:
+        """Create suggestions from cross-file name repetition."""
+        name_map: Dict[str, List[FunctionRecord]] = defaultdict(list)
         for f in functions:
-            if f.name.startswith("__") and f.name.endswith("__"):
-                continue  # skip dunder methods like __init__, __repr__, etc.
-            name_map[f.name].append(f)
-            
-        covered_keys = set()
-        for s in self.suggestions:
-            for f in s.functions:
-                covered_keys.add(f.get("key")) # duplicate dicts have 'key'
+            if not (f.name.startswith("__") and f.name.endswith("__")):
+                name_map[f.name].append(f)
+
+        covered_keys = {
+            f.get("key") for s in self.suggestions for f in s.functions
+        }
 
         for name, funcs in name_map.items():
-            if len(funcs) < 2: 
+            if len(funcs) < 2:
                 continue
-            
-            # Check if they inhabit different files
             files = {f.file_path for f in funcs}
             if len(files) < 2:
                 continue
-
-            # Check if already covered by duplicates
-            # (Simplification: if any function is covered, skip)
             if any(f.key in covered_keys for f in funcs):
                 continue
-                
             module_name = self._suggest_module_name([name])
-            
-            # Convert FunctionRecord to dict for consistent API
             func_dicts = [
                 {"name": f.name, "file": f.file_path, "line": f.line_start, "key": f.key}
                 for f in funcs
             ]
-            
-            sug = LibrarySuggestion(
+            self.suggestions.append(LibrarySuggestion(
                 module_name=module_name,
                 description=f"Multiple functions named '{name}' across {len(files)} files",
                 functions=func_dicts,
                 unified_api=f"def {name}(...):",
-                rationale="Identical naming suggests shared concept."
-            )
-            self.suggestions.append(sug)
+                rationale="Identical naming suggests shared concept.",
+            ))
             
         return self.suggestions
 

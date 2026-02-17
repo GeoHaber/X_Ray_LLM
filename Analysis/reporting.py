@@ -109,34 +109,32 @@ def print_security_report(issues: List[SmellIssue], summary: Dict[str, Any]):
           f"Info (LOW): {summary.get('info', 0)}")
     print("")
 
-    # Show all HIGH severity in detail
-    critical = [i for i in issues if i.severity == Severity.CRITICAL]
-    if critical:
-        print(f"  HIGH Severity ({len(critical)}):")
-        for s in critical:
-            icon = Severity.icon(s.severity)
-            print(f"    {icon} {s.file_path}:{s.line}")
-            print(f"       {s.message}")
-            if s.suggestion:
-                print(f"       Fix: {s.suggestion}")
-        print("")
+    _print_issues_by_severity(issues, Severity.CRITICAL, "HIGH Severity")
+    _print_issues_by_severity(issues, Severity.WARNING, "MEDIUM Severity", limit=15)
 
-    # Show medium severity
-    medium = [i for i in issues if i.severity == Severity.WARNING]
-    if medium:
-        print(f"  MEDIUM Severity ({len(medium)}):")
-        for s in medium[:15]:
-            print(f"    {Severity.icon(s.severity)} {s.file_path}:{s.line} — {s.message}")
-        if len(medium) > 15:
-            print(f"    ... and {len(medium) - 15} more")
-    print("")
-
-    # Show rule breakdown
     by_rule = summary.get("by_rule", {})
     if by_rule:
         print("  Issue Types:")
         for rule, count in sorted(by_rule.items(), key=lambda x: -x[1])[:10]:
             print(f"    {count:4d}  {rule}")
+
+
+def _print_issues_by_severity(issues: List[SmellIssue], severity: str,
+                              label: str, *, limit: int = 0):
+    """Print issues of a given severity with optional limit."""
+    filtered = [i for i in issues if i.severity == severity]
+    if not filtered:
+        return
+    print(f"  {label} ({len(filtered)}):")
+    show = filtered[:limit] if limit else filtered
+    for s in show:
+        icon = Severity.icon(s.severity)
+        print(f"    {icon} {s.file_path}:{s.line} — {s.message}")
+        if s.suggestion and not limit:
+            print(f"       Fix: {s.suggestion}")
+    if limit and len(filtered) > limit:
+        print(f"    ... and {len(filtered) - limit} more")
+    print("")
 
 
 # ── Grade helpers (extracted to reduce complexity) ──────────────

@@ -112,12 +112,19 @@ class SecurityAnalyzer:
             logger.warning("Bandit is not installed. Run: pip install bandit")
             return []
 
-        cmd = [
-            self._bandit_path, "-r", str(root),
-            "-f", "json",
-        ]
+        cmd = self._build_bandit_command(root, exclude)
+        raw = self._run_bandit_subprocess(cmd, root)
+        if raw is None:
+            return []
+        return self._parse_bandit_results(raw, root)
 
-        # Severity threshold flag
+    # -- private helpers (extracted from analyze) ----------------------------
+
+    def _build_bandit_command(self, root: Path,
+                              exclude: Optional[List[str]]) -> List[str]:
+        """Assemble the bandit CLI command list."""
+        cmd = [self._bandit_path, "-r", str(root), "-f", "json"]
+
         sev = self.severity_threshold.lower()
         if sev == "high":
             cmd.append("-lll")
@@ -127,61 +134,60 @@ class SecurityAnalyzer:
             cmd.append("-l")
 
         # Auto-exclude common non-project directories
-        auto_exclude = [".venv", "venv", ".env", "__pycache__", "node_modules",
-                        ".git", "target", ".mypy_cache", ".pytest_cache",
-                        "dist", "build", ".eggs", "*.egg-info",
-                        "_scratch", ".github"]
+        auto_exclude = [
+            ".venv", "venv", ".env", "__pycache__", "node_modules",
+            ".git", "target", ".mypy_cache", ".pytest_cache",
+            "dist", "build", ".eggs", "*.egg-info",
+            "_scratch", ".github",
+        ]
         all_exclude = list(auto_exclude)
         if exclude:
             all_exclude.extend(exclude)
-        # Bandit -x needs comma-separated paths
-        # Convert relative names to absolute paths under root
+
         exclude_paths = []
         for pat in all_exclude:
             full = root / pat
-            if full.exists():
-                exclude_paths.append(str(full))
-            else:
-                exclude_paths.append(pat)
+            exclude_paths.append(str(full) if full.exists() else pat)
         if exclude_paths:
             cmd.extend(["-x", ",".join(exclude_paths)])
 
         cmd.extend(self.extra_args)
+        return cmd
 
+    def _run_bandit_subprocess(self, cmd: List[str],
+                               root: Path) -> Optional[str]:
+        """Execute bandit, return raw JSON string or *None* on failure."""
         logger.info(f"Running Bandit: {' '.join(cmd)}")
-
         try:
             result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=300,
-                cwd=str(root),
+                cmd, capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
+                timeout=300, cwd=str(root),
             )
         except FileNotFoundError:
             logger.error("Bandit executable not found.")
-            return []
+            return None
         except subprocess.TimeoutExpired:
             logger.error("Bandit timed out after 300s.")
-            return []
+            return None
 
-        # Bandit exits with 1 when issues found — expected
         raw = (result.stdout or "").strip()
         if not raw:
             logger.info("Bandit returned no output (clean or empty project).")
-            return []
+            return None
 
-        # Bandit may prepend a progress bar ("Working... ---- 100% ...") before
-        # the JSON.  Strip everything before the first '{'.
+        # Strip progress-bar prefix before JSON
         json_start = raw.find("{")
         if json_start > 0:
             raw = raw[json_start:]
         elif json_start < 0:
             logger.error("Bandit output contains no JSON object.")
-            return []
+            return None
+        return raw
 
+    def _parse_bandit_results(self, raw: str,
+                              root: Path) -> List[SmellIssue]:
+        """Parse raw JSON string into sorted SmellIssue list."""
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as e:
@@ -189,20 +195,15 @@ class SecurityAnalyzer:
             logger.debug(f"Raw output (first 500 chars): {raw[:500]}")
             return []
 
-        results = data.get("results", [])
-        issues = []
-        for item in results:
-            issue = self._to_smell_issue(item, root)
-            if issue is not None:
-                issues.append(issue)
-
-        # Sort: critical first
+        issues = [
+            issue for item in data.get("results", [])
+            if (issue := self._to_smell_issue(item, root)) is not None
+        ]
         issues.sort(key=lambda s: (
             0 if s.severity == Severity.CRITICAL else
             1 if s.severity == Severity.WARNING else 2,
-            s.file_path, s.line
+            s.file_path, s.line,
         ))
-
         logger.info(f"Bandit found {len(issues)} security issues.")
         return issues
 

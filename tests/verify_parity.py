@@ -15,10 +15,13 @@ except ImportError:
     sys.exit(1)
 
 class TestNormalizationParity(unittest.TestCase):
+    """Tests for normalization parity between Python and Rust."""
+
     def setUp(self):
         self.fixtures_dir = Path(__file__).parent / "fixtures"
         
     def test_parity_against_python(self):
+        """Verify Rust implementation produces identical results to Python."""
         fixture_path = self.fixtures_dir / "pure_python_normalize_verification.json"
         
         if not fixture_path.exists():

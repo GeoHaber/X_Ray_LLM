@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from Lang.python_ast import _compute_structure_hash, ASTNormalizer
 
 class TestIntegration(unittest.TestCase):
+    """Integration tests for X-Ray modules."""
+
     def test_compute_structure_hash_uses_rust(self):
         """
         Verify that _compute_structure_hash works and (implicitly) uses Rust if available.

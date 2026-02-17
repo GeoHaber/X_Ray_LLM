@@ -13,7 +13,6 @@ from Analysis.similarity import (
     _ngram_fingerprints,
     _token_ngram_similarity,
     _ast_node_histogram,
-    _ast_histogram_similarity,
     cosine_similarity,
     code_similarity,
     name_similarity,
@@ -28,6 +27,7 @@ from Analysis.similarity import (
 # ════════════════════════════════════════════════════════════════════
 
 class TestTokenize:
+    """Tests for tokenization utilities."""
 
     def test_empty_string(self):
         assert tokenize("") == []
@@ -311,6 +311,7 @@ class TestCallgraphOverlap:
 # ════════════════════════════════════════════════════════════════════
 
 class TestSemanticSimilarity:
+    """Tests for semantic similarity computation."""
 
     def _mock_func(self, name="f", params=None, ret=None, is_async=False,
                    calls_to=None, docstring=None):

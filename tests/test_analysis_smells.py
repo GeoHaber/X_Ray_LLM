@@ -227,6 +227,7 @@ class TestSmellIssueFields:
 # ════════════════════════════════════════════════════════════════════
 
 class TestEnrichWithLLM:
+    """Tests for LLM enrichment of code smells."""
 
     def test_enriches_critical_smells(self):
         det = CodeSmellDetector()

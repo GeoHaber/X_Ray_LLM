@@ -266,6 +266,7 @@ def compare_performance(impls):
 
 
 def main():
+    """Run Python vs Rust comparison benchmarks and print results."""
     print("\n" + "=" * 70)
     print("  X-RAY: Python vs Rust Implementation Comparison")
     print("=" * 70)

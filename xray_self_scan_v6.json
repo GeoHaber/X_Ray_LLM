@@ -1,0 +1,98 @@
+{
+  "smells": {
+    "total": 99,
+    "critical": 2,
+    "warning": 48,
+    "info": 49,
+    "by_category": {
+      "god-class": 2,
+      "deep-nesting": 11,
+      "complex-function": 15,
+      "too-many-returns": 5,
+      "long-function": 8,
+      "too-many-params": 8,
+      "too-many-branches": 1,
+      "boolean-blindness": 12,
+      "dataclass-candidate": 4,
+      "missing-docstring": 33
+    },
+    "worst_files": {
+      "tests/test_xray_claude.py": 11,
+      "Analysis/duplicates.py": 7,
+      "tests/rust_harness/calibrate_fixtures.py": 7,
+      "tests/rust_harness/verify_rust.py": 7,
+      "Analysis/ast_utils.py": 6,
+      "compare_python_vs_rust.py": 4,
+      "tests/rust_harness/benchmark.py": 4,
+      "tests/test_phase1_modularization.py": 4,
+      "tests/rust_harness/generate_golden.py": 3,
+      "x_ray_claude.py": 3
+    }
+  },
+  "duplicates": {
+    "total_groups": 72,
+    "exact_duplicates": 10,
+    "structural_duplicates": 11,
+    "near_duplicates": 38,
+    "semantic_duplicates": 13,
+    "total_functions_involved": 203,
+    "avg_similarity": 0.87
+  },
+  "security": {
+    "total": 27,
+    "critical": 0,
+    "warning": 2,
+    "info": 25,
+    "by_rule": {
+      "B603": 9,
+      "B311": 8,
+      "B110": 5,
+      "B310": 2,
+      "B607": 2,
+      "B602": 1
+    },
+    "by_confidence": {
+      "HIGH": 27
+    },
+    "worst_files": {
+      "tests\\rust_harness\\benchmark.py": 6,
+      "tests\\test_monkey_torture.py": 6,
+      "tests\\fixtures\\bad_code_sample.py": 3,
+      "Core\\inference.py": 2,
+      "Analysis\\test_gen.py": 2,
+      "Analysis\\lint.py": 1,
+      "Analysis\\security.py": 1,
+      "Core\\utils.py": 1,
+      "tests\\harness_generative.py": 1,
+      "tests\\harness_generative_parity.py": 1
+    },
+    "source": "bandit"
+  },
+  "grade": {
+    "score": 88.7,
+    "letter": "B+",
+    "breakdown": {
+      "smells": {
+        "penalty": 3.4,
+        "critical": 2,
+        "warning": 48,
+        "info": 49
+      },
+      "duplicates": {
+        "penalty": 7.2,
+        "groups": 72
+      },
+      "security": {
+        "penalty": 0.7,
+        "critical": 0,
+        "warning": 2,
+        "info": 25
+      }
+    },
+    "tools_run": [
+      "X-Ray Smells",
+      "X-Ray Duplicates",
+      "Bandit Security"
+    ]
+  }
+}

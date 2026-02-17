@@ -27,6 +27,7 @@ def python_normalize_wrapper(code: str) -> str:
     return re_doc.sub("", code)
 
 def main():
+    """Generate AST extraction test cases from Python source files."""
     print("🚀 Starting Test Generation for: normalize_code")
     
     # Initialize Generator with our reference python function

@@ -27,6 +27,7 @@ def _func(name="foo", file_path="a.py", code_hash="h1", structure_hash="s1",
 # ════════════════════════════════════════════════════════════════════
 
 class TestExactDuplicates:
+    """Tests for exact duplicate detection."""
 
     def test_exact_cross_file(self):
         funcs = [
@@ -150,6 +151,7 @@ class TestHelpers:
 # ════════════════════════════════════════════════════════════════════
 
 class TestEdgeCases:
+    """Tests for edge cases in duplicate detection."""
 
     def test_empty_input(self):
         finder = DuplicateFinder()

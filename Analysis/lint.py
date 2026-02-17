@@ -78,51 +78,61 @@ class LintAnalyzer:
             logger.warning("Ruff is not installed. Run: pip install ruff")
             return []
 
-        cmd = [
-            self._ruff_path, "check",
-            str(root),
-            "--output-format=json",
-            "--no-fix",                     # don't modify files
-        ]
+        cmd = self._build_ruff_command(root, exclude)
+        raw = self._run_ruff_subprocess(cmd, root)
+        if raw is None:
+            return []
+        return self._parse_ruff_results(raw, root)
 
-        # Auto-exclude common non-project directories
-        auto_exclude = [".venv", "venv", ".env", "__pycache__", "node_modules",
-                        ".git", "target", ".mypy_cache", ".pytest_cache",
-                        "dist", "build", ".eggs", "*.egg-info",
-                        "_scratch", ".github"]
+    # -- private helpers (extracted from analyze) ----------------------------
+
+    def _build_ruff_command(self, root: Path,
+                            exclude: Optional[List[str]]) -> List[str]:
+        """Assemble the ruff CLI command list."""
+        cmd = [
+            self._ruff_path, "check", str(root),
+            "--output-format=json", "--no-fix",
+        ]
+        auto_exclude = [
+            ".venv", "venv", ".env", "__pycache__", "node_modules",
+            ".git", "target", ".mypy_cache", ".pytest_cache",
+            "dist", "build", ".eggs", "*.egg-info",
+            "_scratch", ".github",
+        ]
         all_exclude = list(auto_exclude)
         if exclude:
             all_exclude.extend(exclude)
         for pat in all_exclude:
             cmd.extend(["--exclude", pat])
-
         cmd.extend(self.extra_args)
+        return cmd
 
+    def _run_ruff_subprocess(self, cmd: List[str],
+                             root: Path) -> Optional[str]:
+        """Execute ruff, return raw JSON string or *None* on failure."""
         logger.info(f"Running Ruff: {' '.join(cmd)}")
-
         try:
             result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=120,
-                cwd=str(root),
+                cmd, capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
+                timeout=120, cwd=str(root),
             )
         except FileNotFoundError:
             logger.error("Ruff executable not found despite which() succeeding.")
-            return []
+            return None
         except subprocess.TimeoutExpired:
             logger.error("Ruff timed out after 120s.")
-            return []
+            return None
 
-        # Ruff exits with 1 when it finds issues — that's expected
         raw = (result.stdout or "").strip()
         if not raw:
             logger.info("Ruff returned no output (clean or empty project).")
-            return []
+            return None
+        return raw
 
+    def _parse_ruff_results(self, raw: str,
+                            root: Path) -> List[SmellIssue]:
+        """Parse raw JSON string into sorted SmellIssue list."""
         try:
             ruff_issues = json.loads(raw)
         except json.JSONDecodeError as e:
@@ -130,19 +140,15 @@ class LintAnalyzer:
             logger.debug(f"Raw output (first 500 chars): {raw[:500]}")
             return []
 
-        issues = []
-        for item in ruff_issues:
-            issue = self._to_smell_issue(item, root)
-            if issue is not None:
-                issues.append(issue)
-
-        # Sort: critical first, then file/line
+        issues = [
+            issue for item in ruff_issues
+            if (issue := self._to_smell_issue(item, root)) is not None
+        ]
         issues.sort(key=lambda s: (
             0 if s.severity == Severity.CRITICAL else
             1 if s.severity == Severity.WARNING else 2,
-            s.file_path, s.line
+            s.file_path, s.line,
         ))
-
         logger.info(f"Ruff found {len(issues)} issues.")
         return issues
 

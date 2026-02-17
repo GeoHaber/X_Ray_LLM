@@ -29,6 +29,7 @@ def _smell(source="xray", severity=Severity.WARNING, **kw):
 # ════════════════════════════════════════════════════════════════════
 
 class TestSmellIssueFields:
+    """Tests for SmellIssue field validation."""
 
     def test_default_source_is_xray(self):
         issue = SmellIssue(
@@ -73,6 +74,7 @@ class TestSmellIssueFields:
 # ════════════════════════════════════════════════════════════════════
 
 class TestUnifiedGrade:
+    """Tests for unified grade computation."""
 
     def test_perfect_score_no_issues(self):
         results = {

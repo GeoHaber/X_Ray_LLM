@@ -53,6 +53,7 @@ class TestLLMHelperInit:
 # ════════════════════════════════════════════════════════════════════
 
 class TestCompletion:
+    """Tests for LLM completion method."""
 
     @patch("Core.inference.urllib.request.urlopen")
     def test_success(self, mock_urlopen):
@@ -100,6 +101,7 @@ class TestCompletion:
 # ════════════════════════════════════════════════════════════════════
 
 class TestGenerateJson:
+    """Tests for LLM JSON generation."""
 
     @patch("Core.inference.urllib.request.urlopen")
     def test_valid_json(self, mock_urlopen):

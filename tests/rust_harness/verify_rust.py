@@ -445,6 +445,7 @@ def print_results(results: List[SuiteResult], verbose: bool = False):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
+    """Execute the Rust verification test suite and print results."""
     parser = argparse.ArgumentParser(
         description="Verify Rust X-Ray binary against Python golden outputs",
     )
