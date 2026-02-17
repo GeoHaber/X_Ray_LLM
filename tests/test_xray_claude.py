@@ -15,7 +15,6 @@ Comprehensive test suite covering:
 from __future__ import annotations
 
 import json
-import os
 import sys
 import textwrap
 from pathlib import Path
@@ -26,28 +25,35 @@ import pytest
 # Ensure project root on path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from x_ray_claude import (
-    # Data classes
+from Core.types import (
     FunctionRecord, ClassRecord, SmellIssue, DuplicateGroup, LibrarySuggestion,
-    FunctionInfo, Severity,
-    # Tokenization & similarity
-    tokenize, cosine_similarity, code_similarity, _term_freq,
-    name_similarity, signature_similarity, callgraph_overlap,
-    semantic_similarity,
-    # AST extraction
-    _compute_nesting_depth, _compute_complexity, _walk_definitions,
-    _extract_functions_from_file, scan_codebase, collect_py_files,
-    # Detectors
-    CodeSmellDetector, SMELL_THRESHOLDS,
-    DuplicateFinder,
-    LibraryAdvisor,
-    SmartGraph,
-    # Reports
-    print_smell_report, print_duplicate_report, print_library_report,
-    build_json_report,
-    # Version
-    __version__,
+    Severity
 )
+from Core.config import __version__
+from Analysis.similarity import (
+    tokenize, cosine_similarity, code_similarity, _normalized_token_stream, _ngram_fingerprints,
+    _token_ngram_similarity, _ast_node_histogram, _ast_histogram_similarity,
+    name_similarity, signature_similarity, callgraph_overlap,
+    semantic_similarity
+)
+from Analysis.ast_utils import (
+    extract_functions_from_file as _extract_functions_from_file,
+    collect_py_files
+)
+from Analysis.smells import CodeSmellDetector
+from Analysis.duplicates import DuplicateFinder, UnionFind
+from Analysis.library_advisor import LibraryAdvisor
+from Analysis.smart_graph import SmartGraph
+from Analysis.reporting import (
+    print_smells as print_smell_report,
+    print_duplicates as print_duplicate_report,
+    print_library_report,
+    build_json_report
+)
+
+from x_ray_claude import scan_codebase
+
+# Fix missing import in test file for UNICODE_OK if it uses it directly (it does in test_icons)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -63,6 +69,15 @@ def _make_func(name="test_func", file_path="test.py", line_start=1,
     if code is None:
         code = f"def {name}():\n    pass"
     import hashlib
+    import ast as _ast
+    # Auto-compute return_count and branch_count from code
+    try:
+        _tree = _ast.parse(code)
+        return_count = sum(1 for n in _ast.walk(_tree) if isinstance(n, _ast.Return))
+        branch_count = sum(1 for n in _ast.walk(_tree) if isinstance(n, _ast.If))
+    except SyntaxError:
+        return_count = 0
+        branch_count = 0
     return FunctionRecord(
         name=name,
         file_path=file_path,
@@ -77,8 +92,10 @@ def _make_func(name="test_func", file_path="test.py", line_start=1,
         complexity=complexity,
         nesting_depth=nesting_depth,
         code_hash=hashlib.sha256(code.encode()).hexdigest(),
-        structure_hash=hashlib.md5(code.encode()).hexdigest(),
+        structure_hash=hashlib.sha256(code.encode()).hexdigest(),
         code=code,
+        return_count=return_count,
+        branch_count=branch_count,
         is_async=is_async,
     )
 
@@ -112,7 +129,9 @@ class TestSeverity:
         assert Severity.INFO == "info"
 
     def test_icons(self):
-        from x_ray_claude import UNICODE_OK
+        # Directly test Severity class, assuming UNICODE_OK or mocked
+        # The test originally imported UNICODE_OK from x_ray_claude
+        from Core.utils import UNICODE_OK
         if UNICODE_OK:
             assert Severity.icon("critical") == "\U0001F534"
             assert Severity.icon("warning") == "\U0001F7E1"
@@ -131,7 +150,7 @@ class TestSeverity:
 class TestFunctionRecord:
     def test_key(self):
         f = _make_func(name="do_stuff", file_path="utils/helpers.py")
-        assert f.key == "helpers.do_stuff"
+        assert f.key == "utils/helpers::do_stuff"
 
     def test_location(self):
         f = _make_func(file_path="a.py", line_start=42)
@@ -147,7 +166,15 @@ class TestFunctionRecord:
 
     def test_key_stem_extraction(self):
         f = _make_func(name="parse", file_path="core/parser.py")
-        assert f.key == "parser.parse"
+        assert f.key == "core/parser::parse"
+
+    def test_key_different_dirs_same_stem(self):
+        """Same filename in different directories should have different keys."""
+        f1 = _make_func(name="parse", file_path="utils/config.py")
+        f2 = _make_func(name="parse", file_path="core/config.py")
+        assert f1.key != f2.key
+        assert f1.key == "utils/config::parse"
+        assert f2.key == "core/config::parse"
 
     def test_is_async_default_false(self):
         f = _make_func()
@@ -248,6 +275,8 @@ class TestCosineSimilarity:
 
 
 class TestCodeSimilarity:
+    """Test language-aware structural similarity (token n-gram + AST histogram)."""
+
     def test_identical(self):
         code = "def foo():\n    return 42"
         assert code_similarity(code, code) == 1.0
@@ -265,6 +294,118 @@ class TestCodeSimilarity:
         a = "def process_data(data):\n    return data.strip()"
         b = "def process_text(text):\n    return text.strip()"
         assert code_similarity(a, b) > 0.6
+
+    def test_renamed_variables_high_similarity(self):
+        """Renamed variables should NOT reduce similarity (unlike SequenceMatcher)."""
+        a = "def clean(x):\n    for i in x:\n        if i > 0:\n            print(i)"
+        b = "def sanitize(val):\n    for v in val:\n        if v > 0:\n            print(v)"
+        # Both should be very similar — only names differ
+        sim = code_similarity(a, b)
+        assert sim > 0.90, f"Renamed variables should be similar, got {sim:.3f}"
+
+    def test_different_logic_low_similarity(self):
+        """Same-looking code with different operations should score low."""
+        a = "def calc(x, y):\n    return x + y"
+        b = "def calc(x, y):\n    return x * y"
+        sim = code_similarity(a, b)
+        # AST differs (Add vs Mult), so similarity should drop
+        assert sim < 0.95, f"Different operations should score lower, got {sim:.3f}"
+
+    def test_loop_vs_comprehension(self):
+        """Same semantics, different style — should still show some similarity."""
+        a = textwrap.dedent("""\
+        def evens(lst):
+            result = []
+            for x in lst:
+                if x % 2 == 0:
+                    result.append(x)
+            return result
+        """)
+        b = "def evens(lst):\n    return [x for x in lst if x % 2 == 0]"
+        sim = code_similarity(a, b)
+        # Different AST structure, so won't be 1.0, but should have some overlap
+        assert sim > 0.2, f"Semantically similar code should have some overlap, got {sim:.3f}"
+
+
+class TestTokenNgramSimilarity:
+    """Test the MOSS-style token n-gram fingerprinting."""
+
+    def test_identical_code(self):
+        code = "def foo():\n    return 42"
+        assert _token_ngram_similarity(code, code) == 1.0
+
+    def test_empty_code(self):
+        assert _token_ngram_similarity("", "") == 0.0
+
+    def test_renamed_vars_identical(self):
+        """Normalised token streams should match for renamed variables."""
+        a = "def foo(x):\n    return x * 2"
+        b = "def bar(y):\n    return y * 2"
+        assert _token_ngram_similarity(a, b) == 1.0
+
+    def test_different_structure(self):
+        a = "def foo():\n    for x in y:\n        pass"
+        b = "def foo():\n    while x > 0:\n        x -= 1"
+        sim = _token_ngram_similarity(a, b)
+        assert sim < 0.5
+
+    def test_normalized_token_stream_normalizes_names(self):
+        tokens = _normalized_token_stream("x = my_variable + 42")
+        assert "ID" in tokens
+        assert "NUM" in tokens
+        # Keywords should be preserved
+        assert "my_variable" not in tokens
+
+    def test_normalized_token_stream_preserves_keywords(self):
+        tokens = _normalized_token_stream("if True:\n    return None")
+        assert "if" in tokens
+        assert "return" in tokens
+
+    def test_ngram_fingerprints_short_code(self):
+        """Very short token streams should return empty fingerprints."""
+        tokens = ["ID", "=", "NUM"]  # shorter than n=5
+        fps = _ngram_fingerprints(tokens, n=5)
+        assert len(fps) == 0
+
+
+class TestASTHistogramSimilarity:
+    """Test DECKARD-style AST node histogram comparison."""
+
+    def test_identical(self):
+        code = "def foo():\n    return 42"
+        sim = _ast_histogram_similarity(code, code)
+        assert sim >= 0.99
+
+    def test_same_structure(self):
+        """Same AST structure, different names."""
+        a = "def foo(x):\n    if x > 0:\n        return x"
+        b = "def bar(y):\n    if y > 0:\n        return y"
+        assert _ast_histogram_similarity(a, b) == 1.0
+
+    def test_different_structure(self):
+        """For loop vs while loop — different AST nodes."""
+        a = "def foo():\n    for i in range(10):\n        pass"
+        b = "def foo():\n    while True:\n        break"
+        sim = _ast_histogram_similarity(a, b)
+        assert sim < 0.9
+
+    def test_add_vs_mult(self):
+        """Addition vs multiplication — different BinOp sub-nodes."""
+        a = "def f(x, y):\n    return x + y"
+        b = "def f(x, y):\n    return x * y"
+        # AST structure is similar but the operator node differs
+        sim = _ast_histogram_similarity(a, b)
+        assert sim < 1.0
+
+    def test_node_histogram_counts(self):
+        hist = _ast_node_histogram("if x > 0:\n    y = x + 1")
+        assert hist["If"] >= 1
+        assert hist["Compare"] >= 1
+        assert hist["BinOp"] >= 1
+
+    def test_syntax_error_returns_empty(self):
+        hist = _ast_node_histogram("def (broken syntax::::")
+        assert len(hist) == 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -295,7 +436,7 @@ class TestCodeSmellDetectorFunctions:
         smells = detector.detect([f], [])
         critical = [s for s in smells if s.severity == Severity.CRITICAL]
         cats = [s.category for s in critical]
-        assert "very-long-function" in cats
+        assert "long-function" in cats
 
     def test_deep_nesting_warning(self):
         f = _make_func(nesting_depth=4)
@@ -309,20 +450,20 @@ class TestCodeSmellDetectorFunctions:
         detector = CodeSmellDetector()
         smells = detector.detect([f], [])
         critical = [s for s in smells if s.severity == Severity.CRITICAL]
-        assert any(s.category == "very-deep-nesting" for s in critical)
+        assert any(s.category == "deep-nesting" for s in critical)
 
     def test_high_complexity_warning(self):
         f = _make_func(complexity=12)
         detector = CodeSmellDetector()
         smells = detector.detect([f], [])
-        assert any(s.category == "high-complexity" for s in smells)
+        assert any(s.category == "complex-function" for s in smells)
 
     def test_very_high_complexity_critical(self):
         f = _make_func(complexity=25)
         detector = CodeSmellDetector()
         smells = detector.detect([f], [])
         critical = [s for s in smells if s.severity == Severity.CRITICAL]
-        assert any(s.category == "very-high-complexity" for s in critical)
+        assert any(s.category == "complex-function" for s in critical)
 
     def test_too_many_params(self):
         f = _make_func(parameters=["a", "b", "c", "d", "e", "f", "g"])
@@ -342,6 +483,10 @@ class TestCodeSmellDetectorFunctions:
         detector = CodeSmellDetector()
         smells = detector.detect([f], [])
         assert any(s.category == "missing-docstring" for s in smells)
+
+
+class TestCodeSmellDetectorAdvanced:
+    """Advanced function-level smell detection tests."""
 
     def test_missing_docstring_private_skipped(self):
         """Private functions (starting with _) should not be flagged for missing docstring."""
@@ -379,6 +524,22 @@ class TestCodeSmellDetectorFunctions:
         smells = detector.detect([f], [])
         assert any(s.category == "too-many-returns" for s in smells)
 
+    def test_too_many_branches(self):
+        """Functions with too many if branches should be flagged."""
+        code = "def branchy(x):\n" + "    if x:\n        pass\n" * 9
+        f = _make_func(code=code)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        assert any(s.category == "too-many-branches" for s in smells)
+
+    def test_branches_below_threshold_not_flagged(self):
+        """Functions with few branches should not be flagged."""
+        code = "def simple(x):\n    if x:\n        pass\n    if not x:\n        pass\n"
+        f = _make_func(code=code)
+        detector = CodeSmellDetector()
+        smells = detector.detect([f], [])
+        assert not any(s.category == "too-many-branches" for s in smells)
+
     def test_multiple_smells_same_function(self):
         """A function can have multiple smells."""
         f = _make_func(size_lines=130, complexity=25, nesting_depth=7,
@@ -386,9 +547,9 @@ class TestCodeSmellDetectorFunctions:
         detector = CodeSmellDetector()
         smells = detector.detect([f], [])
         cats = {s.category for s in smells}
-        assert "very-long-function" in cats
-        assert "very-high-complexity" in cats
-        assert "very-deep-nesting" in cats
+        assert "long-function" in cats
+        assert "complex-function" in cats
+        assert "deep-nesting" in cats
         assert "too-many-params" in cats
 
     def test_custom_thresholds(self):
@@ -496,7 +657,7 @@ class TestDuplicateFinder:
     def test_exact_duplicates(self):
         code = "def helper(data):\n    cleaned = data.strip()\n    return cleaned.lower()"
         import hashlib
-        h = hashlib.md5(code.encode()).hexdigest()
+        hashlib.sha256(code.encode()).hexdigest()
         f1 = _make_func(name="helper", file_path="a.py", code=code,
                          size_lines=3)
         f2 = _make_func(name="helper", file_path="b.py", code=code,
@@ -597,6 +758,34 @@ class TestDuplicateFinder:
         assert s["exact_duplicates"] == 0
         assert s["near_duplicates"] == 0
         assert s["semantic_duplicates"] == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  6a. UnionFind
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestUnionFind:
+    def test_basic_union(self):
+        uf = UnionFind()
+        uf.union("a", "b")
+        assert uf.find("a") == uf.find("b")
+
+    def test_transitive_union(self):
+        uf = UnionFind()
+        uf.union("a", "b")
+        uf.union("b", "c")
+        assert uf.find("a") == uf.find("c")
+
+    def test_disjoint(self):
+        uf = UnionFind()
+        uf.union("a", "b")
+        uf.union("c", "d")
+        assert uf.find("a") != uf.find("c")
+
+    def test_find_without_union(self):
+        uf = UnionFind()
+        root = uf.find("x")
+        assert root == "x"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -757,9 +946,9 @@ class TestLibraryAdvisor:
         group = DuplicateGroup(
             group_id=0, similarity_type="near", avg_similarity=0.85,
             functions=[
-                {"key": "a.parse", "name": "parse", "file": "a.py",
+                {"key": "a::parse", "name": "parse", "file": "a.py",
                  "line": 1, "size": 10, "similarity": 0.85},
-                {"key": "b.parse", "name": "parse", "file": "b.py",
+                {"key": "b::parse", "name": "parse", "file": "b.py",
                  "line": 5, "size": 12, "similarity": 0.85},
             ],
         )
@@ -836,7 +1025,7 @@ class TestSmartGraph:
         smell = SmellIssue(
             file_path="warn.py", line=1, end_line=10,
             category="long-function", severity=Severity.WARNING,
-            message="too long", suggestion="fix it", name="f",
+            message="too long", suggestion="fix it", name="test_func",
             metric_value=70,
         )
         graph = SmartGraph()
@@ -849,7 +1038,7 @@ class TestSmartGraph:
         smell = SmellIssue(
             file_path="bad.py", line=1, end_line=10,
             category="god-class", severity=Severity.CRITICAL,
-            message="bad", suggestion="fix", name="X", metric_value=20,
+            message="bad", suggestion="fix", name="test_func", metric_value=20,
         )
         graph = SmartGraph()
         graph.build([f], [smell], [], Path("."))
@@ -862,8 +1051,8 @@ class TestSmartGraph:
         group = DuplicateGroup(
             group_id=0, similarity_type="near", avg_similarity=0.8,
             functions=[
-                {"key": "a.a", "name": "a", "file": "a.py", "line": 1},
-                {"key": "b.b", "name": "b", "file": "b.py", "line": 1},
+                {"key": "a::a", "name": "a", "file": "a.py", "line": 1},
+                {"key": "b::b", "name": "b", "file": "b.py", "line": 1},
             ],
         )
         graph = SmartGraph()
@@ -886,7 +1075,7 @@ class TestSmartGraph:
         smell = SmellIssue(
             file_path="smelly.py", line=1, end_line=5,
             category="deep-nesting", severity=Severity.WARNING,
-            message="deep", suggestion="fix", name="func",
+            message="deep", suggestion="fix", name="test_func",
             metric_value=5,
         )
         graph = SmartGraph()
@@ -1106,7 +1295,7 @@ class TestReportPrinting:
                     "worst_files": {"a.py": 1}}
         print_smell_report([smell], summary)
         out = capsys.readouterr().out
-        assert "long-function" in out
+        assert "LONG-FUNCTION" in out
         assert "big_func" in out
 
     def test_duplicate_report_empty(self, capsys):
@@ -1243,7 +1432,7 @@ class TestFullPipeline:
         categories = {s.category for s in smells}
         # big_function should trigger: too-many-params, deep-nesting
         assert "too-many-params" in categories or "deep-nesting" in categories
-        # HugeClass should trigger god-class
+        # HugeClass should trigger god-class (CRITICAL)
         assert "god-class" in categories
 
         # Duplicates
@@ -1281,7 +1470,7 @@ class TestEdgeCases:
     def test_function_record_key_no_dirs(self):
         """File in root dir should use stem directly."""
         f = _make_func(name="run", file_path="main.py")
-        assert f.key == "main.run"
+        assert f.key == "main::run"
 
     def test_function_record_empty_params(self):
         f = _make_func(parameters=[])
@@ -1390,7 +1579,7 @@ class TestLLMHelper:
     def test_query_sync_raises_without_llm(self, tmp_path):
         from x_ray_claude import LLMHelper
         helper = LLMHelper(tmp_path)
-        helper._available = False
+        helper._force_unavailable = True
         with pytest.raises(RuntimeError, match="not available"):
             helper.query_sync("test prompt")
 
@@ -1405,5 +1594,5 @@ class TestVersion:
         assert len(parts) == 3
         assert all(p.isdigit() for p in parts)
 
-    def test_version_is_4(self):
-        assert __version__.startswith("4.")
+    def test_version_is_5(self):
+        assert __version__.startswith("5.")

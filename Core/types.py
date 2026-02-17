@@ -1,6 +1,6 @@
 
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 
 @dataclass
 class FunctionRecord:
@@ -20,13 +20,19 @@ class FunctionRecord:
     code_hash: str          # MD5 of function body
     structure_hash: str     # MD5 of normalized AST (for structural duplicates)
     code: str               # actual source code
+    return_count: int = 0   # number of return statements
+    branch_count: int = 0   # number of if/elif branches
     is_async: bool = False
 
     @property
     def key(self) -> str:
         from pathlib import Path
-        stem = Path(self.file_path).stem
-        return f"{stem}.{self.name}"
+        p = Path(self.file_path)
+        parent = str(p.parent).replace("\\", "/")
+        stem = p.stem
+        if parent == ".":
+            return f"{stem}::{self.name}"
+        return f"{parent}/{stem}::{self.name}"
 
     @property
     def location(self) -> str:
@@ -65,8 +71,12 @@ class SmellIssue:
     message: str
     suggestion: str
     name: str               # function/class name
-    metric_value: int       # the number that triggered the smell (size, depth, etc.)
+    metric_value: int = 0   # the number that triggered the smell (size, depth, etc.)
     llm_analysis: str = ""  # optional LLM-generated detailed analysis
+    source: str = "xray"    # origin tool: "xray", "ruff", "bandit"
+    rule_code: str = ""     # tool-specific rule id, e.g. "F401", "B602"
+    fixable: bool = False   # whether the issue can be auto-fixed
+    confidence: str = ""    # bandit confidence level: HIGH / MEDIUM / LOW
 
 
 @dataclass

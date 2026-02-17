@@ -2,9 +2,35 @@ __pycache__/
 *.pyc
 *.pyo
 venv/
+.venv/
 .env
 .DS_Store
 .vscode/
 .idea/
 scan_all_projects.ps1
 verify_structure.py
+how_to_download_rust.md
+test_rust_integration.py
+
+# Build artifacts
+*.pyd
+target/
+*.egg-info/
+dist/
+build/
+
+# Temporary scan results (regeneratable)
+bandit_self.json
+xray_self_scan.json
+xray_self_scan_v2.json
+xray_self_scan_v3.json
+xray_selfanalysis.json
+xray_security_only.json
+xray_final_report.json
+python_vs_rust_comparison.json
+oradea_*.json
+rag_rat_*.json
+rag_cleanup_summary.json
+
+# Scratch / temp
+_scratch/

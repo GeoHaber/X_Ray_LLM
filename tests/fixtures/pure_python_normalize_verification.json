@@ -1,0 +1,55 @@
+{
+  "function": "pure_python_normalize",
+  "cases": [
+    {
+      "input": {
+        "args": [
+          "def func(a, b): return a + b"
+        ],
+        "kwargs": {}
+      },
+      "output": "def func(arg0, arg1):\n    return arg0 + arg1",
+      "status": "success"
+    },
+    {
+      "input": {
+        "args": [
+          "def func():\n    x = 1\n    y = 2\n    return x + y"
+        ],
+        "kwargs": {}
+      },
+      "output": "def func():\n    var0 = 1\n    var1 = 2\n    return var0 + var1",
+      "status": "success"
+    },
+    {
+      "input": {
+        "args": [
+          "def func(x):\n    x = x + 1\n    return x"
+        ],
+        "kwargs": {}
+      },
+      "output": "def func(arg0):\n    arg0 = arg0 + 1\n    return arg0",
+      "status": "success"
+    },
+    {
+      "input": {
+        "args": [
+          "def func():\n    \"\"\"Docstring\"\"\"\n    pass"
+        ],
+        "kwargs": {}
+      },
+      "output": "def func():\n    pass",
+      "status": "success"
+    },
+    {
+      "input": {
+        "args": [
+          "def calc(price, tax):\n    total = price * (1 + tax)\n    return total"
+        ],
+        "kwargs": {}
+      },
+      "output": "def func(arg0, arg1):\n    var0 = arg0 * (1 + arg1)\n    return var0",
+      "status": "success"
+    }
+  ]
+}

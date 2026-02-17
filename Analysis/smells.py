@@ -1,62 +1,107 @@
 
 from typing import List, Dict, Any
+import asyncio
+from collections import Counter
+
 from Core.types import FunctionRecord, ClassRecord, SmellIssue, Severity
 from Core.config import SMELL_THRESHOLDS
 from Core.inference import LLMHelper
-from Core.utils import logger, UNICODE_OK
+from Core.utils import logger
+
 
 class CodeSmellDetector:
-    """Detects code smells based on thresholds."""
+    """
+    Detects code smells via AST heuristics, optionally enriched by LLM.
     
-    def __init__(self):
-        self.smells: List[SmellIssue] = []
-        self.thresholds = SMELL_THRESHOLDS
+    Two-stage approach:
+      Stage 1 (fast):  AST metrics → flag suspects based on thresholds
+      Stage 2 (slow):  Send suspects to LLM for detailed analysis + fix suggestions
+    """
 
-    def check(self, functions: List[FunctionRecord], classes: List[ClassRecord]):
-        """Run checks on all functions and classes."""
+    def __init__(self, thresholds: Dict[str, int] = None):
+        self.thresholds = {**SMELL_THRESHOLDS, **(thresholds or {})}
+        self.smells: List[SmellIssue] = []
+
+    def detect(self, functions: List[FunctionRecord],
+               classes: List[ClassRecord]) -> List[SmellIssue]:
+        """Run all heuristic smell detectors. Returns sorted list of SmellIssues."""
         self.smells = []
         for func in functions:
             self._check_function(func)
         for cls in classes:
             self._check_class(cls)
+        # Sort: critical first, then by file/line
+        self.smells.sort(key=lambda s: (
+            0 if s.severity == Severity.CRITICAL else
+            1 if s.severity == Severity.WARNING else 2,
+            s.file_path, s.line
+        ))
+        return self.smells
+    
+    # Legacy alias for backward compatibility with tests
+    check = detect
 
     def _check_function(self, func: FunctionRecord):
         t = self.thresholds
 
         # Long function
-        if func.size_lines >= t["long_function"]:
-            sev = Severity.CRITICAL if func.size_lines >= t["very_long_function"] else Severity.WARNING
+        if func.size_lines >= t["very_long_function"]:
             self.smells.append(SmellIssue(
                 file_path=func.file_path, line=func.line_start,
                 end_line=func.line_end, category="long-function",
-                severity=sev, name=func.name,
+                severity=Severity.CRITICAL, name=func.name,
                 metric_value=func.size_lines,
-                message=f"Function '{func.name}' is {func.size_lines} lines long (limit: {t['long_function']})",
-                suggestion="Extract helper functions to reduce size.",
+                message=f"Function '{func.name}' is {func.size_lines} lines (limit: {t['very_long_function']})",
+                suggestion="Split into smaller focused functions. Extract logical blocks.",
+            ))
+        elif func.size_lines >= t["long_function"]:
+            self.smells.append(SmellIssue(
+                file_path=func.file_path, line=func.line_start,
+                end_line=func.line_end, category="long-function",
+                severity=Severity.WARNING, name=func.name,
+                metric_value=func.size_lines,
+                message=f"Function '{func.name}' is {func.size_lines} lines (limit: {t['long_function']})",
+                suggestion="Consider splitting into smaller functions.",
             ))
 
         # Deep nesting
-        if func.nesting_depth >= t["deep_nesting"]:
-            sev = Severity.CRITICAL if func.nesting_depth >= t["very_deep_nesting"] else Severity.WARNING
+        if func.nesting_depth >= t["very_deep_nesting"]:
             self.smells.append(SmellIssue(
                 file_path=func.file_path, line=func.line_start,
                 end_line=func.line_end, category="deep-nesting",
-                severity=sev, name=func.name,
+                severity=Severity.CRITICAL, name=func.name,
+                metric_value=func.nesting_depth,
+                message=f"Function '{func.name}' has nesting depth {func.nesting_depth} (limit: {t['very_deep_nesting']})",
+                suggestion="Use early returns, guard clauses, or extract nested blocks.",
+            ))
+        elif func.nesting_depth >= t["deep_nesting"]:
+            self.smells.append(SmellIssue(
+                file_path=func.file_path, line=func.line_start,
+                end_line=func.line_end, category="deep-nesting",
+                severity=Severity.WARNING, name=func.name,
                 metric_value=func.nesting_depth,
                 message=f"Function '{func.name}' has nesting depth {func.nesting_depth} (limit: {t['deep_nesting']})",
-                suggestion="Flatten logic using early returns or extract nested blocks.",
+                suggestion="Flatten with early returns or extract helper functions.",
             ))
 
-        # High complexity
-        if func.complexity >= t["high_complexity"]:
-            sev = Severity.CRITICAL if func.complexity >= t["very_high_complexity"] else Severity.WARNING
+        # High cyclomatic complexity
+        if func.complexity >= t["very_high_complexity"]:
             self.smells.append(SmellIssue(
                 file_path=func.file_path, line=func.line_start,
                 end_line=func.line_end, category="complex-function",
-                severity=sev, name=func.name,
+                severity=Severity.CRITICAL, name=func.name,
+                metric_value=func.complexity,
+                message=f"Function '{func.name}' has cyclomatic complexity {func.complexity} (limit: {t['very_high_complexity']})",
+                suggestion="Decompose into smaller, single-responsibility functions.",
+            ))
+        elif func.complexity >= t["high_complexity"]:
+            self.smells.append(SmellIssue(
+                file_path=func.file_path, line=func.line_start,
+                end_line=func.line_end, category="complex-function",
+                severity=Severity.WARNING, name=func.name,
                 metric_value=func.complexity,
                 message=f"Function '{func.name}' has cyclomatic complexity {func.complexity} (limit: {t['high_complexity']})",
-                suggestion="Simplify logic, reduce branches, or split function.",
+                suggestion="Simplify branching logic. Consider lookup tables or strategy pattern.",
             ))
 
         # Too many parameters
@@ -70,10 +115,63 @@ class CodeSmellDetector:
                 suggestion="Group related parameters into a dataclass or config object.",
             ))
 
+        # Missing docstring (only for non-trivial functions)
+        if (not func.docstring
+                and func.size_lines >= t["missing_docstring_size"]
+                and not func.name.startswith("_")):
+            self.smells.append(SmellIssue(
+                file_path=func.file_path, line=func.line_start,
+                end_line=func.line_end, category="missing-docstring",
+                severity=Severity.INFO, name=func.name,
+                metric_value=func.size_lines,
+                message=f"Function '{func.name}' ({func.size_lines} lines) has no docstring",
+                suggestion="Add a docstring explaining purpose, parameters, and return value.",
+            ))
+
+        # Too many return statements (pre-computed from AST)
+        if func.return_count >= t["too_many_returns"]:
+            self.smells.append(SmellIssue(
+                file_path=func.file_path, line=func.line_start,
+                end_line=func.line_end, category="too-many-returns",
+                severity=Severity.WARNING, name=func.name,
+                metric_value=func.return_count,
+                message=f"Function '{func.name}' has {func.return_count} return statements (limit: {t['too_many_returns']})",
+                suggestion="Consolidate exit points. Consider a result variable.",
+            ))
+
+        self._check_boolean_blindness(func)
+
+        # Too many branches — excessive if/elif logic
+        if func.branch_count >= t["too_many_branches"]:
+            self.smells.append(SmellIssue(
+                file_path=func.file_path, line=func.line_start,
+                end_line=func.line_end, category="too-many-branches",
+                severity=Severity.WARNING, name=func.name,
+                metric_value=func.branch_count,
+                message=f"Function '{func.name}' has {func.branch_count} branches (limit: {t['too_many_branches']})",
+                suggestion="Simplify with lookup tables, strategy pattern, or early returns.",
+            ))
+
+    _BOOL_PREFIXES = ("is_", "has_", "can_", "should_", "check_",
+                      "validate_", "contains_", "exists_")
+
+    def _check_boolean_blindness(self, func: FunctionRecord):
+        """Flag functions returning bool whose name doesn't indicate a question."""
+        if (func.return_type and 'bool' in func.return_type.lower()
+                and not any(func.name.startswith(p) for p in self._BOOL_PREFIXES)):
+            self.smells.append(SmellIssue(
+                file_path=func.file_path, line=func.line_start,
+                end_line=func.line_end, category="boolean-blindness",
+                severity=Severity.INFO, name=func.name,
+                metric_value=0,
+                message=f"Function '{func.name}' returns bool but name doesn't indicate a question",
+                suggestion="Rename to is_/has_/can_/should_/check_ prefix for clarity.",
+            ))
+
     def _check_class(self, cls: ClassRecord):
         t = self.thresholds
 
-        # God class
+        # God class (too many methods)
         if cls.method_count >= t["god_class"]:
             self.smells.append(SmellIssue(
                 file_path=cls.file_path, line=cls.line_start,
@@ -81,10 +179,11 @@ class CodeSmellDetector:
                 severity=Severity.CRITICAL, name=cls.name,
                 metric_value=cls.method_count,
                 message=f"Class '{cls.name}' has {cls.method_count} methods (limit: {t['god_class']})",
-                suggestion="Split into smaller classes with single responsibility.",
+                suggestion="Split into smaller classes with single responsibility."
+                           " Consider delegation or mixins.",
             ))
 
-        # Large class
+        # Large class (too many lines)
         if cls.size_lines >= t["large_class"]:
             self.smells.append(SmellIssue(
                 file_path=cls.file_path, line=cls.line_start,
@@ -92,7 +191,30 @@ class CodeSmellDetector:
                 severity=Severity.WARNING, name=cls.name,
                 metric_value=cls.size_lines,
                 message=f"Class '{cls.name}' is {cls.size_lines} lines (limit: {t['large_class']})",
-                suggestion="Extract logical groups of methods into separate classes.",
+                suggestion="Extract logical groups of methods into separate classes or modules.",
+            ))
+
+        # Missing docstring on class
+        if not cls.docstring and cls.size_lines > 30:
+            self.smells.append(SmellIssue(
+                file_path=cls.file_path, line=cls.line_start,
+                end_line=cls.line_end, category="missing-class-docstring",
+                severity=Severity.INFO, name=cls.name,
+                metric_value=cls.size_lines,
+                message=f"Class '{cls.name}' ({cls.size_lines} lines) has no docstring",
+                suggestion="Add a docstring explaining the class's responsibility.",
+            ))
+
+        # Data class candidate — class with only __init__ setting attributes
+        if (cls.method_count <= 3 and cls.has_init
+                and not cls.base_classes):
+            self.smells.append(SmellIssue(
+                file_path=cls.file_path, line=cls.line_start,
+                end_line=cls.line_end, category="dataclass-candidate",
+                severity=Severity.INFO, name=cls.name,
+                metric_value=cls.method_count,
+                message=f"Class '{cls.name}' has only {cls.method_count} methods — consider @dataclass",
+                suggestion="If this class mainly holds data, convert to @dataclass for less boilerplate.",
             ))
 
     def enrich_with_llm(self, llm: LLMHelper, max_calls: int = 20):
@@ -100,7 +222,7 @@ class CodeSmellDetector:
         critical_smells = [
             s for s in self.smells
             if s.severity in (Severity.CRITICAL, Severity.WARNING)
-            and not s.llm_analysis
+               and not s.llm_analysis
         ][:max_calls]
 
         if not critical_smells:
@@ -109,14 +231,65 @@ class CodeSmellDetector:
         logger.info(f"Enriching {len(critical_smells)} smells with LLM...")
         for smell in critical_smells:
             prompt = (
-                f"Checking code smell:\n"
+                f"You are a Senior Python Architect reviewing code.\n"
                 f"Issue: {smell.message}\n"
                 f"Category: {smell.category}\n"
                 f"File: {smell.file_path}:{smell.line}\n\n"
-                f"Give a 1-sentence fix recommendation."
+                f"Give a 2-3 sentence actionable recommendation to fix this. "
+                f"Be specific about WHAT to extract or refactor.\n\n"
+                f"Recommendation:"
             )
             try:
-                response = llm.query_sync(prompt, max_tokens=100)
+                # Note: Still sync for now, will start upgrade in next phase
+                response = llm.query_sync(prompt, max_tokens=150)
                 smell.llm_analysis = response.strip()
             except Exception as e:
                 logger.debug(f"LLM enrichment failed: {e}")
+
+    async def enrich_with_llm_async(self, llm: LLMHelper, concurrency: int = 5):
+        """
+        Async version: process smells in parallel batches.
+        """
+        # Pick critical smells first
+        candidates = [s for s in self.smells if s.severity == Severity.CRITICAL]
+        # Then warnings if space
+        if len(candidates) < 10:
+            candidates.extend([s for s in self.smells if s.severity == Severity.WARNING])
+        
+        candidates = candidates[:15] # Strict limit
+        if not candidates:
+            return
+
+        sem = asyncio.Semaphore(concurrency)
+
+        async def _process(smell: SmellIssue):
+            async with sem:
+                prompt = (
+                    f"Analyze this code smell: {smell.category} in {smell.name}.\n"
+                    f"Message: {smell.message}\n"
+                    f"Suggest a specific refactoring (2 sentences max)."
+                )
+                try:
+                    # Use completion_async
+                    suggestion = await llm.completion_async(prompt)
+                    smell.llm_analysis = suggestion.strip()
+                except Exception as e:
+                    logger.debug(f"Async LLM enrichment failed: {e}")
+
+        logger.info(f"Enriching {len(candidates)} smells with AI (Async)...")
+        tasks = [_process(s) for s in candidates]
+        await asyncio.gather(*tasks)
+
+    def summary(self) -> Dict[str, Any]:
+        """Return a summary dict of all smells."""
+        by_severity = Counter(s.severity for s in self.smells)
+        by_category = Counter(s.category for s in self.smells)
+        by_file = Counter(s.file_path for s in self.smells)
+        return {
+            "total": len(self.smells),
+            "critical": by_severity.get(Severity.CRITICAL, 0),
+            "warning": by_severity.get(Severity.WARNING, 0),
+            "info": by_severity.get(Severity.INFO, 0),
+            "by_category": dict(by_category),
+            "worst_files": dict(by_file.most_common(10)),
+        }

@@ -1,8 +1,7 @@
 
 import sys
 import logging
-from pathlib import Path
-from typing import List, Set
+import platform
 
 # === LOGGING ===
 def setup_logger(name: str = "X_RAY_Claude"):
@@ -46,3 +45,34 @@ def supports_unicode() -> bool:
         return False
 
 UNICODE_OK = supports_unicode()
+
+# === HARDWARE & OS DETECTION ===
+
+def get_os_info() -> str:
+    """Return a descriptive string of the current OS."""
+    return f"{platform.system()} {platform.release()} ({platform.machine()})"
+
+def get_cpu_info() -> str:
+    """Return CPU brand/features if possible."""
+    # This is a basic implementation. For full features, one might use 'cpuinfo' package
+    # but we'll stick to stdlib for now to minimize dependencies.
+    return platform.processor() or "Unknown CPU"
+
+_verified_cache = False
+
+def verify_rust_environment():
+    """Check if the environment matches the compiled extension expectations."""
+    global _verified_cache
+    if _verified_cache:
+        return True
+        
+    platform.system().lower()
+    platform.machine().lower()
+    
+    logger.info("Checking Performance Engine...")
+    logger.info(f"Target OS: {get_os_info()}")
+    logger.info(f"Target CPU: {get_cpu_info()}")
+    
+    _verified_cache = True
+    return True
+

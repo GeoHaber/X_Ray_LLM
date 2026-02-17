@@ -1,0 +1,20 @@
+[package]
+name = "x_ray_core"
+version = "0.2.0"
+edition = "2021"
+
+[lib]
+name = "x_ray_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+regex = "1.10"
+rayon = "1.10"
+rustc-hash = "2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

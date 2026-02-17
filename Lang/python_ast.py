@@ -7,38 +7,9 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 
 from Core.types import FunctionRecord, ClassRecord
-from Core.utils import logger
+from Core.ast_helpers import compute_nesting_depth, compute_complexity
 
 # === AST Extraction Engine ===
-
-def _compute_nesting_depth(node: ast.AST) -> int:
-    """Compute maximum nesting depth of control flow in a function."""
-    max_depth = 0
-
-    def _walk(n, depth):
-        nonlocal max_depth
-        nesting_types = (ast.If, ast.For, ast.While, ast.Try, ast.With,
-                         ast.ExceptHandler)
-        for child in ast.iter_child_nodes(n):
-            if isinstance(child, nesting_types):
-                new_depth = depth + 1
-                max_depth = max(max_depth, new_depth)
-                _walk(child, new_depth)
-            else:
-                _walk(child, depth)
-
-    _walk(node, 0)
-    return max_depth
-
-
-def _compute_complexity(node: ast.AST) -> int:
-    """Cyclomatic complexity approximation."""
-    return sum(
-        1 for c in ast.walk(node)
-        if isinstance(c, (ast.If, ast.For, ast.While, ast.Try,
-                          ast.ExceptHandler, ast.BoolOp, ast.Assert,
-                          ast.comprehension))
-    )
 
 class ASTNormalizer(ast.NodeTransformer):
     """
@@ -93,15 +64,121 @@ class ASTNormalizer(ast.NodeTransformer):
 
 
 def _compute_structure_hash(node: ast.AST) -> str:
-    """Compute MD5 of normalized AST dump."""
+    """Compute MD5 of normalized structure."""
+    
+    # 1. Try Rust Accelerator (Phase 2)
+    try:
+        if os.getenv("X_RAY_DISABLE_RUST"):
+            raise ImportError("Rust disabled by env var")
+            
+        from Core.utils import verify_rust_environment
+        if not verify_rust_environment():
+            raise RuntimeError("Environment verification failed")
+
+        from Core import x_ray_core
+        # For Rust, we currently accept source string, not AST node.
+        # So we unparse the node first, then let Rust strip docstrings/etc.
+        # This is a deviation from the pure AST transform but faster for now.
+        code = ast.unparse(node)
+        normalized = x_ray_core.normalize_code(code)
+        return hashlib.sha256(normalized.encode()).hexdigest()
+    except (ImportError, AttributeError, Exception):
+        # Fallback to Python AST Normalizer
+        pass
+
     try:
         # Deep copy because NodeTransformer modifies in-place
         import copy
         normalized = ASTNormalizer().visit(copy.deepcopy(node))
         # dump() returns a string representation of the tree structure
-        return hashlib.md5(ast.dump(normalized).encode()).hexdigest()
+        return hashlib.sha256(ast.dump(normalized).encode()).hexdigest()
     except Exception:
         return ""
+
+def _extract_calls(node: ast.AST) -> List[str]:
+    """Collect unique call target names from a function AST node."""
+    calls: List[str] = []
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        if isinstance(child.func, ast.Name):
+            calls.append(child.func.id)
+        elif isinstance(child.func, ast.Attribute):
+            calls.append(child.func.attr)
+    return list(set(calls))
+
+
+def _safe_unparse_decorators(decorator_list) -> List[str]:
+    """Unparse decorator nodes, returning [] on failure."""
+    try:
+        return [ast.unparse(d) for d in decorator_list]
+    except Exception:
+        return []
+
+
+def _process_function_node(
+    node, lines: List[str], rel_path: str,
+) -> FunctionRecord:
+    """Build a FunctionRecord from a FunctionDef/AsyncFunctionDef node."""
+    start = max(node.lineno - 1, 0)
+    end = node.end_lineno or start + 1
+    code = "\n".join(lines[start:end])
+    code_hash = hashlib.sha256(code.encode()).hexdigest()
+    structure_hash = _compute_structure_hash(node)
+
+    params = [a.arg for a in node.args.args if a.arg != "self"]
+    ret = ast.unparse(node.returns) if node.returns and hasattr(ast, "unparse") else None
+
+    return FunctionRecord(
+        name=node.name,
+        file_path=rel_path,
+        line_start=node.lineno,
+        line_end=end,
+        size_lines=end - start,
+        parameters=params,
+        return_type=ret,
+        decorators=_safe_unparse_decorators(node.decorator_list),
+        docstring=ast.get_docstring(node) or None,
+        calls_to=_extract_calls(node),
+        complexity=compute_complexity(node),
+        nesting_depth=compute_nesting_depth(node),
+        code_hash=code_hash,
+        structure_hash=structure_hash,
+        code=code,
+        is_async=isinstance(node, ast.AsyncFunctionDef),
+    )
+
+
+def _process_class_node(
+    node: ast.ClassDef, lines: List[str], rel_path: str,
+) -> ClassRecord:
+    """Build a ClassRecord from a ClassDef node."""
+    start = max(node.lineno - 1, 0)
+    end = node.end_lineno or start + 1
+    methods = [
+        n.name for n in ast.walk(node)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    bases = []
+    for b in node.bases:
+        try:
+            bases.append(ast.unparse(b))
+        except Exception:
+            bases.append("?")
+
+    return ClassRecord(
+        name=node.name,
+        file_path=rel_path,
+        line_start=node.lineno,
+        line_end=end,
+        size_lines=end - start,
+        method_count=len(methods),
+        base_classes=bases,
+        docstring=ast.get_docstring(node) or None,
+        methods=methods,
+        has_init="__init__" in methods,
+    )
+
 
 def _extract_functions_from_file(fpath: Path, root: Path) -> Tuple[
         List[FunctionRecord], List[ClassRecord], Optional[str]]:
@@ -123,73 +200,9 @@ def _extract_functions_from_file(fpath: Path, root: Path) -> Tuple[
 
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # Skip nested functions (only top-level and class methods)
-            start = max(node.lineno - 1, 0)
-            end = node.end_lineno or start + 1
-            code = "\n".join(lines[start:end])
-            code_hash = hashlib.md5(code.encode()).hexdigest()
-            structure_hash = _compute_structure_hash(node)
-
-            params = [a.arg for a in node.args.args if a.arg != "self"]
-            ret = ast.unparse(node.returns) if node.returns and hasattr(ast, "unparse") else None
-            try:
-                decorators = [ast.unparse(d) for d in node.decorator_list]
-            except Exception:
-                decorators = []
-
-            calls: List[str] = []
-            for child in ast.walk(node):
-                if isinstance(child, ast.Call):
-                    if isinstance(child.func, ast.Name):
-                        calls.append(child.func.id)
-                    elif isinstance(child.func, ast.Attribute):
-                        calls.append(child.func.attr)
-
-            functions.append(FunctionRecord(
-                name=node.name,
-                file_path=rel_path,
-                line_start=node.lineno,
-                line_end=end,
-                size_lines=end - start,
-                parameters=params,
-                return_type=ret,
-                decorators=decorators,
-                docstring=ast.get_docstring(node) or None,
-                calls_to=list(set(calls)),
-                complexity=_compute_complexity(node),
-                nesting_depth=_compute_nesting_depth(node),
-                code_hash=code_hash,
-                structure_hash=structure_hash,
-                code=code,
-                is_async=isinstance(node, ast.AsyncFunctionDef),
-            ))
-
+            functions.append(_process_function_node(node, lines, rel_path))
         elif isinstance(node, ast.ClassDef):
-            start = max(node.lineno - 1, 0)
-            end = node.end_lineno or start + 1
-            methods = [
-                n.name for n in ast.walk(node)
-                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-            ]
-            bases = []
-            for b in node.bases:
-                try:
-                    bases.append(ast.unparse(b))
-                except Exception:
-                    bases.append("?")
-
-            classes.append(ClassRecord(
-                name=node.name,
-                file_path=rel_path,
-                line_start=node.lineno,
-                line_end=end,
-                size_lines=end - start,
-                method_count=len(methods),
-                base_classes=bases,
-                docstring=ast.get_docstring(node) or None,
-                methods=methods,
-                has_init="__init__" in methods,
-            ))
+            classes.append(_process_class_node(node, lines, rel_path))
 
     return functions, classes, None
 
@@ -199,8 +212,12 @@ _ALWAYS_SKIP = frozenset({
     "venv", ".venv", "env", ".env",
     "site-packages", "dist-packages",
     "_archive", "_Old", "_old", "_bin",
-    "portable",
+    "_scratch", ".github",
+    "portable", "target",
 })
+
+# Files containing intentional bad code for testing — skip during scanning
+_ALWAYS_SKIP_FILES = frozenset({"smell_factory.py", "bad_code_sample.py"})
 
 
 def collect_py_files(root: Path, exclude: List[str] = None,
@@ -225,7 +242,7 @@ def collect_py_files(root: Path, exclude: List[str] = None,
             if top != "." and not any(top.startswith(p) for p in include):
                 continue
         for fn in filenames:
-            if fn.endswith(".py"):
+            if fn.endswith(".py") and fn not in _ALWAYS_SKIP_FILES:
                 results.append(Path(dirpath) / fn)
     return results
 
