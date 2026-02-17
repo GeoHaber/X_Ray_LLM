@@ -46,6 +46,321 @@ from Analysis.reporting import _score_to_letter
 from Analysis.rust_advisor import RustAdvisor
 
 import concurrent.futures
+import ast
+import re
+import textwrap
+
+
+# ── Python → Rust transpiler (AST-based sketch) ─────────────────────────────
+
+_PY_TO_RUST_TYPES = {
+    "int": "i64", "float": "f64", "str": "String", "bool": "bool",
+    "bytes": "Vec<u8>", "list": "Vec", "dict": "HashMap",
+    "set": "HashSet", "tuple": "tuple", "None": "()",
+    "Optional": "Option", "List": "Vec", "Dict": "HashMap",
+    "Set": "HashSet", "Tuple": "tuple", "Any": "PyObject",
+}
+
+
+def _py_type_to_rust(py_type: str) -> str:
+    """Best-effort Python type annotation → Rust type."""
+    if not py_type:
+        return "PyResult<PyObject>"
+    py_type = py_type.strip()
+    # Handle Optional[X]
+    m = re.match(r"Optional\[(.+)\]", py_type)
+    if m:
+        inner = _py_type_to_rust(m.group(1))
+        return f"Option<{inner}>"
+    # Handle List[X], Set[X]
+    m = re.match(r"(List|Set)\[(.+)\]", py_type)
+    if m:
+        container = "Vec" if m.group(1) == "List" else "HashSet"
+        inner = _py_type_to_rust(m.group(2))
+        return f"{container}<{inner}>"
+    # Handle Dict[K, V]
+    m = re.match(r"Dict\[(.+),\s*(.+)\]", py_type)
+    if m:
+        k = _py_type_to_rust(m.group(1))
+        v = _py_type_to_rust(m.group(2))
+        return f"HashMap<{k}, {v}>"
+    # Handle Tuple[X, Y, ...]
+    m = re.match(r"Tuple\[(.+)\]", py_type)
+    if m:
+        parts = [_py_type_to_rust(p.strip()) for p in m.group(1).split(",")]
+        return f"({', '.join(parts)})"
+    return _PY_TO_RUST_TYPES.get(py_type, "PyObject")
+
+
+def _generate_rust_sketch(func: "FunctionRecord") -> str:
+    """Generate a Rust function sketch from a Python FunctionRecord."""
+    lines = []
+    # Imports hint
+    lines.append("use pyo3::prelude::*;")
+    lines.append("")
+
+    # Parse return type
+    ret_rust = _py_type_to_rust(func.return_type or "")
+    if not ret_rust.startswith("PyResult"):
+        ret_rust = f"PyResult<{ret_rust}>"
+
+    # Parse parameters
+    rust_params = []
+    try:
+        tree = ast.parse(func.code)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for arg in node.args.args:
+                    name = arg.arg
+                    if name == "self":
+                        continue
+                    if arg.annotation:
+                        ann = ast.unparse(arg.annotation)
+                        rust_type = _py_type_to_rust(ann)
+                    else:
+                        rust_type = "PyObject"
+                    rust_params.append(f"{name}: {rust_type}")
+                break
+    except Exception:
+        for p in func.parameters:
+            if p != "self":
+                rust_params.append(f"{p}: PyObject")
+
+    params_str = ", ".join(rust_params)
+
+    # Function signature
+    lines.append("#[pyfunction]")
+    lines.append(f"fn {func.name}({params_str}) -> {ret_rust} {{")
+
+    # Body sketch — translate simple constructs
+    try:
+        tree = ast.parse(func.code)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                body_lines = _translate_body(node.body, indent=1)
+                lines.extend(body_lines)
+                break
+    except Exception:
+        lines.append("    // TODO: translate function body")
+        lines.append("    todo!()")
+
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _translate_body(stmts: list, indent: int = 1) -> List[str]:
+    """Best-effort AST → Rust body translation."""
+    pad = "    " * indent
+    lines = []
+    for stmt in stmts:
+        if isinstance(stmt, ast.Return):
+            if stmt.value:
+                val = ast.unparse(stmt.value)
+                val = _rustify_expr(val)
+                lines.append(f"{pad}Ok({val})")
+            else:
+                lines.append(f"{pad}Ok(())")
+        elif isinstance(stmt, ast.If):
+            test = _rustify_expr(ast.unparse(stmt.test))
+            lines.append(f"{pad}if {test} {{")
+            lines.extend(_translate_body(stmt.body, indent + 1))
+            if stmt.orelse:
+                if len(stmt.orelse) == 1 and isinstance(stmt.orelse[0], ast.If):
+                    lines.append(f"{pad}}} else ")
+                    inner = _translate_body(stmt.orelse, indent)
+                    if inner:
+                        inner[0] = inner[0].lstrip()
+                        lines[-1] += inner[0]
+                        lines.extend(inner[1:])
+                else:
+                    lines.append(f"{pad}}} else {{")
+                    lines.extend(_translate_body(stmt.orelse, indent + 1))
+                    lines.append(f"{pad}}}")
+            else:
+                lines.append(f"{pad}}}")
+        elif isinstance(stmt, ast.For):
+            target = ast.unparse(stmt.target)
+            iter_expr = _rustify_expr(ast.unparse(stmt.iter))
+            lines.append(f"{pad}for {target} in {iter_expr} {{")
+            lines.extend(_translate_body(stmt.body, indent + 1))
+            lines.append(f"{pad}}}")
+        elif isinstance(stmt, ast.While):
+            test = _rustify_expr(ast.unparse(stmt.test))
+            lines.append(f"{pad}while {test} {{")
+            lines.extend(_translate_body(stmt.body, indent + 1))
+            lines.append(f"{pad}}}")
+        elif isinstance(stmt, ast.Assign):
+            targets = ast.unparse(stmt.targets[0])
+            value = _rustify_expr(ast.unparse(stmt.value))
+            lines.append(f"{pad}let mut {targets} = {value};")
+        elif isinstance(stmt, ast.AugAssign):
+            target = ast.unparse(stmt.target)
+            op = _rust_op(stmt.op)
+            value = _rustify_expr(ast.unparse(stmt.value))
+            lines.append(f"{pad}{target} {op}= {value};")
+        elif isinstance(stmt, ast.Expr):
+            expr = _rustify_expr(ast.unparse(stmt.value))
+            lines.append(f"{pad}{expr};")
+        else:
+            # Fallback: comment out the Python line
+            try:
+                py_line = ast.unparse(stmt).split("\n")[0]
+            except Exception:
+                py_line = "..."
+            lines.append(f"{pad}// TODO: {py_line}")
+    return lines
+
+
+def _rustify_expr(expr: str) -> str:
+    """Quick Python expression → Rust expression mappings."""
+    expr = expr.replace("True", "true").replace("False", "false")
+    expr = expr.replace("None", "None")
+    expr = expr.replace(" and ", " && ").replace(" or ", " || ")
+    expr = expr.replace("not ", "!")
+    expr = expr.replace("len(", ".len(")
+    expr = expr.replace(".append(", ".push(")
+    expr = expr.replace("elif", "else if")
+    expr = re.sub(r'f"([^"]+)"', r'format!("\1")', expr)
+    expr = re.sub(r"f'([^']+)'", r'format!("\1")', expr)
+    return expr
+
+
+def _rust_op(op) -> str:
+    """Map Python AST operator to Rust symbol."""
+    return {
+        ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/",
+        ast.Mod: "%", ast.Pow: "**", ast.BitOr: "|", ast.BitAnd: "&",
+        ast.BitXor: "^", ast.LShift: "<<", ast.RShift: ">>",
+    }.get(type(op), "+")
+
+
+# ── Duplicate merge / unify helper ───────────────────────────────────────────
+
+def _generate_unified_function(funcs_data: List[Dict[str, Any]],
+                               code_map: Dict[str, str]) -> str:
+    """Generate a unified function from a group of duplicates."""
+    codes = []
+    names = []
+    params_sets = []
+
+    for f in funcs_data:
+        loc = f"{f.get('file', '?')}:{f.get('line', '?')}"
+        code = code_map.get(loc, code_map.get(f.get('key', ''), ''))
+        if code:
+            codes.append(code)
+            names.append(f.get('name', 'unknown'))
+            # Extract parameters from the code
+            try:
+                tree = ast.parse(textwrap.dedent(code))
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        params = []
+                        for arg in node.args.args:
+                            ann = f": {ast.unparse(arg.annotation)}" if arg.annotation else ""
+                            params.append(f"{arg.arg}{ann}")
+                        params_sets.append(params)
+                        break
+            except Exception:
+                pass
+
+    if not codes:
+        return "# No source code available for merging"
+
+    # Pick the longest version as the base (most complete)
+    base_idx = max(range(len(codes)), key=lambda i: len(codes[i]))
+    base_code = codes[base_idx]
+    base_name = names[base_idx]
+
+    # Build a unified name
+    common_prefix = names[0]
+    for n in names[1:]:
+        while not n.startswith(common_prefix) and common_prefix:
+            common_prefix = common_prefix[:-1]
+    if len(common_prefix) >= 3:
+        unified_name = common_prefix.rstrip("_")
+    else:
+        unified_name = base_name
+
+    # Merge parameter lists (union of all params)
+    all_params = []
+    seen_params = set()
+    for pset in params_sets:
+        for p in pset:
+            param_name = p.split(":")[0].strip()
+            if param_name not in seen_params:
+                seen_params.add(param_name)
+                all_params.append(p)
+
+    # Build the unified function
+    lines = [
+        f"# ══════════════════════════════════════════════════════",
+        f"# UNIFIED from: {', '.join(names)}",
+        f"# Original locations:",
+    ]
+    for f in funcs_data:
+        lines.append(f"#   - {f.get('file', '?')}:{f.get('line', '?')}")
+    lines.append(f"# ══════════════════════════════════════════════════════")
+    lines.append("")
+
+    # Re-parse the base to rebuild with unified name
+    try:
+        tree = ast.parse(textwrap.dedent(base_code))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                # Get decorators
+                decos = []
+                for d in node.decorator_list:
+                    decos.append(f"@{ast.unparse(d)}")
+                for d in decos:
+                    lines.append(d)
+
+                # Build signature
+                is_async = isinstance(node, ast.AsyncFunctionDef)
+                prefix = "async def" if is_async else "def"
+                params_str = ", ".join(all_params)
+                ret = ""
+                if node.returns:
+                    ret = f" -> {ast.unparse(node.returns)}"
+                lines.append(f"{prefix} {unified_name}({params_str}){ret}:")
+
+                # Docstring — combine all
+                doc_parts = []
+                for i, c in enumerate(codes):
+                    try:
+                        t = ast.parse(textwrap.dedent(c))
+                        for n2 in ast.walk(t):
+                            if isinstance(n2, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                                ds = ast.get_docstring(n2)
+                                if ds and ds not in doc_parts:
+                                    doc_parts.append(ds)
+                                break
+                    except Exception:
+                        pass
+                if doc_parts:
+                    lines.append('    """')
+                    lines.append(f"    Unified from {len(names)} duplicates.")
+                    lines.append("")
+                    for dp in doc_parts:
+                        for dl in dp.strip().split("\n"):
+                            lines.append(f"    {dl}")
+                    lines.append('    """')
+                else:
+                    lines.append(f'    """Unified from {len(names)} duplicate functions."""')
+
+                # Body from base (skip the original docstring)
+                body = node.body
+                if (body and isinstance(body[0], ast.Expr)
+                        and isinstance(body[0].value, (ast.Constant, ast.Str))):
+                    body = body[1:]  # skip docstring node
+                for b_node in body:
+                    for bline in ast.unparse(b_node).split("\n"):
+                        lines.append(f"    {bline}")
+                break
+    except Exception:
+        # Fallback: just rename
+        lines.append(base_code.replace(base_name, unified_name, 1))
+
+    return "\n".join(lines)
 
 
 # ── Modern CSS injection ────────────────────────────────────────────────────
@@ -165,6 +480,9 @@ hr {
     background: rgba(0,212,255,0.3);
     border-radius: 3px;
 }
+
+/* Hide deploy button */
+.stDeployButton, [data-testid="stToolbar"] { display: none !important; }
 </style>
 """
 
@@ -516,6 +834,9 @@ def _render_duplicates_tab(results: Dict[str, Any]):
                 st.info(f"**Merge suggestion:** {g.merge_suggestion}")
 
             funcs = g.functions
+
+            # ── Original code side-by-side ──
+            st.markdown("##### 📄 Original Functions")
             if len(funcs) >= 2:
                 cols = st.columns(min(len(funcs), 2))
                 for i, f in enumerate(funcs[:2]):
@@ -547,6 +868,17 @@ def _render_duplicates_tab(results: Dict[str, Any]):
                     st.caption(f"📄 {loc} — **{f.get('name', '?')}**")
                     if code:
                         st.code(code, language="python")
+
+            # ── Unified / merged function preview ──
+            if len(funcs) >= 2:
+                st.markdown("---")
+                st.markdown("##### 🔗 Unified Function (auto-generated)")
+                st.caption(
+                    "This is a suggested merged version. "
+                    "Review parameters, logic branches, and naming "
+                    "before applying.")
+                unified = _generate_unified_function(funcs, code_map)
+                st.code(unified, language="python")
 
     if len(filtered) > 50:
         st.warning(f"Showing first 50 of {len(filtered)} groups.")
@@ -779,7 +1111,19 @@ def _render_rustify_tab(results: Dict[str, Any]):
                 f"{fn.file_path}:{fn.line_start}",
                 code_map.get(fn.key, ""))
             if code:
-                st.code(code, language="python")
+                # Side-by-side: Python original → Rust sketch
+                py_col, rs_col = st.columns(2)
+                with py_col:
+                    st.markdown("**🐍 Python (original)**")
+                    st.code(code, language="python")
+                with rs_col:
+                    st.markdown("**🦀 Rust (auto-sketch)**")
+                    rust_code = _generate_rust_sketch(fn)
+                    st.code(rust_code, language="rust")
+                st.caption(
+                    "⚠️ This is an auto-generated sketch — "
+                    "review and adjust types, error handling, "
+                    "and unsafe blocks before use.")
 
     # Score distribution
     st.markdown("---")
