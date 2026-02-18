@@ -34,3 +34,4 @@ rag_cleanup_summary.json
 
 # Scratch / temp
 _scratch/
+_rustified/

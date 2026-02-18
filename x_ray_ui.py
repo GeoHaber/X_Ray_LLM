@@ -44,6 +44,9 @@ from Analysis.lint import LintAnalyzer
 from Analysis.security import SecurityAnalyzer
 from Analysis.reporting import _score_to_letter
 from Analysis.rust_advisor import RustAdvisor
+from Analysis.auto_rustify import (
+    RustifyPipeline, detect_system, SystemProfile, PipelineReport,
+)
 
 import concurrent.futures
 import ast
@@ -1485,6 +1488,251 @@ def _render_complexity_tab(results: Dict[str, Any]):
                     st.warning("Source code not available")
 
 
+# ── Auto-Rustify Pipeline tab ────────────────────────────────────────────────
+
+def _render_auto_rustify_tab(results: Dict[str, Any]):
+    """Render the ⚙ Auto-Rustify pipeline tab."""
+    st.markdown("""
+    <div style="padding:12px 16px; border-radius:12px;
+                background:rgba(17,25,40,0.6);
+                border:1px solid rgba(124,77,255,0.3); margin-bottom:1rem;">
+        <p style="margin:0 0 6px 0; font-size:0.95rem;
+                  font-family:'JetBrains Mono',monospace;">
+            ⚙️ <b>Auto-Rustify Pipeline</b></p>
+        <p style="font-size:0.78rem; opacity:0.6; margin:0;">
+            End-to-end: Scan → Score → Generate tests → Transpile to Rust →
+            Compile with CPU-optimal flags → Verify.  Produces a ready-to-use
+            Rust crate or standalone executable.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── System detection preview ──
+    sys_profile = detect_system()
+    s1, s2, s3, s4 = st.columns(4)
+    s1.metric("🖥️ OS", sys_profile.os_name)
+    s2.metric("🏗️ Arch", sys_profile.arch)
+    s3.metric("🎯 Target", sys_profile.rust_target.split('-')[0])
+    s4.metric("🚀 CPU Feats", ", ".join(sys_profile.cpu_features) or "baseline")
+
+    st.markdown(f"""
+    <div style="padding:8px 14px; border-radius:8px;
+                background:rgba(0,212,255,0.08);
+                border:1px solid rgba(0,212,255,0.15);
+                font-family:'JetBrains Mono',monospace;
+                font-size:0.78rem; margin:8px 0 16px 0;">
+        <b>Rust target:</b> <code>{sys_profile.rust_target}</code>  ·
+        <b>CPU:</b> {sys_profile.processor[:60]}  ·
+        <b>RUSTFLAGS:</b> {' '.join(f'+{f}' for f in sys_profile.cpu_features) or '(default)'}
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.divider()
+
+    # ── Pipeline config ──
+    st.markdown("##### Pipeline Configuration")
+    cfg1, cfg2, cfg3 = st.columns(3)
+    with cfg1:
+        build_mode = st.selectbox(
+            "Build mode",
+            ["pyo3", "binary"],
+            help="**pyo3** = Python extension (.pyd/.so), "
+                 "**binary** = standalone executable",
+            key="ar_mode")
+    with cfg2:
+        min_score = st.slider(
+            "Min Rust score", 1.0, 30.0, 5.0, 0.5,
+            help="Only transpile functions scoring above this",
+            key="ar_min_score")
+    with cfg3:
+        max_cands = st.slider(
+            "Max candidates", 5, 100, 30,
+            help="Limit the number of functions to transpile",
+            key="ar_max_cands")
+
+    crate_name = st.text_input(
+        "Crate name", value="xray_rustified",
+        help="Name used for Cargo.toml and the output library/binary",
+        key="ar_crate_name")
+
+    scan_path = st.session_state.get("scan_path", str(Path.cwd()))
+    output_dir = Path(scan_path) / "_rustified"
+
+    st.divider()
+
+    # ── Launch button ──
+    run_col1, run_col2 = st.columns([1, 3])
+    with run_col1:
+        do_run = st.button(
+            "🚀 Run Pipeline", type="primary",
+            use_container_width=True,
+            help="Full auto-rustify: scan → transpile → compile → verify")
+    with run_col2:
+        st.caption(
+            f"Output directory: `{output_dir}`")
+        st.caption(
+            "⚠️  Requires Rust toolchain installed (`rustup`, `cargo`).")
+
+    # ── Show previous report ──
+    prev_report: Optional[Dict] = st.session_state.get("auto_rustify_report")
+
+    if do_run:
+        progress_bar = st.progress(0.0)
+        status_text = st.empty()
+
+        def _on_progress(frac: float, label: str):
+            progress_bar.progress(min(frac, 1.0))
+            status_text.markdown(
+                f"<p style='font-family:JetBrains Mono,monospace;"
+                f" font-size:0.82rem; opacity:0.7;'>⚙️ {label}</p>",
+                unsafe_allow_html=True)
+
+        pipeline = RustifyPipeline(
+            project_dir=scan_path,
+            output_dir=str(output_dir),
+            crate_name=crate_name,
+            min_score=min_score,
+            max_candidates=max_cands,
+            mode=build_mode,
+        )
+        report = pipeline.run(progress_cb=_on_progress)
+
+        progress_bar.progress(1.0)
+        if report.compile_result and report.compile_result.success:
+            status_text.markdown(
+                "<p style='font-family:JetBrains Mono,monospace;"
+                " font-size:0.82rem; color:#00c853;'>"
+                "✅ Pipeline complete — crate compiled successfully!</p>",
+                unsafe_allow_html=True)
+        else:
+            status_text.markdown(
+                "<p style='font-family:JetBrains Mono,monospace;"
+                " font-size:0.82rem; color:#ff9800;'>"
+                "⚠️ Pipeline finished with issues — see details below</p>",
+                unsafe_allow_html=True)
+
+        time.sleep(0.8)
+        progress_bar.empty()
+
+        prev_report = report.to_dict()
+        st.session_state["auto_rustify_report"] = prev_report
+
+    # ── Render report ──
+    if prev_report:
+        _render_pipeline_report(prev_report)
+
+
+def _render_pipeline_report(report: Dict[str, Any]):
+    """Display a completed pipeline report."""
+    st.divider()
+    st.markdown("### 📋 Pipeline Report")
+
+    # System info
+    sys_info = report.get("system", {})
+    st.markdown(f"""
+    <div style="padding:10px 14px; border-radius:8px;
+                background:rgba(17,25,40,0.5);
+                border:1px solid rgba(255,255,255,0.06);
+                font-size:0.8rem; margin-bottom:12px;">
+        🖥️ <b>{sys_info.get('os','?')}</b> · {sys_info.get('arch','?')} ·
+        Target: <code>{sys_info.get('rust_target','?')}</code> ·
+        CPU features: {', '.join(sys_info.get('cpu_features',[])) or 'baseline'}
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Summary metrics
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("📄 Scanned",
+              f"{report.get('scan_duration_s', 0):.1f}s")
+    m2.metric("🦀 Candidates",
+              f"{report.get('candidates_selected', 0)}"
+              f"/{report.get('candidates_total', 0)}")
+    compile_info = report.get("compile", {})
+    m3.metric("⚙️ Compile",
+              "✅ OK" if compile_info.get("success") else "❌ Failed")
+    verify_info = report.get("verify", {})
+    m4.metric("✔️ Verify",
+              "✅ OK" if verify_info.get("success") else "❌ Failed")
+
+    # Phase timeline
+    phases = report.get("phases", [])
+    if phases:
+        st.markdown("##### ⏱️ Phase Timeline")
+        for phase in phases:
+            name = phase.get("name", "?")
+            status = phase.get("status", "?")
+            icon = "✅" if status == "ok" else "⚠️" if status == "no_candidates" else "❌"
+            detail_parts = []
+            for k, v in phase.items():
+                if k not in ("name", "status", "stderr"):
+                    detail_parts.append(f"{k}={v}")
+            detail_str = " · ".join(detail_parts) if detail_parts else ""
+            st.markdown(f"""
+            <div style="display:flex; align-items:center; gap:10px;
+                        padding:4px 10px; margin:2px 0; border-radius:6px;
+                        background:rgba(255,255,255,0.02);">
+                <span style="font-size:1.1rem;">{icon}</span>
+                <span style="font-family:'JetBrains Mono',monospace;
+                             font-size:0.82rem; min-width:140px;
+                             color:#00d4ff;">{name}</span>
+                <span style="font-size:0.75rem; opacity:0.6;">{detail_str}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # Compile details
+    if compile_info:
+        st.markdown("##### 🔨 Compilation")
+        cc1, cc2, cc3 = st.columns(3)
+        cc1.markdown(f"**Target:** `{compile_info.get('target', '?')}`")
+        cc2.markdown(f"**Duration:** {compile_info.get('duration_s', 0):.1f}s")
+        cc3.markdown(f"**RUSTFLAGS:** `{compile_info.get('rustflags', 'default')}`")
+        artefact = compile_info.get("artefact", "")
+        if artefact:
+            st.success(f"🎯 Artefact: `{artefact}`")
+        if not compile_info.get("success"):
+            stderr = report.get("phases", [{}])[-2].get("stderr", "") if len(phases) > 1 else ""
+            if stderr:
+                with st.expander("Compiler errors"):
+                    st.code(stderr, language="text")
+
+    # Verify details
+    if verify_info:
+        st.markdown("##### ✔️ Verification")
+        if verify_info.get("success"):
+            st.success(
+                f"All {verify_info.get('passed', 0)} Rust tests passed!")
+        else:
+            st.error(
+                f"{verify_info.get('failed', 0)} test(s) failed")
+
+    # Output paths
+    st.markdown("##### 📁 Output Files")
+    paths = [
+        ("Cargo project", report.get("cargo_project_path", "")),
+        ("Golden tests (Python)", report.get("test_gen_path", "")),
+        ("Verify tests (Rust)", report.get("verify_test_path", "")),
+    ]
+    for label, p in paths:
+        if p:
+            st.markdown(f"- **{label}:** `{p}`")
+
+    # Errors
+    errors = report.get("errors", [])
+    if errors:
+        st.markdown("##### ⚠️ Errors")
+        for e in errors:
+            st.error(e)
+
+    # Download report
+    st.divider()
+    json_str = json.dumps(report, indent=2, default=str)
+    st.download_button(
+        "⬇️ Download Pipeline Report (JSON)",
+        data=json_str,
+        file_name="auto_rustify_report.json",
+        mime="application/json",
+        use_container_width=True)
+
+
 # ── Main app ─────────────────────────────────────────────────────────────────
 
 def main():
@@ -1907,6 +2155,10 @@ def main():
     if has_functions:
         tab_names.append("📊 Complexity")
 
+    # Always show the Auto-Rustify pipeline tab when rustify was enabled
+    if "rustify" in results:
+        tab_names.append("⚙️ Auto-Rustify")
+
     if tab_names:
         tabs = st.tabs(tab_names)
         tab_idx = 0
@@ -1937,6 +2189,10 @@ def main():
         if "📊 Complexity" in tab_names:
             with tabs[tab_idx]:
                 _render_complexity_tab(results)
+            tab_idx += 1
+        if "⚙️ Auto-Rustify" in tab_names:
+            with tabs[tab_idx]:
+                _render_auto_rustify_tab(results)
             tab_idx += 1
 
     # ── Export ────────────────────────────────────────────────────────────
