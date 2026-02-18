@@ -499,12 +499,15 @@ _GRADE_COLORS = {
 
 # ── Scan helpers ─────────────────────────────────────────────────────────────
 
-def _scan_codebase(root: Path, exclude: List[str]) -> tuple:
+def _scan_codebase(root: Path, exclude: List[str],
+                   on_file=None) -> tuple:
     """Parallel-scan the codebase, returning functions, classes, and errors."""
     py_files = collect_py_files(root, exclude or None)
     all_functions: List[FunctionRecord] = []
     all_classes: List[ClassRecord] = []
     errors: List[str] = []
+    done = 0
+    total = len(py_files)
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = {
@@ -517,23 +520,55 @@ def _scan_codebase(root: Path, exclude: List[str]) -> tuple:
             all_classes.extend(clses)
             if err:
                 errors.append(f"{futures[future]}: {err}")
+            done += 1
+            if on_file and total:
+                on_file(done, total, str(futures[future]))
 
     return all_functions, all_classes, errors, len(py_files)
 
 
 def _run_scan(root: Path, modes: Dict[str, bool],
               exclude: List[str],
-              thresholds: Dict[str, int]) -> Dict[str, Any]:
-    """Run selected scan phases and return results dict."""
+              thresholds: Dict[str, int],
+              progress_cb=None) -> Dict[str, Any]:
+    """Run selected scan phases and return results dict.
+
+    *progress_cb(fraction, phase_label)* is called to report 0.0-1.0
+    progress and the name of the current phase.
+    """
     results: Dict[str, Any] = {"meta": {}}
     t0 = time.time()
 
+    # ── Build phase list so we can distribute the progress bar evenly ──
+    phases: List[str] = []
     need_ast = modes.get("smells") or modes.get("duplicates") or modes.get("rustify")
+    if need_ast:
+        phases.append("ast")
+    for key in ("smells", "duplicates", "lint", "security", "rustify"):
+        if modes.get(key):
+            phases.append(key)
+    phases.append("grade")
+    phase_weight = 1.0 / max(len(phases), 1)
+
+    def _progress(phase_idx: int, label: str, sub: float = 1.0):
+        """Report progress: *sub* is 0..1 within the current phase."""
+        if progress_cb:
+            frac = (phase_idx + sub) * phase_weight
+            progress_cb(min(frac, 1.0), label)
+
+    pi = 0  # phase index
+
     functions, classes, errors = [], [], []
     file_count = 0
 
     if need_ast:
-        functions, classes, errors, file_count = _scan_codebase(root, exclude)
+        def _on_file(done, total, path):
+            _progress(pi, f"Parsing {done}/{total} files", done / total)
+        _progress(pi, "Parsing source files", 0.0)
+        functions, classes, errors, file_count = _scan_codebase(
+            root, exclude, on_file=_on_file)
+        _progress(pi, "AST parse complete", 1.0)
+        pi += 1
 
     results["meta"]["files"] = file_count
     results["meta"]["functions"] = len(functions)
@@ -552,22 +587,29 @@ def _run_scan(root: Path, modes: Dict[str, bool],
 
     # ── Smells ──
     if modes.get("smells"):
+        _progress(pi, "Detecting code smells", 0.0)
         detector = CodeSmellDetector(thresholds=thresholds)
         smells = detector.detect(functions, classes)
         summary = detector.summary()
         results["smells"] = summary
         results["_smell_issues"] = smells
+        _progress(pi, "Smells done", 1.0)
+        pi += 1
 
     # ── Duplicates ──
     if modes.get("duplicates"):
+        _progress(pi, "Finding duplicates", 0.0)
         finder = DuplicateFinder()
         finder.find(functions)
         summary = finder.summary()
         results["duplicates"] = summary
         results["_dup_groups"] = finder.groups
+        _progress(pi, "Duplicates done", 1.0)
+        pi += 1
 
     # ── Lint ──
     if modes.get("lint"):
+        _progress(pi, "Running Ruff lint", 0.0)
         linter = LintAnalyzer()
         if linter.available:
             lint_issues = linter.analyze(root, exclude=exclude or None)
@@ -576,9 +618,12 @@ def _run_scan(root: Path, modes: Dict[str, bool],
             results["_lint_issues"] = lint_issues
         else:
             results["lint"] = {"error": "Ruff not installed (pip install ruff)"}
+        _progress(pi, "Lint done", 1.0)
+        pi += 1
 
     # ── Security ──
     if modes.get("security"):
+        _progress(pi, "Running Bandit security", 0.0)
         sec = SecurityAnalyzer()
         if sec.available:
             sec_issues = sec.analyze(root, exclude=exclude or None)
@@ -587,9 +632,12 @@ def _run_scan(root: Path, modes: Dict[str, bool],
             results["_sec_issues"] = sec_issues
         else:
             results["security"] = {"error": "Bandit not installed (pip install bandit)"}
+        _progress(pi, "Security done", 1.0)
+        pi += 1
 
     # ── Rustify ──
     if modes.get("rustify"):
+        _progress(pi, "Scoring Rust candidates", 0.0)
         advisor = RustAdvisor()
         candidates = advisor.score(functions)
         results["rustify"] = {
@@ -598,6 +646,8 @@ def _run_scan(root: Path, modes: Dict[str, bool],
             "top_score": candidates[0].score if candidates else 0,
         }
         results["_rust_candidates"] = candidates
+        _progress(pi, "Rustify done", 1.0)
+        pi += 1
 
     # ── Grade (reuse reporting logic) ──
     grade_data = {}
@@ -755,12 +805,19 @@ def _render_smells_tab(results: Dict[str, Any]):
             </div>
             """, unsafe_allow_html=True)
 
-    # Worst files
+    # Worst files — clickable to view code
     worst = summary.get("worst_files", {})
     if worst:
         st.subheader("Worst Files")
         for f, count in sorted(worst.items(), key=lambda x: -x[1])[:10]:
-            st.write(f"`{f}` — {count} issues")
+            with st.expander(f"📄 `{f}` — {count} issues"):
+                try:
+                    src = Path(f).read_text(encoding="utf-8", errors="replace")
+                    st.code(src[:8000], language="python")
+                    if len(src) > 8000:
+                        st.caption("... truncated (file > 8 000 chars)")
+                except Exception as exc:
+                    st.warning(f"Cannot read file: {exc}")
 
     # Issue list (expandable)
     st.subheader("All Issues")
@@ -967,12 +1024,19 @@ def _render_lint_tab(results: Dict[str, Any]):
             </div>
             """, unsafe_allow_html=True)
 
-    # Worst files
+    # Worst files — clickable to view code
     worst = summary.get("worst_files", {})
     if worst:
         st.subheader("Worst Files")
         for f, count in sorted(worst.items(), key=lambda x: -x[1])[:10]:
-            st.write(f"`{f}` — {count} issues")
+            with st.expander(f"📄 `{f}` — {count} issues"):
+                try:
+                    src = Path(f).read_text(encoding="utf-8", errors="replace")
+                    st.code(src[:8000], language="python")
+                    if len(src) > 8000:
+                        st.caption("... truncated (file > 8 000 chars)")
+                except Exception as exc:
+                    st.warning(f"Cannot read file: {exc}")
 
     # Issue list
     st.subheader("All Issues")
@@ -1228,28 +1292,35 @@ def _render_heatmap_tab(results: Dict[str, Any]):
         display_path = (file_path if len(file_path) <= 50
                         else "..." + file_path[-47:])
 
-        st.markdown(f"""
-        <div style="margin: 5px 0;">
-            <div style="display:flex; align-items:center; gap:8px;
-                        margin-bottom:2px;">
-                <span style="font-family:'JetBrains Mono',monospace;
-                             font-size:0.78rem; min-width:300px;
-                             overflow:hidden; text-overflow:ellipsis;
-                             white-space:nowrap;"
-                      title="{file_path}">{display_path}</span>
-                <span style="font-family:'JetBrains Mono',monospace;
-                             font-weight:700; font-size:0.9rem;
-                             min-width:35px; color:#00d4ff;">{total}</span>
-                {tag_html}
+        # Clickable expander with code preview
+        with st.expander(f"🔥 {display_path} — {total} issues"):
+            # Show the heatmap bar inside
+            st.markdown(f"""
+            <div style="margin: 4px 0 8px 0;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-family:'JetBrains Mono',monospace;
+                                 font-weight:700; color:#00d4ff;">
+                        {total} issues</span>
+                    {tag_html}
+                </div>
+                <div style="background:rgba(255,255,255,0.04);
+                            border-radius:4px; height:10px;
+                            overflow:hidden; margin-top:4px;">
+                    <div style="width:{pct}%; height:100%;
+                                background:{bar_color};
+                                border-radius:4px;"></div>
+                </div>
             </div>
-            <div style="background:rgba(255,255,255,0.04); border-radius:4px;
-                        height:14px; overflow:hidden;">
-                <div style="width:{pct}%; height:100%; background:{bar_color};
-                            border-radius:4px;
-                            transition:width 0.5s ease;"></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+            st.caption(f"📄 `{file_path}`")
+            try:
+                src = Path(file_path).read_text(
+                    encoding="utf-8", errors="replace")
+                st.code(src[:8000], language="python")
+                if len(src) > 8000:
+                    st.caption("... truncated (file > 8 000 chars)")
+            except Exception as exc:
+                st.warning(f"Cannot read file: {exc}")
 
     st.markdown("---")
     total_files = len(file_issues)
@@ -1365,30 +1436,53 @@ def _render_complexity_tab(results: Dict[str, Any]):
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Top complex functions ──
+    # ── Top complex functions — clickable with code preview ──
     st.markdown("---")
     st.subheader("🔥 Most Complex Functions")
+    code_map = results.get("_code_map", {})
     sorted_fns = sorted(
         functions, key=lambda f: f.complexity, reverse=True)[:15]
     for fn in sorted_fns:
         cc_color = ("#d50000" if fn.complexity >= 15
                     else "#ff6d00" if fn.complexity >= 8 else "#ffd600")
-        st.markdown(f"""
-        <div style="display:flex; align-items:center; gap:12px;
-                    padding:6px 10px; margin:2px 0; border-radius:8px;
-                    background:rgba(255,255,255,0.03);
-                    border-left: 3px solid {cc_color};">
-            <span style="font-family:'JetBrains Mono',monospace;
-                         font-size:1.1rem; font-weight:700;
-                         color:{cc_color}; min-width:35px;">
-                CC {fn.complexity}</span>
-            <span style="font-family:'JetBrains Mono',monospace;
-                         font-size:0.82rem; color:#00d4ff;">
-                {fn.name}</span>
-            <span style="font-size:0.72rem; opacity:0.5; margin-left:auto;">
-                {fn.file_path}:{fn.line_start} ({fn.size_lines} lines)</span>
-        </div>
-        """, unsafe_allow_html=True)
+        with st.expander(
+            f"CC {fn.complexity}  ·  {fn.name}  ·  "
+            f"{fn.file_path}:{fn.line_start} ({fn.size_lines} lines)"
+        ):
+            st.markdown(f"""
+            <div style="display:flex; align-items:center; gap:12px;
+                        padding:6px 10px; margin:2px 0; border-radius:8px;
+                        background:rgba(255,255,255,0.03);
+                        border-left: 3px solid {cc_color};">
+                <span style="font-family:'JetBrains Mono',monospace;
+                             font-size:1.1rem; font-weight:700;
+                             color:{cc_color};">CC {fn.complexity}</span>
+                <span style="font-family:'JetBrains Mono',monospace;
+                             font-size:0.82rem; color:#00d4ff;">
+                    {fn.name}</span>
+                <span style="font-size:0.72rem; opacity:0.5;
+                             margin-left:auto;">
+                    {fn.size_lines} lines · params: {", ".join(fn.parameters) or "none"}</span>
+            </div>
+            """, unsafe_allow_html=True)
+            code = code_map.get(
+                f"{fn.file_path}:{fn.line_start}",
+                code_map.get(fn.key, ""))
+            if code:
+                st.code(code, language="python")
+            else:
+                # Fallback: try reading from disk
+                try:
+                    src = Path(fn.file_path).read_text(
+                        encoding="utf-8", errors="replace")
+                    src_lines = src.splitlines()
+                    start = max(0, fn.line_start - 1)
+                    end = min(len(src_lines),
+                              start + fn.size_lines + 5)
+                    snippet = "\n".join(src_lines[start:end])
+                    st.code(snippet, language="python")
+                except Exception:
+                    st.warning("Source code not available")
 
 
 # ── Main app ─────────────────────────────────────────────────────────────────
@@ -1539,24 +1633,234 @@ def main():
             st.warning("Please select at least one analyzer.")
             return
 
-        with st.spinner(f"⚡ Scanning `{root.name}` ..."):
-            results = _run_scan(root, modes, exclude_dirs, custom_thresholds)
-            st.session_state["results"] = results
-            st.session_state["scan_path"] = str(root)
+        # ── Progress bar + live status ──
+        progress_bar = st.progress(0.0)
+        status_text  = st.empty()
+        status_text.markdown(
+            "<p style='font-family:JetBrains Mono,monospace;"
+            " font-size:0.82rem; opacity:0.7;'>"
+            "⚡ Initialising scan…</p>",
+            unsafe_allow_html=True)
+
+        def _on_progress(frac: float, label: str):
+            progress_bar.progress(min(frac, 1.0))
+            status_text.markdown(
+                f"<p style='font-family:JetBrains Mono,monospace;"
+                f" font-size:0.82rem; opacity:0.7;'>"
+                f"⚡ {label}</p>",
+                unsafe_allow_html=True)
+
+        results = _run_scan(
+            root, modes, exclude_dirs, custom_thresholds,
+            progress_cb=_on_progress)
+
+        progress_bar.progress(1.0)
+        status_text.markdown(
+            f"<p style='font-family:JetBrains Mono,monospace;"
+            f" font-size:0.82rem; color:#00c853;'>"
+            f"✅ Scan complete — "
+            f"{results['meta'].get('files',0)} files, "
+            f"{results['meta'].get('functions',0)} functions "
+            f"in {results['meta'].get('duration',0):.1f}s</p>",
+            unsafe_allow_html=True)
+        time.sleep(0.6)          # let the user see the 100 % state
+        progress_bar.empty()     # remove the bar after completion
+        status_text.empty()
+
+        st.session_state["results"] = results
+        st.session_state["scan_path"] = str(root)
 
     # ── Display results ──────────────────────────────────────────────────
     if "results" not in st.session_state:
+        # ── Intro / How It Works landing page ──
         st.markdown("""
-        <div style="text-align:center; padding:4rem 2rem;
-                    border: 1px dashed rgba(255,255,255,0.1);
-                    border-radius:16px; margin-top: 2rem;">
-            <p style="font-size:3rem; margin:0;">🔬</p>
+        <div style="text-align:center; padding:2.5rem 2rem 1rem 2rem;
+                    border: 1px solid rgba(0,212,255,0.15);
+                    border-radius:16px; margin-top:1rem;
+                    background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(124,77,255,0.05));">
+            <p style="font-size:3.5rem; margin:0;">🔬</p>
             <p style="font-family:'JetBrains Mono',monospace;
-                      font-size:1.1rem; margin:0.5rem 0; opacity:0.7;">
-                Ready to scan</p>
-            <p style="opacity:0.4; font-size:0.85rem;">
-                Configure analyzers in the sidebar and click
-                <b>⚡ Run X-Ray Scan</b></p>
+                      font-size:1.3rem; margin:0.5rem 0;
+                      background:linear-gradient(135deg,#00d4ff,#7c4dff);
+                      -webkit-background-clip:text;
+                      -webkit-text-fill-color:transparent;
+                      font-weight:700;">X-Ray Code Quality Scanner</p>
+            <p style="opacity:0.5; font-size:0.85rem; max-width:600px; margin:0 auto;">
+                Deep-scan any Python project for smells, duplication, lint issues,
+                security vulnerabilities — and discover which functions are
+                ready for Rust porting.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.write("")
+
+        # How it works — 3-column overview
+        st.markdown("### ⚡ How It Works")
+        hw1, hw2, hw3 = st.columns(3)
+        with hw1:
+            st.markdown("""
+            <div style="padding:16px; border-radius:12px;
+                        background:rgba(17,25,40,0.6);
+                        border:1px solid rgba(255,255,255,0.06); height:100%;">
+                <p style="font-size:1.8rem; margin:0; text-align:center;">1️⃣</p>
+                <p style="font-family:'JetBrains Mono',monospace;
+                          font-size:0.9rem; text-align:center;
+                          color:#00d4ff; font-weight:600;">Configure</p>
+                <p style="font-size:0.8rem; opacity:0.6; text-align:center;">
+                    Point to a project directory, pick analyzers
+                    (Smells, Lint, Security, Duplicates, Rustify),
+                    and tune thresholds in the sidebar.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with hw2:
+            st.markdown("""
+            <div style="padding:16px; border-radius:12px;
+                        background:rgba(17,25,40,0.6);
+                        border:1px solid rgba(255,255,255,0.06); height:100%;">
+                <p style="font-size:1.8rem; margin:0; text-align:center;">2️⃣</p>
+                <p style="font-family:'JetBrains Mono',monospace;
+                          font-size:0.9rem; text-align:center;
+                          color:#00d4ff; font-weight:600;">Scan</p>
+                <p style="font-size:0.8rem; opacity:0.6; text-align:center;">
+                    Click <b>⚡ Run X-Ray Scan</b>. The engine
+                    parses every .py file, runs AST analysis,
+                    Ruff lint, and Bandit security in parallel.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with hw3:
+            st.markdown("""
+            <div style="padding:16px; border-radius:12px;
+                        background:rgba(17,25,40,0.6);
+                        border:1px solid rgba(255,255,255,0.06); height:100%;">
+                <p style="font-size:1.8rem; margin:0; text-align:center;">3️⃣</p>
+                <p style="font-family:'JetBrains Mono',monospace;
+                          font-size:0.9rem; text-align:center;
+                          color:#00d4ff; font-weight:600;">Explore</p>
+                <p style="font-size:0.8rem; opacity:0.6; text-align:center;">
+                    Browse results in interactive tabs — click any
+                    file or function to see the actual source code,
+                    Rust previews, and merge suggestions.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.write("")
+
+        # Analyzer cards
+        st.markdown("### 🧰 Analyzers")
+        a1, a2 = st.columns(2)
+        with a1:
+            st.markdown("""
+            <div style="padding:14px 16px; border-radius:12px;
+                        background:rgba(17,25,40,0.6);
+                        border:1px solid rgba(255,255,255,0.06);
+                        margin-bottom:12px;">
+                <p style="margin:0 0 4px 0; font-size:0.95rem;">🔍 <b>Code Smells</b></p>
+                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
+                    AST-based detection of long functions, deep nesting,
+                    god classes, too many parameters, dead code, and
+                    15+ other anti-patterns. Each issue is graded
+                    Critical / Warning / Info.</p>
+            </div>
+            <div style="padding:14px 16px; border-radius:12px;
+                        background:rgba(17,25,40,0.6);
+                        border:1px solid rgba(255,255,255,0.06);
+                        margin-bottom:12px;">
+                <p style="margin:0 0 4px 0; font-size:0.95rem;">🧹 <b>Lint (Ruff)</b></p>
+                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
+                    Fast Python linter covering 800+ rules
+                    (pyflakes, pycodestyle, isort, …). Auto-fixable
+                    issues can be patched in one click.</p>
+            </div>
+            <div style="padding:14px 16px; border-radius:12px;
+                        background:rgba(17,25,40,0.6);
+                        border:1px solid rgba(255,255,255,0.06);">
+                <p style="margin:0 0 4px 0; font-size:0.95rem;">🔒 <b>Security (Bandit)</b></p>
+                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
+                    Scans for common security issues — hardcoded
+                    passwords, SQL injection, unsafe deserialization,
+                    subprocess shells, and more.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with a2:
+            st.markdown("""
+            <div style="padding:14px 16px; border-radius:12px;
+                        background:rgba(17,25,40,0.6);
+                        border:1px solid rgba(255,255,255,0.06);
+                        margin-bottom:12px;">
+                <p style="margin:0 0 4px 0; font-size:0.95rem;">📋 <b>Duplicates</b></p>
+                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
+                    Finds exact, near, structural, and semantic
+                    clones across the codebase. Shows side-by-side
+                    diffs and generates a unified merge suggestion.</p>
+            </div>
+            <div style="padding:14px 16px; border-radius:12px;
+                        background:rgba(17,25,40,0.6);
+                        border:1px solid rgba(255,255,255,0.06);
+                        margin-bottom:12px;">
+                <p style="margin:0 0 4px 0; font-size:0.95rem;">🦀 <b>Rustify</b></p>
+                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
+                    Scores every function for Rust-porting fitness.
+                    Pure, high-complexity hotspots rank highest.
+                    Generates a side-by-side Python → Rust sketch
+                    using PyO3 bindings.</p>
+            </div>
+            <div style="padding:14px 16px; border-radius:12px;
+                        background:rgba(17,25,40,0.6);
+                        border:1px solid rgba(255,255,255,0.06);">
+                <p style="margin:0 0 4px 0; font-size:0.95rem;">📊 <b>Heatmap & Complexity</b></p>
+                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
+                    Visualises which files concentrate the most issues
+                    and shows cyclomatic-complexity & size distributions
+                    across all functions.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.write("")
+
+        # Grading explanation
+        st.markdown("### 🏅 Grading")
+        st.markdown("""
+        <div style="padding:16px; border-radius:12px;
+                    background:rgba(17,25,40,0.6);
+                    border:1px solid rgba(255,255,255,0.06);">
+            <p style="font-size:0.82rem; opacity:0.7; margin:0 0 8px 0;">
+                X-Ray calculates a <b>0–100 quality score</b> by starting at 100
+                and subtracting penalties for issues found by each analyzer.
+                The score maps to a letter grade:</p>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+                <span style="background:#00c85322; color:#00c853;
+                             padding:4px 10px; border-radius:6px;
+                             font-family:'JetBrains Mono',monospace;
+                             font-size:0.8rem;">A+ 97  ·  A 93  ·  A- 90</span>
+                <span style="background:#64dd1722; color:#64dd17;
+                             padding:4px 10px; border-radius:6px;
+                             font-family:'JetBrains Mono',monospace;
+                             font-size:0.8rem;">B+ 87  ·  B 83  ·  B- 80</span>
+                <span style="background:#ffd60022; color:#ffd600;
+                             padding:4px 10px; border-radius:6px;
+                             font-family:'JetBrains Mono',monospace;
+                             font-size:0.8rem;">C+ 77  ·  C 73  ·  C- 70</span>
+                <span style="background:#ff6d0022; color:#ff6d00;
+                             padding:4px 10px; border-radius:6px;
+                             font-family:'JetBrains Mono',monospace;
+                             font-size:0.8rem;">D+ 67  ·  D 63  ·  D- 60</span>
+                <span style="background:#d5000022; color:#d50000;
+                             padding:4px 10px; border-radius:6px;
+                             font-family:'JetBrains Mono',monospace;
+                             font-size:0.8rem;">F &lt; 60</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.write("")
+        st.markdown("""
+        <div style="text-align:center; padding:1.5rem;
+                    border:1px dashed rgba(0,212,255,0.2);
+                    border-radius:12px; margin-top:0.5rem;">
+            <p style="font-family:'JetBrains Mono',monospace;
+                      font-size:0.95rem; opacity:0.7; margin:0;">
+                👈  Configure analyzers in the sidebar and press
+                <b style="color:#00d4ff;">⚡ Run X-Ray Scan</b></p>
         </div>
         """, unsafe_allow_html=True)
         return
