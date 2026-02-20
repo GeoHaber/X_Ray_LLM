@@ -1,8 +1,10 @@
 // src/config.rs — Configuration constants
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 pub const VERSION: &str = "5.0.0";
 
+#[allow(dead_code)]
 pub const BANNER: &str = r#"
 ================================================================
   X-RAY v5.0.0 — Unified Code Quality Scanner (Rust)
@@ -46,22 +48,22 @@ impl Default for SmellThresholds {
 }
 
 /// Directories to always skip during file walk
-pub fn always_skip_dirs() -> HashSet<&'static str> {
+pub static SKIP_DIRS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     [
         ".git", "__pycache__", ".venv", "venv", "env", ".env",
         "node_modules", ".tox", ".mypy_cache", ".pytest_cache",
         ".ruff_cache", "dist", "build", ".eggs", "target",
         ".idea", ".vscode", ".vs", "site-packages",
     ].iter().copied().collect()
-}
+});
 
 /// Files to always skip
-pub fn always_skip_files() -> HashSet<&'static str> {
+pub static SKIP_FILES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     ["smell_factory.py", "bad_code_sample.py"].iter().copied().collect()
-}
+});
 
 /// Stop words for tokenization
-pub fn stop_words() -> HashSet<&'static str> {
+pub static STOP_WORDS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     [
         "the", "a", "an", "is", "are", "was", "were", "be", "been",
         "being", "have", "has", "had", "do", "does", "did", "will",
@@ -71,10 +73,10 @@ pub fn stop_words() -> HashSet<&'static str> {
         "but", "or", "not", "no", "if", "then", "else", "when",
         "while", "this", "that", "it", "its", "self",
     ].iter().copied().collect()
-}
+});
 
 /// Ruff severity map
-pub fn ruff_severity_map() -> HashMap<&'static str, &'static str> {
+pub static RUFF_SEVERITY: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     let mut m = HashMap::new();
     m.insert("F811", "critical");
     m.insert("E999", "critical");
@@ -87,7 +89,7 @@ pub fn ruff_severity_map() -> HashMap<&'static str, &'static str> {
     m.insert("F541", "info");
     m.insert("E701", "info");
     m
-}
+});
 
 /// Bandit severity map
 pub fn bandit_severity(sev: &str) -> &'static str {
@@ -99,7 +101,7 @@ pub fn bandit_severity(sev: &str) -> &'static str {
 }
 
 /// Python keywords (preserved during AST normalization)
-pub fn python_keywords() -> HashSet<&'static str> {
+pub static PYTHON_KEYWORDS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     [
         "False", "None", "True", "and", "as", "assert", "async", "await",
         "break", "class", "continue", "def", "del", "elif", "else", "except",
@@ -107,10 +109,10 @@ pub fn python_keywords() -> HashSet<&'static str> {
         "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
         "while", "with", "yield",
     ].iter().copied().collect()
-}
+});
 
 /// Python builtins (preserved during AST normalization)
-pub fn python_builtins() -> HashSet<&'static str> {
+pub static PYTHON_BUILTINS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     [
         "print", "len", "range", "int", "str", "float", "bool", "list",
         "dict", "set", "tuple", "type", "isinstance", "issubclass",
@@ -123,4 +125,4 @@ pub fn python_builtins() -> HashSet<&'static str> {
         "RuntimeError", "StopIteration", "OSError", "IOError",
         "FileNotFoundError", "NotImplementedError", "ImportError",
     ].iter().copied().collect()
-}
+});

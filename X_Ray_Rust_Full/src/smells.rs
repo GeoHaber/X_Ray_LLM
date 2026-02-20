@@ -237,10 +237,8 @@ fn check_class(c: &ClassRecord, t: &SmellThresholds, issues: &mut Vec<SmellIssue
     }
 }
 
-/// Generate summary counts
+/// Generate summary counts (delegates to reporting::count_severities)
+#[allow(dead_code)]
 pub fn summary(issues: &[SmellIssue]) -> (usize, usize, usize) {
-    let critical = issues.iter().filter(|i| i.severity == Severity::Critical).count();
-    let warning = issues.iter().filter(|i| i.severity == Severity::Warning).count();
-    let info = issues.iter().filter(|i| i.severity == Severity::Info).count();
-    (critical, warning, info)
+    crate::reporting::count_severities(issues)
 }

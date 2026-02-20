@@ -20,6 +20,7 @@ pub enum Tool {
 }
 
 impl Tool {
+    #[allow(dead_code)]
     fn name(&self) -> &'static str {
         match self { Tool::Ruff => "ruff", Tool::Bandit => "bandit" }
     }
@@ -28,6 +29,7 @@ impl Tool {
         match self { Tool::Ruff => "ruff", Tool::Bandit => "bandit" }
     }
 
+    #[allow(dead_code)]
     fn source(&self) -> &'static str {
         match self { Tool::Ruff => "ruff", Tool::Bandit => "bandit" }
     }
@@ -55,6 +57,7 @@ pub fn analyze(tool: Tool, root: &Path, exclude: &[String]) -> Vec<SmellIssue> {
 }
 
 /// Summary counts for a set of issues
+#[allow(dead_code)]
 pub fn summary(issues: &[SmellIssue]) -> HashMap<String, usize> {
     let mut m = HashMap::new();
     m.insert("total".to_string(), issues.len());
@@ -68,7 +71,12 @@ pub fn summary(issues: &[SmellIssue]) -> HashMap<String, usize> {
 // ── Internal: Subprocess ───────────────────────────────────────────
 
 fn which(name: &str) -> bool {
-    Command::new("where")
+    #[cfg(target_os = "windows")]
+    let cmd = "where";
+    #[cfg(not(target_os = "windows"))]
+    let cmd = "which";
+
+    Command::new(cmd)
         .arg(name)
         .output()
         .map(|o| o.status.success())
@@ -130,7 +138,7 @@ fn parse_ruff(json_str: &str, root: &Path) -> Vec<SmellIssue> {
         Err(_) => return vec![],
     };
 
-    let severity_map = config::ruff_severity_map();
+    let severity_map = &*config::RUFF_SEVERITY;
     let root_str = root.to_string_lossy();
 
     items
@@ -215,8 +223,10 @@ fn parse_bandit(json_str: &str, root: &Path) -> Vec<SmellIssue> {
             let msg = item.get("issue_text")?.as_str().unwrap_or("");
             let filename = item.get("filename")?.as_str().unwrap_or("");
             let line = item.get("line_number")?.as_u64().unwrap_or(0) as u32;
-            let end_line = item.get("end_col_offset") // bandit doesn't always have end_line
-                .and_then(|e| e.as_u64())
+            let end_line = item.get("line_range")
+                .and_then(|r| r.as_array())
+                .and_then(|arr| arr.last())
+                .and_then(|v| v.as_u64())
                 .unwrap_or(line as u64) as u32;
 
             // Skip B101 in test files, always skip B404

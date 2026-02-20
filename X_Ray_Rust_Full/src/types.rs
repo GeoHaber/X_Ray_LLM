@@ -18,6 +18,7 @@ impl Severity {
             Severity::Info => "info",
         }
     }
+    #[allow(dead_code)]
     pub fn icon(&self) -> &'static str {
         match self {
             Severity::Critical => "\u{1f534}",
@@ -65,6 +66,7 @@ impl FunctionRecord {
         format!("{}::{}", stem, self.name)
     }
 
+    #[allow(dead_code)]
     pub fn location(&self) -> String {
         format!("{}:{}", self.file_path, self.line_start)
     }

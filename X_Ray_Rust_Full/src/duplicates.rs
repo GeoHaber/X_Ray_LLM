@@ -162,7 +162,13 @@ pub fn find_duplicates(functions: &[FunctionRecord]) -> Vec<DuplicateGroup> {
                 let sim = similarity::code_similarity(&fa.code, &fb.code);
                 if sim >= NEAR_DUP_THRESHOLD {
                     uf.union(&fa.key(), &fb.key());
-                    pair_sims.insert((fa.key(), fb.key()), sim);
+                    // Normalize key ordering to lexicographic so lookup matches
+                    let key = if fa.key() < fb.key() {
+                        (fa.key(), fb.key())
+                    } else {
+                        (fb.key(), fa.key())
+                    };
+                    pair_sims.insert(key, sim);
                 }
             }
         }

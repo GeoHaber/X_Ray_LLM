@@ -12,7 +12,7 @@ static SPLIT_RE: LazyLock<Regex> = LazyLock::new(|| {
 
 /// Tokenize text: split on non-alphanum, split camelCase, lowercase, filter stop words
 pub fn tokenize(text: &str) -> Vec<String> {
-    let stops = config::stop_words();
+    let stops = &*config::STOP_WORDS;
     let cleaned = text.chars().map(|c| {
         if c.is_alphanumeric() || c == '_' { c } else { ' ' }
     }).collect::<String>();

@@ -150,7 +150,7 @@ fn severity_icon(sev: Severity) -> &'static str {
     }
 }
 
-fn count_severities(issues: &[SmellIssue]) -> (usize, usize, usize) {
+pub fn count_severities(issues: &[SmellIssue]) -> (usize, usize, usize) {
     let c = issues.iter().filter(|i| i.severity == Severity::Critical).count();
     let w = issues.iter().filter(|i| i.severity == Severity::Warning).count();
     let i = issues.iter().filter(|i| i.severity == Severity::Info).count();

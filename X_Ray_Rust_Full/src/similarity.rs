@@ -26,26 +26,29 @@ static RE_PY_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
     "#).unwrap()
 });
 
-// Token categories for normalization
-fn classify_token(tok: &str) -> Option<String> {
-    // Keywords: keep as-is
-    let keywords: HashSet<&str> = [
+// Token categories for normalization — use statics to avoid per-call allocation
+static CLASSIFY_KEYWORDS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    [
         "def","class","if","elif","else","for","while","try","except",
         "finally","with","return","yield","import","from","as","in","not",
         "and","or","is","lambda","raise","pass","break","continue","assert",
         "global","nonlocal","async","await",
-    ].iter().copied().collect();
+    ].iter().copied().collect()
+});
 
-    let builtins: HashSet<&str> = [
+static CLASSIFY_BUILTINS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    [
         "True","False","None","print","len","range","int","str","float",
         "list","dict","set","tuple","type","isinstance","hasattr","getattr",
         "setattr","enumerate","zip","map","filter","sorted","reversed","any",
         "all","min","max","sum","abs","round","open","super",
-    ].iter().copied().collect();
+    ].iter().copied().collect()
+});
 
-    if keywords.contains(tok) {
+fn classify_token(tok: &str) -> Option<String> {
+    if CLASSIFY_KEYWORDS.contains(tok) {
         Some(tok.to_string())
-    } else if builtins.contains(tok) {
+    } else if CLASSIFY_BUILTINS.contains(tok) {
         Some(tok.to_string())
     } else if tok.chars().next().map_or(false, |c| c.is_alphabetic() || c == '_') {
         Some("ID".to_string())
@@ -113,15 +116,20 @@ fn token_ngram_similarity(code_a: &str, code_b: &str) -> f64 {
 
 /// AST node-type histogram similarity
 fn ast_histogram(code: &str) -> HashMap<String, u32> {
-    let re = Regex::new(r"(?m)^\s*(def|class|if|elif|else|for|while|try|except|finally|with|return|yield|import|from|raise|pass|break|continue|assert|async|await)\b").unwrap();
+    static RE_AST_KW: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^\s*(def|class|if|elif|else|for|while|try|except|finally|with|return|yield|import|from|raise|pass|break|continue|assert|async|await)\b").unwrap()
+    });
+    static RE_ASSIGN: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^\s*\w+\s*=").unwrap()
+    });
+
     let mut counts = HashMap::new();
-    for cap in re.captures_iter(code) {
+    for cap in RE_AST_KW.captures_iter(code) {
         let kw = cap.get(1).unwrap().as_str();
         *counts.entry(kw.to_string()).or_insert(0) += 1;
     }
     // Also count assignments, calls, and operators
-    let re_assign = Regex::new(r"(?m)^\s*\w+\s*=").unwrap();
-    *counts.entry("assign".to_string()).or_insert(0) += re_assign.find_iter(code).count() as u32;
+    *counts.entry("assign".to_string()).or_insert(0) += RE_ASSIGN.find_iter(code).count() as u32;
     counts
 }
 

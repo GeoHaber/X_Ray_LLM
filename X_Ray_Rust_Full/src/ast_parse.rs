@@ -34,6 +34,7 @@ static RE_CALL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?:\b(\w+)\s*\(|\.(\w+)\s*\()").unwrap()
 });
 
+#[allow(dead_code)]
 static RE_DOCSTRING: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?s)^[ \t]*(""".*?"""|'''.*?'''|"[^"]*"|'[^']*')"#).unwrap()
 });
@@ -81,8 +82,8 @@ pub fn collect_py_files(
     exclude: &[String],
     include: &[String],
 ) -> Vec<PathBuf> {
-    let skip_dirs = config::always_skip_dirs();
-    let skip_files = config::always_skip_files();
+    let skip_dirs = &*config::SKIP_DIRS;
+    let skip_files = &*config::SKIP_FILES;
     let mut files = Vec::new();
 
     for entry in WalkDir::new(root)
@@ -284,15 +285,18 @@ fn sha256_hex(text: &str) -> String {
 
 /// Compute structure hash: normalize names, then hash
 fn compute_structure_hash(code: &str) -> String {
+    static RE_IDENT: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\b([a-zA-Z_]\w*)\b").unwrap()
+    });
+
     // Normalize: replace all identifiers with placeholders
-    let re_ident = Regex::new(r"\b([a-zA-Z_]\w*)\b").unwrap();
     let mut var_map = std::collections::HashMap::new();
     let mut counter = 0u32;
 
-    let builtins = config::python_builtins();
-    let keywords = config::python_keywords();
+    let builtins = &*config::PYTHON_BUILTINS;
+    let keywords = &*config::PYTHON_KEYWORDS;
 
-    let normalized = re_ident.replace_all(code, |caps: &regex::Captures| {
+    let normalized = RE_IDENT.replace_all(code, |caps: &regex::Captures| {
         let name = &caps[1];
         // Preserve keywords and builtins
         if keywords.contains(name) || builtins.contains(name) {
@@ -440,7 +444,7 @@ pub fn extract_from_file(
         // Skip nested functions (indent > 4 unless inside a class)
         let is_method = class_ranges
             .iter()
-            .any(|(_, start, end, ci)| line_num > *start && line_num < *end && indent == ci + 4);
+            .any(|(_, start, end, ci)| line_num > *start && line_num < *end && indent > *ci);
         let is_top_level = indent == 0;
         if !is_top_level && !is_method {
             continue; // skip nested functions
