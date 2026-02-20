@@ -35,6 +35,7 @@ rag_cleanup_summary.json
 # Scratch / temp
 _scratch/
 _rustified/
+_rustified_exe/
 
 # PyInstaller build artifacts
 X_Ray_Standalone/

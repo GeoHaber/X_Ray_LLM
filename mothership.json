@@ -1,0 +1,32 @@
+{
+    "_comment": [
+        "Mothership manifest for X_Ray.",
+        "Declares which modules X_Ray needs from the Local_LLM mothership.",
+        "Run: python <Local_LLM>/tools/mothership_sync.py <X_Ray_root>",
+        "This copies the listed modules into _mothership/ with imports rewritten."
+    ],
+
+    "mothership_path": "../Local_LLM",
+
+    "vendor_package": "_mothership",
+
+    "auto_generate_init": true,
+
+    "modules": {
+        "models": {
+            "source": "Core/models.py",
+            "note": "Shared data models — HardwareProfile, ModelCategory, QuantizationType, etc."
+        },
+        "hardware_detection": {
+            "source": "Core/services/hardware_detection.py",
+            "import_rewrites": {
+                "from ..models import": "from .models import"
+            },
+            "note": "Zero-dep system profiler — CPU, RAM, GPU, AVX detection."
+        },
+        "settings_service": {
+            "source": "Core/services/settings_service.py",
+            "note": "JSON settings persistence with deep-merge. Pure stdlib, no rewrites needed."
+        }
+    }
+}
