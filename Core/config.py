@@ -28,15 +28,37 @@ SMELL_THRESHOLDS = {
     "too_many_branches": 8,     # if/elif branches
 }
 
-# LLM Settings (Centralized)
+# LLM Settings (Centralized — overridden by xray_settings.json if present)
 LLM_CONFIG = {
-    "base_url": "http://localhost:5000/v1",
+    "base_url": "http://localhost:8080/v1",
     "api_key": "sk-placeholder",
     "model": "local-model",
     "timeout": 60,
     "max_tokens": 1024,
     "temperature": 0.7,
 }
+
+
+def load_llm_config():
+    """Merge LLM_CONFIG with persisted settings from xray_settings.json."""
+    try:
+        from .llm_manager import load_settings
+        settings = load_settings()
+        llm = settings.get("llm", {})
+        if llm.get("server_url"):
+            LLM_CONFIG["base_url"] = llm["server_url"]
+        if llm.get("api_key"):
+            LLM_CONFIG["api_key"] = llm["api_key"]
+        if llm.get("model_id"):
+            LLM_CONFIG["model"] = llm["model_id"]
+        if llm.get("temperature"):
+            LLM_CONFIG["temperature"] = llm["temperature"]
+        if llm.get("max_tokens"):
+            LLM_CONFIG["max_tokens"] = llm["max_tokens"]
+        if llm.get("context_size"):
+            LLM_CONFIG["timeout"] = max(60, llm.get("context_size", 4096) // 50)
+    except Exception:
+        pass  # settings file doesn't exist yet — use defaults
 
 _ALWAYS_SKIP = frozenset({
     ".git", ".hg", ".svn", "__pycache__", ".mypy_cache", ".pytest_cache",

@@ -908,6 +908,42 @@ strip = true
 '''
 
 
+def _get_llm_engine():
+    """Lazily initialise the LLM transpiler engine (singleton)."""
+    if not hasattr(_get_llm_engine, "_cache"):
+        try:
+            from Analysis.llm_transpiler import get_llm_transpiler
+            eng = get_llm_transpiler()
+            _get_llm_engine._cache = eng if eng.available else None
+            if _get_llm_engine._cache:
+                from Core.utils import logger
+                logger.info("Auto-Rustify: LLM hybrid fallback active")
+        except Exception:
+            _get_llm_engine._cache = None
+    return _get_llm_engine._cache
+
+
+def _transpile_with_fallback(func: FunctionRecord, *,
+                             pyfunction: bool = True) -> str:
+    """AST transpile → if result has todo!(), try LLM fallback."""
+    rust_code = transpile_function(func, pyfunction=pyfunction)
+
+    if "todo!()" in rust_code:
+        llm = _get_llm_engine()
+        if llm is not None:
+            llm_result = llm.transpile(
+                func.code, name_hint=func.name,
+                source_info=f"{func.file_path}:{func.line_start}",
+            )
+            if llm_result is not None:
+                # If pyfunction mode, ensure #[pyfunction] attr is present
+                if pyfunction and "#[pyfunction]" not in llm_result:
+                    llm_result = "#[pyfunction]\n" + llm_result
+                rust_code = llm_result
+
+    return rust_code
+
+
 def _build_lib_rs(candidates: List[RustCandidate], crate_name: str, *,
                   pyo3: bool = True) -> str:
     """Generate lib.rs with all transpiled functions."""
@@ -926,7 +962,7 @@ def _build_lib_rs(candidates: List[RustCandidate], crate_name: str, *,
 
     func_names: List[str] = []
     for cand in candidates:
-        rust_code = transpile_function(cand.func, pyfunction=pyo3)
+        rust_code = _transpile_with_fallback(cand.func, pyfunction=pyo3)
         sections.append(rust_code)
         sections.append("")
         func_names.append(cand.func.name)
@@ -967,7 +1003,7 @@ def _build_main_rs(candidates: List[RustCandidate], crate_name: str) -> str:
             continue
         seen_names.add(fn_name)
 
-        rust_code = transpile_function(cand.func, pyfunction=False)
+        rust_code = _transpile_with_fallback(cand.func, pyfunction=False)
         # Ensure no PyO3 types leak into binary mode
         rust_code = rust_code.replace("PyResult<", "Result<")
         rust_code = rust_code.replace("PyObject", "String")

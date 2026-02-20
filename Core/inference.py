@@ -6,7 +6,11 @@ import urllib.error
 from typing import Optional, Dict, Any
 import asyncio
 from .utils import logger
-from .config import LLM_CONFIG
+from .config import LLM_CONFIG, load_llm_config
+
+# Merge persisted settings on import
+load_llm_config()
+
 
 class LLMHelper:
     """Helper for interacting with local LLM APIs (OpenAI compatible)."""

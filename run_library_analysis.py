@@ -9,7 +9,12 @@ from Analysis.ast_utils import collect_py_files, extract_functions_from_file
 from Analysis.duplicates import DuplicateFinder
 from Analysis.library_advisor import LibraryAdvisor
 
-root = Path(r'c:\Users\Yo930\Desktop\_Python\Projects\RAG_RAT')
+# Default to a sibling project; override via CLI arg if needed
+_default = Path(__file__).resolve().parent.parent / 'Projects' / 'RAG_RAT'
+root = Path(sys.argv[1]) if len(sys.argv) > 1 else _default
+if not root.exists():
+    print(f"Target not found: {root}  — pass a path as argument.")
+    sys.exit(1)
 py_files = collect_py_files(root)
 
 all_functions = []

@@ -243,6 +243,55 @@ MODEL_CATALOG: List[ModelCard] = [
         best_for="Google's versatile model — great general + code",
         gguf_filename="gemma-2-9b-it-Q4_K_M.gguf",
     ),
+    # ── Transpiler-specialized models (Python → Rust) ─────────────────
+    ModelCard(
+        id="starcoder2-7b-q4",
+        name="StarCoder2 7B", family="StarCoder", params="7B",
+        quant="Q4_K_M", size_gb=4.2, ram_needed_gb=10, vram_needed_gb=6,
+        min_tier="medium",
+        speed="🏃 Medium", code_quality="★★★★★", reasoning="★★★☆☆",
+        best_for="Code translation & completion — trained on The Stack v2",
+        gguf_filename="starcoder2-7b-Q4_K_M.gguf",
+    ),
+    ModelCard(
+        id="deepseek-coder-v2-7b-q4",
+        name="DeepSeek Coder V2 7B", family="DeepSeek", params="7B",
+        quant="Q4_K_M", size_gb=4.0, ram_needed_gb=10, vram_needed_gb=6,
+        min_tier="medium",
+        speed="🏃 Medium", code_quality="★★★★★", reasoning="★★★★☆",
+        best_for="Python→Rust transpilation — top cross-language model",
+        gguf_filename="DeepSeek-Coder-V2-Instruct-Q4_K_M.gguf",
+    ),
+    ModelCard(
+        id="codegemma-7b-q4",
+        name="CodeGemma 7B", family="Gemma", params="7B",
+        quant="Q4_K_M", size_gb=4.3, ram_needed_gb=10, vram_needed_gb=6,
+        min_tier="medium",
+        speed="🏃 Medium", code_quality="★★★★☆", reasoning="★★★★☆",
+        best_for="Code generation with strong multi-language support",
+        gguf_filename="codegemma-7b-it-Q4_K_M.gguf",
+    ),
+    ModelCard(
+        id="qwen2.5-coder-3b-q4",
+        name="Qwen 2.5 Coder 3B", family="Qwen", params="3B",
+        quant="Q4_K_M", size_gb=1.9, ram_needed_gb=6, vram_needed_gb=3,
+        min_tier="low",
+        speed="⚡ Fast", code_quality="★★★★☆", reasoning="★★★☆☆",
+        best_for="Lightweight transpiler model — fits 8 GB RAM",
+        gguf_filename="qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+    ),
+]
+
+# Models recommended for Python→Rust transpilation, ordered by quality
+TRANSPILER_MODEL_IDS = [
+    "qwen2.5-coder-7b-q4",        # Best overall code model
+    "deepseek-coder-v2-7b-q4",    # Strong cross-language
+    "starcoder2-7b-q4",           # Trained on multi-lang code
+    "qwen2.5-coder-32b-q4",       # Best quality (needs GPU)
+    "deepseek-coder-v2-lite-q4",   # MoE — good reasoning
+    "codegemma-7b-q4",            # Solid alternative
+    "qwen2.5-coder-3b-q4",        # Lightweight fallback
+    "qwen2.5-coder-1.5b-q4",      # Minimal hardware
 ]
 
 TIER_ORDER = {"minimal": 0, "low": 1, "medium": 2, "high": 3}

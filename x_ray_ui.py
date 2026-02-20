@@ -44,8 +44,11 @@ from Analysis.lint import LintAnalyzer
 from Analysis.security import SecurityAnalyzer
 from Analysis.reporting import _score_to_letter
 from Analysis.rust_advisor import RustAdvisor
+from Analysis.smart_graph import SmartGraph
 from Analysis.auto_rustify import (
     RustifyPipeline, detect_system,
+    py_type_to_rust as _py_type_to_rust,
+    _rustify_expr, _translate_body, _rust_op,
 )
 
 import concurrent.futures
@@ -54,45 +57,7 @@ import re
 import textwrap
 
 
-# ── Python → Rust transpiler (AST-based sketch) ─────────────────────────────
-
-_PY_TO_RUST_TYPES = {
-    "int": "i64", "float": "f64", "str": "String", "bool": "bool",
-    "bytes": "Vec<u8>", "list": "Vec", "dict": "HashMap",
-    "set": "HashSet", "tuple": "tuple", "None": "()",
-    "Optional": "Option", "List": "Vec", "Dict": "HashMap",
-    "Set": "HashSet", "Tuple": "tuple", "Any": "PyObject",
-}
-
-
-def _py_type_to_rust(py_type: str) -> str:
-    """Best-effort Python type annotation → Rust type."""
-    if not py_type:
-        return "PyResult<PyObject>"
-    py_type = py_type.strip()
-    # Handle Optional[X]
-    m = re.match(r"Optional\[(.+)\]", py_type)
-    if m:
-        inner = _py_type_to_rust(m.group(1))
-        return f"Option<{inner}>"
-    # Handle List[X], Set[X]
-    m = re.match(r"(List|Set)\[(.+)\]", py_type)
-    if m:
-        container = "Vec" if m.group(1) == "List" else "HashSet"
-        inner = _py_type_to_rust(m.group(2))
-        return f"{container}<{inner}>"
-    # Handle Dict[K, V]
-    m = re.match(r"Dict\[(.+),\s*(.+)\]", py_type)
-    if m:
-        k = _py_type_to_rust(m.group(1))
-        v = _py_type_to_rust(m.group(2))
-        return f"HashMap<{k}, {v}>"
-    # Handle Tuple[X, Y, ...]
-    m = re.match(r"Tuple\[(.+)\]", py_type)
-    if m:
-        parts = [_py_type_to_rust(p.strip()) for p in m.group(1).split(",")]
-        return f"({', '.join(parts)})"
-    return _PY_TO_RUST_TYPES.get(py_type, "PyObject")
+# ── Python → Rust transpiler helpers imported from Analysis.auto_rustify ────
 
 
 def _generate_rust_sketch(func: "FunctionRecord") -> str:
@@ -149,92 +114,6 @@ def _generate_rust_sketch(func: "FunctionRecord") -> str:
 
     lines.append("}")
     return "\n".join(lines)
-
-
-def _translate_body(stmts: list, indent: int = 1) -> List[str]:
-    """Best-effort AST → Rust body translation."""
-    pad = "    " * indent
-    lines = []
-    for stmt in stmts:
-        if isinstance(stmt, ast.Return):
-            if stmt.value:
-                val = ast.unparse(stmt.value)
-                val = _rustify_expr(val)
-                lines.append(f"{pad}Ok({val})")
-            else:
-                lines.append(f"{pad}Ok(())")
-        elif isinstance(stmt, ast.If):
-            test = _rustify_expr(ast.unparse(stmt.test))
-            lines.append(f"{pad}if {test} {{")
-            lines.extend(_translate_body(stmt.body, indent + 1))
-            if stmt.orelse:
-                if len(stmt.orelse) == 1 and isinstance(stmt.orelse[0], ast.If):
-                    lines.append(f"{pad}}} else ")
-                    inner = _translate_body(stmt.orelse, indent)
-                    if inner:
-                        inner[0] = inner[0].lstrip()
-                        lines[-1] += inner[0]
-                        lines.extend(inner[1:])
-                else:
-                    lines.append(f"{pad}}} else {{")
-                    lines.extend(_translate_body(stmt.orelse, indent + 1))
-                    lines.append(f"{pad}}}")
-            else:
-                lines.append(f"{pad}}}")
-        elif isinstance(stmt, ast.For):
-            target = ast.unparse(stmt.target)
-            iter_expr = _rustify_expr(ast.unparse(stmt.iter))
-            lines.append(f"{pad}for {target} in {iter_expr} {{")
-            lines.extend(_translate_body(stmt.body, indent + 1))
-            lines.append(f"{pad}}}")
-        elif isinstance(stmt, ast.While):
-            test = _rustify_expr(ast.unparse(stmt.test))
-            lines.append(f"{pad}while {test} {{")
-            lines.extend(_translate_body(stmt.body, indent + 1))
-            lines.append(f"{pad}}}")
-        elif isinstance(stmt, ast.Assign):
-            targets = ast.unparse(stmt.targets[0])
-            value = _rustify_expr(ast.unparse(stmt.value))
-            lines.append(f"{pad}let mut {targets} = {value};")
-        elif isinstance(stmt, ast.AugAssign):
-            target = ast.unparse(stmt.target)
-            op = _rust_op(stmt.op)
-            value = _rustify_expr(ast.unparse(stmt.value))
-            lines.append(f"{pad}{target} {op}= {value};")
-        elif isinstance(stmt, ast.Expr):
-            expr = _rustify_expr(ast.unparse(stmt.value))
-            lines.append(f"{pad}{expr};")
-        else:
-            # Fallback: comment out the Python line
-            try:
-                py_line = ast.unparse(stmt).split("\n")[0]
-            except Exception:
-                py_line = "..."
-            lines.append(f"{pad}// TODO: {py_line}")
-    return lines
-
-
-def _rustify_expr(expr: str) -> str:
-    """Quick Python expression → Rust expression mappings."""
-    expr = expr.replace("True", "true").replace("False", "false")
-    expr = expr.replace("None", "None")
-    expr = expr.replace(" and ", " && ").replace(" or ", " || ")
-    expr = expr.replace("not ", "!")
-    expr = expr.replace("len(", ".len(")
-    expr = expr.replace(".append(", ".push(")
-    expr = expr.replace("elif", "else if")
-    expr = re.sub(r'f"([^"]+)"', r'format!("\1")', expr)
-    expr = re.sub(r"f'([^']+)'", r'format!("\1")', expr)
-    return expr
-
-
-def _rust_op(op) -> str:
-    """Map Python AST operator to Rust symbol."""
-    return {
-        ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/",
-        ast.Mod: "%", ast.Pow: "**", ast.BitOr: "|", ast.BitAnd: "&",
-        ast.BitXor: "^", ast.LShift: "<<", ast.RShift: ">>",
-    }.get(type(op), "+")
 
 
 # ── Duplicate merge / unify helper ───────────────────────────────────────────
@@ -1488,6 +1367,91 @@ def _render_complexity_tab(results: Dict[str, Any]):
                     st.warning("Source code not available")
 
 
+# ── Function Graph (vis-network) tab ─────────────────────────────────────────
+
+def _render_graph_tab(results: Dict[str, Any]):
+    """Render interactive function-distribution / connection graph using vis-network."""
+    import streamlit.components.v1 as components
+
+    functions: List[FunctionRecord] = results.get("_functions", [])
+    smells: List[SmellIssue] = results.get("_smell_issues", [])
+    dup_groups = results.get("_dup_groups", [])
+
+    if not functions:
+        st.info("No functions available. Enable Smells or Duplicates to populate the graph.")
+        return
+
+    graph = SmartGraph()
+    graph.build(functions, smells, dup_groups, Path("."))
+
+    # ── Stats row ──
+    healthy = sum(1 for n in graph.nodes if n.get("health") == "healthy")
+    warning = sum(1 for n in graph.nodes if n.get("health") == "warning")
+    critical = sum(1 for n in graph.nodes if n.get("health") == "critical")
+    edge_count = len(graph.edges)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("✅ Healthy", healthy)
+    c2.metric("⚠️ Warning", warning)
+    c3.metric("🔴 Critical", critical)
+    c4.metric("🔗 Duplicate Links", edge_count)
+
+    st.markdown("---")
+    st.markdown(
+        "<small style='opacity:0.5'>Nodes = functions (green ✅ / orange ⚠️ / red 🔴). "
+        "Edges = duplicate pairs. Hover for details. Drag to rearrange.</small>",
+        unsafe_allow_html=True,
+    )
+
+    # ── Build self-contained HTML (vis-network CDN) ──
+    import json as _json
+    nodes_js = _json.dumps(graph.nodes)
+    edges_js = _json.dumps(graph.edges)
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+      <style>
+        body {{ margin:0; padding:0; background:#0e1117; }}
+        #net  {{ width:100%; height:580px; }}
+      </style>
+    </head>
+    <body>
+      <div id="net"></div>
+      <script>
+        var nodes = new vis.DataSet({nodes_js});
+        var edges = new vis.DataSet({edges_js});
+        var container = document.getElementById('net');
+        var data = {{ nodes: nodes, edges: edges }};
+        var options = {{
+          nodes: {{
+            shape: 'dot',
+            font: {{ size: 12, color: '#ccc' }}
+          }},
+          edges: {{
+            color: {{ color:'#555', highlight:'#00d4ff' }},
+            smooth: false
+          }},
+          physics: {{
+            stabilization: {{ iterations: 150 }},
+            barnesHut: {{
+              gravitationalConstant: -40000,
+              springConstant: 0.002,
+              springLength: 160
+            }}
+          }},
+          interaction: {{ hover: true, tooltipDelay: 100 }}
+        }};
+        new vis.Network(container, data, options);
+      </script>
+    </body>
+    </html>
+    """
+    components.html(html, height=600, scrolling=False)
+
+
 # ── Auto-Rustify Pipeline tab ────────────────────────────────────────────────
 
 def _render_auto_rustify_tab(results: Dict[str, Any]):
@@ -2154,6 +2118,7 @@ def main():
     has_functions = bool(results.get("_functions"))
     if has_functions:
         tab_names.append("📊 Complexity")
+        tab_names.append("🕸️ Graph")
 
     # Always show the Auto-Rustify pipeline tab when rustify was enabled
     if "rustify" in results:
@@ -2189,6 +2154,10 @@ def main():
         if "📊 Complexity" in tab_names:
             with tabs[tab_idx]:
                 _render_complexity_tab(results)
+            tab_idx += 1
+        if "🕸️ Graph" in tab_names:
+            with tabs[tab_idx]:
+                _render_graph_tab(results)
             tab_idx += 1
         if "⚙️ Auto-Rustify" in tab_names:
             with tabs[tab_idx]:

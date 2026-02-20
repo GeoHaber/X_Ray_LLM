@@ -45,9 +45,10 @@ def run_scan(target_dir: Path, label: str):
 
 def main():
     """Execute benchmark suite comparing scan performance across configurations."""
-    target = Path("C:/Users/Yo930/Desktop/_Python/Local_LLM") # Scan the larger parent project!
+    # Try to scan a larger sibling project for more meaningful benchmarks
+    target = Path(__file__).resolve().parent.parent / "Local_LLM"
     if not target.exists():
-        target = Path(".") # Fallback to self
+        target = Path(".")  # Fallback to self-scan
     
     print(f"TARGET: {target}")
 

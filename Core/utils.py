@@ -65,14 +65,14 @@ def verify_rust_environment():
     global _verified_cache
     if _verified_cache:
         return True
-        
-    platform.system().lower()
-    platform.machine().lower()
-    
+
+    os_name = platform.system().lower()
+    arch = platform.machine().lower()
+
     logger.info("Checking Performance Engine...")
-    logger.info(f"Target OS: {get_os_info()}")
+    logger.info(f"Target OS: {get_os_info()} (os={os_name}, arch={arch})")
     logger.info(f"Target CPU: {get_cpu_info()}")
-    
+
     _verified_cache = True
     return True
 

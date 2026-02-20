@@ -39,5 +39,18 @@ _rustified_exe/
 
 # PyInstaller build artifacts
 X_Ray_Standalone/
+X_Ray_Desktop/
 build_exe/
-*.spec
+build_web/
+build_desktop/
+
+# Rust build temp outputs
+X_Ray_Rust_Full/*_err.txt
+X_Ray_Rust_Full/*_out.txt
+X_Ray_Rust_Full/test_scan.json
+X_Ray_Rust_Full/version_*.txt
+X_Ray_Rust_Full/build_*.txt
+scriptrunner_listing.txt
+
+# Archive
+_archive/

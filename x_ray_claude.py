@@ -52,13 +52,18 @@ setup_logger()  # configure logging once — no duplicate basicConfig
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  Interactive TUI — select scope and functionality
+#  Interactive TUI — responsive, screen-adaptive, with LLM settings
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _supports_interactive() -> bool:
     """Check if stdin is a real terminal (not piped)."""
-    import sys
     return hasattr(sys.stdin, 'isatty') and sys.stdin.isatty()
+
+
+def _term_size() -> Tuple[int, int]:
+    """(cols, rows) of current terminal."""
+    import shutil
+    return shutil.get_terminal_size((80, 24))
 
 
 def _clear_line():
@@ -66,55 +71,34 @@ def _clear_line():
     print('\033[A\033[K', end='', flush=True)
 
 
-def _interactive_menu() -> dict:
-    """Show an interactive menu to select scan scope and options.
+def _ansi(code: str, text: str) -> str:
+    """Wrap text in ANSI escape codes."""
+    return f"\033[{code}m{text}\033[0m"
 
-    Returns a dict with the selected options matching argparse flag names.
-    Works on Windows (msvcrt) and Unix (tty/termios).
-    """
-    import sys
-    options = [
-        ('smell',       'Code Smell Detection',    True),
-        ('duplicates',  'Duplicate Finder',         False),
-        ('lint',        'Ruff Lint Analysis',       True),
-        ('security',    'Bandit Security Scan',     True),
-        ('rustify',     'Score for Rust Porting',   False),
-        ('rustify_exe', 'Full Rustify → Executable', False),
-    ]
-    selected = [on for _, _, on in options]
-    cursor = 0
 
-    def _render():
-        header = (
-            "\n  \033[1;36m╔══════════════════════════════════════╗\033[0m\n"
-            "  \033[1;36m║   X-RAY  Interactive Mode            ║\033[0m\n"
-            "  \033[1;36m╚══════════════════════════════════════╝\033[0m\n"
-            "\n  Use \033[1m↑↓\033[0m to move, \033[1mSpace\033[0m to toggle, \033[1mEnter\033[0m to run\n"
-        )
-        lines = [header]
-        for i, (key, label, _) in enumerate(options):
-            mark = '\033[1;32m✓\033[0m' if selected[i] else '\033[90m·\033[0m'
-            arrow = '\033[1;33m►\033[0m ' if i == cursor else '  '
-            lines.append(f"  {arrow}[{mark}] {label}")
-        lines.append("\n  \033[90mPress \033[1mq\033[0;90m to quit\033[0m\n")
-        return '\n'.join(lines)
+# ── Platform-specific raw key reader ──
 
-    # Platform-specific key reading
+def _make_key_reader():
+    """Return a zero-argument callable that reads a single keypress."""
     if sys.platform == 'win32':
         import msvcrt
         def _read_key():
             ch = msvcrt.getwch()
-            if ch in ('\x00', '\xe0'):  # special key prefix
+            if ch in ('\x00', '\xe0'):
                 ch2 = msvcrt.getwch()
-                if ch2 == 'H': return 'up'
-                if ch2 == 'P': return 'down'
-                return 'unknown'
-            if ch == ' ': return 'space'
+                return {'H': 'up', 'P': 'down', 'K': 'left', 'M': 'right'}.get(ch2, 'unknown')
+            if ch == ' ':          return 'space'
             if ch in ('\r', '\n'): return 'enter'
-            if ch.lower() == 'q': return 'quit'
-            if ch.lower() == 'a': return 'all'
-            if ch.lower() == 'n': return 'none'
+            if ch == '\t':         return 'tab'
+            if ch == '\x1b':       return 'quit'
+            lo = ch.lower()
+            if lo == 'q': return 'quit'
+            if lo == 'a': return 'all'
+            if lo == 'n': return 'none'
+            if lo == 's': return 'settings'
+            if lo == 'h': return 'help'
             return 'unknown'
+        return _read_key
     else:
         import tty, termios
         def _read_key():
@@ -125,56 +109,262 @@ def _interactive_menu() -> dict:
                 ch = sys.stdin.read(1)
                 if ch == '\x1b':
                     ch2 = sys.stdin.read(2)
-                    if ch2 == '[A': return 'up'
-                    if ch2 == '[B': return 'down'
-                    return 'unknown'
-                if ch == ' ': return 'space'
+                    return {'[A': 'up', '[B': 'down', '[C': 'right', '[D': 'left'}.get(ch2, 'unknown')
+                if ch == ' ':          return 'space'
                 if ch in ('\r', '\n'): return 'enter'
-                if ch.lower() == 'q': return 'quit'
-                if ch.lower() == 'a': return 'all'
-                if ch.lower() == 'n': return 'none'
+                if ch == '\t':         return 'tab'
+                lo = ch.lower()
+                if lo == 'q': return 'quit'
+                if lo == 'a': return 'all'
+                if lo == 'n': return 'none'
+                if lo == 's': return 'settings'
+                if lo == 'h': return 'help'
                 return 'unknown'
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        return _read_key
 
-    # Initial render
-    display = _render()
-    line_count = display.count('\n') + 1
-    print(display, end='', flush=True)
+
+# ── Box-drawing helpers (adapt to screen width) ──
+
+def _box_top(w: int) -> str:
+    return _ansi("1;36", "╔" + "═" * (w - 2) + "╗")
+
+def _box_mid(w: int) -> str:
+    return _ansi("1;36", "╠" + "═" * (w - 2) + "╣")
+
+def _box_sep(w: int) -> str:
+    return _ansi("36", "╟" + "─" * (w - 2) + "╢")
+
+def _box_bot(w: int) -> str:
+    return _ansi("1;36", "╚" + "═" * (w - 2) + "╝")
+
+def _box_line(w: int, text: str, align: str = "left") -> str:
+    """A line inside a box. `text` may contain ANSI — we strip for padding."""
+    import re
+    visible = len(re.sub(r'\033\[[0-9;]*m', '', text))
+    inner = w - 4  # 2 border + 2 padding
+    if align == "center":
+        pad_left = max(0, (inner - visible) // 2)
+        pad_right = max(0, inner - visible - pad_left)
+    else:
+        pad_left = 0
+        pad_right = max(0, inner - visible)
+    return _ansi("36", "║") + " " + " " * pad_left + text + " " * pad_right + " " + _ansi("36", "║")
+
+
+# ── Scan option definitions ──
+
+_SCAN_OPTIONS = [
+    ('smell',       'Code Smells',              '🔬', True,  'AST-based structural analysis'),
+    ('duplicates',  'Duplicates',               '🔁', False, 'Find similar / copy-paste code'),
+    ('lint',        'Lint (Ruff)',              '✏️',  True,  'Style, imports, hygiene'),
+    ('security',    'Security (Bandit)',        '🛡️',  True,  'Vulnerability scanner'),
+    ('rustify',     'Rust Score',               '🦀', False, 'Rank functions for Rust porting'),
+    ('rustify_exe', 'Rustify → EXE',           '⚙️',  False, 'Full transpile + compile pipeline'),
+]
+
+
+def _interactive_menu() -> dict:
+    """Responsive interactive TUI with scan options + LLM settings.
+
+    Adapts layout to terminal width:
+      - ≥80 cols: full two-column layout with decorations
+      - <80 cols: compact single-column layout
+
+    Navigation:
+      ↑↓ move  |  Space toggle  |  Enter run  |  Tab → LLM settings
+      a = all   |  n = none      |  s = settings  |  q = quit
+    """
+    cols, rows = _term_size()
+    wide = cols >= 80
+    box_w = min(cols - 4, 72) if wide else min(cols - 2, 50)
+    read_key = _make_key_reader()
+
+    selected = [d for _, _, _, d, _ in _SCAN_OPTIONS]
+    cursor = 0
+    page = 'scan'  # 'scan' or 'settings'
+
+    # LLM info (lazy-loaded)
+    llm_mgr = None
+    hw_info = None
+    model_recs = None
+
+    def _get_llm_info():
+        nonlocal llm_mgr, hw_info, model_recs
+        if llm_mgr is None:
+            try:
+                from Core.llm_manager import LLMManager
+                llm_mgr = LLMManager()
+                llm_mgr.detect_all()
+                hw_info = llm_mgr.hw
+                from Core.llm_manager import recommend_models
+                model_recs = recommend_models(hw_info)
+            except Exception:
+                pass
+        return llm_mgr, hw_info, model_recs
+
+    # ── Render functions ──
+
+    def _render_scan() -> str:
+        lines = []
+        lines.append("")
+        lines.append("  " + _box_top(box_w))
+        title = _ansi("1;97", "X-RAY 5.0") + "  " + _ansi("36", "Interactive Scanner")
+        lines.append("  " + _box_line(box_w, title, "center"))
+        lines.append("  " + _box_mid(box_w))
+
+        # Controls bar
+        if wide:
+            ctrl = (
+                _ansi("90", "↑↓") + " move  "
+                + _ansi("90", "Space") + " toggle  "
+                + _ansi("90", "Enter") + " run  "
+                + _ansi("90", "Tab/s") + " LLM settings"
+            )
+        else:
+            ctrl = _ansi("90", "↑↓ Space Enter  s=settings  q=quit")
+        lines.append("  " + _box_line(box_w, ctrl, "center"))
+        lines.append("  " + _box_sep(box_w))
+
+        # Scan options
+        for i, (key, label, icon, default, desc) in enumerate(_SCAN_OPTIONS):
+            mark = _ansi("1;32", "✓") if selected[i] else _ansi("90", "·")
+            arrow = _ansi("1;33", "►") + " " if i == cursor else "  "
+            if wide:
+                line_text = f"{arrow}[{mark}] {icon} {label:<22} {_ansi('90', desc)}"
+            else:
+                line_text = f"{arrow}[{mark}] {label}"
+            lines.append("  " + _box_line(box_w, line_text))
+
+        lines.append("  " + _box_sep(box_w))
+
+        # Summary bar
+        count = sum(selected)
+        summary = _ansi("1;97", f"{count}") + _ansi("90", f"/{len(_SCAN_OPTIONS)} selected")
+        shortcuts = _ansi("90", "a") + "=all  " + _ansi("90", "n") + "=none  " + _ansi("90", "q") + "=quit"
+        if wide:
+            lines.append("  " + _box_line(box_w, f"{summary}    {shortcuts}"))
+        else:
+            lines.append("  " + _box_line(box_w, f"{summary}  {shortcuts}"))
+
+        lines.append("  " + _box_bot(box_w))
+        lines.append("")
+        return '\n'.join(lines)
+
+    def _render_settings() -> str:
+        mgr, hw, models = _get_llm_info()
+        lines = []
+        lines.append("")
+        lines.append("  " + _box_top(box_w))
+        title = _ansi("1;97", "LLM & Runtime") + "  " + _ansi("36", "Settings")
+        lines.append("  " + _box_line(box_w, title, "center"))
+        lines.append("  " + _box_mid(box_w))
+
+        ctrl = _ansi("90", "Tab/Esc") + " back to scan  " + _ansi("90", "Enter") + " confirm"
+        lines.append("  " + _box_line(box_w, ctrl, "center"))
+        lines.append("  " + _box_sep(box_w))
+
+        # System info
+        if hw:
+            lines.append("  " + _box_line(box_w, _ansi("1;97", "System Profile")))
+            lines.append("  " + _box_line(box_w, f"  OS:   {hw.os_name} {hw.os_version} ({hw.arch})"))
+            lines.append("  " + _box_line(box_w, f"  CPU:  {hw.cpu_brand[:40]}"))
+            lines.append("  " + _box_line(box_w, f"  RAM:  {hw.ram_gb:.0f} GB   Cores: {hw.cpu_cores}"))
+            gpu_text = hw.gpu_name if hw.gpu_name != "none" else _ansi("90", "no GPU detected")
+            lines.append("  " + _box_line(box_w, f"  GPU:  {gpu_text}"))
+            avx = (_ansi("32", "AVX2 ✓") if hw.avx2 else _ansi("90", "AVX2 ✗"))
+            lines.append("  " + _box_line(box_w, f"  SIMD: {avx}"))
+            lines.append("  " + _box_line(box_w, f"  Tier: {hw.tier_label}"))
+        else:
+            lines.append("  " + _box_line(box_w, _ansi("33", "  detecting hardware...")))
+
+        lines.append("  " + _box_sep(box_w))
+
+        # Runtime status
+        if mgr and mgr.runtime:
+            rt = mgr.runtime
+            lines.append("  " + _box_line(box_w, _ansi("1;97", "llama.cpp Runtime")))
+            if rt.installed:
+                status = _ansi("32", "✓ installed") + f"  {rt.version}  [{rt.backend}]"
+                lines.append("  " + _box_line(box_w, f"  Status: {status}"))
+                srv = _ansi("32", f"running :{rt.server_port}") if rt.server_running else _ansi("90", "stopped")
+                lines.append("  " + _box_line(box_w, f"  Server: {srv}"))
+            else:
+                lines.append("  " + _box_line(box_w, _ansi("33", "  ⚠ llama.cpp not found")))
+                lines.append("  " + _box_line(box_w, _ansi("90", "  Install: github.com/ggerganov/llama.cpp")))
+        else:
+            lines.append("  " + _box_line(box_w, _ansi("90", "  (runtime detection...)")))
+
+        lines.append("  " + _box_sep(box_w))
+
+        # Recommended models
+        lines.append("  " + _box_line(box_w, _ansi("1;97", "Recommended Models")))
+        if models:
+            for i, m in enumerate(models[:4], 1):
+                tag = _ansi("1;33", " ★ BEST") if i == 1 else ""
+                if wide:
+                    ml = f"  {i}. {m.name} ({m.params}){tag}"
+                    lines.append("  " + _box_line(box_w, ml))
+                    det = f"     {m.speed}  Code: {m.code_quality}  RAM: {m.ram_needed_gb:.0f}GB"
+                    lines.append("  " + _box_line(box_w, _ansi("90", det)))
+                else:
+                    ml = f"  {i}. {m.name}{tag}"
+                    lines.append("  " + _box_line(box_w, ml))
+        else:
+            lines.append("  " + _box_line(box_w, _ansi("90", "  (no models fit this hardware)")))
+
+        lines.append("  " + _box_bot(box_w))
+        lines.append("")
+        return '\n'.join(lines)
+
+    # ── Main loop ──
+
+    def _draw(content: str) -> int:
+        print(content, end='', flush=True)
+        return content.count('\n') + 1
+
+    display = _render_scan()
+    line_count = _draw(display)
 
     while True:
-        key = _read_key()
-        if key == 'up':
-            cursor = (cursor - 1) % len(options)
-        elif key == 'down':
-            cursor = (cursor + 1) % len(options)
-        elif key == 'space':
-            selected[cursor] = not selected[cursor]
-        elif key == 'enter':
-            break
-        elif key == 'quit':
-            print('\n  Cancelled.')
-            sys.exit(0)
-        elif key == 'all':
-            selected = [True] * len(options)
-        elif key == 'none':
-            selected = [False] * len(options)
-        else:
-            continue
+        key = read_key()
 
-        # Re-render: clear previous output, redraw
+        # Navigation
+        if page == 'scan':
+            if key == 'up':
+                cursor = (cursor - 1) % len(_SCAN_OPTIONS)
+            elif key == 'down':
+                cursor = (cursor + 1) % len(_SCAN_OPTIONS)
+            elif key == 'space':
+                selected[cursor] = not selected[cursor]
+            elif key == 'enter':
+                break
+            elif key in ('tab', 'settings'):
+                page = 'settings'
+            elif key == 'quit':
+                print('\n  Cancelled.')
+                sys.exit(0)
+            elif key == 'all':
+                selected = [True] * len(_SCAN_OPTIONS)
+            elif key == 'none':
+                selected = [False] * len(_SCAN_OPTIONS)
+            else:
+                continue
+        elif page == 'settings':
+            if key in ('tab', 'quit', 'settings', 'enter'):
+                page = 'scan'
+            else:
+                continue
+
+        # Re-render
         for _ in range(line_count):
             _clear_line()
-        display = _render()
-        line_count = display.count('\n') + 1
-        print(display, end='', flush=True)
+        display = _render_settings() if page == 'settings' else _render_scan()
+        line_count = _draw(display)
 
-    print()  # final newline after menu
-
-    result = {}
-    for i, (key, _, _) in enumerate(options):
-        result[key] = selected[i]
-    return result
+    print()
+    return {key: selected[i] for i, (key, _, _, _, _) in enumerate(_SCAN_OPTIONS)}
 
 
 def scan_codebase(root: Path, exclude: List[str] = None,
@@ -231,11 +421,41 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--rustify-exe", action="store_true",
                         help="Full pipeline: scan → optimize → transpile → compile to executable")
     parser.add_argument("--use-llm", action="store_true", help="Enable LLM enrichment")
+    parser.add_argument("--llm-settings", action="store_true",
+                        help="Show LLM settings: hardware detection, model recommendations")
+    parser.add_argument("--system-info", action="store_true",
+                        help="Print hardware profile and exit")
     parser.add_argument("--report", help="Save JSON report to file")
     parser.add_argument("--exclude", nargs="*", help="Exclude directories")
     parser.add_argument("--interactive", "-i", action="store_true",
                         help="Launch interactive TUI to select scope and options")
     args = parser.parse_args()
+
+    # ── System info mode ──
+    if args.system_info:
+        from Core.llm_manager import LLMManager
+        mgr = LLMManager()
+        mgr.detect_all()
+        print(mgr.format_system_profile())
+        print(mgr.format_runtime_status())
+        print(mgr.format_model_recommendations())
+        sys.exit(0)
+
+    # ── LLM settings mode ──
+    if args.llm_settings:
+        from Core.llm_manager import LLMManager
+        mgr = LLMManager(project_dir=Path(args.path).resolve())
+        mgr.detect_all()
+        print(mgr.format_system_profile())
+        print(mgr.format_runtime_status())
+        print(mgr.format_model_recommendations())
+        status = mgr.check_and_prompt()
+        if status.get('needs_install'):
+            print("  💡 To install llama.cpp:")
+            print("     https://github.com/ggerganov/llama.cpp/releases")
+        if status.get('needs_upgrade'):
+            print(f"  💡 Newer version available: {status['latest_version']}")
+        sys.exit(0)
 
     # Interactive mode: launch TUI to select options
     if args.interactive and _supports_interactive():
