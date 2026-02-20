@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import sys
 import os
 import time
@@ -48,12 +47,8 @@ from Analysis.reporting import (
     print_security_report, print_unified_grade,
 )
 
-# === LOGGING ===
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
+from Core.utils import setup_logger
+setup_logger()  # configure logging once — no duplicate basicConfig
 
 
 def scan_codebase(root: Path, exclude: List[str] = None,

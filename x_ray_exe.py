@@ -31,14 +31,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import os
 import platform
 import shutil
 import subprocess
 import sys
 import time
-import asyncio
 import concurrent.futures
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
@@ -60,7 +58,7 @@ else:
 # Imports from the X-Ray project
 # ---------------------------------------------------------------------------
 from Core.types import FunctionRecord, ClassRecord
-from Core.config import BANNER, __version__
+from Core.config import __version__
 
 from Analysis.ast_utils import extract_functions_from_file, collect_py_files
 from Analysis.smells import CodeSmellDetector
@@ -85,12 +83,8 @@ _EXE_BANNER = f"""
 # Logging
 # ---------------------------------------------------------------------------
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
-log = logging.getLogger("x_ray_exe")
+from Core.utils import setup_logger
+log = setup_logger("x_ray_exe")
 
 
 # ---------------------------------------------------------------------------
@@ -136,8 +130,7 @@ def detect_hardware() -> Dict[str, Any]:
     except Exception:
         info["ram_gb"] = "unknown"
 
-    # CPU features (SSE, AVX etc.) - read from environment variable on Windows
-    features = []
+    # CPU name
     try:
         result = subprocess.run(
             ["wmic", "cpu", "get", "Name", "/value"],
@@ -163,7 +156,7 @@ def detect_hardware() -> Dict[str, Any]:
 
     # Check for x_ray_core (Rust acceleration)
     try:
-        import x_ray_core
+        import x_ray_core  # noqa: F401
         info["rust_acceleration"] = True
     except ImportError:
         info["rust_acceleration"] = False
@@ -382,7 +375,7 @@ def main():
         status = f"OK ({path})" if path else "not found (skipped)"
         print(f"    {name:10s}  {status}")
     try:
-        import x_ray_core
+        import x_ray_core  # noqa: F401
         print(f"    {'x_ray_core':10s}  OK (Rust acceleration)")
     except ImportError:
         print(f"    {'x_ray_core':10s}  not available (using pure Python)")

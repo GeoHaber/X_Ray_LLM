@@ -48,6 +48,9 @@ _ALWAYS_SKIP = frozenset({
     "portable", "target",
 })
 
+import builtins as _builtins_mod
+_BUILTIN_NAMES = frozenset(dir(_builtins_mod))
+
 _STOP_WORDS = frozenset(
     "self cls none true false return def class if else elif for while try "
     "except finally with as import from raise pass break continue yield "

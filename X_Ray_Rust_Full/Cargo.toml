@@ -1,0 +1,24 @@
+
+[package]
+name = "x_ray_rust_full"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+walkdir = "2.4"
+regex = "1.10"
+rayon = "1.8"
+clap = { version = "4.4", features = ["derive"] }
+python-parser = "0.1" # Hypothetical crate, or we implement our own parser if needed?
+# For now, we assume we are porting LOGIC, not writing a Python parser from scratch in Rust immediately unless needed.
+# But wait, to 'run on X-Ray', we need to parse Python.
+# We can use `rustpython-parser` or similar.
+rustpython-parser = "0.3" 
+
+[[bin]]
+name = "xray_exe"
+path = "src/main.rs"

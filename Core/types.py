@@ -105,7 +105,6 @@ class Severity:
     WARNING  = "warning"    # 🟡
     INFO     = "info"       # 🟢
 
-    from .utils import UNICODE_OK
     _ICONS_UNICODE = {
         "critical": "\U0001F534",  # 🔴
         "warning":  "\U0001F7E1",  # 🟡

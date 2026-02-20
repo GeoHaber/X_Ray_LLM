@@ -113,21 +113,7 @@ class LLMHelper:
         full_prompt = prompt + "\n\nRespond with ONLY the JSON object/list."
         
         response = self.completion(full_prompt, system_prompt)
-        
-        # Simple cleanup
-        response = response.strip()
-        if response.startswith("```json"):
-            response = response[7:]
-        if response.startswith("```"):
-            response = response[3:]
-        if response.endswith("```"):
-            response = response[:-3]
-            
-        try:
-            return json.loads(response)
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse JSON from LLM: {response[:100]}...")
-            return None
+        return self._parse_json_response(response)
 
     async def generate_json_async(self, prompt: str, schema: Optional[Dict] = None) -> Any:
         """
@@ -137,9 +123,10 @@ class LLMHelper:
         full_prompt = prompt + "\n\nRespond with ONLY the JSON object/list."
         
         response = await self.completion_async(full_prompt, system_prompt)
-        
-        # Reuse parsing logic? Or just duplicate for simplicity to avoid separating logic
-        # Clean up
+        return self._parse_json_response(response)
+
+    def _parse_json_response(self, response: str) -> Any:
+        """Strip markdown fences and parse JSON from an LLM response."""
         response = response.strip()
         if response.startswith("```json"):
             response = response[7:]

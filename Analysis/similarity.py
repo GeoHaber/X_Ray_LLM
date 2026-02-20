@@ -1,12 +1,10 @@
 
 import re
-import math
 import hashlib
 import keyword
 import io
 import tokenize as _tokenize_mod
 import ast
-import builtins as _builtins_mod
 from collections import Counter
 from typing import List
 
@@ -18,39 +16,14 @@ except ImportError:
     _rust_core = None
     _HAS_RUST = False
 
-# Built-in names for token normalization
-_BUILTIN_NAMES = frozenset(dir(_builtins_mod))
-
-_STOP_WORDS = frozenset(
-    "self cls none true false return def class if else elif for while try "
-    "except finally with as import from raise pass break continue yield "
-    "lambda and or not in is assert del global nonlocal async await "
-    "the a an of to is it that this be on at by do has was are were "
-    "str int float bool list dict set tuple bytes type any all len "
-    "range print open super init new call".split()
-)
+# Import canonical definitions — single source of truth
+from Core.config import _BUILTIN_NAMES
+from Lang.tokenizer import tokenize, term_freq as _term_freq, cosine_similarity
 
 _SPLIT_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
 
 
-def tokenize(text: str) -> List[str]:
-    """Split text into meaningful lowercase tokens (camelCase/snake_case aware)."""
-    if not text:
-        return []
-    cleaned = re.sub(r"[^a-zA-Z0-9]", " ", text)
-    raw: List[str] = []
-    for word in cleaned.split():
-        parts = [m.group().lower() for m in _SPLIT_RE.finditer(word)]
-        if parts:
-            raw.extend(parts)
-        else:
-            raw.append(word.lower())
-    return [t for t in raw if len(t) > 1 and t not in _STOP_WORDS]
-
-
-def _term_freq(tokens: List[str]) -> Counter:
-    return Counter(tokens)
-
+# tokenize, _term_freq, cosine_similarity are imported from Lang.tokenizer
 
 
 def _classify_name(name: str) -> str:
@@ -131,18 +104,7 @@ def _ast_node_histogram(code: str) -> Counter:
     return Counter(type(node).__name__ for node in ast.walk(tree))
 
 
-def cosine_similarity(a: Counter, b: Counter) -> float:
-    """Cosine similarity between two term-frequency vectors."""
-    common = set(a) & set(b)
-    if not common:
-        return 0.0
-    dot = sum(a[k] * b[k] for k in common)
-    mag_a = math.sqrt(sum(v * v for v in a.values()))
-    mag_b = math.sqrt(sum(v * v for v in b.values()))
-    if mag_a == 0 or mag_b == 0:
-        return 0.0
-    result = dot / (mag_a * mag_b)
-    return min(result, 1.0)
+# cosine_similarity is imported from Lang.tokenizer (clamped version)
 
 
 def _ast_histogram_similarity(code_a: str, code_b: str) -> float:

@@ -28,9 +28,7 @@ import json
 import os
 import platform
 import re
-import shutil
 import subprocess
-import textwrap
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -142,8 +140,8 @@ def _detect_x86_features() -> List[str]:
     elif system == "Linux":
         try:
             cpuinfo = Path("/proc/cpuinfo").read_text()
-            flags_line = [l for l in cpuinfo.split("\n")
-                          if l.startswith("flags")]
+            flags_line = [line for line in cpuinfo.split("\n")
+                          if line.startswith("flags")]
             if flags_line:
                 flags = flags_line[0].split(":")[-1]
                 for feat in _X86_FEATURES:
@@ -480,6 +478,193 @@ def _translate_body(stmts: list, indent: int = 1, *,
     return lines
 
 
+def transpile_class(class_def: ast.ClassDef, *, pyfunction: bool = True) -> str:
+    """Generate Rust struct and impl from a Python class."""
+    lines: List[str] = []
+    class_name = class_def.name
+    
+    # 1. Struct definition
+    # Iterate over __init__ or __annotations__ to find fields
+    fields: Dict[str, str] = {}
+    
+    # Check for __init__ to find fields
+    init_method = None
+    for item in class_def.body:
+        if isinstance(item, ast.FunctionDef) and item.name == "__init__":
+            init_method = item
+            break
+            
+    if init_method:
+        for stmt in init_method.body:
+            if isinstance(stmt, ast.Assign):
+                # self.x = y
+                for target in stmt.targets:
+                    if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
+                        field_name = target.attr
+                        # Infer type? Hard without annotations. Default to PyObject/String?
+                        fields[field_name] = "PyObject" # Default
+
+    # Check for type annotations in class body (Dataclasses)
+    for item in class_def.body:
+        if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+            fname = item.target.id
+            ftype = "PyObject"
+            if item.annotation:
+                ftype = py_type_to_rust(ast.unparse(item.annotation))
+            fields[fname] = ftype
+
+    # Generate Struct
+    if pyfunction:
+        lines.append("#[pyclass]")
+    lines.append(f"struct {class_name} {{")
+    for fname, ftype in fields.items():
+        lines.append(f"    {fname}: {ftype},")
+    lines.append("}")
+    lines.append("")
+
+    # Generate Impl
+    if pyfunction:
+        lines.append("#[pymethods]")
+    lines.append(f"impl {class_name} {{")
+    
+    # Generate __init__ as new()
+    if init_method:
+        lines.append("    #[new]")
+        # TODO: parse init args
+        args = []
+        for arg in init_method.args.args:
+            if arg.arg == "self":
+                continue
+            # Basic type inference
+            atype = "PyObject"
+            if arg.annotation:
+                atype = py_type_to_rust(ast.unparse(arg.annotation))
+            args.append(f"{arg.arg}: {atype}")
+        args_str = ", ".join(args)
+        
+        lines.append(f"    fn new({args_str}) -> Self {{")
+        lines.append(f"        {class_name} {{")
+        # Initialize fields
+        for fname in fields:
+            # Check if arg matches field
+            if fname in [a.split(":")[0] for a in args]:
+                lines.append(f"            {fname},")
+            else:
+                lines.append(f"            {fname}: PyObject::default(), // TODO: default??")
+        lines.append("        }")
+        lines.append("    }")
+    
+    # Generate other methods
+    for item in class_def.body:
+        if isinstance(item, ast.FunctionDef):
+            if item.name == "__init__":
+                continue
+            # Transpile method
+            # Need to handle 'self' arg = &self
+            # We reuse transpile_function logic but adapted for methods?
+            # For now, just a simplified version
+            lines.append(f"    // Method {item.name}")
+            # ... (Full method transpilation logic would go here)
+            # This is a scratchpad implementation.
+            
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def transpile_function_ast(func_def: ast.FunctionDef | ast.AsyncFunctionDef, *, 
+                          pyfunction: bool = True) -> str:
+    """Generate Rust function from AST node."""
+    lines: List[str] = []
+    
+    # Return type
+    ret_rust = "PyObject"
+    if func_def.returns:
+        ret_rust = py_type_to_rust(ast.unparse(func_def.returns))
+
+    if pyfunction:
+        if not ret_rust.startswith("PyResult"):
+            ret_rust = f"PyResult<{ret_rust}>"
+    else:
+         if ret_rust == "PyObject":
+            ret_rust = "()"
+
+    # Attributes
+    if pyfunction:
+        lines.append("#[pyfunction]")
+    
+    # Signature
+    fn_name = func_def.name
+    
+    params = []
+    for arg in func_def.args.args:
+        if arg.arg == "self":
+            continue
+        ptype = "PyObject"
+        if arg.annotation:
+            ptype = py_type_to_rust(ast.unparse(arg.annotation))
+        
+        if not pyfunction and ptype == "PyObject":
+            ptype = "String" # Binary mode fallback
+            
+        params.append(f"{arg.arg}: {ptype}")
+    
+    params_str = ", ".join(params)
+    lines.append(f"fn {fn_name}({params_str}) -> {ret_rust} {{")
+    
+    # Body
+    body_lines = _translate_body(func_def.body, indent=1, wrap_ok=pyfunction, ret_type=ret_rust)
+    lines.extend(body_lines)
+    
+    if pyfunction:
+         if body_lines and not any("Ok(" in ln for ln in body_lines[-3:]):
+            lines.append("    Ok(())")
+            
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def transpile_module(code: str, *, pyo3: bool = True) -> str:
+    """Transpile an entire Python module to Rust."""
+    try:
+        tree = ast.parse(code)
+    except Exception:
+        return "// Parse error"
+        
+    lines = []
+    lines.append("// Auto-transpiled module")
+    lines.append("use pyo3::prelude::*;")
+    lines.append("use std::collections::{HashMap, HashSet};")
+    lines.append("")
+    
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            lines.append(transpile_class(node, pyfunction=pyo3))
+            lines.append("")
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            lines.append(transpile_function_ast(node, pyfunction=pyo3))
+            lines.append("")
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            lines.append(f"// {ast.unparse(node)}")
+        else:
+             # Top-level code? Put in a comment or try to transpile (rare for library modules)
+             pass 
+             
+    if pyo3:
+        # Generate module init
+        lines.append("")
+        lines.append("#[pymodule]")
+        lines.append("fn rust_module672(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {")
+        for node in tree.body:
+             if isinstance(node, ast.ClassDef):
+                 lines.append(f"    m.add_class::<{node.name}>()?;")
+             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                 lines.append(f"    m.add_function(wrap_pyfunction!({node.name}, m)?)?;")
+        lines.append("    Ok(())")
+        lines.append("}")
+
+    return "\n".join(lines)
+
+
 def transpile_function(func: FunctionRecord, *,
                        pyfunction: bool = True) -> str:
     """Generate a full Rust function from a Python FunctionRecord.
@@ -548,7 +733,7 @@ def transpile_function(func: FunctionRecord, *,
                 lines.extend(body_lines)
                 # If last line doesn't return, add appropriate return
                 if pyfunction:
-                    if body_lines and not any("Ok(" in l for l in body_lines[-3:]):
+                    if body_lines and not any("Ok(" in ln for ln in body_lines[-3:]):
                         lines.append("    Ok(())")
                 break
     except Exception:

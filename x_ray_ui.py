@@ -22,7 +22,7 @@ import subprocess
 import time
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
@@ -45,7 +45,7 @@ from Analysis.security import SecurityAnalyzer
 from Analysis.reporting import _score_to_letter
 from Analysis.rust_advisor import RustAdvisor
 from Analysis.auto_rustify import (
-    RustifyPipeline, detect_system, SystemProfile, PipelineReport,
+    RustifyPipeline, detect_system,
 )
 
 import concurrent.futures

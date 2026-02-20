@@ -1,20 +1,15 @@
 
 import ast
 import hashlib
-import builtins as _builtins_mod
-import copy
 import logging
 from pathlib import Path
 from typing import List, Tuple, Optional
 import os
 from Core.types import FunctionRecord, ClassRecord
-from Core.config import _ALWAYS_SKIP
+from Core.config import _ALWAYS_SKIP, _BUILTIN_NAMES
 from Core.ast_helpers import compute_nesting_depth, compute_complexity
 
 logger = logging.getLogger("X_RAY_AST")
-
-# Built-in names preserved during AST normalisation
-_BUILTIN_NAMES = frozenset(dir(_builtins_mod))
 
 # Files containing intentional bad code for testing — skip during scanning
 _ALWAYS_SKIP_FILES = frozenset({"smell_factory.py", "bad_code_sample.py"})
@@ -74,14 +69,15 @@ class ASTNormalizer(ast.NodeTransformer):
 def _compute_structure_hash(node: ast.AST) -> str:
     """Compute hash of normalized AST source for structural fingerprinting.
 
-    Uses ``ast.unparse`` instead of ``ast.dump`` to avoid C-level
-    stack overflow on deeply nested AST nodes.
+    Normalizes variable/argument names via :class:`ASTNormalizer` first so
+    that structurally identical functions with different names produce the
+    same hash.  Uses ``ast.unparse`` instead of ``ast.dump`` to avoid
+    C-level stack overflow on deeply nested AST nodes.
     """
     try:
-        source = ast.unparse(node)
-        # Normalize: strip whitespace variations, variable names etc.
-        # A quick approach: hash the unparsed source after lowering to
-        # a canonical form (still catches structural similarity).
+        import copy
+        normalized = ASTNormalizer().visit(copy.deepcopy(node))
+        source = ast.unparse(normalized)
         return hashlib.sha256(source.encode()).hexdigest()
     except Exception:
         return ""

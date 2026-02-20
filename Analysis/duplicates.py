@@ -16,6 +16,8 @@ if _HAS_RUST:
      except ImportError:
          _HAS_RUST = False
 
+from Analysis.semantic_fuzzer import SemanticFuzzer
+
 class UnionFind:
     """Simple union-find (disjoint-set) with path compression."""
 
@@ -136,10 +138,75 @@ class DuplicateFinder:
         group_id = self._stage_hash_matches(functions, cross_file_only, group_id, seen_keys)
         group_id = self._stage_near_duplicates(functions, cross_file_only, group_id, seen_keys)
         group_id = self._stage_semantic_similarity(functions, cross_file_only, group_id, seen_keys)
+        
+        # 4. Operational Equivalence (Fuzzing) - Refine groups
+        self._refine_with_fuzzer(functions)
 
         # Sort by quality
         self.groups.sort(key=lambda g: g.avg_similarity, reverse=True)
         return self.groups
+
+    def _refine_with_fuzzer(self, functions: List[FunctionRecord]):
+        """Run Semantic Fuzzer on near/semantic groups to detect operational morphing."""
+        fuzzer = SemanticFuzzer()
+        func_map = {f.key: f for f in functions}
+        
+        for group in self.groups:
+            if group.similarity_type in ("exact", "structural", "operational"):
+                continue
+            if len(group.functions) < 2:
+                continue
+                
+            # Pick candidates (pairwise or just leader vs others)
+            # For simplicity, compare first function with others if they look promising
+            
+            # Optimization: only fuzz if similarity is high enough to warrant the cost
+            if group.avg_similarity < 0.6: 
+                continue
+
+            leader_key = group.functions[0]["key"]
+            leader = func_map.get(leader_key)
+            if not leader: continue
+            
+            # Use executable code from leader
+            try:
+                # Need executable objects. This is tricky since we only have FunctionRecords with string code.
+                # SemanticFuzzer typically needs callable objects OR we adapt it to compile from source.
+                # We'll adapt here: compile the code string into a function object.
+                exec_globals = {}
+                exec(leader.code, exec_globals)
+                func_a = exec_globals.get(leader.name)
+            except Exception as e:
+                logger.debug(f"Fuzzer compilation failed for {leader.name}: {e}")
+                continue
+
+            confirmed_group = True
+            for member in group.functions[1:]:
+                mem = func_map.get(member["key"])
+                if not mem: continue
+                
+                try:
+                    exec_globals_b = {}
+                    exec(mem.code, exec_globals_b)
+                    func_b = exec_globals_b.get(mem.name)
+                    
+                    if not func_a or not func_b:
+                        confirmed_group = False
+                        break
+
+                    is_equiv, _ = fuzzer.check_equivalence(func_a, func_b, iterations=20)
+                    if not is_equiv:
+                        confirmed_group = False
+                        # If not equivalent, we should arguably split the group or just leave it as 'semantic'
+                        # For now, we only upgrade if ALL are equivalent? Or just mark pairwise.
+                        # We'll keep it simple: if Pair(A, B) is equivalent, great.
+                except Exception:
+                    confirmed_group = False
+            
+            if confirmed_group:
+                group.similarity_type = "operational"
+                group.avg_similarity = 1.0
+                group.merge_suggestion = "Functions are operationally identical (Doppelgänger). Safe to merge."
 
     def _precompute_tokens(self, functions: List[FunctionRecord]) -> None:
         """Pre-compute TF-IDF tokens for all functions (shared across stages)."""

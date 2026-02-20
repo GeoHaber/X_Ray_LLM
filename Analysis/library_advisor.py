@@ -68,8 +68,7 @@ class LibraryAdvisor:
                 unified_api=f"def {name}(...):",
                 rationale="Identical naming suggests shared concept.",
             ))
-            
-        return self.suggestions
+
 
     def _suggest_module_name(self, func_names: List[str]) -> str:
         """Heuristic to name the module based on function names."""
