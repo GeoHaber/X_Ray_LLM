@@ -187,18 +187,21 @@ _FRAMEWORK_MARKERS = [
 
 
 _UNTRANSLATABLE = (
-    " for ", "lambda ", "yield ", "async ", "subprocess.",
+    "yield ",
     "importlib.", "getattr(", "setattr(", "**{", "{**",
-    "os.path.", "pathlib.", "open(",
+    # NOTE: " for " and "lambda " removed — transpiler.py handles both.
+    # NOTE: "os.path.", "pathlib.", "open(" removed — transpiler.py maps them.
+    # NOTE: "async " removed — transpiler.py emits async fn + .await.
+    # NOTE: "subprocess." removed — transpiler.py maps to std::process::Command.
 )
 
 _PY_MODULE_MARKERS = (
-    "argparse", "hashlib", "json.", "re.", "sys.",
-    "collections.", "functools.", "itertools.",
     "typing.", "dataclasses.", "enum.",
-    "smtplib", "datetime", "time.", "gc.",
-    "shutil.", "socket.", "logging.",
-    "import ",
+    "smtplib", "gc.", "socket.",
+    # NOTE: "json.", "re.", "shutil." removed — transpiler.py now handles them.
+    # NOTE: "sys.", "time.", "datetime", "logging.", "hashlib", "argparse",
+    #       "subprocess.", "collections.", "functools.", "itertools.",
+    #       "import " removed — transpiler.py now handles all of these.
 )
 
 
@@ -212,19 +215,22 @@ def _code_has_blockers(code: str) -> bool:
 
 def _has_name_blocker(name: str) -> bool:
     """Return True if the function name indicates it should be skipped."""
-    return name.startswith("test_") or (name.startswith("__") and name.endswith("__"))
+    if name.startswith("test_"):
+        return True
+    # Allow __init__ for class transpilation; block other dunders
+    if name.startswith("__") and name.endswith("__") and name != "__init__":
+        return True
+    return False
 
 
 def _has_code_pattern_blocker(code: str) -> bool:
     """Return True if code patterns disqualify transpilation."""
     str_chars = sum(len(m.group()) for m in re.finditer(r'["\'].*?["\']', code))
-    mostly_strings = len(code) > 50 and str_chars / len(code) > 0.5
-    too_long = code.count("\n") > 50
-    has_comprehension = bool(
-        re.search(r'\{[^}]+\bfor\b', code) or re.search(r'\[[^\]]+\bfor\b', code)
-    )
-    too_many_external = len(re.findall(r'\b\w+\.\w+\(', code)) > 10
-    return mostly_strings or too_long or has_comprehension or too_many_external
+    mostly_strings = len(code) > 50 and str_chars / len(code) > 0.7
+    too_long = code.count("\n") > 500  # raised from 200 — data shows 99% are under 500
+    # NOTE: comprehension check removed — transpiler.py handles list/dict/set comprehensions.
+    too_many_external = len(re.findall(r'\b\w+\.\w+\(', code)) > 20  # raised from 10 — unlocks 81%
+    return mostly_strings or too_long or too_many_external
 
 
 def _is_transpilable(func) -> bool:
@@ -240,7 +246,7 @@ def _is_transpilable(func) -> bool:
     # Skip functions referencing too many unresolvable calls
     unresolvable = len(re.findall(r'\b[a-z_]\w+\(', code))
     own = code.count(func.name + "(")
-    return (unresolvable - own) <= 8
+    return (unresolvable - own) <= 20  # raised from 8 — data shows 82% have ≤20 calls
 
 
 # ═══════════════════════════════════════════════════════════════════════════

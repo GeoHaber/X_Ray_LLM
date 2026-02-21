@@ -15,36 +15,56 @@ def setup_logger(name: str = "X_RAY_Claude"):
 logger = setup_logger()
 
 # === SAFE UNICODE OUTPUT ===
-def supports_unicode() -> bool:
-    """Detect whether the current stdout can handle full Unicode."""
-    enc = getattr(sys.stdout, 'encoding', None) or ''
-    if enc.lower().replace('-', '').replace('_', '') in ('utf8', 'utf8'):
-        return True
-    # Try reconfigure  (CPython 3.7+)
+def _enable_utf8_console() -> None:
+    """Best-effort: switch the Windows console to UTF-8 so basic text works."""
+    import os as _os
+    if _os.name == 'nt':
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+            ctypes.windll.kernel32.SetConsoleCP(65001)
+        except Exception:
+            pass
+    # Reconfigure streams to utf-8 with replace for safety
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-        return True
     except Exception:
-        pass
-    # Last resort: wrap the raw buffer
-    import io
-    try:
-        if hasattr(sys.stdout, 'buffer'):
-            sys.stdout = io.TextIOWrapper(
-                sys.stdout.buffer, encoding='utf-8', errors='replace',
-                line_buffering=True,
-            )
-        if hasattr(sys.stderr, 'buffer'):
-            sys.stderr = io.TextIOWrapper(
-                sys.stderr.buffer, encoding='utf-8', errors='replace',
-                line_buffering=True,
-            )
-        return True
-    except Exception:
+        import io
+        try:
+            if hasattr(sys.stdout, 'buffer'):
+                sys.stdout = io.TextIOWrapper(
+                    sys.stdout.buffer, encoding='utf-8', errors='replace',
+                    line_buffering=True,
+                )
+            if hasattr(sys.stderr, 'buffer'):
+                sys.stderr = io.TextIOWrapper(
+                    sys.stderr.buffer, encoding='utf-8', errors='replace',
+                    line_buffering=True,
+                )
+        except Exception:
+            pass
+
+
+def supports_unicode() -> bool:
+    """Detect whether the current stdout can handle full Unicode emoji.
+
+    For frozen PyInstaller builds (.exe) we ALWAYS return False so that
+    only safe ASCII icons are printed to the Windows console.  Emoji
+    belongs in Streamlit, not in cmd.exe / PowerShell.
+    """
+    # Frozen .exe  →  never use emoji in terminal output
+    if getattr(sys, 'frozen', False):
         return False
 
-UNICODE_OK = supports_unicode()
+    enc = getattr(sys.stdout, 'encoding', None) or ''
+    if enc.lower().replace('-', '').replace('_', '') in ('utf8',):
+        return True
+    return False
+
+
+_enable_utf8_console()          # make sure we can at least print ASCII safely
+UNICODE_OK = supports_unicode() # False when frozen → ASCII icons only
 
 # === HARDWARE & OS DETECTION ===
 
