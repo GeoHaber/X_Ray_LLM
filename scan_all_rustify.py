@@ -15,28 +15,26 @@ Produces:
 """
 from __future__ import annotations
 
-import os
 import re as _re
 import sys
 import time
 import json
-import textwrap
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 from collections import Counter
 
 # Ensure X_Ray root on path
 XRAY_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(XRAY_ROOT))
 
-from Core.scan_phases import scan_codebase
-from Analysis.rust_advisor import RustAdvisor
-from Analysis.auto_rustify import (
-    _is_transpilable, _code_has_blockers, _has_code_pattern_blocker,
+from Core.scan_phases import scan_codebase  # noqa: E402
+from Analysis.rust_advisor import RustAdvisor  # noqa: E402
+from Analysis.auto_rustify import (  # noqa: E402
+    _is_transpilable,
     _has_name_blocker, _ALL_BLOCKERS, _FRAMEWORK_MARKERS,
     _UNTRANSLATABLE, _PY_MODULE_MARKERS,
 )
-from Analysis.transpiler import transpile_function_code
+from Analysis.transpiler import transpile_function_code  # noqa: E402
 
 # ── Configuration ─────────────────────────────────────────────────────
 
@@ -436,14 +434,14 @@ def print_project_result(result: Dict[str, Any]) -> None:
     mf = result.get("blocker_marker_freq", {})
     if mf:
         top_markers = sorted(mf.items(), key=lambda x: -x[1])[:8]
-        print(f"\n  Most frequent blocking markers:")
+        print("\n  Most frequent blocking markers:")
         for marker, count in top_markers:
             print(f"    {repr(marker):25s}: {count:4d} functions")
 
     # Top candidates
     top = result.get("top_candidates", [])
     if top:
-        print(f"\n  Top Rust candidates:")
+        print("\n  Top Rust candidates:")
         for c in top:
             pure = "PURE" if c["is_pure"] else "    "
             print(f"    [{pure}] {c['name']:30s} score={c['score']:6.1f}  cx={c['complexity']}")
@@ -492,7 +490,7 @@ def main():
                  if totals["functions"] else 0)
 
     print(f"\n{'='*66}")
-    print(f"  GRAND TOTAL ACROSS ALL PROJECTS")
+    print("  GRAND TOTAL ACROSS ALL PROJECTS")
     print(f"{'='*66}")
     print(f"  Projects scanned:     {len(projects)}")
     print(f"  Total functions:      {totals['functions']:,}")
@@ -513,17 +511,17 @@ def main():
             global_markers[marker] += cnt
 
     if global_reasons:
-        print(f"\n  GLOBAL BLOCKER REASONS:")
+        print("\n  GLOBAL BLOCKER REASONS:")
         for reason, cnt in global_reasons.most_common():
             print(f"    {reason:35s}: {cnt:5d}")
 
     if global_markers:
-        print(f"\n  GLOBAL TOP 15 BLOCKING MARKERS (training priorities):")
+        print("\n  GLOBAL TOP 15 BLOCKING MARKERS (training priorities):")
         for marker, cnt in global_markers.most_common(15):
             print(f"    {repr(marker):25s}: {cnt:5d} functions")
 
     # ── Training ground summary ──────────────────────────────────────
-    print(f"\n  TRAINING GROUND SAVED:")
+    print("\n  TRAINING GROUND SAVED:")
     print(f"    {BLOCKED_DIR / 'all_blocked.jsonl'}")
     print(f"      -> {tg_stats['total_blocked']:,} blocked functions with full diagnosis")
     print(f"    {BLOCKED_DIR / 'by_reason/'}")

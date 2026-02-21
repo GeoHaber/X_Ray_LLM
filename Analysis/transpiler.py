@@ -682,7 +682,7 @@ def _unwrap_format_args(args):
                 return a0
             return f'{a0}, {", ".join(args[1:])}'
         # Non-literal expression → wrap in "{}"
-        return f'"{{}}"' + f', {", ".join(args)}'
+        return '"{}"' + f', {", ".join(args)}'
     return '""'
 
 def _call_logger(method, args, all_args):
@@ -972,7 +972,7 @@ def _call_hashlib(method, args, all_args):
     if method == "new" and args:
         return f"/* hashlib.new({all_args}) */ Vec::new()"
     if method in ("hexdigest", "digest"):
-        return f"format!(\"{{:x}}\", self.finalize())"
+        return "format!(\"{:x}\", self.finalize())"
     if method == "update" and args:
         return f"self.update({args[0]})"
     return f"/* hashlib.{method}({all_args}) */"
@@ -1678,7 +1678,7 @@ def _stmt_nested_class(stmt, pad: str, indent: int, _ret_type: str) -> List[str]
     for fname, ftype in fields.items():
         lines.append(f"{pad}    {fname}: {ftype},")
     lines.append(f"{pad}}}")
-    lines.append(f"")
+    lines.append("")
 
     if methods or fields:
         lines.append(f"{pad}impl {class_name} {{")
