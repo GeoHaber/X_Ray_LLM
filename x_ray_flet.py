@@ -1183,29 +1183,38 @@ async def main(page: ft.Page):
         color_scheme_seed=TH.accent(),
         font_family="Segoe UI, Roboto, Helvetica, Arial, sans-serif")
 
-    # ── State ────────────────────────────────────────────────────────────
-    state = {
-        "root_path": "",
-        "results": None,
-        "exclude": [
-            ".venv", "venv", "__pycache__", ".git", "_OLD",
-            "node_modules", "target", "build_exe", "build_web",
-            "build_desktop", "X_Ray_Desktop", "X_Ray_Standalone",
-        ],
-        "modes": {
-            "smells": True, "duplicates": True, "lint": True,
-            "security": True, "rustify": True,
-        },
-        "thresholds": SMELL_THRESHOLDS.copy(),
-    }
+    # ── State (persisted in page.data so theme / lang rebuilds keep it) ──
+    page.data = page.data or {}
+    if "_state" not in page.data:
+        page.data["_state"] = {
+            "root_path": "",
+            "results": None,
+            "exclude": [
+                ".venv", "venv", "__pycache__", ".git", "_OLD",
+                "node_modules", "target", "build_exe", "build_web",
+                "build_desktop", "X_Ray_Desktop", "X_Ray_Standalone",
+            ],
+            "modes": {
+                "smells": True, "duplicates": True, "lint": True,
+                "security": True, "rustify": True,
+            },
+            "thresholds": SMELL_THRESHOLDS.copy(),
+        }
+    state = page.data["_state"]
 
     # ── File picker (Service, not overlay) ───────────────────────────────
     file_picker = ft.FilePicker()
-    page.services.append(file_picker)
+    # Avoid appending duplicate services on rebuild
+    if not any(isinstance(s, ft.FilePicker) for s in page.services):
+        page.services.append(file_picker)
 
-    path_text = ft.Text(t("no_dir_selected"), color=TH.muted(),
-                        size=12, italic=True, max_lines=2,
-                        overflow=ft.TextOverflow.ELLIPSIS)
+    # Show previously-selected path if we're rebuilding after theme/lang change
+    _prev_path = state.get("root_path", "")
+    path_text = ft.Text(
+        _prev_path if _prev_path else t("no_dir_selected"),
+        color=TH.accent() if _prev_path else TH.muted(),
+        size=12, italic=not bool(_prev_path), max_lines=2,
+        overflow=ft.TextOverflow.ELLIPSIS)
 
     async def pick_directory(e):
         result = await file_picker.get_directory_path(
@@ -1220,28 +1229,35 @@ async def main(page: ft.Page):
     def on_mode(e):
         state["modes"][e.control.data] = e.control.value
 
+    _m = state["modes"]
     mode_checks = ft.Column([
-        ft.Checkbox(label=t("smells"), value=True, on_change=on_mode,
-                    data="smells", fill_color=TH.accent(),
-                    check_color=ft.Colors.WHITE),
-        ft.Checkbox(label=t("duplicates"), value=True, on_change=on_mode,
-                    data="duplicates", fill_color=TH.accent(),
-                    check_color=ft.Colors.WHITE),
-        ft.Checkbox(label=t("lint"), value=True, on_change=on_mode,
-                    data="lint", fill_color=TH.accent(),
-                    check_color=ft.Colors.WHITE),
-        ft.Checkbox(label=t("security"), value=True, on_change=on_mode,
-                    data="security", fill_color=TH.accent(),
-                    check_color=ft.Colors.WHITE),
-        ft.Checkbox(label=t("rustify"), value=True, on_change=on_mode,
-                    data="rustify", fill_color=TH.accent(),
-                    check_color=ft.Colors.WHITE),
+        ft.Checkbox(label=t("smells"), value=_m["smells"],
+                    on_change=on_mode, data="smells",
+                    fill_color=TH.accent(), check_color=ft.Colors.WHITE),
+        ft.Checkbox(label=t("duplicates"), value=_m["duplicates"],
+                    on_change=on_mode, data="duplicates",
+                    fill_color=TH.accent(), check_color=ft.Colors.WHITE),
+        ft.Checkbox(label=t("lint"), value=_m["lint"],
+                    on_change=on_mode, data="lint",
+                    fill_color=TH.accent(), check_color=ft.Colors.WHITE),
+        ft.Checkbox(label=t("security"), value=_m["security"],
+                    on_change=on_mode, data="security",
+                    fill_color=TH.accent(), check_color=ft.Colors.WHITE),
+        ft.Checkbox(label=t("rustify"), value=_m["rustify"],
+                    on_change=on_mode, data="rustify",
+                    fill_color=TH.accent(), check_color=ft.Colors.WHITE),
     ], spacing=0)
 
     # ── Theme & language pickers ─────────────────────────────────────────
+    theme_icon = ft.IconButton(
+        icon=(ft.Icons.LIGHT_MODE if TH.is_dark()
+              else ft.Icons.DARK_MODE),
+        icon_color=TH.accent(),
+        tooltip="Toggle Light / Dark",
+        icon_size=20)
+
     def on_theme_toggle(e):
         TH.toggle()
-        page.data = page.data or {}
         page.data["_onboarded"] = True
         try:
             page.pop_dialog()
@@ -1249,6 +1265,8 @@ async def main(page: ft.Page):
             pass
         page.controls.clear()
         page.run_task(main, page)
+
+    theme_icon.on_click = on_theme_toggle
 
     def on_lang_change(e):
         set_locale(e.control.value)
@@ -1260,14 +1278,6 @@ async def main(page: ft.Page):
             pass
         page.controls.clear()
         page.run_task(main, page)
-
-    theme_icon = ft.IconButton(
-        icon=(ft.Icons.LIGHT_MODE if TH.is_dark()
-              else ft.Icons.DARK_MODE),
-        icon_color=TH.accent(),
-        tooltip="Toggle Light / Dark",
-        on_click=on_theme_toggle,
-        icon_size=20)
 
     lang_dd = ft.Dropdown(
         value=get_locale(), width=120, dense=True,
@@ -1774,12 +1784,15 @@ async def main(page: ft.Page):
         padding=ft.Padding.symmetric(horizontal=12, vertical=8))
 
     # ── Layout ───────────────────────────────────────────────────────────
-    build_landing()
+    # If we already have scan results (e.g. after theme/lang toggle), show dashboard
+    if state.get("results"):
+        build_dashboard(state["results"])
+    else:
+        build_landing()
 
     page.add(ft.Row([sidebar, main_content], expand=True, spacing=0))
 
     # ── First-run onboarding (only once) ─────────────────────────────────
-    page.data = page.data or {}
     if not page.data.get("_onboarded"):
         page.data["_onboarded"] = True
         _show_onboarding(page)
