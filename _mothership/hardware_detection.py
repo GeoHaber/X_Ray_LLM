@@ -42,9 +42,11 @@ logger = logging.getLogger(__name__)
 # CPU
 # ============================================================================
 
+
 def _cpu_brand_windows() -> Optional[str]:
     """Read CPU brand from Windows registry."""
     import winreg
+
     key = winreg.OpenKey(
         winreg.HKEY_LOCAL_MACHINE,
         r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
@@ -67,7 +69,8 @@ def _cpu_brand_darwin() -> Optional[str]:
     """Read CPU brand via sysctl."""
     out = subprocess.check_output(
         ["sysctl", "-n", "machdep.cpu.brand_string"],
-        text=True, timeout=5,
+        text=True,
+        timeout=5,
     ).strip()
     return out or None
 
@@ -102,6 +105,7 @@ def _detect_cpu_brand() -> str:
 # RAM
 # ============================================================================
 
+
 def _ram_gb_windows() -> float:
     """Read total RAM via Windows ctypes."""
     import ctypes
@@ -122,7 +126,7 @@ def _ram_gb_windows() -> float:
     mem = MEMORYSTATUSEX()
     mem.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
     ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem))
-    return mem.ullTotalPhys / (1024 ** 3)
+    return mem.ullTotalPhys / (1024**3)
 
 
 def _ram_gb_linux() -> Optional[float]:
@@ -131,7 +135,7 @@ def _ram_gb_linux() -> Optional[float]:
         for line in f:
             if line.startswith("MemTotal"):
                 kb = int(re.search(r"\d+", line).group())
-                return kb / (1024 ** 2)
+                return kb / (1024**2)
     return None
 
 
@@ -139,9 +143,10 @@ def _ram_gb_darwin() -> float:
     """Read total RAM via sysctl."""
     out = subprocess.check_output(
         ["sysctl", "-n", "hw.memsize"],
-        text=True, timeout=5,
+        text=True,
+        timeout=5,
     ).strip()
-    return int(out) / (1024 ** 3)
+    return int(out) / (1024**3)
 
 
 _RAM_GB_DISPATCH = {
@@ -190,7 +195,7 @@ def _avail_ram_gb_windows() -> float:
     mem = MEMORYSTATUSEX()
     mem.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
     ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem))
-    return mem.ullAvailPhys / (1024 ** 3)
+    return mem.ullAvailPhys / (1024**3)
 
 
 def _avail_ram_gb_linux() -> Optional[float]:
@@ -199,7 +204,7 @@ def _avail_ram_gb_linux() -> Optional[float]:
         for line in f:
             if line.startswith("MemAvailable"):
                 kb = int(re.search(r"\d+", line).group())
-                return kb / (1024 ** 2)
+                return kb / (1024**2)
     return None
 
 
@@ -207,9 +212,10 @@ def _avail_ram_gb_darwin() -> float:
     """Estimate available RAM via sysctl (rough: total × 0.5)."""
     out = subprocess.check_output(
         ["sysctl", "-n", "hw.memsize"],
-        text=True, timeout=5,
+        text=True,
+        timeout=5,
     ).strip()
-    total = int(out) / (1024 ** 3)
+    total = int(out) / (1024**3)
     return total * 0.5
 
 
@@ -243,13 +249,19 @@ def _detect_available_ram_gb() -> float:
 # GPU
 # ============================================================================
 
+
 def _detect_gpu_nvidia() -> Optional[Tuple[str, float]]:
     """Try NVIDIA GPU via nvidia-smi."""
     try:
         out = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=name,memory.total",
-             "--format=csv,noheader,nounits"],
-            text=True, timeout=10, stderr=subprocess.DEVNULL,
+            [
+                "nvidia-smi",
+                "--query-gpu=name,memory.total",
+                "--format=csv,noheader,nounits",
+            ],
+            text=True,
+            timeout=10,
+            stderr=subprocess.DEVNULL,
         ).strip()
         if out:
             parts = out.split(",")
@@ -266,11 +278,13 @@ def _detect_gpu_amd() -> Optional[Tuple[str, float]]:
     try:
         out = subprocess.check_output(
             ["rocm-smi", "--showmeminfo", "vram"],
-            text=True, timeout=10, stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=10,
+            stderr=subprocess.DEVNULL,
         )
         if "Total" in out:
             m = re.search(r"Total Memory.*?(\d+)", out)
-            vram = int(m.group(1)) / (1024 ** 2) if m else 0
+            vram = int(m.group(1)) / (1024**2) if m else 0
             return ("AMD GPU (ROCm)", vram)
     except Exception:
         pass
@@ -291,17 +305,26 @@ def _detect_gpu_wmi() -> Optional[Tuple[str, float]]:
         return None
     try:
         out = subprocess.check_output(
-            ["powershell", "-NoProfile", "-Command",
-             "(Get-CimInstance Win32_VideoController).Name"],
-            text=True, timeout=10, stderr=subprocess.DEVNULL,
-            encoding="utf-8", errors="replace",
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "(Get-CimInstance Win32_VideoController).Name",
+            ],
+            text=True,
+            timeout=10,
+            stderr=subprocess.DEVNULL,
+            encoding="utf-8",
+            errors="replace",
         ).strip()
         if out:
             names = [n.strip() for n in out.splitlines() if n.strip()]
             discrete = [
-                n for n in names
-                if not any(x in n.lower() for x in
-                           ["microsoft basic", "virtual", "remote"])
+                n
+                for n in names
+                if not any(
+                    x in n.lower() for x in ["microsoft basic", "virtual", "remote"]
+                )
             ]
             return (discrete[0] if discrete else names[0], 0.0)
     except Exception:
@@ -315,16 +338,19 @@ def _detect_gpu() -> Tuple[str, float]:
     Checks in order: NVIDIA → AMD ROCm → Apple Metal → Windows WMI.
     Returns (gpu_name, vram_gb) — ("none", 0.0) if nothing found.
     """
-    return (_detect_gpu_nvidia()
-            or _detect_gpu_amd()
-            or _detect_gpu_apple()
-            or _detect_gpu_wmi()
-            or ("none", 0.0))
+    return (
+        _detect_gpu_nvidia()
+        or _detect_gpu_amd()
+        or _detect_gpu_apple()
+        or _detect_gpu_wmi()
+        or ("none", 0.0)
+    )
 
 
 # ============================================================================
 # INSTRUCTION SET (AVX2, AVX-512, NEON)
 # ============================================================================
+
 
 def _detect_avx() -> Tuple[bool, bool]:
     """Detect AVX2 and AVX-512 support.
@@ -339,6 +365,7 @@ def _detect_avx() -> Tuple[bool, bool]:
     try:
         if system == "Windows":
             import winreg
+
             key = winreg.OpenKey(
                 winreg.HKEY_LOCAL_MACHINE,
                 r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
@@ -357,7 +384,9 @@ def _detect_avx() -> Tuple[bool, bool]:
             return "avx2" in text, "avx512" in text
         if system == "Darwin":
             out = subprocess.check_output(
-                ["sysctl", "-a"], text=True, timeout=5,
+                ["sysctl", "-a"],
+                text=True,
+                timeout=5,
                 stderr=subprocess.DEVNULL,
             )
             avx2 = "hw.optional.avx2_0: 1" in out
@@ -371,6 +400,7 @@ def _detect_avx() -> Tuple[bool, bool]:
 # ============================================================================
 # PUBLIC API
 # ============================================================================
+
 
 def detect_hardware() -> HardwareProfile:
     """Auto-detect the full hardware profile of this machine.
@@ -406,7 +436,13 @@ def detect_hardware() -> HardwareProfile:
     logger.info(
         "Hardware detected: %s, %d cores, %.1f GB RAM, GPU=%s (%.1f GB VRAM), "
         "AVX2=%s, tier=%s",
-        cpu_brand, cpu_cores, ram_gb, gpu_name, gpu_vram, avx2, hw.tier,
+        cpu_brand,
+        cpu_cores,
+        ram_gb,
+        gpu_name,
+        gpu_vram,
+        avx2,
+        hw.tier,
     )
     return hw
 

@@ -18,6 +18,7 @@ def make_mock_analyze(analyzer_cls, tool_binary):
     shutil.which and subprocess.run so the analyzer parses *raw_output*
     without touching the real filesystem.
     """
+
     def _mock_analyze(raw_output: str) -> list:
         with patch("shutil.which", return_value=tool_binary):
             analyzer = analyzer_cls()
@@ -26,10 +27,12 @@ def make_mock_analyze(analyzer_cls, tool_binary):
         mock_result.returncode = 1
         with patch("subprocess.run", return_value=mock_result):
             return analyzer.analyze(Path("/project"))
+
     return _mock_analyze
 
 
 # ── Assertion helpers ────────────────────────────────────────────────
+
 
 def assert_empty_output_returns_empty(mock_analyze):
     """Empty subprocess output → []."""
@@ -65,7 +68,9 @@ def assert_timeout_returns_empty(analyzer_cls, tool_binary, tool_cmd):
     """Subprocess TimeoutExpired → []."""
     with patch("shutil.which", return_value=tool_binary):
         analyzer = analyzer_cls()
-    with patch("subprocess.run", side_effect=sp.TimeoutExpired(cmd=tool_cmd, timeout=120)):
+    with patch(
+        "subprocess.run", side_effect=sp.TimeoutExpired(cmd=tool_cmd, timeout=120)
+    ):
         assert analyzer.analyze(Path("/project")) == []
 
 

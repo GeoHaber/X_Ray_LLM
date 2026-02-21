@@ -15,7 +15,7 @@
 - [x] Interactive HTML graph with health-colored nodes
 - [x] Full JSON reporting for CI/CD
 - [x] Optional LLM enrichment (async + sync)
-- [x] 497 comprehensive tests
+- [x] 500+ comprehensive tests
 
 **Phase 2 — Cure (Rustify):**
 - [x] PyO3 Rust extension module (`x_ray_core`)
@@ -74,5 +74,5 @@
 1. **Zero dependencies first** — core features work with stdlib only
 2. **Fast by default** — heuristics first, LLM only for enrichment
 3. **Rust where it matters** — port CPU-hot-paths, not glue code
-4. **Test everything** — maintain 497+ tests with parity verification
+4. **Test everything** — maintain 500+ tests with parity verification
 5. **Graceful degradation** — works on any terminal, any OS, with or without Rust

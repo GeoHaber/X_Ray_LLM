@@ -1,6 +1,7 @@
 """
 Tests for Analysis/smells.py — CodeSmellDetector.
 """
+
 from unittest.mock import MagicMock
 from Core.types import Severity
 from Core.config import SMELL_THRESHOLDS
@@ -12,8 +13,8 @@ from tests.conftest import make_func as _func, make_cls as _cls
 #  Long function
 # ════════════════════════════════════════════════════════════════════
 
-class TestLongFunction:
 
+class TestLongFunction:
     def test_no_smell_under_threshold(self):
         det = CodeSmellDetector()
         det.check([_func(size_lines=30)], [])
@@ -40,8 +41,8 @@ class TestLongFunction:
 #  Deep nesting
 # ════════════════════════════════════════════════════════════════════
 
-class TestDeepNesting:
 
+class TestDeepNesting:
     def test_no_smell(self):
         det = CodeSmellDetector()
         det.check([_func(nesting_depth=2)], [])
@@ -68,8 +69,8 @@ class TestDeepNesting:
 #  High complexity
 # ════════════════════════════════════════════════════════════════════
 
-class TestHighComplexity:
 
+class TestHighComplexity:
     def test_no_smell(self):
         det = CodeSmellDetector()
         det.check([_func(complexity=3)], [])
@@ -96,8 +97,8 @@ class TestHighComplexity:
 #  Too many params
 # ════════════════════════════════════════════════════════════════════
 
-class TestTooManyParams:
 
+class TestTooManyParams:
     def test_no_smell(self):
         det = CodeSmellDetector()
         det.check([_func(parameters=["a", "b"])], [])
@@ -117,8 +118,8 @@ class TestTooManyParams:
 #  Class smells
 # ════════════════════════════════════════════════════════════════════
 
-class TestClassSmells:
 
+class TestClassSmells:
     def test_god_class(self):
         t = SMELL_THRESHOLDS["god_class"]
         det = CodeSmellDetector()
@@ -145,15 +146,22 @@ class TestClassSmells:
 #  Multiple smells at once
 # ════════════════════════════════════════════════════════════════════
 
-class TestMultipleSmells:
 
+class TestMultipleSmells:
     def test_function_triggers_multiple(self):
         """A function can trigger long + complex + deep nesting simultaneously."""
         det = CodeSmellDetector()
-        det.check([_func(
-            size_lines=200, nesting_depth=8, complexity=25,
-            parameters=[f"p{i}" for i in range(10)],
-        )], [])
+        det.check(
+            [
+                _func(
+                    size_lines=200,
+                    nesting_depth=8,
+                    complexity=25,
+                    parameters=[f"p{i}" for i in range(10)],
+                )
+            ],
+            [],
+        )
         cats = {s.category for s in det.smells}
         assert "long-function" in cats
         assert "deep-nesting" in cats
@@ -173,8 +181,8 @@ class TestMultipleSmells:
 #  SmellIssue fields
 # ════════════════════════════════════════════════════════════════════
 
-class TestSmellIssueFields:
 
+class TestSmellIssueFields:
     def test_metric_value_correct(self):
         det = CodeSmellDetector()
         det.check([_func(size_lines=100)], [])
@@ -199,6 +207,7 @@ class TestSmellIssueFields:
 # ════════════════════════════════════════════════════════════════════
 #  enrich_with_llm
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestEnrichWithLLM:
     """Tests for LLM enrichment of code smells."""
@@ -241,8 +250,8 @@ class TestEnrichWithLLM:
 #  Missing docstring
 # ════════════════════════════════════════════════════════════════════
 
-class TestMissingDocstring:
 
+class TestMissingDocstring:
     def test_flagged_for_large_public_function(self):
         det = CodeSmellDetector()
         det.check([_func(name="process", size_lines=20, docstring=None)], [])
@@ -266,8 +275,8 @@ class TestMissingDocstring:
 #  Boolean blindness
 # ════════════════════════════════════════════════════════════════════
 
-class TestBooleanBlindness:
 
+class TestBooleanBlindness:
     def test_flagged_without_prefix(self):
         det = CodeSmellDetector()
         det.check([_func(name="process", return_type="bool")], [])
@@ -291,8 +300,8 @@ class TestBooleanBlindness:
 #  Too many returns / branches & class smells
 # ════════════════════════════════════════════════════════════════════
 
-class TestReturnsBranches:
 
+class TestReturnsBranches:
     def test_too_many_returns(self):
         t = SMELL_THRESHOLDS["too_many_returns"]
         det = CodeSmellDetector()
@@ -309,7 +318,6 @@ class TestReturnsBranches:
 
 
 class TestClassSmellsExtended:
-
     def test_dataclass_candidate(self):
         det = CodeSmellDetector()
         det.check([], [_cls(method_count=2, base_classes=[], has_init=True)])
@@ -339,8 +347,8 @@ class TestClassSmellsExtended:
 #  Summary
 # ════════════════════════════════════════════════════════════════════
 
-class TestSmellSummary:
 
+class TestSmellSummary:
     def test_summary_structure(self):
         det = CodeSmellDetector()
         det.check([_func(size_lines=200)], [])

@@ -1,0 +1,31 @@
+[project]
+name = "x-ray"
+version = "5.0.0"
+description = "Smart AI-Powered Code Analyzer & Rustifier"
+requires-python = ">=3.10"
+
+[tool.pyright]
+# Start permissive — ratchet up over time (remove diagnostics as you fix)
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportUnusedImport = "warning"
+reportUnusedVariable = "warning"
+
+# Exclude non-source paths
+exclude = [
+    "venv",
+    ".venv",
+    "build",
+    "dist",
+    "target",
+    "_archive",
+    "_scratch",
+    "X_Ray_Rust_Full",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.2",
+]

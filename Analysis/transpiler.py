@@ -47,12 +47,21 @@ logger = logging.getLogger("X_RAY_Claude")
 # ═══════════════════════════════════════════════════════════════════════════
 
 _PY_TO_RUST: Dict[str, str] = {
-    "int": "i64", "float": "f64", "str": "String", "bool": "bool",
-    "bytes": "Vec<u8>", "None": "()", "NoneType": "()",
-    "list": "Vec<String>", "dict": "HashMap<String, String>",
-    "set": "HashSet<String>", "tuple": "()",
-    "Any": "String", "object": "String",
-    "Path": "String", "pathlib.Path": "String",
+    "int": "i64",
+    "float": "f64",
+    "str": "String",
+    "bool": "bool",
+    "bytes": "Vec<u8>",
+    "None": "()",
+    "NoneType": "()",
+    "list": "Vec<String>",
+    "dict": "HashMap<String, String>",
+    "set": "HashSet<String>",
+    "tuple": "()",
+    "Any": "String",
+    "object": "String",
+    "Path": "String",
+    "pathlib.Path": "String",
 }
 
 # Regex patterns for generic Python types → Rust types
@@ -60,17 +69,25 @@ _GENERIC_TYPE_PATTERNS = [
     (r"Optional\[(.+)\]", lambda m: f"Option<{py_type_to_rust(m.group(1))}>"),
     (r"(?:List|list)\[(.+)\]", lambda m: f"Vec<{py_type_to_rust(m.group(1))}>"),
     (r"(?:Set|set)\[(.+)\]", lambda m: f"HashSet<{py_type_to_rust(m.group(1))}>"),
-    (r"(?:Dict|dict)\[(.+?),\s*(.+)\]",
-     lambda m: f"HashMap<{py_type_to_rust(m.group(1))}, {py_type_to_rust(m.group(2))}>"),
-    (r"(?:Tuple|tuple)\[(.+)\]",
-     lambda m: f"({', '.join(py_type_to_rust(p.strip()) for p in m.group(1).split(','))})"),
+    (
+        r"(?:Dict|dict)\[(.+?),\s*(.+)\]",
+        lambda m: (
+            f"HashMap<{py_type_to_rust(m.group(1))}, {py_type_to_rust(m.group(2))}>"
+        ),
+    ),
+    (
+        r"(?:Tuple|tuple)\[(.+)\]",
+        lambda m: (
+            f"({', '.join(py_type_to_rust(p.strip()) for p in m.group(1).split(','))})"
+        ),
+    ),
     (r"Union\[(.+)\]", lambda m: py_type_to_rust(m.group(1).split(",")[0].strip())),
 ]
 
 
 def py_type_to_rust(py_type: str, default: str = "String") -> str:
     """Convert a Python type annotation string to a Rust type string.
-    
+
     *default* is returned for types not in _PY_TO_RUST (e.g. \"String\" for
     pure Rust, \"PyObject\" for PyO3 bindings).
     """
@@ -89,29 +106,74 @@ def py_type_to_rust(py_type: str, default: str = "String") -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 _OP_MAP = {
-    ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/",
-    ast.Mod: "%", ast.Pow: "pow", ast.BitOr: "|", ast.BitAnd: "&",
-    ast.BitXor: "^", ast.LShift: "<<", ast.RShift: ">>",
+    ast.Add: "+",
+    ast.Sub: "-",
+    ast.Mult: "*",
+    ast.Div: "/",
+    ast.Mod: "%",
+    ast.Pow: "pow",
+    ast.BitOr: "|",
+    ast.BitAnd: "&",
+    ast.BitXor: "^",
+    ast.LShift: "<<",
+    ast.RShift: ">>",
     ast.FloorDiv: "/",
 }
 
 _CMP_MAP = {
-    ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
-    ast.Gt: ">", ast.GtE: ">=", ast.Is: "==", ast.IsNot: "!=",
-    ast.In: ".contains", ast.NotIn: ".contains",
+    ast.Eq: "==",
+    ast.NotEq: "!=",
+    ast.Lt: "<",
+    ast.LtE: "<=",
+    ast.Gt: ">",
+    ast.GtE: ">=",
+    ast.Is: "==",
+    ast.IsNot: "!=",
+    ast.In: ".contains",
+    ast.NotIn: ".contains",
 }
 
 _UNARY_MAP = {
-    ast.UAdd: "+", ast.USub: "-", ast.Not: "!", ast.Invert: "~",
+    ast.UAdd: "+",
+    ast.USub: "-",
+    ast.Not: "!",
+    ast.Invert: "~",
 }
 
 # Rust reserved words needing r# prefix or renaming
 _RUST_RESERVED = {
-    "type", "match", "ref", "mod", "fn", "use", "impl", "struct",
-    "enum", "trait", "pub", "crate", "super", "move", "mut",
-    "loop", "where", "async", "await", "dyn", "abstract", "become",
-    "box", "do", "final", "macro", "override", "priv", "typeof",
-    "unsized", "virtual", "yield",
+    "type",
+    "match",
+    "ref",
+    "mod",
+    "fn",
+    "use",
+    "impl",
+    "struct",
+    "enum",
+    "trait",
+    "pub",
+    "crate",
+    "super",
+    "move",
+    "mut",
+    "loop",
+    "where",
+    "async",
+    "await",
+    "dyn",
+    "abstract",
+    "become",
+    "box",
+    "do",
+    "final",
+    "macro",
+    "override",
+    "priv",
+    "typeof",
+    "unsized",
+    "virtual",
+    "yield",
 }
 
 # Words that cannot use r# prefix at all — must be renamed
@@ -141,7 +203,9 @@ def _expr_constant(node: ast.expr) -> str:
     _CONST_TYPE_MAP = {
         bool: lambda x: "true" if x else "false",
         int: lambda x: str(x),
-        float: lambda x: repr(x) if ("." in repr(x) or "e" in repr(x).lower()) else repr(x) + ".0",
+        float: lambda x: (
+            repr(x) if ("." in repr(x) or "e" in repr(x).lower()) else repr(x) + ".0"
+        ),
         str: _escape_string_literal,
         bytes: lambda x: f'b"{x.decode("utf-8", errors="replace")}"',
     }
@@ -170,14 +234,25 @@ def _expr_name(node: ast.expr) -> str:
 
 
 _ATTR_RENAMES: Dict[str, str] = {
-    "append": "push", "strip": "trim",
-    "lstrip": "trim_start", "rstrip": "trim_end",
-    "lower": "to_lowercase", "upper": "to_uppercase",
-    "startswith": "starts_with", "endswith": "ends_with",
-    "items": "iter", "keys": "keys", "values": "values",
-    "extend": "extend", "replace": "replace", "split": "split",
-    "join": "join", "format": "format", "count": "matches",
-    "find": "find", "index": "find",
+    "append": "push",
+    "strip": "trim",
+    "lstrip": "trim_start",
+    "rstrip": "trim_end",
+    "lower": "to_lowercase",
+    "upper": "to_uppercase",
+    "startswith": "starts_with",
+    "endswith": "ends_with",
+    "items": "iter",
+    "keys": "keys",
+    "values": "values",
+    "extend": "extend",
+    "replace": "replace",
+    "split": "split",
+    "join": "join",
+    "format": "format",
+    "count": "matches",
+    "find": "find",
+    "index": "find",
     "isdigit": "chars().all(|c| c.is_ascii_digit())",
     "isalpha": "chars().all(|c| c.is_alphabetic())",
 }
@@ -224,9 +299,11 @@ def _coerce_float_literal(left_node, comp_node, left_str, right_str):
 
 def _is_plain_int(node) -> bool:
     """Check if node is an int constant (not bool)."""
-    return (isinstance(node, ast.Constant)
-            and isinstance(node.value, int)
-            and not isinstance(node.value, bool))
+    return (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, int)
+        and not isinstance(node.value, bool)
+    )
 
 
 def _is_float_context(node) -> bool:
@@ -241,8 +318,10 @@ def _compare_contains(left: str, comp_node, negated: bool = False) -> str:
     right = _expr(comp_node)
     prefix = "!" if negated else ""
     if isinstance(comp_node, (ast.List, ast.Set, ast.Tuple)):
-        has_str = any(isinstance(e, ast.Constant) and isinstance(e.value, str)
-                      for e in comp_node.elts)
+        has_str = any(
+            isinstance(e, ast.Constant) and isinstance(e.value, str)
+            for e in comp_node.elts
+        )
         ref = f"&{left}.as_str()" if has_str else f"&{left}"
         return f"{prefix}{right}.contains({ref})"
     return f"{prefix}{right}.contains({left})"
@@ -271,7 +350,8 @@ def _expr_compare(node: ast.expr) -> str:
     for op, comparator in zip(node.ops, node.comparators):
         right_str = _expr(comparator)
         left_str, right_str = _coerce_float_literal(
-            left_node, comparator, left_str, right_str)
+            left_node, comparator, left_str, right_str
+        )
         handler = _CMP_OP_HANDLERS.get(type(op))
         if handler:
             parts.append(handler(left_str, comparator))
@@ -295,8 +375,10 @@ def _expr_subscript(node: ast.expr) -> str:
 
 def _expr_ifexp(node: ast.expr) -> str:
     """Ternary: a if cond else b → if cond { a } else { b }."""
-    return (f"if {_expr(node.test)} "
-            f"{{ {_expr(node.body)} }} else {{ {_expr(node.orelse)} }}")
+    return (
+        f"if {_expr(node.test)} "
+        f"{{ {_expr(node.body)} }} else {{ {_expr(node.orelse)} }}"
+    )
 
 
 def _expr_list(node: ast.expr) -> str:
@@ -459,6 +541,7 @@ def _expr(node: ast.expr) -> str:
 #  Call Handlers  (builtin functions + method calls → Rust)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _call_print(args, _kw):
     """print(...) → println!(...)."""
     if not args:
@@ -466,7 +549,7 @@ def _call_print(args, _kw):
     if len(args) == 1:
         a = args[0]
         if a.startswith("format!("):
-            return f"println!({a[len('format!('):-1]})"
+            return f"println!({a[len('format!(') : -1]})"
         if a.startswith('"'):
             return f"println!({a})"
     fmt = " ".join("{}" for _ in args)
@@ -498,8 +581,10 @@ def _call_round(args, _kw):
     if not args:
         return "0"
     if len(args) >= 2:
-        return (f"(({args[0]} * 10f64.powi({args[1]} as i32)).round()"
-                f" / 10f64.powi({args[1]} as i32))")
+        return (
+            f"(({args[0]} * 10f64.powi({args[1]} as i32)).round()"
+            f" / 10f64.powi({args[1]} as i32))"
+        )
     return f"({args[0]} as f64).round() as i64"
 
 
@@ -513,29 +598,37 @@ def _call_min_max(name, args, _kw):
 
 # Simple builtin rewrites: name → lambda(args, kwargs) → Rust string
 _BUILTIN_SIMPLE: Dict[str, Callable] = {
-    "len":        lambda a, _: f"{a[0]}.len()" if a else "0",
-    "str":        lambda a, _: f"{a[0]}.to_string()" if a else '"".to_string()',
-    "int":        lambda a, _: f"{a[0]} as i64" if a else "0",
-    "float":      lambda a, _: f"{a[0]} as f64" if a else "0.0",
-    "bool":       lambda a, _: f"({a[0]} != 0)" if a else "false",
-    "abs":        lambda a, _: f"{a[0]}.abs()" if a else "0",
-    "sum":        lambda a, _: f"{a[0]}.iter().sum::<i64>()" if a else "0",
-    "reversed":   lambda a, _: f"{a[0]}.iter().rev()" if a else "vec![].iter().rev()",
-    "enumerate":  lambda a, _: f"{a[0]}.iter().enumerate()" if a else "vec![].iter().enumerate()",
+    "len": lambda a, _: f"{a[0]}.len()" if a else "0",
+    "str": lambda a, _: f"{a[0]}.to_string()" if a else '"".to_string()',
+    "int": lambda a, _: f"{a[0]} as i64" if a else "0",
+    "float": lambda a, _: f"{a[0]} as f64" if a else "0.0",
+    "bool": lambda a, _: f"({a[0]} != 0)" if a else "false",
+    "abs": lambda a, _: f"{a[0]}.abs()" if a else "0",
+    "sum": lambda a, _: f"{a[0]}.iter().sum::<i64>()" if a else "0",
+    "reversed": lambda a, _: f"{a[0]}.iter().rev()" if a else "vec![].iter().rev()",
+    "enumerate": lambda a, _: (
+        f"{a[0]}.iter().enumerate()" if a else "vec![].iter().enumerate()"
+    ),
     "isinstance": lambda a, _: f"/* isinstance({', '.join(a)}) */ true",
-    "hasattr":    lambda a, _: f"/* hasattr({', '.join(a)}) */ true",
-    "type":       lambda a, _: f'/* type({", ".join(a)}) */ "unknown"',
-    "dict":       lambda _a, _: "HashMap::new()",
-    "set":        lambda a, _: (f"{a[0]}.into_iter().collect::<HashSet<_>>()"
-                                if a else "HashSet::new()"),
-    "list":       lambda a, _: (f"{a[0]}.into_iter().collect::<Vec<_>>()"
-                                if a else "Vec::new()"),
-    "tuple":      lambda a, _: f"/* tuple({', '.join(a)}) */",
-    "open":       lambda a, _: f"std::fs::read_to_string({a[0]}).unwrap_or_default()" if a else 'std::fs::read_to_string("").unwrap_or_default()',
-    "any":        lambda a, _: f"{a[0]}.iter().any(|x| *x)" if a else "false",
-    "all":        lambda a, _: f"{a[0]}.iter().all(|x| *x)" if a else "true",
-    "ord":        lambda a, _: f"{a[0]}.chars().next().unwrap() as u32" if a else "0",
-    "chr":        lambda a, _: f"char::from_u32({a[0]} as u32).unwrap()" if a else "' '",
+    "hasattr": lambda a, _: f"/* hasattr({', '.join(a)}) */ true",
+    "type": lambda a, _: f'/* type({", ".join(a)}) */ "unknown"',
+    "dict": lambda _a, _: "HashMap::new()",
+    "set": lambda a, _: (
+        f"{a[0]}.into_iter().collect::<HashSet<_>>()" if a else "HashSet::new()"
+    ),
+    "list": lambda a, _: (
+        f"{a[0]}.into_iter().collect::<Vec<_>>()" if a else "Vec::new()"
+    ),
+    "tuple": lambda a, _: f"/* tuple({', '.join(a)}) */",
+    "open": lambda a, _: (
+        f"std::fs::read_to_string({a[0]}).unwrap_or_default()"
+        if a
+        else 'std::fs::read_to_string("").unwrap_or_default()'
+    ),
+    "any": lambda a, _: f"{a[0]}.iter().any(|x| *x)" if a else "false",
+    "all": lambda a, _: f"{a[0]}.iter().all(|x| *x)" if a else "true",
+    "ord": lambda a, _: f"{a[0]}.chars().next().unwrap() as u32" if a else "0",
+    "chr": lambda a, _: f"char::from_u32({a[0]} as u32).unwrap()" if a else "' '",
     "print": _call_print,
     "range": _call_range,
     "round": _call_round,
@@ -550,16 +643,20 @@ def _builtin_zip(args, all_args):
         return f"{args[0]}.iter().zip({args[1]}.iter())"
     return f"/* zip({all_args}) */"
 
+
 def _builtin_map(args, all_args):
     return f"{args[1]}.iter().map({args[0]})" if len(args) >= 2 else None
 
+
 def _builtin_filter(args, all_args):
     return f"{args[1]}.iter().filter({args[0]})" if len(args) >= 2 else None
+
 
 def _builtin_getattr(args, all_args):
     if len(args) >= 3:
         return f"/* getattr */ {args[2]}"
     return f"/* getattr({all_args}) */"
+
 
 def _builtin_format(args, all_args):
     if args and args[0].startswith('"'):
@@ -568,6 +665,7 @@ def _builtin_format(args, all_args):
         return f'format!("{{}}", {args[0]})'
     return '"".to_string()'
 
+
 _BUILTIN_COMPLEX_DISPATCH = {
     "zip": _builtin_zip,
     "map": _builtin_map,
@@ -575,6 +673,7 @@ _BUILTIN_COMPLEX_DISPATCH = {
     "getattr": _builtin_getattr,
     "format": _builtin_format,
 }
+
 
 def _call_builtin_complex(name, args, kwargs):
     """Handle remaining builtins: zip, map, filter, getattr, format."""
@@ -587,12 +686,20 @@ def _call_builtin_complex(name, args, kwargs):
 
 # ── Module-specific call handlers ─────────────────────────────────────
 
+
 def _call_logger(method, args, all_args):
     """logger.xxx() → eprintln!()."""
-    _LOG_METHODS = {"info", "debug", "warning", "error", "critical",
-                    "exception", "warn"}
+    _LOG_METHODS = {
+        "info",
+        "debug",
+        "warning",
+        "error",
+        "critical",
+        "exception",
+        "warn",
+    }
     if method in _LOG_METHODS:
-        return f'eprintln!({", ".join(args)})' if args else "eprintln!()"
+        return f"eprintln!({', '.join(args)})" if args else "eprintln!()"
     return f"/* logger.{method}({all_args}) */"
 
 
@@ -605,9 +712,11 @@ _PLATFORM_MAP = {
 def _call_shutil(method, args, all_args):
     """shutil.xxx() → Rust fs equivalents."""
     if method == "which" and args:
-        return (f'std::process::Command::new("which")'
-                f'.arg({args[0]}).output()'
-                f'.ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())')
+        return (
+            f'std::process::Command::new("which")'
+            f".arg({args[0]}).output()"
+            f".ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())"
+        )
     if method in ("rmtree", "remove") and args:
         return f"std::fs::remove_dir_all({args[0]}).ok()"
     if method in ("copy2", "copy", "copyfile") and len(args) >= 2:
@@ -620,13 +729,17 @@ def _call_sys_method(method, args, all_args):
     if method == "getrecursionlimit":
         return "1000i64"
     if method == "exit":
-        return f"std::process::exit({args[0]} as i32)" if args else "std::process::exit(0)"
+        return (
+            f"std::process::exit({args[0]} as i32)" if args else "std::process::exit(0)"
+        )
     return f"/* sys.{method}({all_args}) */"
 
 
 _MODULE_CALL_DISPATCH = {
     "logger": _call_logger,
-    "platform": lambda m, a, aa: _PLATFORM_MAP.get(m, f'/* platform.{m}({aa}) */ String::new()'),
+    "platform": lambda m, a, aa: _PLATFORM_MAP.get(
+        m, f"/* platform.{m}({aa}) */ String::new()"
+    ),
     "shutil": _call_shutil,
     "sys": _call_sys_method,
 }
@@ -635,39 +748,57 @@ _MODULE_CALL_DISPATCH = {
 # ── Method-on-object handlers ────────────────────────────────────────
 
 _METHOD_RENAMES = {
-    "append": "push", "strip": "trim", "lstrip": "trim_start",
-    "rstrip": "trim_end", "lower": "to_lowercase",
-    "upper": "to_uppercase", "startswith": "starts_with",
-    "endswith": "ends_with", "items": "iter",
+    "append": "push",
+    "strip": "trim",
+    "lstrip": "trim_start",
+    "rstrip": "trim_end",
+    "lower": "to_lowercase",
+    "upper": "to_uppercase",
+    "startswith": "starts_with",
+    "endswith": "ends_with",
+    "items": "iter",
 }
 
 
 def _method_join(obj, args, all_args):
     return f"{args[0]}.join({obj})" if args else f"Vec::<String>::new().join({obj})"
 
+
 def _method_format(obj, args, all_args):
     return f"format!({obj}, {all_args})"
+
 
 def _method_split(obj, args, all_args):
     sep = args[0] if args else None
     collect = ".collect::<Vec<&str>>()"
-    return f"{obj}.split({sep}){collect}" if sep else f"{obj}.split_whitespace(){collect}"
+    return (
+        f"{obj}.split({sep}){collect}" if sep else f"{obj}.split_whitespace(){collect}"
+    )
+
 
 def _method_rsplit(obj, args, all_args):
     sep = args[0] if args else None
     collect = ".collect::<Vec<&str>>()"
-    return f"{obj}.rsplit({sep}){collect}" if sep else f"{obj}.rsplit_whitespace(){collect}"
+    return (
+        f"{obj}.rsplit({sep}){collect}"
+        if sep
+        else f"{obj}.rsplit_whitespace(){collect}"
+    )
+
 
 def _method_get(obj, args, all_args):
     if len(args) >= 2:
         return f"{obj}.get(&{args[0]}).cloned().unwrap_or({args[1]})"
     return f"{obj}.get(&{args[0]})"
 
+
 def _method_pop(obj, args, all_args):
     return f"{obj}.remove(&{args[0]})" if args else f"{obj}.pop()"
 
+
 def _method_update(obj, args, all_args):
     return f"{obj}.extend({all_args})"
+
 
 _METHOD_SPECIAL_DISPATCH = {
     "join": _method_join,
@@ -678,6 +809,7 @@ _METHOD_SPECIAL_DISPATCH = {
     "pop": _method_pop,
     "update": _method_update,
 }
+
 
 def _call_method_special(obj, method, args, all_args):
     """Handle method calls that need custom Rust translation."""
@@ -690,16 +822,18 @@ def _call_method_special(obj, method, args, all_args):
 # File/path method handlers
 _PATH_METHOD_MAP = {
     "read_text": lambda o, a: f"std::fs::read_to_string(&{o}).unwrap_or_default()",
-    "read":      lambda o, a: f"std::fs::read_to_string(&{o}).unwrap_or_default()",
-    "write_text": lambda o, a: f'std::fs::write(&{o}, {a[0] if a else ""}).ok()',
-    "exists":    lambda o, a: f"std::path::Path::new(&{o}).exists()",
-    "is_file":   lambda o, a: f"std::path::Path::new(&{o}).is_file()",
-    "is_dir":    lambda o, a: f"std::path::Path::new(&{o}).is_dir()",
-    "mkdir":     lambda o, a: f"std::fs::create_dir_all(&{o}).ok()",
-    "iterdir":   lambda o, a: f"std::fs::read_dir(&{o}).unwrap()",
-    "keys":      lambda o, a: f"{o}.keys()",
-    "values":    lambda o, a: f"{o}.values()",
-    "count":     lambda o, a: f"{o}.matches({a[0]}).count() as i64" if a else f"{o}.len() as i64",
+    "read": lambda o, a: f"std::fs::read_to_string(&{o}).unwrap_or_default()",
+    "write_text": lambda o, a: f"std::fs::write(&{o}, {a[0] if a else ''}).ok()",
+    "exists": lambda o, a: f"std::path::Path::new(&{o}).exists()",
+    "is_file": lambda o, a: f"std::path::Path::new(&{o}).is_file()",
+    "is_dir": lambda o, a: f"std::path::Path::new(&{o}).is_dir()",
+    "mkdir": lambda o, a: f"std::fs::create_dir_all(&{o}).ok()",
+    "iterdir": lambda o, a: f"std::fs::read_dir(&{o}).unwrap()",
+    "keys": lambda o, a: f"{o}.keys()",
+    "values": lambda o, a: f"{o}.values()",
+    "count": lambda o, a: (
+        f"{o}.matches({a[0]}).count() as i64" if a else f"{o}.len() as i64"
+    ),
 }
 
 
@@ -768,6 +902,7 @@ def _dispatch_method_call(node, args, kwargs):
 # ═══════════════════════════════════════════════════════════════════════════
 #  Statement Handlers  (each handles one AST statement type)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def _stmt_return(stmt, pad, indent, ret_type):
     """Handle return statements."""
@@ -875,7 +1010,7 @@ def _stmt_assert(stmt, pad, _indent, _ret_type):
     """Handle assert statements."""
     test_expr = _expr(stmt.test)
     if stmt.msg:
-        return [f'{pad}assert!({test_expr}, {_expr(stmt.msg)});']
+        return [f"{pad}assert!({test_expr}, {_expr(stmt.msg)});"]
     return [f"{pad}assert!({test_expr});"]
 
 
@@ -930,27 +1065,27 @@ def _stmt_import(stmt, pad, _indent, _ret_type):
 # ── Statement dispatch table ─────────────────────────────────────────
 
 _STMT_DISPATCH: Dict[type, Callable] = {
-    ast.Return:     _stmt_return,
-    ast.If:         _stmt_if,
-    ast.For:        _stmt_for,
-    ast.While:      _stmt_while,
-    ast.Assign:     _stmt_assign,
-    ast.AnnAssign:  _stmt_ann_assign,
-    ast.AugAssign:  _stmt_aug_assign,
-    ast.Expr:       _stmt_expr,
-    ast.Assert:     _stmt_assert,
-    ast.Raise:      _stmt_raise,
-    ast.Try:        _stmt_try,
-    ast.With:       _stmt_with,
-    ast.Delete:     _stmt_delete,
-    ast.Import:     _stmt_import,
+    ast.Return: _stmt_return,
+    ast.If: _stmt_if,
+    ast.For: _stmt_for,
+    ast.While: _stmt_while,
+    ast.Assign: _stmt_assign,
+    ast.AnnAssign: _stmt_ann_assign,
+    ast.AugAssign: _stmt_aug_assign,
+    ast.Expr: _stmt_expr,
+    ast.Assert: _stmt_assert,
+    ast.Raise: _stmt_raise,
+    ast.Try: _stmt_try,
+    ast.With: _stmt_with,
+    ast.Delete: _stmt_delete,
+    ast.Import: _stmt_import,
     ast.ImportFrom: _stmt_import,
 }
 
 # Simple one-liner statements
 _STMT_SIMPLE = {
-    ast.Pass:     lambda _s, pad, _i, _r: [f"{pad}// pass"],
-    ast.Break:    lambda _s, pad, _i, _r: [f"{pad}break;"],
+    ast.Pass: lambda _s, pad, _i, _r: [f"{pad}// pass"],
+    ast.Break: lambda _s, pad, _i, _r: [f"{pad}break;"],
     ast.Continue: lambda _s, pad, _i, _r: [f"{pad}continue;"],
 }
 
@@ -992,8 +1127,10 @@ def _body(stmts: list, indent: int = 1, *, ret_type: str = "()") -> List[str]:
 #  Top-level: Transpile One Function
 # ═══════════════════════════════════════════════════════════════════════════
 
-def transpile_function_code(code: str, *, name_hint: str = "",
-                            source_info: str = "") -> str:
+
+def transpile_function_code(
+    code: str, *, name_hint: str = "", source_info: str = ""
+) -> str:
     """Transpile a Python function's source code to Rust.
 
     Parameters
@@ -1018,8 +1155,10 @@ def transpile_function_code(code: str, *, name_hint: str = "",
     func_node = _find_func_node(tree)
     if func_node is None:
         fn_name = name_hint or "unknown"
-        return (f"// No function found: {source_info}\n"
-                f"fn {fn_name}() {{\n    todo!(\"no function in source\")\n}}")
+        return (
+            f"// No function found: {source_info}\n"
+            f'fn {fn_name}() {{\n    todo!("no function in source")\n}}'
+        )
 
     fn_name = _safe_name(name_hint) if name_hint else _safe_name(func_node.name)
     params_str = _build_params(func_node)
@@ -1032,8 +1171,10 @@ def _parse_or_stub(code, fn_name, source_info):
     try:
         return ast.parse(code)
     except SyntaxError:
-        return (f"// Could not parse: {source_info}\n"
-                f"fn {fn_name}() {{\n    todo!(\"parse error\")\n}}")
+        return (
+            f"// Could not parse: {source_info}\n"
+            f'fn {fn_name}() {{\n    todo!("parse error")\n}}'
+        )
 
 
 def _find_func_node(tree):
@@ -1052,15 +1193,20 @@ def _build_params(func_node) -> str:
         if arg.arg in ("self", "cls"):
             continue
         pname = _safe_name(arg.arg)
-        ptype = (py_type_to_rust(ast.unparse(arg.annotation))
-                 if arg.annotation else _infer_type_from_name(arg.arg))
+        ptype = (
+            py_type_to_rust(ast.unparse(arg.annotation))
+            if arg.annotation
+            else _infer_type_from_name(arg.arg)
+        )
         if ptype == "f64":
             _FLOAT_PARAMS.add(arg.arg)
         params.append(f"{pname}: {ptype}")
     if func_node.args.vararg:
         params.append(f"{_safe_name(func_node.args.vararg.arg)}: Vec<String>")
     if func_node.args.kwarg:
-        params.append(f"{_safe_name(func_node.args.kwarg.arg)}: HashMap<String, String>")
+        params.append(
+            f"{_safe_name(func_node.args.kwarg.arg)}: HashMap<String, String>"
+        )
     return ", ".join(params)
 
 
@@ -1080,9 +1226,11 @@ def _assemble_function(fn_name, params_str, ret_type, func_node, source_info):
     body_lines = _body(func_node.body, indent=1, ret_type=ret_type)
     lines.extend(body_lines)
     if ret_type != "()" and body_lines:
-        has_return = any("return " in ln or "return;" in ln
-                         for ln in body_lines
-                         if ln.strip() and not ln.strip().startswith("//"))
+        has_return = any(
+            "return " in ln or "return;" in ln
+            for ln in body_lines
+            if ln.strip() and not ln.strip().startswith("//")
+        )
         if not has_return:
             lines.append(f'    todo!("return {ret_type}")')
     lines.append("}")
@@ -1093,14 +1241,52 @@ def _assemble_function(fn_name, params_str, ret_type, func_node, source_info):
 
 _NAME_TYPE_RULES = [
     (("path", "file", "dir", "folder"), "&str"),
-    (("name", "text", "msg", "code", "source", "line",
-      "pattern", "prefix", "suffix", "key", "label"), "&str"),
-    (("count", "size", "num", "index", "depth",
-      "width", "height", "limit", "max", "min"), "usize"),
-    (("flag", "enable", "disable", "verbose",
-      "force", "recursive", "debug"), "bool"),
-    (("items", "list", "values", "args", "params",
-      "names", "files", "lines", "results"), "&[String]"),
+    (
+        (
+            "name",
+            "text",
+            "msg",
+            "code",
+            "source",
+            "line",
+            "pattern",
+            "prefix",
+            "suffix",
+            "key",
+            "label",
+        ),
+        "&str",
+    ),
+    (
+        (
+            "count",
+            "size",
+            "num",
+            "index",
+            "depth",
+            "width",
+            "height",
+            "limit",
+            "max",
+            "min",
+        ),
+        "usize",
+    ),
+    (("flag", "enable", "disable", "verbose", "force", "recursive", "debug"), "bool"),
+    (
+        (
+            "items",
+            "list",
+            "values",
+            "args",
+            "params",
+            "names",
+            "files",
+            "lines",
+            "results",
+        ),
+        "&[String]",
+    ),
     (("dict", "map", "config", "options", "settings"), "&HashMap<String, String>"),
 ]
 
@@ -1134,7 +1320,11 @@ def _classify_return_value(val) -> str:
         result = f"({', '.join(['String'] * len(val.elts))})"
     if not result and isinstance(val, (ast.BoolOp, ast.Compare)):
         result = "bool"
-    if not result and isinstance(val, ast.BinOp) and isinstance(val.op, (ast.Add, ast.Sub, ast.Mult)):
+    if (
+        not result
+        and isinstance(val, ast.BinOp)
+        and isinstance(val.op, (ast.Add, ast.Sub, ast.Mult))
+    ):
         result = "i64"
     return result or "String"
 
@@ -1151,6 +1341,7 @@ def _infer_return_type(func_node) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 #  Top-level: Transpile Entire Module / Batch
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def transpile_module_file(filepath: str) -> str:
     """Read a .py file and transpile all top-level functions to Rust."""
@@ -1180,10 +1371,25 @@ def transpile_module_code(code: str, *, source: str = "") -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 _PYTHON_ONLY_SYMBOLS = {
-    "ast", "os", "re", "json", "logging", "pathlib",
-    "concurrent", "threading", "subprocess", "argparse",
-    "io", "importlib", "inspect", "traceback", "pyo3",
-    "typing", "collections", "functools", "itertools",
+    "ast",
+    "os",
+    "re",
+    "json",
+    "logging",
+    "pathlib",
+    "concurrent",
+    "threading",
+    "subprocess",
+    "argparse",
+    "io",
+    "importlib",
+    "inspect",
+    "traceback",
+    "pyo3",
+    "typing",
+    "collections",
+    "functools",
+    "itertools",
 }
 
 _UNTRANSPILABLE_PATTERNS = [
@@ -1195,31 +1401,113 @@ _UNTRANSPILABLE_PATTERNS = [
     r"\b_[A-Z][A-Z_]{2,}\b",
     r'\["[^"]*"\]',
     r'extern\s+"C"',
-    r'&\w+\[[^\]]*\]\s*=',
+    r"&\w+\[[^\]]*\]\s*=",
 ]
 
 _SAFE_RUST_METHODS = {
-    "len", "push", "pop", "contains", "is_empty", "to_string", "clone",
-    "iter", "into_iter", "map", "filter", "collect", "any", "all",
-    "unwrap", "unwrap_or", "expect", "ok", "err", "is_some", "is_none",
-    "as_str", "trim", "split", "join", "replace", "starts_with", "ends_with",
-    "to_lowercase", "to_uppercase", "chars", "bytes", "lines",
-    "insert", "remove", "get", "entry", "or_insert", "extend",
-    "sort", "sort_by", "reverse", "dedup", "retain",
-    "pow", "abs", "min", "max", "round", "ceil", "floor",
-    "keys", "values", "items", "find", "matches",
-    "strip_prefix", "strip_suffix", "parse", "as_ref",
-    "display", "write", "read", "flush",
-    "result", "and_then", "or_else", "map_err",
-    "format", "with_capacity", "capacity", "reserve",
-    "as_bytes", "as_slice", "as_mut_slice",
-    "checked_add", "checked_sub", "checked_mul",
-    "to_owned", "into", "from", "default",
-    "first", "last", "skip", "take", "enumerate", "zip",
-    "flat_map", "fold", "reduce", "sum", "count",
-    "step_by", "chain", "peekable",
-    "is_ascii_digit", "is_alphabetic", "is_ascii",
-    "new", "with", "build", "from_utf8",
+    "len",
+    "push",
+    "pop",
+    "contains",
+    "is_empty",
+    "to_string",
+    "clone",
+    "iter",
+    "into_iter",
+    "map",
+    "filter",
+    "collect",
+    "any",
+    "all",
+    "unwrap",
+    "unwrap_or",
+    "expect",
+    "ok",
+    "err",
+    "is_some",
+    "is_none",
+    "as_str",
+    "trim",
+    "split",
+    "join",
+    "replace",
+    "starts_with",
+    "ends_with",
+    "to_lowercase",
+    "to_uppercase",
+    "chars",
+    "bytes",
+    "lines",
+    "insert",
+    "remove",
+    "get",
+    "entry",
+    "or_insert",
+    "extend",
+    "sort",
+    "sort_by",
+    "reverse",
+    "dedup",
+    "retain",
+    "pow",
+    "abs",
+    "min",
+    "max",
+    "round",
+    "ceil",
+    "floor",
+    "keys",
+    "values",
+    "items",
+    "find",
+    "matches",
+    "strip_prefix",
+    "strip_suffix",
+    "parse",
+    "as_ref",
+    "display",
+    "write",
+    "read",
+    "flush",
+    "result",
+    "and_then",
+    "or_else",
+    "map_err",
+    "format",
+    "with_capacity",
+    "capacity",
+    "reserve",
+    "as_bytes",
+    "as_slice",
+    "as_mut_slice",
+    "checked_add",
+    "checked_sub",
+    "checked_mul",
+    "to_owned",
+    "into",
+    "from",
+    "default",
+    "first",
+    "last",
+    "skip",
+    "take",
+    "enumerate",
+    "zip",
+    "flat_map",
+    "fold",
+    "reduce",
+    "sum",
+    "count",
+    "step_by",
+    "chain",
+    "peekable",
+    "is_ascii_digit",
+    "is_alphabetic",
+    "is_ascii",
+    "new",
+    "with",
+    "build",
+    "from_utf8",
 }
 
 
@@ -1230,8 +1518,12 @@ def _sanitize_generated(rust_code: str) -> str:
     if sig_idx < 0:
         return rust_code
 
-    body = "\n".join(lines[sig_idx + 1:])
-    reason = _check_python_symbols(body) or _check_patterns(body) or _check_field_access(body)
+    body = "\n".join(lines[sig_idx + 1 :])
+    reason = (
+        _check_python_symbols(body)
+        or _check_patterns(body)
+        or _check_field_access(body)
+    )
     if not reason:
         return rust_code
 
@@ -1253,7 +1545,7 @@ def _find_signature(lines):
 
 def _check_python_symbols(body: str):
     """Check for Python-only module symbols in body."""
-    stripped = re.sub(r'//.*$', '', body, flags=re.MULTILINE)
+    stripped = re.sub(r"//.*$", "", body, flags=re.MULTILINE)
     stripped = re.sub(r'"(?:[^"\\]|\\.)*"', '""', stripped)
     for sym in _PYTHON_ONLY_SYMBOLS:
         if re.search(rf"\b{sym}\b", stripped):
@@ -1283,6 +1575,7 @@ def _check_field_access(body: str):
 # ═══════════════════════════════════════════════════════════════════════════
 #  Batch JSON Transpilation (called by X_Ray.exe)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def transpile_batch_json(json_input: str) -> str:
     """Transpile a JSON array of {name, code, file_path, line_start}.
@@ -1325,6 +1618,7 @@ def _init_llm_engine():
     Delegates to ``get_cached_llm_transpiler()`` for singleton caching.
     """
     from Analysis.llm_transpiler import get_cached_llm_transpiler
+
     engine = get_cached_llm_transpiler()
     return engine, engine is not None
 
@@ -1346,7 +1640,8 @@ def _transpile_candidate(cand, name_counts, llm_engine, llm_available):
     if "todo!" in rust and llm_available and llm_engine is not None:
         logger.info(f"  AST produced todo!() for {unique_name} — trying LLM...")
         llm_result = llm_engine.transpile(
-            code, name_hint=unique_name, source_info=source_info)
+            code, name_hint=unique_name, source_info=source_info
+        )
         if llm_result is not None:
             rust = llm_result
     return rust
@@ -1370,13 +1665,19 @@ def _collect_real_functions(candidates, parts, name_counts):
         name = cand.get("name", "unknown")
         rust_name = name
         if name_counts.get(name, 0) > 1:
-            stem = Path(cand.get("file_path", "")).stem if cand.get("file_path") else "mod"
+            stem = (
+                Path(cand.get("file_path", "")).stem if cand.get("file_path") else "mod"
+            )
             safe_stem = re.sub(r"[^a-zA-Z0-9_]", "_", stem)
             rust_name = f"{safe_stem}__{name}"
         fn_code = next(
-            (p for p in parts
-             if f"fn {rust_name}(" in p or f"fn {_safe_name(rust_name)}(" in p),
-            "")
+            (
+                p
+                for p in parts
+                if f"fn {rust_name}(" in p or f"fn {_safe_name(rust_name)}(" in p
+            ),
+            "",
+        )
         if fn_code and "todo!" not in fn_code:
             real_fns.append((rust_name, fn_code))
     return real_fns
@@ -1389,22 +1690,34 @@ def _build_main(parts, candidates, real_fns, llm_engine):
     ast_real = sum(1 for _, c in real_fns if "LLM-assisted" not in c)
 
     parts.append("fn main() {")
-    parts.append('    println!("╔══════════════════════════════════════════════════╗");')
+    parts.append(
+        '    println!("╔══════════════════════════════════════════════════╗");'
+    )
     parts.append('    println!("║  X-Ray Rustified Executable (Hybrid)            ║");')
-    parts.append(f'    println!("║  {n} functions transpiled, {{}} real Rust         ║", {len(real_fns)});')
+    parts.append(
+        f'    println!("║  {n} functions transpiled, {{}} real Rust         ║", {len(real_fns)});'
+    )
     if llm_count > 0:
-        parts.append(f'    println!("║    AST engine: {ast_real}  |  LLM engine: {llm_count}             ║");')
-    parts.append('    println!("╚══════════════════════════════════════════════════╝");')
-    parts.append('    println!();')
+        parts.append(
+            f'    println!("║    AST engine: {ast_real}  |  LLM engine: {llm_count}             ║");'
+        )
+    parts.append(
+        '    println!("╚══════════════════════════════════════════════════╝");'
+    )
+    parts.append("    println!();")
 
     for fn_name, fn_code in real_fns:
         _add_demo_call(parts, fn_name, fn_code)
 
-    parts.append('    println!();')
+    parts.append("    println!();")
     if llm_count > 0:
-        parts.append(f'    println!("  Done. {{}} of {n} functions are real Rust code ({ast_real} AST + {llm_count} LLM).", {len(real_fns)});')
+        parts.append(
+            f'    println!("  Done. {{}} of {n} functions are real Rust code ({ast_real} AST + {llm_count} LLM).", {len(real_fns)});'
+        )
     else:
-        parts.append(f'    println!("  Done. {{}} of {n} functions are real Rust code.", {len(real_fns)});')
+        parts.append(
+            f'    println!("  Done. {{}} of {n} functions are real Rust code.", {len(real_fns)});'
+        )
     parts.append("}")
 
 
@@ -1413,8 +1726,12 @@ def _demo_call_for_params(safe: str, params_raw: str) -> List[str]:
     if not params_raw:
         return [f'    println!("  ▸ {safe}() = {{:?}}", {safe}());']
     _SINGLE_PARAM_MAP = {
-        "Vec<String>": lambda s: [f'    println!("  ▸ {s}() = {{:?}}", {s}(vec!["parse_config".to_string(), "load_data".to_string()]));'],
-        "String": lambda s: [f'    println!("  ▸ {s}(\\\"file_path\\\") = {{:?}}", {s}("file_path".to_string()));'],
+        "Vec<String>": lambda s: [
+            f'    println!("  ▸ {s}() = {{:?}}", {s}(vec!["parse_config".to_string(), "load_data".to_string()]));'
+        ],
+        "String": lambda s: [
+            f'    println!("  ▸ {s}(\\"file_path\\") = {{:?}}", {s}("file_path".to_string()));'
+        ],
         "f64": lambda s: [
             f'    println!("  ▸ {s}(0.03) = {{:?}}", {s}(0.03));',
             f'    println!("  ▸ {s}(-0.10) = {{:?}}", {s}(-0.10));',
@@ -1425,7 +1742,7 @@ def _demo_call_for_params(safe: str, params_raw: str) -> List[str]:
         for type_key, template in _SINGLE_PARAM_MAP.items():
             if type_key in params_raw:
                 return template(safe)
-    return [f'    // {safe}({params_raw}) — complex signature, skipped']
+    return [f"    // {safe}({params_raw}) — complex signature, skipped"]
 
 
 def _add_demo_call(parts, fn_name, fn_code):
@@ -1454,22 +1771,26 @@ def _log_llm_stats(llm_engine):
         logger.info(
             f"Hybrid transpiler stats: {s['attempted']} LLM attempts, "
             f"{s['success']} succeeded, {s['compile_fail']} compile fails, "
-            f"{s['llm_fail']} LLM errors")
+            f"{s['llm_fail']} LLM errors"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CLI Entry Point
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def main():
     """CLI: python -m Analysis.transpiler [options]"""
     import argparse
+
     parser = argparse.ArgumentParser(description="X-Ray AST Transpiler: Python → Rust")
     parser.add_argument("--file", help="Transpile all functions in a .py file")
     parser.add_argument("--code", help="Transpile a single function from a code string")
     parser.add_argument("--json", help="Path to JSON file with candidate list")
-    parser.add_argument("--stdin-json", action="store_true",
-                        help="Read JSON candidates from stdin")
+    parser.add_argument(
+        "--stdin-json", action="store_true", help="Read JSON candidates from stdin"
+    )
     parser.add_argument("--out", help="Output file (default: stdout)")
     args = parser.parse_args()
 
@@ -1479,7 +1800,11 @@ def main():
     elif args.code:
         result = transpile_function_code(args.code)
     elif args.json or args.stdin_json:
-        json_text = Path(args.json).read_text(encoding="utf-8") if args.json else sys.stdin.read()
+        json_text = (
+            Path(args.json).read_text(encoding="utf-8")
+            if args.json
+            else sys.stdin.read()
+        )
         result = transpile_batch_json(json_text)
     else:
         parser.print_help()

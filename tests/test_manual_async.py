@@ -1,7 +1,7 @@
-
 import asyncio
 import pytest
 from Core.inference import LLMHelper
+
 
 @pytest.mark.asyncio
 async def test_async_inference():
@@ -17,6 +17,7 @@ async def test_async_inference():
         print(f"Result: {res}")
     except Exception as e:
         print(f"Async query failed: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(test_async_inference())

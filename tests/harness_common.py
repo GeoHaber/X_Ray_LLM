@@ -12,6 +12,14 @@ from pathlib import Path
 
 def mock_transpile_to_rust_v2(python_code: str) -> str:
     """Generate mock Rust code from a Python function for transpilation testing."""
+    if "def fib(n):" in python_code:
+        return r"""
+        #[no_mangle]
+        pub extern "C" def fib(n: i32) -> i32 {
+            if n <= 1 { return n; }
+            fib(n - 1) + fib(n - 2)
+        }
+        """
     if "def add(a, b):" in python_code:
         return r"""
         #[no_mangle]
@@ -26,7 +34,7 @@ def mock_transpile_to_rust_v2(python_code: str) -> str:
             x * y
         }
         """
-    raise NotImplementedError("Transpiler only supports 'add' and 'multiply'.")
+    raise NotImplementedError("Transpiler only supports 'fib', 'add', and 'multiply'.")
 
 
 def compile_rust(rust_code: str) -> str:

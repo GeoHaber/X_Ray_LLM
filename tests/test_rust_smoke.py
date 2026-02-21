@@ -1,4 +1,5 @@
 """Quick smoke test for the Rust x_ray_core module."""
+
 import x_ray_core
 
 # Test 1: normalized_token_stream
@@ -31,9 +32,7 @@ ts = x_ray_core.token_ngram_similarity(
 print(f"Token ngram sim: {ts:.4f}")
 
 # Test 5: ast_histogram
-hist = x_ray_core.ast_node_histogram(
-    "if x > 0:\n    return x\nelse:\n    return -x"
-)
+hist = x_ray_core.ast_node_histogram("if x > 0:\n    return x\nelse:\n    return -x")
 print(f"AST histogram: {dict(hist)}")
 assert "If" in hist, "Should detect If node"
 assert "Return" in hist, "Should detect Return node"
@@ -46,11 +45,13 @@ assert '"""' not in clean, "Docstrings should be removed"
 assert "#" not in clean, "Comments should be removed"
 
 # Test 7: batch_code_similarity
-matrix = x_ray_core.batch_code_similarity([
-    "def f(x): return x + 1",
-    "def g(y): return y + 2",
-    "class Foo:\n    def bar(self): pass",
-])
+matrix = x_ray_core.batch_code_similarity(
+    [
+        "def f(x): return x + 1",
+        "def g(y): return y + 2",
+        "class Foo:\n    def bar(self): pass",
+    ]
+)
 print("Batch matrix:")
 for row in matrix:
     print(f"  {[round(v, 3) for v in row]}")

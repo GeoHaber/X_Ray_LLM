@@ -44,9 +44,9 @@ from Analysis.reporting import compute_grade  # noqa: E402
 from Analysis.rust_advisor import RustAdvisor  # noqa: E402
 from Analysis.smart_graph import SmartGraph  # noqa: E402
 from Analysis.auto_rustify import (  # noqa: E402
-    RustifyPipeline, detect_system,
-    py_type_to_rust as _py_type_to_rust,
-    _translate_body,
+    RustifyPipeline,
+    detect_system,
+    transpile_function,
 )
 
 import concurrent.futures  # noqa: E402
@@ -54,68 +54,14 @@ import ast  # noqa: E402
 import textwrap  # noqa: E402
 
 
-# ── Python → Rust transpiler helpers imported from Analysis.auto_rustify ────
-
-
-def _parse_sketch_params(func: "FunctionRecord") -> List[str]:
-    """Parse Python parameters into Rust parameter strings."""
-    try:
-        tree = ast.parse(func.code)
-        func_node = next(
-            (n for n in ast.walk(tree)
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
-            None,
-        )
-        if func_node is None:
-            raise ValueError("No function node")
-        params = []
-        for arg in func_node.args.args:
-            if arg.arg == "self":
-                continue
-            rust_type = _py_type_to_rust(ast.unparse(arg.annotation)) if arg.annotation else "PyObject"
-            params.append(f"{arg.arg}: {rust_type}")
-        return params
-    except Exception:
-        return [f"{p}: PyObject" for p in func.parameters if p != "self"]
-
-
-def _translate_sketch_body(func: "FunctionRecord") -> List[str]:
-    """Translate function body to Rust sketch lines."""
-    try:
-        tree = ast.parse(func.code)
-        func_node = next(
-            (n for n in ast.walk(tree)
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
-            None,
-        )
-        if func_node is not None:
-            return _translate_body(func_node.body, indent=1)
-    except Exception:
-        pass
-    return ["    // TODO: translate function body", "    todo!()"]
-
-
 def _generate_rust_sketch(func: "FunctionRecord") -> str:
     """Generate a Rust function sketch from a Python FunctionRecord."""
-    ret_rust = _py_type_to_rust(func.return_type or "")
-    if not ret_rust.startswith("PyResult"):
-        ret_rust = f"PyResult<{ret_rust}>"
-
-    params_str = ", ".join(_parse_sketch_params(func))
-    body_lines = _translate_sketch_body(func)
-
-    lines = [
-        "use pyo3::prelude::*;",
-        "",
-        "#[pyfunction]",
-        f"fn {func.name}({params_str}) -> {ret_rust} {{",
-        *body_lines,
-        "}",
-    ]
-    return "\n".join(lines)
+    rust_fn = transpile_function(func, pyfunction=True)
+    return "use pyo3::prelude::*;\n\n" + rust_fn
 
 
 # ── Duplicate merge / unify helper ───────────────────────────────────────────
+
 
 def _extract_params_from_code(code: str):
     """Parse code and extract parameter list from the first function."""
@@ -127,21 +73,21 @@ def _extract_params_from_code(code: str):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             return [
                 f"{a.arg}{': ' + ast.unparse(a.annotation) if a.annotation else ''}"
-                for a in node.args.args]
+                for a in node.args.args
+            ]
     return None
 
 
-def _extract_func_codes(funcs_data: List[Dict[str, Any]],
-                        code_map: Dict[str, str]):
+def _extract_func_codes(funcs_data: List[Dict[str, Any]], code_map: Dict[str, str]):
     """Extract source code, names, and parameter sets from function data."""
     codes, names, params_sets = [], [], []
     for f in funcs_data:
         loc = f"{f.get('file', '?')}:{f.get('line', '?')}"
-        code = code_map.get(loc, code_map.get(f.get('key', ''), ''))
+        code = code_map.get(loc, code_map.get(f.get("key", ""), ""))
         if not code:
             continue
         codes.append(code)
-        names.append(f.get('name', 'unknown'))
+        names.append(f.get("name", "unknown"))
         params = _extract_params_from_code(code)
         if params is not None:
             params_sets.append(params)
@@ -192,8 +138,9 @@ def _collect_docstrings(codes: List[str]) -> List[str]:
     return parts
 
 
-def _build_unified_header(funcs_data: List[Dict[str, Any]],
-                          names: List[str]) -> List[str]:
+def _build_unified_header(
+    funcs_data: List[Dict[str, Any]], names: List[str]
+) -> List[str]:
     """Build the comment header for a unified function."""
     lines = [
         "# ══════════════════════════════════════════════════════",
@@ -206,8 +153,7 @@ def _build_unified_header(funcs_data: List[Dict[str, Any]],
     return lines
 
 
-def _build_unified_docstring(names: List[str],
-                             doc_parts: List[str]) -> List[str]:
+def _build_unified_docstring(names: List[str], doc_parts: List[str]) -> List[str]:
     """Build the docstring block for a unified function."""
     if not doc_parts:
         return [f'    """Unified from {len(names)} duplicate functions."""']
@@ -218,8 +164,13 @@ def _build_unified_docstring(names: List[str],
     return lines
 
 
-def _unparse_func_node(node, unified_name: str, all_params: List[str],
-                       names: List[str], doc_parts: List[str]) -> List[str]:
+def _unparse_func_node(
+    node,
+    unified_name: str,
+    all_params: List[str],
+    names: List[str],
+    doc_parts: List[str],
+) -> List[str]:
     """Unparse a function AST node into unified source lines."""
     lines = []
     for d in node.decorator_list:
@@ -229,16 +180,20 @@ def _unparse_func_node(node, unified_name: str, all_params: List[str],
     lines.append(f"{kw} {unified_name}({', '.join(all_params)}){ret}:")
     lines.extend(_build_unified_docstring(names, doc_parts))
     body = node.body
-    if (body and isinstance(body[0], ast.Expr)
-            and isinstance(body[0].value, (ast.Constant, ast.Str))):
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, (ast.Constant, ast.Str))
+    ):
         body = body[1:]
     for b_node in body:
         lines.extend(f"    {bl}" for bl in ast.unparse(b_node).split("\n"))
     return lines
 
 
-def _generate_unified_function(funcs_data: List[Dict[str, Any]],
-                               code_map: Dict[str, str]) -> str:
+def _generate_unified_function(
+    funcs_data: List[Dict[str, Any]], code_map: Dict[str, str]
+) -> str:
     """Generate a unified function from a group of duplicates."""
     codes, names, params_sets = _extract_func_codes(funcs_data, code_map)
     if not codes:
@@ -255,14 +210,18 @@ def _generate_unified_function(funcs_data: List[Dict[str, Any]],
     try:
         tree = ast.parse(textwrap.dedent(base_code))
         func_node = next(
-            (n for n in ast.walk(tree)
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
+            (
+                n
+                for n in ast.walk(tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ),
             None,
         )
         if func_node is None:
             raise ValueError("No function node")
-        lines.extend(_unparse_func_node(
-            func_node, unified_name, all_params, names, doc_parts))
+        lines.extend(
+            _unparse_func_node(func_node, unified_name, all_params, names, doc_parts)
+        )
     except Exception:
         lines.append(base_code.replace(base_name, unified_name, 1))
 
@@ -396,10 +355,18 @@ hr {
 # ── Grade colours ────────────────────────────────────────────────────────────
 
 _GRADE_COLORS = {
-    "A+": "#00c853", "A": "#00c853", "A-": "#00e676",
-    "B+": "#64dd17", "B": "#aeea00", "B-": "#ffd600",
-    "C+": "#ffab00", "C": "#ff6d00", "C-": "#ff3d00",
-    "D+": "#dd2c00", "D": "#d50000", "D-": "#b71c1c",
+    "A+": "#00c853",
+    "A": "#00c853",
+    "A-": "#00e676",
+    "B+": "#64dd17",
+    "B": "#aeea00",
+    "B-": "#ffd600",
+    "C+": "#ffab00",
+    "C": "#ff6d00",
+    "C-": "#ff3d00",
+    "D+": "#dd2c00",
+    "D": "#d50000",
+    "D-": "#b71c1c",
     "F": "#880e4f",
 }
 
@@ -408,8 +375,10 @@ _SEV_ICONS = {"critical": "🔴", "warning": "🟡", "info": "🟢"}
 
 # ── Reusable UI helpers ──────────────────────────────────────────────────────
 
-def _html_bar(label: str, count: int, max_count: int,
-              color: str, label_width: str = "120px") -> str:
+
+def _html_bar(
+    label: str, count: int, max_count: int, color: str, label_width: str = "120px"
+) -> str:
     """Return one styled horizontal bar as raw HTML."""
     pct = int(count / max(max_count, 1) * 100)
     return (
@@ -431,8 +400,7 @@ def _render_bars(items: list, label_width: str = "120px"):
         return
     max_count = max(c for _, c, _ in items) if items else 1
     html = "\n".join(
-        _html_bar(lbl, cnt, max_count, col, label_width)
-        for lbl, cnt, col in items
+        _html_bar(lbl, cnt, max_count, col, label_width) for lbl, cnt, col in items
     )
     st.markdown(html, unsafe_allow_html=True)
 
@@ -460,10 +428,7 @@ def _render_worst_files(worst: Dict[str, int], limit: int = 10):
 
 def _mono_status(text: str, color: str = "") -> str:
     """Return an inline monospace status paragraph (HTML)."""
-    style = (
-        "font-family:'Cascadia Code','Consolas',monospace;"
-        "font-size:0.82rem;"
-    )
+    style = "font-family:'Cascadia Code','Consolas',monospace;font-size:0.82rem;"
     if color:
         style += f"color:{color};"
     else:
@@ -473,8 +438,8 @@ def _mono_status(text: str, color: str = "") -> str:
 
 # ── Scan helpers ─────────────────────────────────────────────────────────────
 
-def _scan_codebase(root: Path, exclude: List[str],
-                   on_file=None) -> tuple:
+
+def _scan_codebase(root: Path, exclude: List[str], on_file=None) -> tuple:
     """Parallel-scan the codebase, returning functions, classes, and errors."""
     py_files = collect_py_files(root, exclude or None)
     all_functions: List[FunctionRecord] = []
@@ -485,8 +450,7 @@ def _scan_codebase(root: Path, exclude: List[str],
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(extract_functions_from_file, f, root): f
-            for f in py_files
+            executor.submit(extract_functions_from_file, f, root): f for f in py_files
         }
         for future in concurrent.futures.as_completed(futures):
             funcs, clses, err = future.result()
@@ -524,6 +488,7 @@ def _run_phase_duplicates(ctx, results):
 def _run_phase_lint(ctx, results):
     """Run Ruff lint phase — delegates to Core.scan_phases."""
     from Core.scan_phases import run_lint_phase
+
     linter, lint_issues = run_lint_phase(ctx.root, exclude=ctx.exclude or None)
     if linter is not None:
         results["lint"] = linter.summary(lint_issues)
@@ -535,6 +500,7 @@ def _run_phase_lint(ctx, results):
 def _run_phase_security(ctx, results):
     """Run Bandit security phase — delegates to Core.scan_phases."""
     from Core.scan_phases import run_security_phase
+
     sec, sec_issues = run_security_phase(ctx.root, exclude=ctx.exclude or None)
     if sec is not None:
         results["security"] = sec.summary(sec_issues)
@@ -556,18 +522,21 @@ def _run_phase_rustify(ctx, results):
 
 
 _PHASE_RUNNERS = {
-    "smells":     ("Detecting code smells",      _run_phase_smells),
-    "duplicates": ("Finding duplicates",          _run_phase_duplicates),
-    "lint":       ("Running Ruff lint",           _run_phase_lint),
-    "security":   ("Running Bandit security",     _run_phase_security),
-    "rustify":    ("Scoring Rust candidates",     _run_phase_rustify),
+    "smells": ("Detecting code smells", _run_phase_smells),
+    "duplicates": ("Finding duplicates", _run_phase_duplicates),
+    "lint": ("Running Ruff lint", _run_phase_lint),
+    "security": ("Running Bandit security", _run_phase_security),
+    "rustify": ("Scoring Rust candidates", _run_phase_rustify),
 }
 
 
-def _run_scan(root: Path, modes: Dict[str, bool],
-              exclude: List[str],
-              thresholds: Dict[str, int],
-              progress_cb=None) -> Dict[str, Any]:
+def _run_scan(
+    root: Path,
+    modes: Dict[str, bool],
+    exclude: List[str],
+    thresholds: Dict[str, int],
+    progress_cb=None,
+) -> Dict[str, Any]:
     """Run selected scan phases and return results dict.
 
     *progress_cb(fraction, phase_label)* is called to report 0.0-1.0
@@ -592,15 +561,18 @@ def _run_scan(root: Path, modes: Dict[str, bool],
     if need_ast:
         _prog("Parsing source files", 0.0)
         functions, classes, errors, file_count = _scan_codebase(
-            root, exclude,
-            on_file=lambda d, t, _p: _prog(f"Parsing {d}/{t}", d / t))
+            root, exclude, on_file=lambda d, t, _p: _prog(f"Parsing {d}/{t}", d / t)
+        )
         _prog("AST parse complete")
         pi += 1
 
     results["meta"].update(
-        files=file_count, functions=len(functions),
-        classes=len(classes), errors=len(errors),
-        error_list=errors[:20])
+        files=file_count,
+        functions=len(functions),
+        classes=len(classes),
+        errors=len(errors),
+        error_list=errors[:20],
+    )
 
     if need_ast:
         code_map: Dict[str, str] = {}
@@ -627,6 +599,7 @@ def _run_scan(root: Path, modes: Dict[str, bool],
 
 # ── UI Components ────────────────────────────────────────────────────────────
 
+
 def _render_grade_card(grade: Dict[str, Any]):
     """Render the big grade card at the top with a modern glassmorphism look."""
     score = grade["score"]
@@ -634,7 +607,8 @@ def _render_grade_card(grade: Dict[str, Any]):
     color = _GRADE_COLORS.get(letter, "#888")
     glow_size = max(10, int(score / 3))
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div style="
         text-align: center;
         padding: 1.2rem 1rem;
@@ -658,7 +632,9 @@ def _render_grade_card(grade: Dict[str, Any]):
             text-transform: uppercase; letter-spacing: 2px;
         ">Quality Score</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def _render_stats_bar(meta: Dict[str, Any]):
@@ -672,7 +648,8 @@ def _render_stats_bar(meta: Dict[str, Any]):
     cols = st.columns(len(items))
     for col, (icon, label, value) in zip(cols, items):
         with col:
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div style="
                 text-align: center; padding: 12px;
                 border-radius: 12px;
@@ -686,7 +663,9 @@ def _render_stats_bar(meta: Dict[str, Any]):
                 <p style="font-size: 0.75rem; margin: 0; opacity: 0.5;
                           text-transform: uppercase; letter-spacing: 1px;">{label}</p>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
 
 def _render_penalty_bar(breakdown: Dict[str, Any]):
@@ -694,8 +673,12 @@ def _render_penalty_bar(breakdown: Dict[str, Any]):
     if not breakdown:
         return
     cols = st.columns(len(breakdown))
-    labels = {"smells": "🔍 Smells", "duplicates": "📋 Duplicates",
-              "lint": "🧹 Lint", "security": "🔒 Security"}
+    labels = {
+        "smells": "🔍 Smells",
+        "duplicates": "📋 Duplicates",
+        "lint": "🧹 Lint",
+        "security": "🔒 Security",
+    }
     for col, (key, detail) in zip(cols, breakdown.items()):
         penalty = detail.get("penalty", 0)
         with col:
@@ -726,9 +709,12 @@ def _render_smells_tab(results: Dict[str, Any]):
         st.subheader("By Category")
         cat_data = sorted(by_cat.items(), key=lambda x: -x[1])
         _render_bars(
-            [(cat, cnt, "linear-gradient(90deg,#ff6b6b,#ffa06b)")
-             for cat, cnt in cat_data],
-            label_width="180px")
+            [
+                (cat, cnt, "linear-gradient(90deg,#ff6b6b,#ffa06b)")
+                for cat, cnt in cat_data
+            ],
+            label_width="180px",
+        )
 
     _render_worst_files(summary.get("worst_files", {}))
     _render_smell_issues(issues, results.get("_code_map", {}))
@@ -737,20 +723,25 @@ def _render_smells_tab(results: Dict[str, Any]):
 def _render_smell_issues(issues: list, code_map: dict):
     """Expandable issue list with severity filter."""
     st.subheader("All Issues")
-    sev_filter = st.selectbox("Filter by severity",
-                              ["all", "critical", "warning", "info"],
-                              key="smell_filter")
-    filtered = (issues if sev_filter == "all"
-                else [i for i in issues if i.severity == sev_filter])
-    filtered.sort(key=lambda s: (
-        0 if s.severity == "critical" else 1 if s.severity == "warning" else 2,
-        s.file_path, s.line))
+    sev_filter = st.selectbox(
+        "Filter by severity", ["all", "critical", "warning", "info"], key="smell_filter"
+    )
+    filtered = (
+        issues
+        if sev_filter == "all"
+        else [i for i in issues if i.severity == sev_filter]
+    )
+    filtered.sort(
+        key=lambda s: (
+            0 if s.severity == "critical" else 1 if s.severity == "warning" else 2,
+            s.file_path,
+            s.line,
+        )
+    )
 
     for s in filtered[:100]:
         icon = _SEV_ICONS.get(s.severity, "❓")
-        with st.expander(
-            f"{icon} [{s.category}] {s.name} — {s.file_path}:{s.line}"
-        ):
+        with st.expander(f"{icon} [{s.category}] {s.name} — {s.file_path}:{s.line}"):
             st.write(f"**Issue:** {s.message}")
             if s.suggestion:
                 st.write(f"**Fix:** {s.suggestion}")
@@ -768,13 +759,14 @@ def _render_smell_issues(issues: list, code_map: dict):
 def _render_func_column(col, f, code_map: dict):
     """Render one function's code inside a Streamlit column."""
     loc = f"{f.get('file', '?')}:{f.get('line', '?')}"
-    code = code_map.get(loc, code_map.get(f.get('key', ''), ''))
+    code = code_map.get(loc, code_map.get(f.get("key", ""), ""))
     with col:
         st.caption(f"📄 {loc}")
         st.markdown(
             f"**{f.get('name', '?')}** "
             f"({f.get('size', '?')} lines, "
-            f"sim: {f.get('similarity', 0):.0%})")
+            f"sim: {f.get('similarity', 0):.0%})"
+        )
         if code:
             st.code(code, language="python")
         else:
@@ -795,14 +787,14 @@ def _render_dup_group(g, code_map: dict):
             _render_func_column(cols[i], f, code_map)
         for f in funcs[2:]:
             loc = f"{f.get('file', '?')}:{f.get('line', '?')}"
-            code = code_map.get(loc, code_map.get(f.get('key', ''), ''))
+            code = code_map.get(loc, code_map.get(f.get("key", ""), ""))
             st.caption(f"📄 {loc} — **{f.get('name', '?')}**")
             if code:
                 st.code(code, language="python")
     else:
         for f in funcs:
             loc = f"{f.get('file', '?')}:{f.get('line', '?')}"
-            code = code_map.get(loc, code_map.get(f.get('key', ''), ''))
+            code = code_map.get(loc, code_map.get(f.get("key", ""), ""))
             st.caption(f"📄 {loc} — **{f.get('name', '?')}**")
             if code:
                 st.code(code, language="python")
@@ -813,7 +805,8 @@ def _render_dup_group(g, code_map: dict):
         st.caption(
             "This is a suggested merged version. "
             "Review parameters, logic branches, and naming "
-            "before applying.")
+            "before applying."
+        )
         unified = _generate_unified_function(funcs, code_map)
         st.code(unified, language="python")
 
@@ -838,9 +831,13 @@ def _render_duplicates_tab(results: Dict[str, Any]):
     type_filter = st.selectbox(
         "Filter by type",
         ["all", "exact", "near", "structural", "semantic"],
-        key="dup_filter")
-    filtered = (groups if type_filter == "all"
-                else [g for g in groups if g.similarity_type == type_filter])
+        key="dup_filter",
+    )
+    filtered = (
+        groups
+        if type_filter == "all"
+        else [g for g in groups if g.similarity_type == type_filter]
+    )
 
     code_map = results.get("_code_map", {})
 
@@ -848,8 +845,7 @@ def _render_duplicates_tab(results: Dict[str, Any]):
         sim_pct = f"{g.avg_similarity:.0%}"
         func_names = ", ".join(f.get("name", "?") for f in g.functions)
         with st.expander(
-            f"Group {g.group_id} — {g.similarity_type} ({sim_pct}) — "
-            f"{func_names}"
+            f"Group {g.group_id} — {g.similarity_type} ({sim_pct}) — {func_names}"
         ):
             _render_dup_group(g, code_map)
 
@@ -862,7 +858,10 @@ def _run_ruff_autofix(scan_path: str):
     try:
         result = subprocess.run(
             ["ruff", "check", "--fix", str(scan_path)],
-            capture_output=True, text=True, timeout=60)
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
         if result.returncode == 0:
             st.success("✅ Auto-fix complete! Re-run scan to see updated results.")
         else:
@@ -882,12 +881,13 @@ def _render_autofix_section(fixable_count: int):
     fix_col1, fix_col2 = st.columns([1, 3])
     with fix_col1:
         do_fix = st.button(
-            "🔧 Auto-Fix All", type="primary",
+            "🔧 Auto-Fix All",
+            type="primary",
             use_container_width=True,
-            help=f"Run ruff --fix on {fixable_count} auto-fixable issues")
+            help=f"Run ruff --fix on {fixable_count} auto-fixable issues",
+        )
     with fix_col2:
-        st.caption(
-            f"⚡ {fixable_count} issues can be automatically fixed by Ruff.")
+        st.caption(f"⚡ {fixable_count} issues can be automatically fixed by Ruff.")
         st.caption("⚠️ This modifies files in-place. Commit your work first!")
 
     if do_fix:
@@ -926,9 +926,12 @@ def _render_lint_tab(results: Dict[str, Any]):
         st.subheader("Top Rules")
         top_rules = sorted(by_rule.items(), key=lambda x: -x[1])[:10]
         _render_bars(
-            [(rule, cnt, "linear-gradient(90deg,#ff9800,#ff5722)")
-             for rule, cnt in top_rules],
-            label_width="120px")
+            [
+                (rule, cnt, "linear-gradient(90deg,#ff9800,#ff5722)")
+                for rule, cnt in top_rules
+            ],
+            label_width="120px",
+        )
 
     _render_worst_files(summary.get("worst_files", {}))
 
@@ -937,9 +940,7 @@ def _render_lint_tab(results: Dict[str, Any]):
     for s in issues[:100]:
         icon = _SEV_ICONS.get(s.severity, "❓")
         fix_tag = " 🔧" if s.fixable else ""
-        with st.expander(
-            f"{icon} [{s.rule_code}] {s.file_path}:{s.line}{fix_tag}"
-        ):
+        with st.expander(f"{icon} [{s.rule_code}] {s.file_path}:{s.line}{fix_tag}"):
             st.write(f"**Issue:** {s.message}")
             if s.suggestion:
                 st.write(f"**Fix:** {s.suggestion}")
@@ -984,17 +985,17 @@ def _render_security_tab(results: Dict[str, Any]):
 
     st.subheader("All Issues")
     sev_filter = st.selectbox(
-        "Filter by severity", ["all", "critical", "warning", "info"],
-        key="sec_filter")
-    filtered = (issues if sev_filter == "all"
-                else [i for i in issues if i.severity == sev_filter])
+        "Filter by severity", ["all", "critical", "warning", "info"], key="sec_filter"
+    )
+    filtered = (
+        issues
+        if sev_filter == "all"
+        else [i for i in issues if i.severity == sev_filter]
+    )
 
     for s in filtered[:100]:
-        icon = {"critical": "🔴", "warning": "🟡",
-                "info": "🟢"}.get(s.severity, "❓")
-        with st.expander(
-            f"{icon} [{s.rule_code}] {s.file_path}:{s.line}"
-        ):
+        icon = {"critical": "🔴", "warning": "🟡", "info": "🟢"}.get(s.severity, "❓")
+        with st.expander(f"{icon} [{s.rule_code}] {s.file_path}:{s.line}"):
             st.write(f"**Issue:** {s.message}")
             if s.suggestion:
                 st.write(f"**Fix:** {s.suggestion}")
@@ -1009,15 +1010,17 @@ def _render_candidate_card(rank: int, cand, code_map: dict):
     """Render one Rust candidate inside an expander."""
     fn = cand.func
     purity_badge = "🟢 Pure" if cand.is_pure else "🔴 Impure"
-    score_color = ("#00c853" if cand.score >= 20
-                   else "#ffd600" if cand.score >= 10 else "#ff5722")
+    score_color = (
+        "#00c853" if cand.score >= 20 else "#ffd600" if cand.score >= 10 else "#ff5722"
+    )
 
     info_cols = st.columns(5)
     info_cols[0].markdown("**Score**")
     info_cols[0].markdown(
         f"<span style='font-family:var(--font-mono); font-size:1.4rem; "
         f"color:{score_color}; font-weight:700;'>{cand.score}</span>",
-        unsafe_allow_html=True)
+        unsafe_allow_html=True,
+    )
     info_cols[1].markdown(f"**Purity**\n\n{purity_badge}")
     info_cols[2].markdown(f"**Complexity**\n\n`CC = {fn.complexity}`")
     info_cols[3].markdown(f"**Size**\n\n`{fn.size_lines} lines`")
@@ -1027,8 +1030,7 @@ def _render_candidate_card(rank: int, cand, code_map: dict):
         st.caption(f"💡 Reason: {cand.reason}")
     st.markdown(f"📄 `{fn.file_path}:{fn.line_start}`")
 
-    code = code_map.get(
-        f"{fn.file_path}:{fn.line_start}", code_map.get(fn.key, ""))
+    code = code_map.get(f"{fn.file_path}:{fn.line_start}", code_map.get(fn.key, ""))
     if code:
         py_col, rs_col = st.columns(2)
         with py_col:
@@ -1037,23 +1039,24 @@ def _render_candidate_card(rank: int, cand, code_map: dict):
         with rs_col:
             st.markdown("**🦀 Rust (auto-sketch)**")
             st.code(_generate_rust_sketch(fn), language="rust")
-        st.caption(
-            "⚠️ Auto-generated sketch — review types and error handling.")
+        st.caption("⚠️ Auto-generated sketch — review types and error handling.")
 
 
 _SCORE_BUCKET_ORDER = ["0-5", "5-10", "10-15", "15-20", "20-25", "25+"]
 _SCORE_BUCKET_THRESHOLDS = [5, 10, 15, 20, 25]
 _SCORE_BUCKET_COLORS = {
-    "25+": "#00c853", "20-25": "#00c853",
-    "15-20": "#ffd600", "10-15": "#ffd600",
-    "5-10": "#ff5722", "0-5": "#ff5722",
+    "25+": "#00c853",
+    "20-25": "#00c853",
+    "15-20": "#ffd600",
+    "10-15": "#ffd600",
+    "5-10": "#ff5722",
+    "0-5": "#ff5722",
 }
 
 
 def _score_to_bucket(score: float) -> str:
     """Map a numeric score to its bucket label."""
-    for threshold, label in zip(
-            _SCORE_BUCKET_THRESHOLDS, _SCORE_BUCKET_ORDER):
+    for threshold, label in zip(_SCORE_BUCKET_THRESHOLDS, _SCORE_BUCKET_ORDER):
         if score < threshold:
             return label
     return "25+"
@@ -1066,8 +1069,9 @@ def _render_score_distribution(candidates: list):
     for c in candidates:
         buckets[_score_to_bucket(c.score)] += 1
 
-    items = [(label, count, _SCORE_BUCKET_COLORS[label])
-             for label, count in buckets.items()]
+    items = [
+        (label, count, _SCORE_BUCKET_COLORS[label]) for label, count in buckets.items()
+    ]
     _render_bars(items, label_width="60px")
 
 
@@ -1085,15 +1089,20 @@ def _render_rustify_tab(results: Dict[str, Any]):
     c1.metric("🦀 Scored", rustify_summary.get("total_scored", 0))
     c2.metric("✅ Pure", rustify_summary.get("pure_count", 0))
     c3.metric("🏆 Top Score", rustify_summary.get("top_score", 0))
-    c4.metric("⚠️ Impure",
-              rustify_summary.get("total_scored", 0)
-              - rustify_summary.get("pure_count", 0))
+    c4.metric(
+        "⚠️ Impure",
+        rustify_summary.get("total_scored", 0) - rustify_summary.get("pure_count", 0),
+    )
 
     st.markdown("---")
     st.subheader("🏆 Top Rust Candidates")
     show_n = st.slider(
-        "Show top N", 5, min(50, len(candidates)),
-        min(15, len(candidates)), key="rustify_top_n")
+        "Show top N",
+        5,
+        min(50, len(candidates)),
+        min(15, len(candidates)),
+        key="rustify_top_n",
+    )
 
     for rank, cand in enumerate(candidates[:show_n], 1):
         fn = cand.func
@@ -1152,8 +1161,7 @@ def _render_heatmap_tab(results: Dict[str, Any]):
     st.subheader("🔥 Issue Heatmap — Worst Files")
     st.caption("Aggregated across all enabled analyzers.")
 
-    cat_colors = {"smells": "#ff6b6b", "lint": "#ffa06b",
-                  "security": "#ff4081"}
+    cat_colors = {"smells": "#ff6b6b", "lint": "#ffa06b", "security": "#ff4081"}
 
     for file_path, total in ranked:
         pct = int(total / max(max_issues, 1) * 100)
@@ -1165,10 +1173,10 @@ def _render_heatmap_tab(results: Dict[str, Any]):
             f"{cat}:{cnt}</span>"
             for cat, cnt in sorted(detail.items(), key=lambda x: -x[1])
         )
-        display = (file_path if len(file_path) <= 50
-                   else "..." + file_path[-47:])
+        display = file_path if len(file_path) <= 50 else "..." + file_path[-47:]
         with st.expander(f"🔥 {display} — {total} issues"):
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div style="margin: 4px 0 8px 0;">
                 <div style="display:flex;align-items:center;gap:8px;">
                     <span style="font-family:var(--font-mono);
@@ -1183,13 +1191,15 @@ def _render_heatmap_tab(results: Dict[str, Any]):
                                 border-radius:4px;"></div>
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
             _render_file_preview(file_path)
 
     st.markdown("---")
     st.caption(
-        f"📊 {sum(file_issues.values())} total issues "
-        f"across {len(file_issues)} files")
+        f"📊 {sum(file_issues.values())} total issues across {len(file_issues)} files"
+    )
 
 
 _CC_THRESHOLDS = [
@@ -1209,13 +1219,17 @@ def _render_cc_histogram(complexities: list):
     """Cyclomatic complexity distribution bars."""
     st.subheader("📊 Cyclomatic Complexity Distribution")
     buckets = {
-        "1-3 (simple)": 0, "4-7 (moderate)": 0,
-        "8-14 (complex)": 0, "15-24 (very complex)": 0,
+        "1-3 (simple)": 0,
+        "4-7 (moderate)": 0,
+        "8-14 (complex)": 0,
+        "15-24 (very complex)": 0,
         "25+ (untestable)": 0,
     }
     bucket_colors = {
-        "1-3 (simple)": "#00c853", "4-7 (moderate)": "#64dd17",
-        "8-14 (complex)": "#ffd600", "15-24 (very complex)": "#ff6d00",
+        "1-3 (simple)": "#00c853",
+        "4-7 (moderate)": "#64dd17",
+        "8-14 (complex)": "#ffd600",
+        "15-24 (very complex)": "#ff6d00",
         "25+ (untestable)": "#d50000",
     }
     for cc in complexities:
@@ -1223,7 +1237,8 @@ def _render_cc_histogram(complexities: list):
 
     _render_bars(
         [(lbl, cnt, bucket_colors[lbl]) for lbl, cnt in buckets.items()],
-        label_width="170px")
+        label_width="170px",
+    )
 
 
 _SIZE_THRESHOLDS = [
@@ -1242,33 +1257,41 @@ def _size_bucket(s: int) -> str:
 def _render_size_distribution(sizes: list):
     """Function size distribution bars."""
     st.subheader("📏 Function Size Distribution")
-    size_buckets = {"1-10": 0, "11-25": 0, "26-50": 0,
-                    "51-100": 0, "100+": 0}
-    size_colors = {"1-10": "#00c853", "11-25": "#64dd17",
-                   "26-50": "#ffd600", "51-100": "#ff6d00",
-                   "100+": "#d50000"}
+    size_buckets = {"1-10": 0, "11-25": 0, "26-50": 0, "51-100": 0, "100+": 0}
+    size_colors = {
+        "1-10": "#00c853",
+        "11-25": "#64dd17",
+        "26-50": "#ffd600",
+        "51-100": "#ff6d00",
+        "100+": "#d50000",
+    }
     for s in sizes:
         size_buckets[_size_bucket(s)] += 1
 
     _render_bars(
-        [(f"{lbl} lines", cnt, size_colors[lbl])
-         for lbl, cnt in size_buckets.items()],
-        label_width="80px")
+        [(f"{lbl} lines", cnt, size_colors[lbl]) for lbl, cnt in size_buckets.items()],
+        label_width="80px",
+    )
 
 
 def _render_top_complex_fns(functions: list, code_map: dict):
     """Show the top-15 most complex functions with code preview."""
     st.subheader("🔥 Most Complex Functions")
-    sorted_fns = sorted(
-        functions, key=lambda f: f.complexity, reverse=True)[:15]
+    sorted_fns = sorted(functions, key=lambda f: f.complexity, reverse=True)[:15]
     for fn in sorted_fns:
-        cc_color = ("#d50000" if fn.complexity >= 15
-                    else "#ff6d00" if fn.complexity >= 8 else "#ffd600")
+        cc_color = (
+            "#d50000"
+            if fn.complexity >= 15
+            else "#ff6d00"
+            if fn.complexity >= 8
+            else "#ffd600"
+        )
         with st.expander(
             f"CC {fn.complexity}  ·  {fn.name}  ·  "
             f"{fn.file_path}:{fn.line_start} ({fn.size_lines} lines)"
         ):
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div style="display:flex; align-items:center; gap:12px;
                         padding:6px 10px; margin:2px 0; border-radius:8px;
                         background:rgba(255,255,255,0.03);
@@ -1283,10 +1306,12 @@ def _render_top_complex_fns(functions: list, code_map: dict):
                              margin-left:auto;">
                     {fn.size_lines} lines · params: {", ".join(fn.parameters) or "none"}</span>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
             code = code_map.get(
-                f"{fn.file_path}:{fn.line_start}",
-                code_map.get(fn.key, ""))
+                f"{fn.file_path}:{fn.line_start}", code_map.get(fn.key, "")
+            )
             if code:
                 st.code(code, language="python")
             else:
@@ -1296,8 +1321,7 @@ def _render_top_complex_fns(functions: list, code_map: dict):
 def _render_file_snippet(fn):
     """Fallback: load source from disk for a FunctionRecord."""
     try:
-        src = Path(fn.file_path).read_text(
-            encoding="utf-8", errors="replace")
+        src = Path(fn.file_path).read_text(encoding="utf-8", errors="replace")
         lines = src.splitlines()
         start = max(0, fn.line_start - 1)
         end = min(len(lines), start + fn.size_lines + 5)
@@ -1312,7 +1336,8 @@ def _render_complexity_tab(results: Dict[str, Any]):
     if not functions:
         st.info(
             "No functions available. Enable Smells, Duplicates, or Rustify "
-            "to scan the AST.")
+            "to scan the AST."
+        )
         return
 
     complexities = [f.complexity for f in functions]
@@ -1342,9 +1367,11 @@ def _render_complexity_tab(results: Dict[str, Any]):
 
 # ── Function Graph (Plotly) tab ──────────────────────────────────────────────
 
+
 def _layout_graph_nodes(nodes: list):
     """Position nodes in concentric rings by health category."""
     import math
+
     groups = {"healthy": [], "warning": [], "critical": []}
     for i, node in enumerate(nodes):
         groups.get(node.get("health", "healthy"), groups["healthy"]).append(i)
@@ -1372,14 +1399,19 @@ def _build_edge_trace(graph, node_x, node_y, go):
             edge_x.extend([node_x[src], node_x[dst], None])
             edge_y.extend([node_y[src], node_y[dst], None])
     return go.Scatter(
-        x=edge_x, y=edge_y, mode="lines",
+        x=edge_x,
+        y=edge_y,
+        mode="lines",
         line=dict(width=0.8, color="rgba(150,150,150,0.4)"),
-        hoverinfo="none")
+        hoverinfo="none",
+    )
 
 
 class _GraphLayout:
     """Bundle of graph + node positions for trace building."""
-    __slots__ = ('graph', 'node_x', 'node_y')
+
+    __slots__ = ("graph", "node_x", "node_y")
+
     def __init__(self, graph, node_x, node_y):
         self.graph = graph
         self.node_x = node_x
@@ -1394,24 +1426,30 @@ def _build_node_trace(layout: _GraphLayout, indices, health, go):
     xs = [node_x[i] for i in indices]
     ys = [node_y[i] for i in indices]
     labels = [graph.nodes[i]["label"] for i in indices]
-    sizes = [max(6, min(25, graph.nodes[i].get("size", 10) / 3))
-             for i in indices]
+    sizes = [max(6, min(25, graph.nodes[i].get("size", 10) / 3)) for i in indices]
     hovers = [
         f"<b>{graph.nodes[i]['label']}</b><br>"
         f"Size: {graph.nodes[i].get('size', '?')} lines<br>"
         f"Group: {graph.nodes[i].get('group', '?')}"
-        for i in indices]
+        for i in indices
+    ]
     return go.Scatter(
-        x=xs, y=ys, mode="markers+text",
+        x=xs,
+        y=ys,
+        mode="markers+text",
         name=f"{label_map[health]} ({len(indices)})",
         text=labels if len(indices) <= 40 else [""] * len(indices),
         textposition="top center",
         textfont=dict(size=8, color="#ccc"),
         marker=dict(
-            size=sizes, color=color_map[health],
+            size=sizes,
+            color=color_map[health],
             line=dict(width=1, color="rgba(255,255,255,0.3)"),
-            opacity=0.85),
-        hovertext=hovers, hoverinfo="text")
+            opacity=0.85,
+        ),
+        hovertext=hovers,
+        hoverinfo="text",
+    )
 
 
 def _build_graph_traces(graph, node_x, node_y, groups):
@@ -1456,7 +1494,8 @@ def _render_graph_tab(results: Dict[str, Any]):
     c4.metric("Dup Links", len(graph.edges))
     st.caption(
         "Nodes = functions (green/orange/red). "
-        "Edges = duplicate pairs. Hover for details.")
+        "Edges = duplicate pairs. Hover for details."
+    )
 
     if not graph.nodes:
         st.info("No function nodes to display.")
@@ -1471,17 +1510,26 @@ def _render_graph_tab(results: Dict[str, Any]):
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(14,17,23,0.8)",
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                    xanchor="center", x=0.5, font=dict(size=11)),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=11),
+        ),
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         margin=dict(l=0, r=0, t=40, b=0),
-        height=550, hovermode="closest")
+        height=550,
+        hovermode="closest",
+    )
 
     st.plotly_chart(fig, use_container_width=True, key="graph_plotly")
 
 
 # ── Auto-Rustify Pipeline tab ────────────────────────────────────────────────
+
 
 def _render_pipeline_config() -> Dict[str, Any]:
     """Pipeline configuration widgets; return config dict."""
@@ -1489,53 +1537,74 @@ def _render_pipeline_config() -> Dict[str, Any]:
     cfg1, cfg2, cfg3 = st.columns(3)
     with cfg1:
         build_mode = st.selectbox(
-            "Build mode", ["pyo3", "binary"],
+            "Build mode",
+            ["pyo3", "binary"],
             help="**pyo3** = Python extension, **binary** = standalone exe",
-            key="ar_mode")
+            key="ar_mode",
+        )
     with cfg2:
         min_score = st.slider(
-            "Min Rust score", 1.0, 30.0, 5.0, 0.5,
+            "Min Rust score",
+            1.0,
+            30.0,
+            5.0,
+            0.5,
             help="Only transpile functions scoring above this",
-            key="ar_min_score")
+            key="ar_min_score",
+        )
     with cfg3:
         max_cands = st.slider(
-            "Max candidates", 5, 100, 30,
+            "Max candidates",
+            5,
+            100,
+            30,
             help="Limit the number of functions to transpile",
-            key="ar_max_cands")
+            key="ar_max_cands",
+        )
 
     crate_name = st.text_input(
-        "Crate name", value="xray_rustified",
+        "Crate name",
+        value="xray_rustified",
         help="Name for Cargo.toml and the output library/binary",
-        key="ar_crate_name")
+        key="ar_crate_name",
+    )
 
-    return {"mode": build_mode, "min_score": min_score,
-            "max_cands": max_cands, "crate_name": crate_name}
+    return {
+        "mode": build_mode,
+        "min_score": min_score,
+        "max_cands": max_cands,
+        "crate_name": crate_name,
+    }
 
 
-def _execute_rustify_pipeline(scan_path: str, output_dir: Path,
-                              cfg: Dict[str, Any]):
+def _execute_rustify_pipeline(scan_path: str, output_dir: Path, cfg: Dict[str, Any]):
     """Run the auto-rustify pipeline with progress UI."""
     progress_bar = st.progress(0.0)
     status_text = st.empty()
 
     def _on_progress(frac: float, label: str):
         progress_bar.progress(min(frac, 1.0))
-        status_text.markdown(
-            _mono_status(f"⚙️ {label}"), unsafe_allow_html=True)
+        status_text.markdown(_mono_status(f"⚙️ {label}"), unsafe_allow_html=True)
 
     pipeline = RustifyPipeline(
-        project_dir=scan_path, output_dir=str(output_dir),
-        crate_name=cfg["crate_name"], min_score=cfg["min_score"],
-        max_candidates=cfg["max_cands"], mode=cfg["mode"])
+        project_dir=scan_path,
+        output_dir=str(output_dir),
+        crate_name=cfg["crate_name"],
+        min_score=cfg["min_score"],
+        max_candidates=cfg["max_cands"],
+        mode=cfg["mode"],
+    )
     report = pipeline.run(progress_cb=_on_progress)
 
     progress_bar.progress(1.0)
     success = report.compile_result and report.compile_result.success
-    msg = ("✅ Pipeline complete — crate compiled successfully!" if success
-           else "⚠️ Pipeline finished with issues — see details below")
+    msg = (
+        "✅ Pipeline complete — crate compiled successfully!"
+        if success
+        else "⚠️ Pipeline finished with issues — see details below"
+    )
     color = "#00c853" if success else "#ff9800"
-    status_text.markdown(
-        _mono_status(msg, color=color), unsafe_allow_html=True)
+    status_text.markdown(_mono_status(msg, color=color), unsafe_allow_html=True)
     time.sleep(0.8)
     progress_bar.empty()
 
@@ -1544,7 +1613,8 @@ def _execute_rustify_pipeline(scan_path: str, output_dir: Path,
 
 def _render_auto_rustify_tab(results: Dict[str, Any]):
     """Render the Auto-Rustify pipeline tab."""
-    st.markdown("""
+    st.markdown(
+        """
     <div style="padding:12px 16px; border-radius:12px;
                 background:rgba(17,25,40,0.6);
                 border:1px solid rgba(124,77,255,0.3); margin-bottom:1rem;">
@@ -1555,13 +1625,15 @@ def _render_auto_rustify_tab(results: Dict[str, Any]):
             End-to-end: Scan → Score → Generate tests → Transpile →
             Compile → Verify.</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     sys_profile = detect_system()
     s1, s2, s3, s4 = st.columns(4)
     s1.metric("🖥️ OS", sys_profile.os_name)
     s2.metric("🏗️ Arch", sys_profile.arch)
-    s3.metric("🎯 Target", sys_profile.rust_target.split('-')[0])
+    s3.metric("🎯 Target", sys_profile.rust_target.split("-")[0])
     s4.metric("🚀 CPU Feats", ", ".join(sys_profile.cpu_features) or "baseline")
     st.divider()
 
@@ -1573,9 +1645,7 @@ def _render_auto_rustify_tab(results: Dict[str, Any]):
 
     run_col1, run_col2 = st.columns([1, 3])
     with run_col1:
-        do_run = st.button(
-            "🚀 Run Pipeline", type="primary",
-            use_container_width=True)
+        do_run = st.button("🚀 Run Pipeline", type="primary", use_container_width=True)
     with run_col2:
         st.caption(f"Output directory: `{output_dir}`")
         st.caption("⚠️  Requires Rust toolchain (`rustup`, `cargo`).")
@@ -1597,10 +1667,14 @@ def _render_phase_timeline(phases: list):
         name = phase.get("name", "?")
         status = phase.get("status", "?")
         icon = "✅" if status == "ok" else "⚠️" if status == "no_candidates" else "❌"
-        parts = [f"{k}={v}" for k, v in phase.items()
-                 if k not in ("name", "status", "stderr")]
+        parts = [
+            f"{k}={v}"
+            for k, v in phase.items()
+            if k not in ("name", "status", "stderr")
+        ]
         detail_str = " · ".join(parts) if parts else ""
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div style="display:flex; align-items:center; gap:10px;
                     padding:4px 10px; margin:2px 0; border-radius:6px;
                     background:rgba(255,255,255,0.02);">
@@ -1610,7 +1684,9 @@ def _render_phase_timeline(phases: list):
                          color:#00d4ff;">{name}</span>
             <span style="font-size:0.75rem; opacity:0.6;">{detail_str}</span>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
 
 def _render_compile_details(compile_info: dict, phases: list):
@@ -1619,8 +1695,7 @@ def _render_compile_details(compile_info: dict, phases: list):
     cc1, cc2, cc3 = st.columns(3)
     cc1.markdown(f"**Target:** `{compile_info.get('target', '?')}`")
     cc2.markdown(f"**Duration:** {compile_info.get('duration_s', 0):.1f}s")
-    cc3.markdown(
-        f"**RUSTFLAGS:** `{compile_info.get('rustflags', 'default')}`")
+    cc3.markdown(f"**RUSTFLAGS:** `{compile_info.get('rustflags', 'default')}`")
     artefact = compile_info.get("artefact", "")
     if artefact:
         st.success(f"🎯 Artefact: `{artefact}`")
@@ -1634,27 +1709,29 @@ def _render_compile_details(compile_info: dict, phases: list):
 def _render_pipeline_metrics(report: Dict[str, Any]):
     """Render system info and top-level metrics for the pipeline report."""
     sys_info = report.get("system", {})
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div style="padding:10px 14px; border-radius:8px;
                 background:rgba(17,25,40,0.5);
                 border:1px solid rgba(255,255,255,0.06);
                 font-size:0.8rem; margin-bottom:12px;">
-        🖥️ <b>{sys_info.get('os','?')}</b> · {sys_info.get('arch','?')} ·
-        Target: <code>{sys_info.get('rust_target','?')}</code>
+        🖥️ <b>{sys_info.get("os", "?")}</b> · {sys_info.get("arch", "?")} ·
+        Target: <code>{sys_info.get("rust_target", "?")}</code>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("📄 Scanned", f"{report.get('scan_duration_s', 0):.1f}s")
-    m2.metric("🦀 Candidates",
-              f"{report.get('candidates_selected', 0)}"
-              f"/{report.get('candidates_total', 0)}")
+    m2.metric(
+        "🦀 Candidates",
+        f"{report.get('candidates_selected', 0)}/{report.get('candidates_total', 0)}",
+    )
     compile_info = report.get("compile", {})
-    m3.metric("⚙️ Compile",
-              "✅ OK" if compile_info.get("success") else "❌ Failed")
+    m3.metric("⚙️ Compile", "✅ OK" if compile_info.get("success") else "❌ Failed")
     verify_info = report.get("verify", {})
-    m4.metric("✔️ Verify",
-              "✅ OK" if verify_info.get("success") else "❌ Failed")
+    m4.metric("✔️ Verify", "✅ OK" if verify_info.get("success") else "❌ Failed")
     return compile_info, verify_info
 
 
@@ -1696,7 +1773,8 @@ def _render_pipeline_report(report: Dict[str, Any]):
         data=json.dumps(report, indent=2, default=str),
         file_name="auto_rustify_report.json",
         mime="application/json",
-        use_container_width=True)
+        use_container_width=True,
+    )
 
 
 # ── Main app ─────────────────────────────────────────────────────────────────
@@ -1710,17 +1788,15 @@ def _sidebar_analyzers() -> Dict[str, bool]:
         do_smells = st.checkbox("Smells", value=True)
         do_lint = st.checkbox("Lint", value=True)
         do_rustify = st.checkbox(
-            "🦀 Rustify", value=False,
-            help="Score functions for Rust porting")
+            "🦀 Rustify", value=False, help="Score functions for Rust porting"
+        )
     with col2:
         do_duplicates = st.checkbox(
-            "Duplicates", value=False,
-            help="Slower — finds similar functions")
+            "Duplicates", value=False, help="Slower — finds similar functions"
+        )
         do_security = st.checkbox("Security", value=True)
 
-    preset = st.radio(
-        "Presets", ["Custom", "Quick", "Full"],
-        horizontal=True, index=0)
+    preset = st.radio("Presets", ["Custom", "Quick", "Full"], horizontal=True, index=0)
     if preset == "Quick":
         do_smells, do_lint, do_security = True, True, True
         do_duplicates, do_rustify = False, False
@@ -1729,8 +1805,11 @@ def _sidebar_analyzers() -> Dict[str, bool]:
         do_duplicates = do_rustify = True
 
     return {
-        "smells": do_smells, "duplicates": do_duplicates,
-        "lint": do_lint, "security": do_security, "rustify": do_rustify,
+        "smells": do_smells,
+        "duplicates": do_duplicates,
+        "lint": do_lint,
+        "security": do_security,
+        "rustify": do_rustify,
     }
 
 
@@ -1739,20 +1818,18 @@ def _sidebar_thresholds() -> Dict[str, int]:
     st.markdown("##### ⚙️ Thresholds")
     with st.expander("Adjust sensitivity", expanded=False):
         th_long = st.slider(
-            "Long function (lines)",
-            20, 200, SMELL_THRESHOLDS["long_function"])
+            "Long function (lines)", 20, 200, SMELL_THRESHOLDS["long_function"]
+        )
         th_complex = st.slider(
-            "High complexity (CC)",
-            5, 40, SMELL_THRESHOLDS["high_complexity"])
+            "High complexity (CC)", 5, 40, SMELL_THRESHOLDS["high_complexity"]
+        )
         th_nesting = st.slider(
-            "Deep nesting (levels)",
-            2, 10, SMELL_THRESHOLDS["deep_nesting"])
+            "Deep nesting (levels)", 2, 10, SMELL_THRESHOLDS["deep_nesting"]
+        )
         th_params = st.slider(
-            "Too many params",
-            3, 15, SMELL_THRESHOLDS["too_many_params"])
-        th_god = st.slider(
-            "God class (methods)",
-            8, 30, SMELL_THRESHOLDS["god_class"])
+            "Too many params", 3, 15, SMELL_THRESHOLDS["too_many_params"]
+        )
+        th_god = st.slider("God class (methods)", 8, 30, SMELL_THRESHOLDS["god_class"])
     return {
         **SMELL_THRESHOLDS,
         "long_function": th_long,
@@ -1766,7 +1843,8 @@ def _sidebar_thresholds() -> Dict[str, int]:
 def _render_sidebar() -> Dict[str, Any]:
     """Build the entire sidebar; return scan configuration dict."""
     with st.sidebar:
-        st.markdown("""
+        st.markdown(
+            """
         <div style="text-align:center; padding: 0.5rem 0 1rem 0;">
             <p style="font-family:'Cascadia Code','Consolas',monospace;
                       font-size:1.6rem; font-weight:700; margin:0;
@@ -1777,23 +1855,28 @@ def _render_sidebar() -> Dict[str, Any]:
                       letter-spacing:3px; text-transform:uppercase;">
                 Code Scanner</p>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
         st.caption(f"v{__version__}")
         st.divider()
 
         # Directory picker
         st.markdown("##### 📁 Target")
         scan_path = st.text_input(
-            "Path to scan", value=str(Path.cwd()),
+            "Path to scan",
+            value=str(Path.cwd()),
             help="Absolute path to the project root",
-            label_visibility="collapsed")
+            label_visibility="collapsed",
+        )
         exclude_str = st.text_input(
-            "Exclude dirs (comma-sep)", value="",
+            "Exclude dirs (comma-sep)",
+            value="",
             help="e.g. venv,node_modules,__pycache__",
             label_visibility="collapsed",
-            placeholder="Exclude: venv, node_modules, ...")
-        exclude_dirs = [d.strip() for d in exclude_str.split(",")
-                        if d.strip()]
+            placeholder="Exclude: venv, node_modules, ...",
+        )
+        exclude_dirs = [d.strip() for d in exclude_str.split(",") if d.strip()]
         st.divider()
 
         modes = _sidebar_analyzers()
@@ -1803,26 +1886,36 @@ def _render_sidebar() -> Dict[str, Any]:
         st.divider()
 
         run_clicked = st.button(
-            "⚡ Run X-Ray Scan", use_container_width=True, type="primary")
+            "⚡ Run X-Ray Scan", use_container_width=True, type="primary"
+        )
 
         st.divider()
-        st.markdown("""
+        st.markdown(
+            """
         <div style="text-align:center; opacity:0.3; font-size:0.65rem;
                     font-family:'Cascadia Code','Consolas',monospace;">
             AST · Ruff · Bandit · Rust<br>
             github.com/GeoHaber/X_Ray
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     return {
-        "scan_path": scan_path, "exclude_dirs": exclude_dirs,
-        "modes": modes, "thresholds": thresholds, "run": run_clicked,
+        "scan_path": scan_path,
+        "exclude_dirs": exclude_dirs,
+        "modes": modes,
+        "thresholds": thresholds,
+        "run": run_clicked,
     }
 
 
-def _execute_scan_ui(root: Path, modes: Dict[str, bool],
-                     exclude_dirs: List[str],
-                     thresholds: Dict[str, int]):
+def _execute_scan_ui(
+    root: Path,
+    modes: Dict[str, bool],
+    exclude_dirs: List[str],
+    thresholds: Dict[str, int],
+):
     """Run the scan with a live progress bar; store results in session."""
     if not any(modes.values()):
         st.warning("Please select at least one analyzer.")
@@ -1830,16 +1923,13 @@ def _execute_scan_ui(root: Path, modes: Dict[str, bool],
 
     progress_bar = st.progress(0.0)
     status_text = st.empty()
-    status_text.markdown(
-        _mono_status("⚡ Initialising scan…"), unsafe_allow_html=True)
+    status_text.markdown(_mono_status("⚡ Initialising scan…"), unsafe_allow_html=True)
 
     def _on_progress(frac: float, label: str):
         progress_bar.progress(min(frac, 1.0))
-        status_text.markdown(
-            _mono_status(f"⚡ {label}"), unsafe_allow_html=True)
+        status_text.markdown(_mono_status(f"⚡ {label}"), unsafe_allow_html=True)
 
-    results = _run_scan(root, modes, exclude_dirs, thresholds,
-                        progress_cb=_on_progress)
+    results = _run_scan(root, modes, exclude_dirs, thresholds, progress_cb=_on_progress)
 
     progress_bar.progress(1.0)
     meta = results["meta"]
@@ -1848,8 +1938,10 @@ def _execute_scan_ui(root: Path, modes: Dict[str, bool],
             f"✅ Scan complete — {meta.get('files', 0)} files, "
             f"{meta.get('functions', 0)} functions "
             f"in {meta.get('duration', 0):.1f}s",
-            color="#00c853"),
-        unsafe_allow_html=True)
+            color="#00c853",
+        ),
+        unsafe_allow_html=True,
+    )
     time.sleep(0.6)
     progress_bar.empty()
     status_text.empty()
@@ -1860,7 +1952,8 @@ def _execute_scan_ui(root: Path, modes: Dict[str, bool],
 
 def _render_landing():
     """Display the landing page when no scan results exist yet."""
-    st.markdown("""
+    st.markdown(
+        """
     <div style="text-align:center; padding:2rem 1.5rem;
                 border: 1px solid rgba(0,212,255,0.12);
                 border-radius:16px; margin-top:1rem;
@@ -1874,7 +1967,9 @@ def _render_landing():
         <p style="opacity:0.45; font-size:0.8rem; max-width:500px; margin:0.5rem auto 0;">
             AST Smells · Ruff Lint · Bandit Security · Duplicate Detection · Rust Advisor</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     st.write("")
     g1, g2, g3 = st.columns(3)
@@ -1888,24 +1983,27 @@ def _render_landing():
     st.write("")
     st.caption(
         "Quality grades: A+ (97) · A (93) · B+ (87) · B (83) "
-        "· C+ (77) · C (73) · D (63) · F (<60)")
+        "· C+ (77) · C (73) · D (63) · F (<60)"
+    )
 
 
 _TAB_RENDERERS = [
-    ("🔍 Smells",      "smells",   lambda r: _render_smells_tab(r)),
-    ("📋 Duplicates",  "duplicates", lambda r: _render_duplicates_tab(r)),
-    ("🧹 Lint",        "lint",     lambda r: _render_lint_tab(r)),
-    ("🔒 Security",    "security", lambda r: _render_security_tab(r)),
-    ("🦀 Rustify",     "rustify",  lambda r: _render_rustify_tab(r)),
+    ("🔍 Smells", "smells", lambda r: _render_smells_tab(r)),
+    ("📋 Duplicates", "duplicates", lambda r: _render_duplicates_tab(r)),
+    ("🧹 Lint", "lint", lambda r: _render_lint_tab(r)),
+    ("🔒 Security", "security", lambda r: _render_security_tab(r)),
+    ("🦀 Rustify", "rustify", lambda r: _render_rustify_tab(r)),
 ]
 
 
 def _collect_extra_tabs(results: Dict[str, Any]) -> List[tuple]:
     """Collect extra tabs (heatmap, complexity, graph, auto-rustify)."""
     extras: List[tuple] = []
-    has_issues = (results.get("_smell_issues")
-                  or results.get("_lint_issues")
-                  or results.get("_sec_issues"))
+    has_issues = (
+        results.get("_smell_issues")
+        or results.get("_lint_issues")
+        or results.get("_sec_issues")
+    )
     if has_issues:
         extras.append(("🔥 Heatmap", lambda r: _render_heatmap_tab(r)))
     if results.get("_functions"):
@@ -1947,8 +2045,12 @@ def _render_results_header(results: Dict[str, Any]):
         _render_stats_bar(meta)
         breakdown = grade.get("breakdown", {})
         if breakdown:
-            labels = {"smells": "Smells", "duplicates": "Duplicates",
-                      "lint": "Lint", "security": "Security"}
+            labels = {
+                "smells": "Smells",
+                "duplicates": "Duplicates",
+                "lint": "Lint",
+                "security": "Security",
+            }
             parts = [
                 f"{labels.get(k, k)} <b>-{d.get('penalty', 0):.0f}</b>"
                 for k, d in breakdown.items()
@@ -1958,7 +2060,8 @@ def _render_results_header(results: Dict[str, Any]):
                 st.markdown(
                     f"<p style='font-size:0.78rem; opacity:0.55; "
                     f"margin-top:8px;'>Penalties: {' · '.join(parts)}</p>",
-                    unsafe_allow_html=True)
+                    unsafe_allow_html=True,
+                )
     st.divider()
 
 
@@ -1967,8 +2070,7 @@ def _render_export(results: Dict[str, Any]):
     st.divider()
     st.markdown("##### 📥 Export")
 
-    export_data = {
-        k: v for k, v in results.items() if not k.startswith("_")}
+    export_data = {k: v for k, v in results.items() if not k.startswith("_")}
     export_data["scan_path"] = st.session_state.get("scan_path", "")
 
     col_a, col_b = st.columns(2)
@@ -1978,14 +2080,16 @@ def _render_export(results: Dict[str, Any]):
             data=json.dumps(export_data, indent=2, default=str),
             file_name="xray_report.json",
             mime="application/json",
-            use_container_width=True)
+            use_container_width=True,
+        )
     with col_b:
         st.download_button(
             "⬇️ Markdown Report",
             data=_build_markdown_summary(results),
             file_name="xray_report.md",
             mime="text/markdown",
-            use_container_width=True)
+            use_container_width=True,
+        )
 
     error_list = results.get("meta", {}).get("error_list", [])
     if error_list:
@@ -2006,8 +2110,8 @@ def main():
             st.error(f"❌ Not a valid directory: `{config['scan_path']}`")
             return
         _execute_scan_ui(
-            root, config["modes"],
-            config["exclude_dirs"], config["thresholds"])
+            root, config["modes"], config["exclude_dirs"], config["thresholds"]
+        )
 
     if "results" not in st.session_state:
         _render_landing()
@@ -2024,15 +2128,20 @@ def _md_header(results: Dict[str, Any]) -> List[str]:
     grade = results.get("grade", {})
     meta = results.get("meta", {})
     return [
-        "# X-Ray Code Quality Report", "",
+        "# X-Ray Code Quality Report",
+        "",
         f"**Score:** {grade.get('score', '?')}/100  "
-        f"**Grade:** {grade.get('letter', '?')}", "",
-        f"**Path:** `{results.get('scan_path', '?')}`", "",
-        "| Metric | Value |", "|--------|-------|",
+        f"**Grade:** {grade.get('letter', '?')}",
+        "",
+        f"**Path:** `{results.get('scan_path', '?')}`",
+        "",
+        "| Metric | Value |",
+        "|--------|-------|",
         f"| Files scanned | {meta.get('files', 0)} |",
         f"| Functions | {meta.get('functions', 0)} |",
         f"| Classes | {meta.get('classes', 0)} |",
-        f"| Duration | {meta.get('duration', 0):.1f}s |", "",
+        f"| Duration | {meta.get('duration', 0):.1f}s |",
+        "",
     ]
 
 
@@ -2041,9 +2150,12 @@ def _md_breakdown(grade: dict) -> List[str]:
     breakdown = grade.get("breakdown", {})
     if not breakdown:
         return []
-    lines = ["## Penalty Breakdown", "",
-             "| Category | Penalty | Details |",
-             "|----------|---------|---------|"]
+    lines = [
+        "## Penalty Breakdown",
+        "",
+        "| Category | Penalty | Details |",
+        "|----------|---------|---------|",
+    ]
     for key, detail in breakdown.items():
         penalty = detail.get("penalty", 0)
         extras = {k: v for k, v in detail.items() if k != "penalty"}
@@ -2053,8 +2165,9 @@ def _md_breakdown(grade: dict) -> List[str]:
     return lines
 
 
-def _md_section(results: Dict[str, Any], key: str, title: str,
-                fields: List[tuple]) -> List[str]:
+def _md_section(
+    results: Dict[str, Any], key: str, title: str, fields: List[tuple]
+) -> List[str]:
     """Build a section with title and bullet-point fields."""
     data = results.get(key, {})
     if not data or isinstance(data, str) or data.get("error"):
@@ -2070,19 +2183,58 @@ def _build_markdown_summary(results: Dict[str, Any]) -> str:
     """Build a Markdown summary of scan results."""
     lines = _md_header(results)
     lines.extend(_md_breakdown(results.get("grade", {})))
-    lines.extend(_md_section(results, "smells", "Code Smells", [
-        ("Total", "total"), ("Critical", "critical"),
-        ("Warning", "warning"), ("Info", "info")]))
-    lines.extend(_md_section(results, "duplicates", "Duplicates", [
-        ("Groups", "total_groups"),
-        ("Functions involved", "total_functions_involved")]))
-    lines.extend(_md_section(results, "lint", "Lint (Ruff)", [
-        ("Total", "total"), ("Auto-fixable", "fixable")]))
-    lines.extend(_md_section(results, "security", "Security (Bandit)", [
-        ("Total", "total"), ("High", "critical"), ("Medium", "warning")]))
-    lines.extend(_md_section(results, "rustify", "Rustify Candidates", [
-        ("Scored", "total_scored"), ("Pure", "pure_count"),
-        ("Top score", "top_score")]))
+    lines.extend(
+        _md_section(
+            results,
+            "smells",
+            "Code Smells",
+            [
+                ("Total", "total"),
+                ("Critical", "critical"),
+                ("Warning", "warning"),
+                ("Info", "info"),
+            ],
+        )
+    )
+    lines.extend(
+        _md_section(
+            results,
+            "duplicates",
+            "Duplicates",
+            [
+                ("Groups", "total_groups"),
+                ("Functions involved", "total_functions_involved"),
+            ],
+        )
+    )
+    lines.extend(
+        _md_section(
+            results,
+            "lint",
+            "Lint (Ruff)",
+            [("Total", "total"), ("Auto-fixable", "fixable")],
+        )
+    )
+    lines.extend(
+        _md_section(
+            results,
+            "security",
+            "Security (Bandit)",
+            [("Total", "total"), ("High", "critical"), ("Medium", "warning")],
+        )
+    )
+    lines.extend(
+        _md_section(
+            results,
+            "rustify",
+            "Rustify Candidates",
+            [
+                ("Scored", "total_scored"),
+                ("Pure", "pure_count"),
+                ("Top score", "top_score"),
+            ],
+        )
+    )
     lines.append("---")
     lines.append(f"*Generated by X-Ray v{__version__}*")
     return "\n".join(lines)

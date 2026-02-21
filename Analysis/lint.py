@@ -21,17 +21,17 @@ from Analysis._analyzer_base import BaseStaticAnalyzer
 # Ruff rule code → X-Ray severity mapping
 _SEVERITY_MAP: Dict[str, str] = {
     # Fatal / likely bugs → CRITICAL
-    "F811": Severity.CRITICAL,   # redefined-while-unused
-    "E999": Severity.CRITICAL,   # syntax-error
-    "F821": Severity.CRITICAL,   # undefined-name
+    "F811": Severity.CRITICAL,  # redefined-while-unused
+    "E999": Severity.CRITICAL,  # syntax-error
+    "F821": Severity.CRITICAL,  # undefined-name
     # Hygiene issues → WARNING
-    "F401": Severity.WARNING,    # unused-import
-    "F841": Severity.WARNING,    # unused-variable
-    "E722": Severity.WARNING,    # bare-except
-    "E741": Severity.WARNING,    # ambiguous-variable-name
-    "E402": Severity.WARNING,    # module-import-not-at-top
-    "F541": Severity.INFO,       # f-string-missing-placeholders
-    "E701": Severity.INFO,       # multiple-statements-on-one-line
+    "F401": Severity.WARNING,  # unused-import
+    "F841": Severity.WARNING,  # unused-variable
+    "E722": Severity.WARNING,  # bare-except
+    "E741": Severity.WARNING,  # ambiguous-variable-name
+    "E402": Severity.WARNING,  # module-import-not-at-top
+    "F541": Severity.INFO,  # f-string-missing-placeholders
+    "E701": Severity.INFO,  # multiple-statements-on-one-line
 }
 
 
@@ -52,18 +52,31 @@ class LintAnalyzer(BaseStaticAnalyzer):
 
     # -- overrides ---------------------------------------------------------
 
-    def _build_command(self, root: Path,
-                       exclude: Optional[List[str]]) -> List[str]:
+    def _build_command(self, root: Path, exclude: Optional[List[str]]) -> List[str]:
         """Assemble the ruff CLI command list."""
         cmd = [
-            self._tool_path, "check", str(root),
-            "--output-format=json", "--no-fix",
+            self._tool_path,
+            "check",
+            str(root),
+            "--output-format=json",
+            "--no-fix",
         ]
         auto_exclude = [
-            ".venv", "venv", ".env", "__pycache__", "node_modules",
-            ".git", "target", ".mypy_cache", ".pytest_cache",
-            "dist", "build", ".eggs", "*.egg-info",
-            "_scratch", ".github",
+            ".venv",
+            "venv",
+            ".env",
+            "__pycache__",
+            "node_modules",
+            ".git",
+            "target",
+            ".mypy_cache",
+            ".pytest_cache",
+            "dist",
+            "build",
+            ".eggs",
+            "*.egg-info",
+            "_scratch",
+            ".github",
         ]
         all_exclude = list(auto_exclude)
         if exclude:

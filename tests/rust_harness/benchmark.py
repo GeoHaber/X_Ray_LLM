@@ -12,6 +12,7 @@ Usage:
     python tests/rust_harness/benchmark.py --rust-bin ./target/release/xray
     python tests/rust_harness/benchmark.py --rust-bin xray.exe --iterations 10 --project C:\\code\\big
 """
+
 from __future__ import annotations
 
 import argparse
@@ -38,6 +39,7 @@ FIXTURES_DIR = HARNESS_DIR / "fixtures"
 # ─────────────────────────────────────────────────────────────────────────────
 #  Data structures
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class TimingResult:
@@ -109,6 +111,7 @@ class BenchmarkSuite:
 #  Python benchmark runner
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _run_python_once(scan_path: Path) -> tuple[float, dict]:
     """Run Python X-Ray once, return (elapsed_ms, report)."""
     from x_ray_claude import scan_codebase  # type: ignore
@@ -143,7 +146,7 @@ def bench_python(scan_path: Path, iterations: int, warmup: int = 1) -> TimingRes
     for i in range(iterations):
         elapsed, _ = _run_python_once(scan_path)
         result.times_ms.append(elapsed)
-        sys.stdout.write(f"\r    Python: {i+1}/{iterations}")
+        sys.stdout.write(f"\r    Python: {i + 1}/{iterations}")
         sys.stdout.flush()
     print()
 
@@ -154,19 +157,21 @@ def bench_python(scan_path: Path, iterations: int, warmup: int = 1) -> TimingRes
 #  Rust benchmark runner
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _run_rust_once(rust_bin: str, scan_path: Path,
-                   timeout: int = 120) -> tuple[float, dict]:
+
+def _run_rust_once(
+    rust_bin: str, scan_path: Path, timeout: int = 120
+) -> tuple[float, dict]:
     """Run Rust X-Ray once, return (elapsed_ms, report)."""
-    with tempfile.NamedTemporaryFile(
-        suffix=".json", delete=False, mode="w"
-    ) as tmp:
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tmp:
         report_path = tmp.name
 
     cmd = [
         rust_bin,
-        "--path", str(scan_path),
+        "--path",
+        str(scan_path),
         "--full-scan",
-        "--report", report_path,
+        "--report",
+        report_path,
         "--quiet",
     ]
 
@@ -194,20 +199,29 @@ def _run_rust_once(rust_bin: str, scan_path: Path,
 
 def _measure_linux_rss(rust_bin: str, scan_path: Path) -> float:
     """Measure peak RSS on Linux via /usr/bin/time -v."""
-    with tempfile.NamedTemporaryFile(
-        suffix=".json", delete=False, mode="w"
-    ) as tmp:
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tmp:
         report_path = tmp.name
     cmd = [
-        "/usr/bin/time", "-v",
-        rust_bin, "--path", str(scan_path),
-        "--full-scan", "--report", report_path, "--quiet",
+        "/usr/bin/time",
+        "-v",
+        rust_bin,
+        "--path",
+        str(scan_path),
+        "--full-scan",
+        "--report",
+        report_path,
+        "--quiet",
     ]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         rss_line = next(
-            (line for line in proc.stderr.splitlines()
-             if "Maximum resident set size" in line), None)
+            (
+                line
+                for line in proc.stderr.splitlines()
+                if "Maximum resident set size" in line
+            ),
+            None,
+        )
         if rss_line:
             return float(rss_line.split(":")[-1].strip())
     except Exception:
@@ -219,21 +233,21 @@ def _measure_linux_rss(rust_bin: str, scan_path: Path) -> float:
 
 def _measure_windows_rss(rust_bin: str, scan_path: Path) -> float:
     """Measure peak working set on Windows via PowerShell."""
-    with tempfile.NamedTemporaryFile(
-        suffix=".json", delete=False, mode="w"
-    ) as tmp:
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tmp:
         report_path = tmp.name
     ps_cmd = (
         f'$p = Start-Process -FilePath "{rust_bin}" '
         f'-ArgumentList "--path","{scan_path}","--full-scan",'
         f'"--report","{report_path}","--quiet" '
-        f'-PassThru -NoNewWindow -Wait; '
-        f'$p.PeakWorkingSet64 / 1024'
+        f"-PassThru -NoNewWindow -Wait; "
+        f"$p.PeakWorkingSet64 / 1024"
     )
     try:
         proc = subprocess.run(
             ["powershell", "-Command", ps_cmd],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         return float(proc.stdout.strip())
     except Exception:
@@ -253,12 +267,14 @@ def _get_rust_peak_memory(rust_bin: str, scan_path: Path) -> float:
     Delegates to platform-specific helpers; falls back to 0.
     """
     import platform
+
     measurer = _RSS_MEASURERS.get(platform.system())
     return measurer(rust_bin, scan_path) if measurer else 0.0
 
 
-def bench_rust(rust_bin: str, scan_path: Path,
-               iterations: int, warmup: int = 1) -> TimingResult:
+def bench_rust(
+    rust_bin: str, scan_path: Path, iterations: int, warmup: int = 1
+) -> TimingResult:
     """Benchmark the Rust implementation."""
     result = TimingResult()
 
@@ -273,7 +289,7 @@ def bench_rust(rust_bin: str, scan_path: Path,
     for i in range(iterations):
         elapsed, _ = _run_rust_once(rust_bin, scan_path)
         result.times_ms.append(elapsed)
-        sys.stdout.write(f"\r    Rust:   {i+1}/{iterations}")
+        sys.stdout.write(f"\r    Rust:   {i + 1}/{iterations}")
         sys.stdout.flush()
     print()
 
@@ -284,38 +300,51 @@ def bench_rust(rust_bin: str, scan_path: Path,
 #  Report
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def print_benchmark_report(suites: List[BenchmarkSuite]):
     """Print pretty benchmark comparison table."""
-    print(f"\n  {'='*72}")
+    print(f"\n  {'=' * 72}")
     print("    PERFORMANCE BENCHMARK: Python vs Rust")
-    print(f"  {'='*72}")
+    print(f"  {'=' * 72}")
 
     for s in suites:
-        print(f"\n    --- {s.name} ({s.file_count} files, {s.function_count} funcs) ---")
+        print(
+            f"\n    --- {s.name} ({s.file_count} files, {s.function_count} funcs) ---"
+        )
         print(f"    {'Metric':<20s} {'Python':>12s} {'Rust':>12s} {'Factor':>10s}")
-        print(f"    {'-'*54}")
-        print(f"    {'Mean time':.<20s} {s.python.mean:>10.1f}ms {s.rust.mean:>10.1f}ms "
-              f"{s.speedup_mean:>8.1f}x")
-        print(f"    {'Median time':.<20s} {s.python.median:>10.1f}ms {s.rust.median:>10.1f}ms "
-              f"{s.speedup_median:>8.1f}x")
+        print(f"    {'-' * 54}")
+        print(
+            f"    {'Mean time':.<20s} {s.python.mean:>10.1f}ms {s.rust.mean:>10.1f}ms "
+            f"{s.speedup_mean:>8.1f}x"
+        )
+        print(
+            f"    {'Median time':.<20s} {s.python.median:>10.1f}ms {s.rust.median:>10.1f}ms "
+            f"{s.speedup_median:>8.1f}x"
+        )
         print(f"    {'p95 time':.<20s} {s.python.p95:>10.1f}ms {s.rust.p95:>10.1f}ms")
-        print(f"    {'Min / Max':.<20s} "
-              f"{s.python.min:>5.0f}/{s.python.max:<5.0f}ms "
-              f"{s.rust.min:>5.0f}/{s.rust.max:<5.0f}ms")
+        print(
+            f"    {'Min / Max':.<20s} "
+            f"{s.python.min:>5.0f}/{s.python.max:<5.0f}ms "
+            f"{s.rust.min:>5.0f}/{s.rust.max:<5.0f}ms"
+        )
         if s.python.peak_memory_kb > 0 or s.rust.peak_memory_kb > 0:
-            print(f"    {'Peak memory':.<20s} "
-                  f"{s.python.peak_memory_kb:>9.0f}KB {s.rust.peak_memory_kb:>9.0f}KB "
-                  f"{s.memory_reduction*100:>7.0f}% less")
+            print(
+                f"    {'Peak memory':.<20s} "
+                f"{s.python.peak_memory_kb:>9.0f}KB {s.rust.peak_memory_kb:>9.0f}KB "
+                f"{s.memory_reduction * 100:>7.0f}% less"
+            )
 
-    print(f"\n  {'='*72}")
+    print(f"\n  {'=' * 72}")
 
     # Aggregate
     if len(suites) > 1:
         total_py = sum(s.python.mean for s in suites)
         total_rs = sum(s.rust.mean for s in suites)
         if total_rs > 0:
-            print(f"    Overall speedup: {total_py / total_rs:.1f}x (all suites combined)")
-        print(f"  {'='*72}")
+            print(
+                f"    Overall speedup: {total_py / total_rs:.1f}x (all suites combined)"
+            )
+        print(f"  {'=' * 72}")
     print()
 
 
@@ -326,35 +355,37 @@ def save_benchmark_json(suites: List[BenchmarkSuite], output_path: Path):
         "suites": [],
     }
     for s in suites:
-        data["suites"].append({
-            "name": s.name,
-            "path": str(s.path),
-            "file_count": s.file_count,
-            "function_count": s.function_count,
-            "python": {
-                "mean_ms": s.python.mean,
-                "median_ms": s.python.median,
-                "p95_ms": s.python.p95,
-                "min_ms": s.python.min,
-                "max_ms": s.python.max,
-                "stdev_ms": s.python.stdev,
-                "peak_memory_kb": s.python.peak_memory_kb,
-                "iterations": len(s.python.times_ms),
-            },
-            "rust": {
-                "mean_ms": s.rust.mean,
-                "median_ms": s.rust.median,
-                "p95_ms": s.rust.p95,
-                "min_ms": s.rust.min,
-                "max_ms": s.rust.max,
-                "stdev_ms": s.rust.stdev,
-                "peak_memory_kb": s.rust.peak_memory_kb,
-                "iterations": len(s.rust.times_ms),
-            },
-            "speedup_mean": s.speedup_mean,
-            "speedup_median": s.speedup_median,
-            "memory_reduction": s.memory_reduction,
-        })
+        data["suites"].append(
+            {
+                "name": s.name,
+                "path": str(s.path),
+                "file_count": s.file_count,
+                "function_count": s.function_count,
+                "python": {
+                    "mean_ms": s.python.mean,
+                    "median_ms": s.python.median,
+                    "p95_ms": s.python.p95,
+                    "min_ms": s.python.min,
+                    "max_ms": s.python.max,
+                    "stdev_ms": s.python.stdev,
+                    "peak_memory_kb": s.python.peak_memory_kb,
+                    "iterations": len(s.python.times_ms),
+                },
+                "rust": {
+                    "mean_ms": s.rust.mean,
+                    "median_ms": s.rust.median,
+                    "p95_ms": s.rust.p95,
+                    "min_ms": s.rust.min,
+                    "max_ms": s.rust.max,
+                    "stdev_ms": s.rust.stdev,
+                    "peak_memory_kb": s.rust.peak_memory_kb,
+                    "iterations": len(s.rust.times_ms),
+                },
+                "speedup_mean": s.speedup_mean,
+                "speedup_median": s.speedup_median,
+                "memory_reduction": s.memory_reduction,
+            }
+        )
 
     output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     print(f"  Saved benchmark JSON to: {output_path}")
@@ -363,6 +394,7 @@ def save_benchmark_json(suites: List[BenchmarkSuite], output_path: Path):
 # ─────────────────────────────────────────────────────────────────────────────
 #  Main
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _count_functions_in_files(py_files: List[Path]) -> int:
     """Count approximate function definitions in a list of Python files."""
@@ -389,7 +421,8 @@ def _bench_fixtures_suite(args) -> BenchmarkSuite:
     suite.python = bench_python(FIXTURES_DIR, args.iterations, warmup=args.warmup)
     if not args.python_only:
         suite.rust = bench_rust(
-            args.rust_bin, FIXTURES_DIR, args.iterations, warmup=args.warmup)
+            args.rust_bin, FIXTURES_DIR, args.iterations, warmup=args.warmup
+        )
     return suite
 
 
@@ -402,8 +435,7 @@ def _bench_project_suite(args) -> BenchmarkSuite | None:
         print(f"  WARN: Project path not found: {args.project}")
         return None
 
-    suite = BenchmarkSuite(
-        name=f"project ({project_path.name})", path=project_path)
+    suite = BenchmarkSuite(name=f"project ({project_path.name})", path=project_path)
 
     all_py = list(project_path.rglob("*.py"))
     suite.file_count = len(all_py)
@@ -416,7 +448,8 @@ def _bench_project_suite(args) -> BenchmarkSuite | None:
     suite.python = bench_python(project_path, args.iterations, warmup=args.warmup)
     if not args.python_only:
         suite.rust = bench_rust(
-            args.rust_bin, project_path, args.iterations, warmup=args.warmup)
+            args.rust_bin, project_path, args.iterations, warmup=args.warmup
+        )
     return suite
 
 
@@ -424,16 +457,30 @@ def main():
     """Run the Rust vs Python performance benchmark suite."""
     parser = argparse.ArgumentParser(description="Benchmark Python vs Rust X-Ray")
     parser.add_argument("--rust-bin", required=True, help="Path to Rust binary")
-    parser.add_argument("--iterations", "-n", type=int, default=5,
-                        help="Number of timed iterations (default: 5)")
-    parser.add_argument("--warmup", type=int, default=2,
-                        help="Warmup iterations (default: 2)")
-    parser.add_argument("--project", type=str, default=None,
-                        help="Additional real-world project path to benchmark")
-    parser.add_argument("--output", type=str, default=None,
-                        help="Save JSON results to this path")
-    parser.add_argument("--python-only", action="store_true",
-                        help="Only run Python benchmarks (baseline)")
+    parser.add_argument(
+        "--iterations",
+        "-n",
+        type=int,
+        default=5,
+        help="Number of timed iterations (default: 5)",
+    )
+    parser.add_argument(
+        "--warmup", type=int, default=2, help="Warmup iterations (default: 2)"
+    )
+    parser.add_argument(
+        "--project",
+        type=str,
+        default=None,
+        help="Additional real-world project path to benchmark",
+    )
+    parser.add_argument(
+        "--output", type=str, default=None, help="Save JSON results to this path"
+    )
+    parser.add_argument(
+        "--python-only",
+        action="store_true",
+        help="Only run Python benchmarks (baseline)",
+    )
     args = parser.parse_args()
 
     suites: list[BenchmarkSuite] = []

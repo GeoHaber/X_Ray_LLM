@@ -1,31 +1,29 @@
-
-
 __version__ = "5.0.0"
 
 # Safe separator: always ASCII dash — renders correctly on every terminal/console
 SEP = "-"
 
 BANNER = f"""
-{'='*64}
+{"=" * 64}
   X-RAY Claude v{__version__} — Unified Code Quality Scanner
   AST Smells + Ruff Lint + Bandit Security
-{'='*64}
+{"=" * 64}
 """
 
 # Thresholds (tunable)
 SMELL_THRESHOLDS = {
-    "long_function": 60,        # lines
+    "long_function": 60,  # lines
     "very_long_function": 120,  # lines → critical
-    "deep_nesting": 4,          # levels
-    "very_deep_nesting": 6,     # levels → critical
-    "high_complexity": 10,      # cyclomatic
-    "very_high_complexity": 20, # cyclomatic → critical
-    "too_many_params": 6,       # parameters
-    "god_class": 15,            # methods
-    "large_class": 500,         # lines
+    "deep_nesting": 4,  # levels
+    "very_deep_nesting": 6,  # levels → critical
+    "high_complexity": 10,  # cyclomatic
+    "very_high_complexity": 20,  # cyclomatic → critical
+    "too_many_params": 6,  # parameters
+    "god_class": 15,  # methods
+    "large_class": 500,  # lines
     "missing_docstring_size": 15,  # only flag if function > N lines
-    "too_many_returns": 5,      # return statements
-    "too_many_branches": 8,     # if/elif branches
+    "too_many_returns": 5,  # return statements
+    "too_many_branches": 8,  # if/elif branches
 }
 
 # LLM Settings (Centralized — overridden by xray_settings.json if present)
@@ -43,6 +41,7 @@ def load_llm_config():
     """Merge LLM_CONFIG with persisted settings from xray_settings.json."""
     try:
         from .llm_manager import load_settings
+
         settings = load_settings()
         llm = settings.get("llm", {})
         if llm.get("server_url"):
@@ -60,19 +59,43 @@ def load_llm_config():
     except Exception:
         pass  # settings file doesn't exist yet — use defaults
 
-_ALWAYS_SKIP = frozenset({
-    ".git", ".hg", ".svn", "__pycache__", ".mypy_cache", ".pytest_cache",
-    ".tox", ".nox", ".eggs", "node_modules",
-    "venv", ".venv", "env", ".env",
-    "site-packages", "dist-packages",
-    "_archive", "_Old", "_old", "_bin",
-    "_scratch", ".github",
-    "portable", "target",
-    "build_exe", "build_web",
-    "X_Ray_Desktop", "X_Ray_Standalone", "X_Ray_Rust_Full",
-})
+
+_ALWAYS_SKIP = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".tox",
+        ".nox",
+        ".eggs",
+        "node_modules",
+        "venv",
+        ".venv",
+        "env",
+        ".env",
+        "site-packages",
+        "dist-packages",
+        "_archive",
+        "_Old",
+        "_old",
+        "_bin",
+        "_scratch",
+        ".github",
+        "portable",
+        "target",
+        "build_exe",
+        "build_web",
+        "X_Ray_Desktop",
+        "X_Ray_Standalone",
+        "X_Ray_Rust_Full",
+    }
+)
 
 import builtins as _builtins_mod  # noqa: E402
+
 _BUILTIN_NAMES = frozenset(dir(_builtins_mod))
 
 _STOP_WORDS = frozenset(

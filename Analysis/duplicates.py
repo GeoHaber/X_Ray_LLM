@@ -1,4 +1,3 @@
-
 from typing import List, Dict, Set, Tuple, Any
 import asyncio
 from collections import defaultdict, Counter
@@ -8,16 +7,22 @@ from Core.types import FunctionRecord, DuplicateGroup
 from Core.utils import logger
 from Core.inference import LLMHelper, _llm_enrich_one
 from Analysis.similarity import (
-    tokenize, _term_freq, cosine_similarity, code_similarity,
-    semantic_similarity, _HAS_RUST
+    tokenize,
+    _term_freq,
+    cosine_similarity,
+    code_similarity,
+    semantic_similarity,
+    _HAS_RUST,
 )
+
 if _HAS_RUST:
-     try:
-         import x_ray_core as _rust_core
-         if not hasattr(_rust_core, "prefilter_parallel"):
-             _HAS_RUST = False
-     except ImportError:
-         _HAS_RUST = False
+    try:
+        import x_ray_core as _rust_core
+
+        if not hasattr(_rust_core, "prefilter_parallel"):
+            _HAS_RUST = False
+    except ImportError:
+        _HAS_RUST = False
 
 from Analysis.semantic_fuzzer import SemanticFuzzer
 
@@ -25,9 +30,11 @@ from Analysis.semantic_fuzzer import SemanticFuzzer
 @dataclass
 class _MatchContext:
     """Mutable state carried through hash-matching stages."""
+
     cross_file_only: bool
     group_id: int
     seen_keys: Set[str]
+
 
 class UnionFind:
     """Simple union-find (disjoint-set) with path compression."""
@@ -92,8 +99,9 @@ async def _enrich_group_async(item, llm, sem):
     )
     await _llm_enrich_one(
         prompt,
-        lambda resp: setattr(group, 'merge_suggestion', resp),
-        llm, sem,
+        lambda resp: setattr(group, "merge_suggestion", resp),
+        llm,
+        sem,
     )
 
 
@@ -104,7 +112,7 @@ def _compile_to_callable(func_record: FunctionRecord, safe: bool = False):
         return None
     try:
         exec_globals = {}
-        # WARNING: exec is used for operational equivalence testing. 
+        # WARNING: exec is used for operational equivalence testing.
         # Only run on trusted codebases.
         exec(func_record.code, exec_globals)  # noqa: S102 # nosec B102
         return exec_globals.get(func_record.name)
@@ -145,15 +153,17 @@ def _batch_code_similarity(candidates, threshold):
                 code_to_idx[f.code] = len(code_list)
                 code_list.append(f.code)
     matrix = _rust_core.batch_code_similarity(code_list)
-    return [(f1, f2, matrix[code_to_idx[f1.code]][code_to_idx[f2.code]])
-            for f1, f2, _ in candidates
-            if matrix[code_to_idx[f1.code]][code_to_idx[f2.code]] >= threshold]
+    return [
+        (f1, f2, matrix[code_to_idx[f1.code]][code_to_idx[f2.code]])
+        for f1, f2, _ in candidates
+        if matrix[code_to_idx[f1.code]][code_to_idx[f2.code]] >= threshold
+    ]
 
 
 class DuplicateFinder:
     """
     Cross-file function similarity detector.
-    
+
     Four-stage pipeline:
       1a. Exact hash match  → identical code
       1b. Structural hash   → same AST shape, different variable names
@@ -165,26 +175,42 @@ class DuplicateFinder:
     EXACT_THRESHOLD = 1.0
     NEAR_DUP_THRESHOLD = 0.80
     TOKEN_PREFILTER = 0.25
-    SIZE_RATIO_MIN = 0.35       # skip if sizes wildly different
-    SEMANTIC_THRESHOLD = 0.50   # semantic similarity threshold
-    SEMANTIC_MIN_LINES = 8      # min function size for semantic matching
+    SIZE_RATIO_MIN = 0.35  # skip if sizes wildly different
+    SEMANTIC_THRESHOLD = 0.50  # semantic similarity threshold
+    SEMANTIC_MIN_LINES = 8  # min function size for semantic matching
 
     # Boilerplate to skip
-    _BOILERPLATE = frozenset({
-        "__init__", "__repr__", "__str__", "__eq__", "__hash__",
-        "__len__", "__iter__", "__next__", "__enter__", "__exit__",
-        "__getitem__", "__setitem__", "__contains__",
-        "setUp", "tearDown", "setup", "teardown",
-    })
+    _BOILERPLATE = frozenset(
+        {
+            "__init__",
+            "__repr__",
+            "__str__",
+            "__eq__",
+            "__hash__",
+            "__len__",
+            "__iter__",
+            "__next__",
+            "__enter__",
+            "__exit__",
+            "__getitem__",
+            "__setitem__",
+            "__contains__",
+            "setUp",
+            "tearDown",
+            "setup",
+            "teardown",
+        }
+    )
 
     def __init__(self):
         self.groups: List[DuplicateGroup] = []
         self._tokens: Dict[str, Counter] = {}
 
-    def find(self, functions: List[FunctionRecord],
-             cross_file_only: bool = True) -> List[DuplicateGroup]:
+    def find(
+        self, functions: List[FunctionRecord], cross_file_only: bool = True
+    ) -> List[DuplicateGroup]:
         """Find duplicate/similar functions across 4 stages (dispatcher).
-        
+
         1. Exact hash + Structural hash
         2. Near-duplicates (code similarity)
         3. Semantic similarity
@@ -198,13 +224,18 @@ class DuplicateFinder:
         self._precompute_tokens(functions)
 
         # Run all stages
-        ctx = _MatchContext(cross_file_only=cross_file_only,
-                            group_id=group_id, seen_keys=seen_keys)
+        ctx = _MatchContext(
+            cross_file_only=cross_file_only, group_id=group_id, seen_keys=seen_keys
+        )
         self._stage_hash_matches(functions, ctx)
         group_id = ctx.group_id
-        group_id = self._stage_near_duplicates(functions, cross_file_only, group_id, seen_keys)
-        group_id = self._stage_semantic_similarity(functions, cross_file_only, group_id, seen_keys)
-        
+        group_id = self._stage_near_duplicates(
+            functions, cross_file_only, group_id, seen_keys
+        )
+        group_id = self._stage_semantic_similarity(
+            functions, cross_file_only, group_id, seen_keys
+        )
+
         # 4. Operational Equivalence (Fuzzing) - Refine groups
         self._refine_with_fuzzer(functions)
 
@@ -216,21 +247,23 @@ class DuplicateFinder:
         """Run Semantic Fuzzer on near/semantic groups to detect operational morphing."""
         fuzzer = SemanticFuzzer()
         func_map = {f.key: f for f in functions}
-        
+
         for group in self.groups:
             if group.similarity_type in ("exact", "structural", "operational"):
                 continue
             if len(group.functions) < 2:
                 continue
-            if group.avg_similarity < 0.6: 
+            if group.avg_similarity < 0.6:
                 continue
 
             leader_key = group.functions[0]["key"]
             leader = func_map.get(leader_key)
             if not leader:
                 continue
-            
-            func_a = _compile_to_callable(leader, safe=getattr(self, 'safe_mode', False))
+
+            func_a = _compile_to_callable(
+                leader, safe=getattr(self, "safe_mode", False)
+            )
             if not func_a:
                 continue
 
@@ -242,34 +275,56 @@ class DuplicateFinder:
     def _precompute_tokens(self, functions: List[FunctionRecord]) -> None:
         """Pre-compute TF-IDF tokens for all functions (shared across stages)."""
         for func in functions:
-            text = " ".join([
-                func.name,
-                func.docstring or "",
-                " ".join(func.parameters),
-                func.return_type or "",
-                " ".join(func.calls_to),
-                func.code or "",
-            ])
+            text = " ".join(
+                [
+                    func.name,
+                    func.docstring or "",
+                    " ".join(func.parameters),
+                    func.return_type or "",
+                    " ".join(func.calls_to),
+                    func.code or "",
+                ]
+            )
             self._tokens[func.key] = _term_freq(tokenize(text))
 
-    def _build_dup_group(self, funcs: List[FunctionRecord],
-                         sim_type: str, group_id: int,
-                         seen_keys: Set[str],
-                         merge_msg: str = "") -> int:
+    def _build_dup_group(
+        self,
+        funcs: List[FunctionRecord],
+        sim_type: str,
+        group_id: int,
+        seen_keys: Set[str],
+        merge_msg: str = "",
+    ) -> int:
         """Create a DuplicateGroup from a list of matched functions."""
-        self.groups.append(DuplicateGroup(
-            group_id=group_id, similarity_type=sim_type, avg_similarity=1.0,
-            functions=[{"key": f.key, "name": f.name, "file": f.file_path,
-                       "line": f.line_start, "size": f.size_lines,
-                       "similarity": 1.0} for f in funcs],
-            merge_suggestion=merge_msg or None,
-        ))
+        self.groups.append(
+            DuplicateGroup(
+                group_id=group_id,
+                similarity_type=sim_type,
+                avg_similarity=1.0,
+                functions=[
+                    {
+                        "key": f.key,
+                        "name": f.name,
+                        "file": f.file_path,
+                        "line": f.line_start,
+                        "size": f.size_lines,
+                        "similarity": 1.0,
+                    }
+                    for f in funcs
+                ],
+                merge_suggestion=merge_msg or None,
+            )
+        )
         seen_keys.update(f.key for f in funcs)
         return group_id + 1
 
-    def _collect_hash_groups(self, functions: List[FunctionRecord],
-                             attr: str, seen_keys: Set[str],
-                             min_lines: int = 0) -> Dict[str, List[FunctionRecord]]:
+    def _collect_hash_groups(
+        self,
+        functions: List[FunctionRecord],
+        attr: str,
+        seen_keys: Set[str],
+        min_lines: int = 0,
+    ) -> Dict[str, List[FunctionRecord]]:
         """Group functions by a hash attribute, filtering boilerplate and seen."""
         groups: Dict[str, List[FunctionRecord]] = defaultdict(list)
         for func in functions:
@@ -284,9 +339,13 @@ class DuplicateFinder:
                 groups[hash_val].append(func)
         return groups
 
-    def _process_hash_group(self, groups: Dict[str, List[FunctionRecord]],
-                            ctx: _MatchContext, match_type: str,
-                            hint: str = "") -> None:
+    def _process_hash_group(
+        self,
+        groups: Dict[str, List[FunctionRecord]],
+        ctx: _MatchContext,
+        match_type: str,
+        hint: str = "",
+    ) -> None:
         """Build dup groups from hash-based groups."""
         for group in groups.values():
             if len(group) < 2:
@@ -294,75 +353,108 @@ class DuplicateFinder:
             if ctx.cross_file_only and len({f.file_path for f in group}) < 2:
                 continue
             ctx.group_id = self._build_dup_group(
-                group, match_type, ctx.group_id, ctx.seen_keys, hint or None)
+                group, match_type, ctx.group_id, ctx.seen_keys, hint or None
+            )
 
-    def _stage_hash_matches(self, functions: List[FunctionRecord],
-                           ctx: _MatchContext) -> None:
+    def _stage_hash_matches(
+        self, functions: List[FunctionRecord], ctx: _MatchContext
+    ) -> None:
         """Stage 1: Exact code hash + Structural hash matching."""
         exact = self._collect_hash_groups(functions, "code_hash", ctx.seen_keys)
         self._process_hash_group(exact, ctx, "exact")
 
         structural = self._collect_hash_groups(
-            functions, "structure_hash", ctx.seen_keys, min_lines=4)
+            functions, "structure_hash", ctx.seen_keys, min_lines=4
+        )
         self._process_hash_group(
-            structural, ctx, "structural",
-            "Logic is identical. Rename variables to unify.")
+            structural,
+            ctx,
+            "structural",
+            "Logic is identical. Rename variables to unify.",
+        )
 
-    def _prefilter_candidates(self, func_list: List[FunctionRecord],
-                              cross_file_only: bool
-                              ) -> List[Tuple[FunctionRecord, FunctionRecord, float]]:
+    def _prefilter_candidates(
+        self, func_list: List[FunctionRecord], cross_file_only: bool
+    ) -> List[Tuple[FunctionRecord, FunctionRecord, float]]:
         """Pre-filter function pairs by size ratio and token cosine."""
         candidates = []
         for i, f1 in enumerate(func_list):
-            for f2 in func_list[i + 1:]:
+            for f2 in func_list[i + 1 :]:
                 if cross_file_only and f1.file_path == f2.file_path:
                     continue
-                ratio = min(f1.size_lines, f2.size_lines) / max(f1.size_lines, f2.size_lines)
+                ratio = min(f1.size_lines, f2.size_lines) / max(
+                    f1.size_lines, f2.size_lines
+                )
                 if ratio < self.SIZE_RATIO_MIN:
                     continue
                 tok_sim = cosine_similarity(
                     self._tokens.get(f1.key, Counter()),
-                    self._tokens.get(f2.key, Counter()))
+                    self._tokens.get(f2.key, Counter()),
+                )
                 if tok_sim >= self.TOKEN_PREFILTER:
                     candidates.append((f1, f2, tok_sim))
         return candidates
 
-    def _stage_near_duplicates(self, functions: List[FunctionRecord],
-                              cross_file_only: bool, group_id: int,
-                              seen_keys: Set[str]) -> int:
+    def _stage_near_duplicates(
+        self,
+        functions: List[FunctionRecord],
+        cross_file_only: bool,
+        group_id: int,
+        seen_keys: Set[str],
+    ) -> int:
         """Stage 2: Token + Code similarity (near-duplicates)."""
-        func_list = [f for f in functions if f.key not in seen_keys
-                     and f.name not in self._BOILERPLATE and f.size_lines >= 5]
+        func_list = [
+            f
+            for f in functions
+            if f.key not in seen_keys
+            and f.name not in self._BOILERPLATE
+            and f.size_lines >= 5
+        ]
 
         if _HAS_RUST:
             # Shift the O(N^2) load to Rust
             candidates = _rust_core.prefilter_parallel(
-                func_list, self._tokens, cross_file_only,
-                self.SIZE_RATIO_MIN, self.TOKEN_PREFILTER
+                func_list,
+                self._tokens,
+                cross_file_only,
+                self.SIZE_RATIO_MIN,
+                self.TOKEN_PREFILTER,
             )
             logger.info(f"Duplicate pre-filter (Rust): {len(candidates)} candidates")
             near_pairs = _batch_code_similarity(candidates, self.NEAR_DUP_THRESHOLD)
         else:
             candidates = self._prefilter_candidates(func_list, cross_file_only)
             logger.info(f"Duplicate pre-filter (Python): {len(candidates)} candidates")
-            near_pairs = [(f1, f2, code_similarity(f1.code, f2.code))
-                         for f1, f2, _ in candidates
-                         if code_similarity(f1.code, f2.code) >= self.NEAR_DUP_THRESHOLD]
+            near_pairs = [
+                (f1, f2, code_similarity(f1.code, f2.code))
+                for f1, f2, _ in candidates
+                if code_similarity(f1.code, f2.code) >= self.NEAR_DUP_THRESHOLD
+            ]
 
-        group_id = self._build_similarity_groups(near_pairs, group_id, "near", seen_keys)
+        group_id = self._build_similarity_groups(
+            near_pairs, group_id, "near", seen_keys
+        )
         return group_id
 
-    def _stage_semantic_similarity(self, functions: List[FunctionRecord],
-                                  cross_file_only: bool, group_id: int,
-                                  seen_keys: Set[str]) -> int:
+    def _stage_semantic_similarity(
+        self,
+        functions: List[FunctionRecord],
+        cross_file_only: bool,
+        group_id: int,
+        seen_keys: Set[str],
+    ) -> int:
         """Stage 3: Semantic similarity (80 lines → 20 lines)."""
-        semantic_list = [f for f in functions if f.key not in seen_keys
-                        and f.name not in self._BOILERPLATE
-                        and f.size_lines >= self.SEMANTIC_MIN_LINES]
+        semantic_list = [
+            f
+            for f in functions
+            if f.key not in seen_keys
+            and f.name not in self._BOILERPLATE
+            and f.size_lines >= self.SEMANTIC_MIN_LINES
+        ]
 
         sem_pairs = []
         for i, f1 in enumerate(semantic_list):
-            for f2 in semantic_list[i + 1:]:
+            for f2 in semantic_list[i + 1 :]:
                 if cross_file_only and f1.file_path == f2.file_path:
                     continue
                 sim = semantic_similarity(f1, f2)
@@ -371,13 +463,19 @@ class DuplicateFinder:
 
         if sem_pairs:
             logger.info(f"Semantic stage: {len(sem_pairs)} functionally similar pairs")
-            group_id = self._build_similarity_groups(sem_pairs, group_id, "semantic", seen_keys)
+            group_id = self._build_similarity_groups(
+                sem_pairs, group_id, "semantic", seen_keys
+            )
 
         return group_id
 
-    def _build_similarity_groups(self, pairs: List[Tuple[FunctionRecord, FunctionRecord, float]],
-                                group_id: int, similarity_type: str,
-                                seen_keys: Set[str]) -> int:
+    def _build_similarity_groups(
+        self,
+        pairs: List[Tuple[FunctionRecord, FunctionRecord, float]],
+        group_id: int,
+        similarity_type: str,
+        seen_keys: Set[str],
+    ) -> int:
         """Cluster pairs using union-find, build DuplicateGroup objects."""
         if not pairs:
             return group_id
@@ -395,19 +493,32 @@ class DuplicateFinder:
                 continue
             pair_sims_list = cluster_pair_sims.get(root_key, [])
             avg = sum(pair_sims_list) / len(pair_sims_list) if pair_sims_list else 0
-            self.groups.append(DuplicateGroup(
-                group_id=group_id, similarity_type=similarity_type, avg_similarity=round(avg, 3),
-                functions=[{"key": f.key, "name": f.name, "file": f.file_path,
-                           "line": f.line_start, "size": f.size_lines, "similarity": round(sim, 3),
-                           "signature": f.signature}
-                          for f, sim in members],
-            ))
+            self.groups.append(
+                DuplicateGroup(
+                    group_id=group_id,
+                    similarity_type=similarity_type,
+                    avg_similarity=round(avg, 3),
+                    functions=[
+                        {
+                            "key": f.key,
+                            "name": f.name,
+                            "file": f.file_path,
+                            "line": f.line_start,
+                            "size": f.size_lines,
+                            "similarity": round(sim, 3),
+                            "signature": f.signature,
+                        }
+                        for f, sim in members
+                    ],
+                )
+            )
             seen_keys.update(f.key for f, _ in members)
             group_id += 1
         return group_id
 
-    def enrich_with_llm(self, llm: LLMHelper, functions: List[FunctionRecord],
-                        max_calls: int = 15):
+    def enrich_with_llm(
+        self, llm: LLMHelper, functions: List[FunctionRecord], max_calls: int = 15
+    ):
         """Ask LLM if near-duplicates should be merged."""
         func_map = {f.key: f for f in functions}
         enriched = 0
@@ -462,7 +573,8 @@ class DuplicateFinder:
             "total_functions_involved": total_funcs,
             "avg_similarity": (
                 round(sum(g.avg_similarity for g in self.groups) / len(self.groups), 3)
-                if self.groups else 0
+                if self.groups
+                else 0
             ),
         }
 
@@ -471,7 +583,9 @@ class DuplicateFinder:
     # ─────────────────────────────────────────────────────────────────────────
 
 
-async def enrich_with_llm_async(finder, llm: LLMHelper, functions: List[FunctionRecord], max_calls: int = 20):
+async def enrich_with_llm_async(
+    finder, llm: LLMHelper, functions: List[FunctionRecord], max_calls: int = 20
+):
     """Async version of enrich_with_llm (module-level to reduce class size)."""
     func_map = {f.key: f for f in functions}
     candidates = []
@@ -519,5 +633,5 @@ def _func_to_dict(func: FunctionRecord) -> Dict[str, Any]:
         "file": func.file_path,
         "line": func.line_start,
         "size": func.size_lines,
-        "signature": func.signature
+        "signature": func.signature,
     }

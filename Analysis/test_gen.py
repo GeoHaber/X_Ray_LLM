@@ -1,4 +1,3 @@
-
 import ast
 import json
 import random
@@ -6,22 +5,25 @@ import inspect
 from pathlib import Path
 from typing import List, Any, Dict, Callable, Optional
 
+
 class TestGenerator:
     """
     Analyzes function signatures and generates test inputs.
     """
-    
+
     def generate_inputs(self, func_code: str) -> List[Dict[str, Any]]:
         """
         Parses function code and generates a list of argument dictionaries.
         """
         try:
             tree = ast.parse(func_code)
-            func_node = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef))
+            func_node = next(
+                n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+            )
         except Exception:
-            return [] # Can't parse
+            return []  # Can't parse
 
-        args = [a.arg for a in func_node.args.args if a.arg != 'self']
+        args = [a.arg for a in func_node.args.args if a.arg != "self"]
         str_args = [a for a in args if a in ("text", "code", "name", "s")]
         num_args = [a for a in args if a not in str_args]
 
@@ -50,7 +52,9 @@ class TestGenerator:
             {arg: 1 for arg in args},
         ]
 
-    def execute_and_capture(self, func: Callable, inputs: List[Dict[str, Any]]) -> List[Any]:
+    def execute_and_capture(
+        self, func: Callable, inputs: List[Dict[str, Any]]
+    ) -> List[Any]:
         """
         Runs the function with inputs and captures results.
         """
@@ -69,6 +73,7 @@ class TestReferenceGenerator:
     Higher-level test reference generator that wraps a callable,
     captures ground-truth execution results, and saves fixtures.
     """
+
     __test__ = False  # Not a pytest test class
 
     def __init__(self, func: Callable):
@@ -93,9 +98,7 @@ class TestReferenceGenerator:
             kwargs = spec.get("kwargs", {})
             try:
                 output = self.func(*args, **kwargs)
-                results.append(
-                    {"input": spec, "output": output, "status": "success"}
-                )
+                results.append({"input": spec, "output": output, "status": "success"})
             except Exception as exc:
                 results.append(
                     {
@@ -107,9 +110,7 @@ class TestReferenceGenerator:
                 )
         return results
 
-    def save_fixture(
-        self, results: List[Dict[str, Any]], *, output_dir: str
-    ) -> str:
+    def save_fixture(self, results: List[Dict[str, Any]], *, output_dir: str) -> str:
         """
         Persist *results* as a JSON fixture file under *output_dir*.
 
@@ -145,4 +146,3 @@ class TestReferenceGenerator:
             return []
         except Exception:
             return []
-

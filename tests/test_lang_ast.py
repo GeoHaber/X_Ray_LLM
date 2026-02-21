@@ -2,6 +2,7 @@
 Tests for Lang/python_ast.py — nesting depth, complexity, ASTNormalizer,
 structure hash, file extraction, collect_py_files, scan_codebase.
 """
+
 import ast
 import os
 import textwrap
@@ -19,6 +20,7 @@ from Core.ast_helpers import compute_nesting_depth, compute_complexity
 
 # ── helpers ──────────────────────────────────────────────────────────
 
+
 def _parse_func(src: str) -> ast.AST:
     """Parse a function string and return the FunctionDef node."""
     tree = ast.parse(textwrap.dedent(src))
@@ -31,6 +33,7 @@ def _parse_func(src: str) -> ast.AST:
 # ════════════════════════════════════════════════════════════════════
 #  compute_nesting_depth
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestNestingDepth:
     """Tests for AST nesting depth computation."""
@@ -88,6 +91,7 @@ class TestNestingDepth:
 #  compute_complexity
 # ════════════════════════════════════════════════════════════════════
 
+
 class TestComplexity:
     """Tests for cyclomatic complexity computation."""
 
@@ -132,18 +136,21 @@ class TestComplexity:
 #  ASTNormalizer
 # ════════════════════════════════════════════════════════════════════
 
+
 class TestASTNormalizer:
     """Tests for AST normalizer."""
 
     def test_renames_function(self):
         node = _parse_func("def my_func():\n    pass")
         import copy
+
         normalized = ASTNormalizer().visit(copy.deepcopy(node))
         assert normalized.name == "func"
 
     def test_renames_args(self):
         node = _parse_func("def f(x, y):\n    return x + y")
         import copy
+
         normalized = ASTNormalizer().visit(copy.deepcopy(node))
         arg_names = [a.arg for a in normalized.args.args]
         assert arg_names == ["arg0", "arg1"]
@@ -152,6 +159,7 @@ class TestASTNormalizer:
         src = "def f(self, x):\n    return self.x"
         node = _parse_func(src)
         import copy
+
         normalized = ASTNormalizer().visit(copy.deepcopy(node))
         arg_names = [a.arg for a in normalized.args.args]
         assert arg_names[0] == "self"
@@ -165,17 +173,22 @@ class TestASTNormalizer:
         '''
         node = _parse_func(src)
         import copy
+
         normalized = ASTNormalizer().visit(copy.deepcopy(node))
         # docstring should be removed — body should NOT start with Constant str
         first = normalized.body[0]
         if isinstance(first, ast.Expr):
-            assert not (isinstance(first.value, ast.Constant) and isinstance(first.value.value, str))
+            assert not (
+                isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)
+            )
 
     def test_equivalent_functions_produce_same_dump(self):
         """Two structurally equivalent functions with different names should normalize identically."""
         src_a = "def add(x, y):\n    return x + y"
         src_b = "def sum_two(a, b):\n    return a + b"
         import copy
+
         norm_a = ASTNormalizer().visit(copy.deepcopy(_parse_func(src_a)))
         norm_b = ASTNormalizer().visit(copy.deepcopy(_parse_func(src_b)))
         assert ast.dump(norm_a) == ast.dump(norm_b)
@@ -184,6 +197,7 @@ class TestASTNormalizer:
         src_a = "def f(x):\n    return x + 1"
         src_b = "def f(x):\n    if x:\n        return x"
         import copy
+
         norm_a = ASTNormalizer().visit(copy.deepcopy(_parse_func(src_a)))
         norm_b = ASTNormalizer().visit(copy.deepcopy(_parse_func(src_b)))
         assert ast.dump(norm_a) != ast.dump(norm_b)
@@ -192,6 +206,7 @@ class TestASTNormalizer:
 # ════════════════════════════════════════════════════════════════════
 #  _compute_structure_hash
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestStructureHash:
     """Tests for structure hash computation."""
@@ -210,7 +225,9 @@ class TestStructureHash:
 
     def test_different_structure_different_hash(self):
         h1 = _compute_structure_hash(_parse_func("def f(x):\n    return x"))
-        h2 = _compute_structure_hash(_parse_func("def f(x):\n    if x:\n        return 1"))
+        h2 = _compute_structure_hash(
+            _parse_func("def f(x):\n    if x:\n        return 1")
+        )
         assert h1 != h2
 
     @patch.dict(os.environ, {"X_RAY_DISABLE_RUST": "1"})
@@ -230,6 +247,7 @@ class TestStructureHash:
 # ════════════════════════════════════════════════════════════════════
 #  _extract_functions_from_file
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestExtractFunctions:
     """Tests for function extraction from AST."""
@@ -322,6 +340,7 @@ class TestExtractFunctions:
 #  collect_py_files
 # ════════════════════════════════════════════════════════════════════
 
+
 class TestCollectPyFiles:
     """Tests for Python file collection."""
 
@@ -382,8 +401,8 @@ class TestCollectPyFiles:
 #  scan_codebase
 # ════════════════════════════════════════════════════════════════════
 
-class TestScanCodebase:
 
+class TestScanCodebase:
     def test_scans_multiple_files(self, tmp_path):
         (tmp_path / "a.py").write_text("def fa(): pass\n")
         (tmp_path / "b.py").write_text("def fb(): pass\n")

@@ -24,6 +24,7 @@ from a 0–100 score:
 | **Duplicate Finder** | 4-stage pipeline: exact hash → structural hash → token n-gram + AST histogram → semantic similarity |
 | **Ruff Lint** | Fast Python linting (unused imports, undefined names, bare-excepts, style issues) |
 | **Bandit Security** | Security audit (hardcoded passwords, SQL injection, unsafe eval, subprocess misuse) |
+| **Ruff Format** | Formatting check (`ruff format --check`) when available |
 | **Library Advisor** | Groups duplicates and suggests shared library extractions with unified APIs |
 | **Smart Graph** | Interactive HTML visualization with health-colored nodes and duplicate edges |
 
@@ -60,7 +61,7 @@ CPU-bound), it can **accelerate them with Rust** via a PyO3-based native module:
 - **LLM enrichment is optional** — all detectors provide useful results without any LLM
 - **Fast parallel scanning** — `concurrent.futures` for multi-file AST parsing
 - **Unified grading** — single A+ → F grade combining all 4 tools
-- **497 tests** — comprehensive test suite with full coverage
+- **500+ tests** — comprehensive test suite with parity verification
 
 ---
 
@@ -70,7 +71,9 @@ CPU-bound), it can **accelerate them with Rust** via a PyO3-based native module:
 # Clone the repo
 git clone https://github.com/GeoHaber/X_Ray.git
 cd X_Ray
-pip install -r requirements.txt
+
+# Install (optional — core works with stdlib only)
+pip install -r requirements.txt   # or: uv sync
 
 # Basic scan (smells only)
 python x_ray_claude.py --path /your/project
@@ -100,8 +103,7 @@ python x_ray_claude.py --path . --full-scan --report self_scan.json
 
 ## Phase 2: Rustifying Your Code
 
-X-Ray doesn't just find problems — it helps you fix them. The Rustification
-workflow turns X-Ray's analysis into targeted Rust acceleration:
+X-Ray helps you accelerate hot paths with Rust. The workflow:
 
 ### Step 1: Identify Targets
 
@@ -207,7 +209,7 @@ X-Ray's Rustification approach applies to any Python project:
 ```bash
 pip install pytest
 
-# Full test suite (497 tests)
+# Full test suite (500+ tests)
 python -m pytest tests/ -v
 
 # Quick run
@@ -341,9 +343,23 @@ The unified score is `100 − penalties`, where penalties come from all 4 tools:
 
 1. Fork the repository
 2. Create a feature branch
-3. Run the test suite: `python -m pytest tests/ -q --tb=short`
-4. Ensure Ruff is clean: `ruff check .`
-5. Submit a pull request
+3. Install dev deps: `pip install -r requirements-dev.txt`
+4. Run security audit: `pip-audit -r requirements.txt -r requirements-dev.txt`
+5. Run type check: `pyright .`
+6. Run the test suite: `python -m pytest tests/ -q --tb=short`
+7. Submit a pull request
+
+See [SECURITY.md](SECURITY.md) for dependency and code security practices.
+
+---
+
+## Documentation
+
+| Doc | Description |
+|-----|--------------|
+| [docs/USAGE.md](docs/USAGE.md) | CLI options, smell categories, duplicate detection, programmatic API |
+| [CI_CD_SETUP.md](CI_CD_SETUP.md) | GitHub Actions, pre-commit, quality gates |
+| [docs/FUTURE_PLAN.md](docs/FUTURE_PLAN.md) | Roadmap and design philosophy |
 
 ---
 

@@ -1,4 +1,3 @@
-
 import sys
 import pytest
 from pathlib import Path
@@ -7,7 +6,6 @@ from pathlib import Path
 root = Path(__file__).parent.resolve()
 sys.path.insert(0, str(root))
 print(f"Running tests with PYTHONPATH set to: {root}")
-
 
 
 # Run ALL tests

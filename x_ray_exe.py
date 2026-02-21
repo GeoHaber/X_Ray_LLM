@@ -43,7 +43,7 @@ from typing import Dict, Any, Optional
 # ---------------------------------------------------------------------------
 # Fix for PyInstaller frozen bundles: ensure our package root is on sys.path
 # ---------------------------------------------------------------------------
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     _BUNDLE_DIR = Path(sys._MEIPASS)
     _EXE_DIR = Path(sys.executable).parent
     # Add the bundle dir so our Core/Analysis/Lang packages are importable
@@ -59,8 +59,14 @@ else:
 from Core.config import __version__
 from Analysis._analyzer_base import _find_tool  # noqa: E402
 from Core.scan_phases import (
-    scan_codebase, run_smell_phase, run_duplicate_phase,
-    run_lint_phase, run_security_phase, run_rustify_scan, collect_reports,
+    scan_codebase,
+    run_smell_phase,
+    run_duplicate_phase,
+    run_format_phase,
+    run_lint_phase,
+    run_security_phase,
+    run_rustify_scan,
+    collect_reports,
 )
 
 # ---------------------------------------------------------------------------
@@ -68,10 +74,10 @@ from Core.scan_phases import (
 # ---------------------------------------------------------------------------
 
 _EXE_BANNER = f"""
-{'='*66}
+{"=" * 66}
   X-RAY v{__version__} — Standalone Code Quality Scanner (.exe)
   AST Smells + Ruff Lint + Bandit Security + Rust Advisor
-{'='*66}
+{"=" * 66}
 """
 
 # ---------------------------------------------------------------------------
@@ -79,6 +85,7 @@ _EXE_BANNER = f"""
 # ---------------------------------------------------------------------------
 
 from Core.utils import setup_logger  # noqa: E402
+
 log = setup_logger("x_ray_exe")
 
 
@@ -86,16 +93,19 @@ log = setup_logger("x_ray_exe")
 # Hardware detection
 # ---------------------------------------------------------------------------
 
+
 def _wmic_value(query: str, field: str) -> Optional[str]:
     """Run a wmic query and return the value for *field*, or None."""
     try:
         result = subprocess.run(
             ["wmic"] + query.split() + ["/value"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
-        for line in result.stdout.strip().split('\n'):
+        for line in result.stdout.strip().split("\n"):
             if line.startswith(f"{field}="):
-                return line.split('=', 1)[1].strip()
+                return line.split("=", 1)[1].strip()
     except Exception:
         pass
     return None
@@ -108,14 +118,14 @@ def _detect_rust_info() -> Dict[str, Any]:
     if info["rust_available"]:
         try:
             result = subprocess.run(
-                ["rustc", "--version"],
-                capture_output=True, text=True, timeout=5
+                ["rustc", "--version"], capture_output=True, text=True, timeout=5
             )
             info["rust_version"] = result.stdout.strip()
         except Exception:
             info["rust_version"] = "unknown"
     try:
         import x_ray_core  # noqa: F401
+
         info["rust_acceleration"] = True
     except ImportError:
         info["rust_acceleration"] = False
@@ -140,7 +150,9 @@ def detect_hardware() -> Dict[str, Any]:
     info.setdefault("processor", info.get("cpu_brand", "Unknown"))
     info.setdefault("cpu_name", info.get("cpu_brand", info.get("processor", "")))
     info.setdefault("cpu_count_logical", info.get("cpu_cores", os.cpu_count() or 1))
-    info.setdefault("cpu_count_physical", info.get("cpu_cores", info["cpu_count_logical"]))
+    info.setdefault(
+        "cpu_count_physical", info.get("cpu_cores", info["cpu_count_logical"])
+    )
 
     # Rust environment (x_ray_exe specific)
     info.update(_detect_rust_info())
@@ -150,21 +162,25 @@ def detect_hardware() -> Dict[str, Any]:
 
 def print_hardware(hw: Dict[str, Any]) -> None:
     """Pretty-print hardware information."""
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print("  SYSTEM HARDWARE PROFILE")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     print(f"  OS:           {hw['os']} {hw.get('os_release', '')} ({hw['machine']})")
     print(f"  CPU:          {hw.get('cpu_name', hw['processor'])}")
-    print(f"  Cores:        {hw.get('cpu_count_physical', '?')} physical, "
-          f"{hw['cpu_count_logical']} logical")
-    if hw.get('ram_gb') and hw['ram_gb'] != 'unknown':
+    print(
+        f"  Cores:        {hw.get('cpu_count_physical', '?')} physical, "
+        f"{hw['cpu_count_logical']} logical"
+    )
+    if hw.get("ram_gb") and hw["ram_gb"] != "unknown":
         print(f"  RAM:          {hw['ram_gb']} GB")
-    if hw.get('rust_available'):
+    if hw.get("rust_available"):
         print(f"  Rust:         {hw.get('rust_version', 'available')}")
     else:
         print("  Rust:         not installed")
-    print(f"  Accelerator:  {'x_ray_core (Rust)' if hw.get('rust_acceleration') else 'Pure Python'}")
-    print(f"{'='*50}\n")
+    print(
+        f"  Accelerator:  {'x_ray_core (Rust)' if hw.get('rust_acceleration') else 'Pure Python'}"
+    )
+    print(f"{'=' * 50}\n")
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +207,7 @@ def check_tools() -> Dict[str, str]:
 # ---------------------------------------------------------------------------
 # Main orchestration
 # ---------------------------------------------------------------------------
+
 
 def _parse_args() -> argparse.Namespace:
     """Parse and normalise CLI arguments."""
@@ -221,6 +238,7 @@ def _print_tool_status(tools: dict) -> None:
         print(f"    {name:10s}  {status}")
     try:
         import x_ray_core  # noqa: F401
+
         print(f"    {'x_ray_core':10s}  OK (Rust acceleration)")
     except ImportError:
         print(f"    {'x_ray_core':10s}  not available (using pure Python)")
@@ -243,7 +261,8 @@ def _run_scan_phases(args, root: Path):
 
     if args.smell or args.duplicates:
         functions, classes, errors = scan_codebase(
-            root, exclude=args.exclude, verbose=args.verbose)
+            root, exclude=args.exclude, verbose=args.verbose
+        )
         print(f"  Found {len(functions)} functions, {len(classes)} classes")
         if errors:
             print(f"  ({len(errors)} parse errors)")
@@ -257,6 +276,12 @@ def _run_scan_phases(args, root: Path):
 
     finder = run_duplicate_phase(functions) if args.duplicates else None
 
+    if getattr(args, "format", False):
+        fmt_analyzer, format_issues = run_format_phase(root, exclude=args.exclude)
+        all_issues.extend(format_issues)
+    else:
+        fmt_analyzer, format_issues = None, []
+
     if args.lint:
         linter, lint_issues = run_lint_phase(root, exclude=args.exclude)
         all_issues.extend(lint_issues)
@@ -269,7 +294,16 @@ def _run_scan_phases(args, root: Path):
     else:
         sec_analyzer, sec_issues = None, []
 
-    return detector, finder, linter, lint_issues, sec_analyzer, sec_issues
+    return (
+        detector,
+        finder,
+        fmt_analyzer,
+        format_issues,
+        linter,
+        lint_issues,
+        sec_analyzer,
+        sec_issues,
+    )
 
 
 def main():
@@ -296,13 +330,31 @@ def main():
 
     # Standard scan
     start_time = time.time()
-    detector, finder, linter, lint_issues, sec_analyzer, sec_issues = \
-        _run_scan_phases(args, root)
+    (
+        detector,
+        finder,
+        fmt_analyzer,
+        format_issues,
+        linter,
+        lint_issues,
+        sec_analyzer,
+        sec_issues,
+    ) = _run_scan_phases(args, root)
 
     from Core.scan_phases import AnalysisComponents
-    results = collect_reports(AnalysisComponents(
-        detector, finder, linter, lint_issues,
-        sec_analyzer, sec_issues))
+
+    results = collect_reports(
+        AnalysisComponents(
+            detector,
+            finder,
+            fmt_analyzer,
+            format_issues,
+            linter,
+            lint_issues,
+            sec_analyzer,
+            sec_issues,
+        )
+    )
     results["hardware"] = hw
 
     duration = time.time() - start_time
@@ -313,9 +365,9 @@ def main():
             json.dump(results, f, indent=2, default=str)
         print(f"  Report saved to {args.report}")
 
-    print(f"\n{'='*66}")
+    print(f"\n{'=' * 66}")
     print("  X-Ray scan complete.")
-    print(f"{'='*66}\n")
+    print(f"{'=' * 66}\n")
 
 
 if __name__ == "__main__":

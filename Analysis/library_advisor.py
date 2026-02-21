@@ -1,17 +1,20 @@
-
 from typing import List, Dict, Any
 from collections import defaultdict
 from Core.types import FunctionRecord, DuplicateGroup, LibrarySuggestion
+
 
 class LibraryAdvisor:
     """
     Analyzes duplication groups and function names to suggest potential shared libraries.
     """
+
     def __init__(self):
         self.suggestions: List[LibrarySuggestion] = []
         self._analyzed_count = 0
 
-    def analyze(self, duplicates: List[DuplicateGroup], functions: List[FunctionRecord]) -> List[LibrarySuggestion]:
+    def analyze(
+        self, duplicates: List[DuplicateGroup], functions: List[FunctionRecord]
+    ) -> List[LibrarySuggestion]:
         """Analyze duplicates and cross-file name repetition for library candidates."""
         self.suggestions = []
         self._analyzed_count = len(functions)
@@ -29,20 +32,23 @@ class LibraryAdvisor:
             names = [f["name"] for f in group.functions]
             most_common_name = max(set(names), key=names.count)
             module_name = self._suggest_module_name([most_common_name])
-            self.suggestions.append(LibrarySuggestion(
-                module_name=module_name,
-                description=f"Cluster of {len(group.functions)} similar functions ({most_common_name})",
-                functions=group.functions,
-                unified_api=f"def {most_common_name}(...):",
-                rationale=f"Found {len(group.functions)} {group.similarity_type} duplicates.",
-            ))
+            self.suggestions.append(
+                LibrarySuggestion(
+                    module_name=module_name,
+                    description=f"Cluster of {len(group.functions)} similar functions ({most_common_name})",
+                    functions=group.functions,
+                    unified_api=f"def {most_common_name}(...):",
+                    rationale=f"Found {len(group.functions)} {group.similarity_type} duplicates.",
+                )
+            )
 
     @staticmethod
     def _is_dunder(name: str) -> bool:
         return name.startswith("__") and name.endswith("__")
 
-    def _is_cross_file_candidate(self, name: str, funcs: List[FunctionRecord],
-                                  covered_keys: set) -> bool:
+    def _is_cross_file_candidate(
+        self, name: str, funcs: List[FunctionRecord], covered_keys: set
+    ) -> bool:
         """Check if a group of same-named functions qualifies for suggestion."""
         if len(funcs) < 2:
             return False
@@ -56,27 +62,31 @@ class LibraryAdvisor:
             if not self._is_dunder(f.name):
                 name_map[f.name].append(f)
 
-        covered_keys = {
-            f.get("key") for s in self.suggestions for f in s.functions
-        }
+        covered_keys = {f.get("key") for s in self.suggestions for f in s.functions}
 
         for name, funcs in name_map.items():
             if not self._is_cross_file_candidate(name, funcs, covered_keys):
                 continue
             module_name = self._suggest_module_name([name])
             func_dicts = [
-                {"name": f.name, "file": f.file_path, "line": f.line_start, "key": f.key}
+                {
+                    "name": f.name,
+                    "file": f.file_path,
+                    "line": f.line_start,
+                    "key": f.key,
+                }
                 for f in funcs
             ]
             files = {f.file_path for f in funcs}
-            self.suggestions.append(LibrarySuggestion(
-                module_name=module_name,
-                description=f"Multiple functions named '{name}' across {len(files)} files",
-                functions=func_dicts,
-                unified_api=f"def {name}(...):",
-                rationale="Identical naming suggests shared concept.",
-            ))
-
+            self.suggestions.append(
+                LibrarySuggestion(
+                    module_name=module_name,
+                    description=f"Multiple functions named '{name}' across {len(files)} files",
+                    functions=func_dicts,
+                    unified_api=f"def {name}(...):",
+                    rationale="Identical naming suggests shared concept.",
+                )
+            )
 
     _MODULE_KEYWORDS = [
         (("parse",), "utils"),
@@ -97,5 +107,7 @@ class LibraryAdvisor:
         return {
             "total_suggestions": len(self.suggestions),
             "total_functions": self._analyzed_count,
-            "modules_proposed": sorted(list(set(s.module_name for s in self.suggestions)))
+            "modules_proposed": sorted(
+                list(set(s.module_name for s in self.suggestions))
+            ),
         }

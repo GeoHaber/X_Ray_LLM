@@ -1,6 +1,7 @@
 """
 Tests for Analysis/security.py — SecurityAnalyzer (Bandit integration).
 """
+
 import pytest
 import json
 import shutil
@@ -10,10 +11,14 @@ from unittest.mock import patch, MagicMock
 from Core.types import Severity
 from Analysis.security import SecurityAnalyzer
 from tests.conftest_analyzers import (
-    make_mock_analyze, assert_empty_output_returns_empty,
-    assert_invalid_json_returns_empty, assert_all_issues_are_smell_issues,
-    assert_not_available_when_tool_missing, assert_returns_empty_when_not_available,
-    assert_timeout_returns_empty, assert_file_not_found_returns_empty,
+    make_mock_analyze,
+    assert_empty_output_returns_empty,
+    assert_invalid_json_returns_empty,
+    assert_all_issues_are_smell_issues,
+    assert_not_available_when_tool_missing,
+    assert_returns_empty_when_not_available,
+    assert_timeout_returns_empty,
+    assert_file_not_found_returns_empty,
 )
 
 # Shared mock-analyze callable for SecurityAnalyzer
@@ -23,92 +28,94 @@ _sec_mock = make_mock_analyze(SecurityAnalyzer, "/usr/bin/bandit")
 # ── helpers ──────────────────────────────────────────────────────────
 
 # Sample Bandit JSON output (mimics real bandit -f json)
-SAMPLE_BANDIT_OUTPUT = json.dumps({
-    "errors": [],
-    "generated_at": "2026-02-17T12:00:00Z",
-    "metrics": {},
-    "results": [
-        {
-            "code": "    subprocess.run('echo hello', shell=True)\n",
-            "col_offset": 4,
-            "end_col_offset": 47,
-            "filename": "/project/utils.py",
-            "issue_confidence": "HIGH",
-            "issue_cwe": {"id": 78, "link": ""},
-            "issue_severity": "HIGH",
-            "issue_text": "subprocess call with shell=True identified, security issue.",
-            "line_number": 15,
-            "line_range": [15],
-            "more_info": "",
-            "test_id": "B602",
-            "test_name": "subprocess_popen_with_shell_equals_true",
-        },
-        {
-            "code": "    h = hashlib.md5(b'data')\n",
-            "col_offset": 8,
-            "end_col_offset": 31,
-            "filename": "/project/core/hasher.py",
-            "issue_confidence": "HIGH",
-            "issue_severity": "HIGH",
-            "issue_text": "Use of weak MD5 hash for security. Consider usedforsecurity=False",
-            "line_number": 42,
-            "line_range": [42],
-            "more_info": "",
-            "test_id": "B324",
-            "test_name": "hashlib",
-        },
-        {
-            "code": "    assert x > 0\n",
-            "col_offset": 4,
-            "end_col_offset": 18,
-            "filename": "/project/tests/test_foo.py",
-            "issue_confidence": "HIGH",
-            "issue_severity": "LOW",
-            "issue_text": "Use of assert detected.",
-            "line_number": 10,
-            "line_range": [10],
-            "more_info": "",
-            "test_id": "B101",
-            "test_name": "assert_used",
-        },
-        {
-            "code": "    requests.get(url)\n",
-            "col_offset": 4,
-            "end_col_offset": 24,
-            "filename": "/project/api.py",
-            "issue_confidence": "LOW",
-            "issue_severity": "MEDIUM",
-            "issue_text": "Call to requests without timeout",
-            "line_number": 88,
-            "line_range": [88],
-            "more_info": "",
-            "test_id": "B113",
-            "test_name": "request_without_timeout",
-        },
-        {
-            "code": "    exec(code)\n",
-            "col_offset": 4,
-            "end_col_offset": 14,
-            "filename": "/project/dynamic.py",
-            "issue_confidence": "HIGH",
-            "issue_severity": "MEDIUM",
-            "issue_text": "Use of exec detected.",
-            "line_number": 33,
-            "line_range": [33],
-            "more_info": "",
-            "test_id": "B102",
-            "test_name": "exec_used",
-        },
-    ]
-})
+SAMPLE_BANDIT_OUTPUT = json.dumps(
+    {
+        "errors": [],
+        "generated_at": "2026-02-17T12:00:00Z",
+        "metrics": {},
+        "results": [
+            {
+                "code": "    subprocess.run('echo hello', shell=True)\n",
+                "col_offset": 4,
+                "end_col_offset": 47,
+                "filename": "/project/utils.py",
+                "issue_confidence": "HIGH",
+                "issue_cwe": {"id": 78, "link": ""},
+                "issue_severity": "HIGH",
+                "issue_text": "subprocess call with shell=True identified, security issue.",
+                "line_number": 15,
+                "line_range": [15],
+                "more_info": "",
+                "test_id": "B602",
+                "test_name": "subprocess_popen_with_shell_equals_true",
+            },
+            {
+                "code": "    h = hashlib.md5(b'data')\n",
+                "col_offset": 8,
+                "end_col_offset": 31,
+                "filename": "/project/core/hasher.py",
+                "issue_confidence": "HIGH",
+                "issue_severity": "HIGH",
+                "issue_text": "Use of weak MD5 hash for security. Consider usedforsecurity=False",
+                "line_number": 42,
+                "line_range": [42],
+                "more_info": "",
+                "test_id": "B324",
+                "test_name": "hashlib",
+            },
+            {
+                "code": "    assert x > 0\n",
+                "col_offset": 4,
+                "end_col_offset": 18,
+                "filename": "/project/tests/test_foo.py",
+                "issue_confidence": "HIGH",
+                "issue_severity": "LOW",
+                "issue_text": "Use of assert detected.",
+                "line_number": 10,
+                "line_range": [10],
+                "more_info": "",
+                "test_id": "B101",
+                "test_name": "assert_used",
+            },
+            {
+                "code": "    requests.get(url)\n",
+                "col_offset": 4,
+                "end_col_offset": 24,
+                "filename": "/project/api.py",
+                "issue_confidence": "LOW",
+                "issue_severity": "MEDIUM",
+                "issue_text": "Call to requests without timeout",
+                "line_number": 88,
+                "line_range": [88],
+                "more_info": "",
+                "test_id": "B113",
+                "test_name": "request_without_timeout",
+            },
+            {
+                "code": "    exec(code)\n",
+                "col_offset": 4,
+                "end_col_offset": 14,
+                "filename": "/project/dynamic.py",
+                "issue_confidence": "HIGH",
+                "issue_severity": "MEDIUM",
+                "issue_text": "Use of exec detected.",
+                "line_number": 33,
+                "line_range": [33],
+                "more_info": "",
+                "test_id": "B102",
+                "test_name": "exec_used",
+            },
+        ],
+    }
+)
 
 
 # ════════════════════════════════════════════════════════════════════
 #  Availability
 # ════════════════════════════════════════════════════════════════════
 
-class TestSecurityAvailability:
 
+class TestSecurityAvailability:
     def test_available_when_bandit_found(self):
         with patch("shutil.which", return_value="/usr/bin/bandit"):
             analyzer = SecurityAnalyzer()
@@ -124,6 +131,7 @@ class TestSecurityAvailability:
 # ════════════════════════════════════════════════════════════════════
 #  Severity Mapping
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestSecuritySeverityMapping:
     """Tests for security severity mapping."""
@@ -154,6 +162,7 @@ class TestSecuritySeverityMapping:
 # ════════════════════════════════════════════════════════════════════
 #  JSON Parsing
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestSecurityParsing:
     """Tests for security result parsing."""
@@ -236,6 +245,7 @@ class TestSecurityParsing:
 #  Summary
 # ════════════════════════════════════════════════════════════════════
 
+
 class TestSecuritySummary:
     """Tests for security summary generation."""
 
@@ -253,9 +263,9 @@ class TestSecuritySummary:
         summary = analyzer.summary(issues)
         # B101 in test file is filtered → 4 total
         assert summary["total"] == 4
-        assert summary["critical"] == 2   # B602, B324
-        assert summary["warning"] == 2    # B113, B102
-        assert summary["info"] == 0       # B101 filtered
+        assert summary["critical"] == 2  # B602, B324
+        assert summary["warning"] == 2  # B113, B102
+        assert summary["info"] == 0  # B101 filtered
         assert summary["source"] == "bandit"
         assert "by_rule" in summary
         assert "worst_files" in summary
@@ -280,8 +290,8 @@ class TestSecuritySummary:
 #  Fix Suggestions
 # ════════════════════════════════════════════════════════════════════
 
-class TestSecuritySuggestions:
 
+class TestSecuritySuggestions:
     def test_known_suggestions(self):
         known = {
             "B101": "assert",
@@ -292,8 +302,9 @@ class TestSecuritySuggestions:
         }
         for test_id, keyword in known.items():
             suggestion = SecurityAnalyzer._suggest_fix(test_id, "")
-            assert keyword.lower() in suggestion.lower(), \
+            assert keyword.lower() in suggestion.lower(), (
                 f"B{test_id} suggestion should mention '{keyword}': got '{suggestion}'"
+            )
 
     def test_unknown_returns_generic(self):
         suggestion = SecurityAnalyzer._suggest_fix("B999", "")
@@ -304,8 +315,8 @@ class TestSecuritySuggestions:
 #  Error Handling
 # ════════════════════════════════════════════════════════════════════
 
-class TestSecurityErrorHandling:
 
+class TestSecurityErrorHandling:
     def test_timeout_returns_empty(self):
         assert_timeout_returns_empty(SecurityAnalyzer, "/usr/bin/bandit", "bandit")
 
@@ -316,6 +327,7 @@ class TestSecurityErrorHandling:
 # ════════════════════════════════════════════════════════════════════
 #  Live Integration (skip if bandit not installed)
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestSecurityLiveIntegration:
     """These tests actually run bandit. Skipped if not installed."""
@@ -359,7 +371,9 @@ class TestSecurityLiveIntegration:
     def test_clean_file_minimal_issues(self, tmp_path):
         """Scan a clean file — should have no HIGH issues."""
         clean = tmp_path / "clean.py"
-        clean.write_text('"""Clean module."""\n\n\ndef greet(name: str) -> str:\n    """Say hello."""\n    return f"Hello, {name}"\n')
+        clean.write_text(
+            '"""Clean module."""\n\n\ndef greet(name: str) -> str:\n    """Say hello."""\n    return f"Hello, {name}"\n'
+        )
 
         analyzer = SecurityAnalyzer()
         issues = analyzer.analyze(tmp_path)
@@ -370,8 +384,7 @@ class TestSecurityLiveIntegration:
         """Verify summary dict has expected keys."""
         bad_file = tmp_path / "bad.py"
         bad_file.write_text(
-            "import subprocess\n"
-            "subprocess.run('echo hi', shell=True)\n"
+            "import subprocess\nsubprocess.run('echo hi', shell=True)\n"
         )
 
         analyzer = SecurityAnalyzer()
@@ -391,6 +404,7 @@ class TestSecurityLiveIntegration:
 #  Edge Cases & Filtering
 # ════════════════════════════════════════════════════════════════════
 
+
 class TestSecurityEdgeCases:
     """Tests for security edge case handling."""
 
@@ -399,28 +413,54 @@ class TestSecurityEdgeCases:
 
     def test_b101_in_non_test_file_is_kept(self):
         """B101 (assert-used) in a production file should NOT be filtered."""
-        data = json.dumps({"errors": [], "results": [{
-            "code": "    assert x > 0\n", "col_offset": 4,
-            "end_col_offset": 18, "filename": "/project/utils.py",
-            "issue_confidence": "HIGH", "issue_severity": "LOW",
-            "issue_text": "Use of assert.", "line_number": 5,
-            "line_range": [5], "more_info": "", "test_id": "B101",
-            "test_name": "assert_used",
-        }]})
+        data = json.dumps(
+            {
+                "errors": [],
+                "results": [
+                    {
+                        "code": "    assert x > 0\n",
+                        "col_offset": 4,
+                        "end_col_offset": 18,
+                        "filename": "/project/utils.py",
+                        "issue_confidence": "HIGH",
+                        "issue_severity": "LOW",
+                        "issue_text": "Use of assert.",
+                        "line_number": 5,
+                        "line_range": [5],
+                        "more_info": "",
+                        "test_id": "B101",
+                        "test_name": "assert_used",
+                    }
+                ],
+            }
+        )
         issues = self._mock_analyze(data)
         assert len(issues) == 1
         assert issues[0].rule_code == "B101"
 
     def test_b404_always_filtered(self):
         """B404 (import-subprocess) should always be filtered out."""
-        data = json.dumps({"errors": [], "results": [{
-            "code": "import subprocess\n", "col_offset": 0,
-            "end_col_offset": 20, "filename": "/project/run.py",
-            "issue_confidence": "HIGH", "issue_severity": "LOW",
-            "issue_text": "Consider possible security implications.",
-            "line_number": 1, "line_range": [1], "more_info": "",
-            "test_id": "B404", "test_name": "import_subprocess",
-        }]})
+        data = json.dumps(
+            {
+                "errors": [],
+                "results": [
+                    {
+                        "code": "import subprocess\n",
+                        "col_offset": 0,
+                        "end_col_offset": 20,
+                        "filename": "/project/run.py",
+                        "issue_confidence": "HIGH",
+                        "issue_severity": "LOW",
+                        "issue_text": "Consider possible security implications.",
+                        "line_number": 1,
+                        "line_range": [1],
+                        "more_info": "",
+                        "test_id": "B404",
+                        "test_name": "import_subprocess",
+                    }
+                ],
+            }
+        )
         issues = self._mock_analyze(data)
         assert len(issues) == 0
 

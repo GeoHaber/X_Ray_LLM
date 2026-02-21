@@ -13,6 +13,7 @@ Usage:
     python tests/rust_harness/verify_rust.py --rust-bin xray.exe --verbose
     python tests/rust_harness/verify_rust.py --rust-bin xray.exe --suite exact_dupes
 """
+
 from __future__ import annotations
 
 import argparse
@@ -35,9 +36,11 @@ GOLDEN_DIR = HARNESS_DIR / "golden"
 #  Data structures
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Mismatch:
     """A single verification mismatch."""
+
     field: str
     expected: Any
     actual: Any
@@ -48,8 +51,9 @@ class Mismatch:
 @dataclass
 class SuiteResult:
     """Result of running one verification suite."""
+
     name: str
-    status: str = "PENDING"     # PASS | FAIL | SKIP | ERROR
+    status: str = "PENDING"  # PASS | FAIL | SKIP | ERROR
     mismatches: List[Mismatch] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     rust_time_ms: float = 0.0
@@ -73,14 +77,21 @@ class SuiteResult:
 #  Rust binary runner
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _build_rust_cmd(rust_bin: str, fixture_path: Path, report_path: str,
-                    include_files: Optional[List[str]] = None) -> list:
+
+def _build_rust_cmd(
+    rust_bin: str,
+    fixture_path: Path,
+    report_path: str,
+    include_files: Optional[List[str]] = None,
+) -> list:
     """Build the command-line list for the Rust X-Ray binary."""
     cmd = [
         rust_bin,
-        "--path", str(fixture_path),
+        "--path",
+        str(fixture_path),
         "--full-scan",
-        "--report", report_path,
+        "--report",
+        report_path,
         "--quiet",
     ]
     if include_files:
@@ -103,9 +114,12 @@ def _read_rust_report(report_path: str) -> dict:
     return report
 
 
-def run_rust_binary(rust_bin: str, fixture_path: Path,
-                    include_files: Optional[List[str]] = None,
-                    timeout: int = 120) -> tuple[dict, float]:
+def run_rust_binary(
+    rust_bin: str,
+    fixture_path: Path,
+    include_files: Optional[List[str]] = None,
+    timeout: int = 120,
+) -> tuple[dict, float]:
     """
     Execute the Rust X-Ray binary and capture its JSON report.
 
@@ -121,8 +135,7 @@ def run_rust_binary(rust_bin: str, fixture_path: Path,
 
     t0 = time.perf_counter()
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return {}, timeout * 1000
     except FileNotFoundError:
@@ -144,89 +157,132 @@ def run_rust_binary(rust_bin: str, fixture_path: Path,
 #  Comparison engine
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _compare_scalar(field: str, expected, actual, result: SuiteResult,
-                    severity: str = "ERROR"):
+
+def _compare_scalar(
+    field: str, expected, actual, result: SuiteResult, severity: str = "ERROR"
+):
     """Compare a single scalar value."""
     if expected != actual:
-        result.mismatches.append(Mismatch(
-            field=field, expected=expected, actual=actual,
-            severity=severity,
-            message=f"{field}: expected {expected!r}, got {actual!r}",
-        ))
+        result.mismatches.append(
+            Mismatch(
+                field=field,
+                expected=expected,
+                actual=actual,
+                severity=severity,
+                message=f"{field}: expected {expected!r}, got {actual!r}",
+            )
+        )
 
 
-def _compare_set(field: str, expected: set, actual: set,
-                 result: SuiteResult, severity: str = "ERROR"):
+def _compare_set(
+    field: str, expected: set, actual: set, result: SuiteResult, severity: str = "ERROR"
+):
     """Compare two sets, reporting missing and extra items."""
     missing = expected - actual
     extra = actual - expected
     if missing:
-        result.mismatches.append(Mismatch(
-            field=f"{field} (missing)",
-            expected=sorted(missing), actual=None,
-            severity=severity,
-            message=f"{field}: missing {len(missing)} items: {sorted(missing)[:5]}",
-        ))
+        result.mismatches.append(
+            Mismatch(
+                field=f"{field} (missing)",
+                expected=sorted(missing),
+                actual=None,
+                severity=severity,
+                message=f"{field}: missing {len(missing)} items: {sorted(missing)[:5]}",
+            )
+        )
     if extra:
-        result.mismatches.append(Mismatch(
-            field=f"{field} (extra)",
-            expected=None, actual=sorted(extra),
-            severity=severity,
-            message=f"{field}: {len(extra)} unexpected items: {sorted(extra)[:5]}",
-        ))
+        result.mismatches.append(
+            Mismatch(
+                field=f"{field} (extra)",
+                expected=None,
+                actual=sorted(extra),
+                severity=severity,
+                message=f"{field}: {len(extra)} unexpected items: {sorted(extra)[:5]}",
+            )
+        )
 
 
-def _compare_list_sorted(field: str, expected: list, actual: list,
-                         result: SuiteResult, severity: str = "ERROR"):
+def _compare_list_sorted(
+    field: str,
+    expected: list,
+    actual: list,
+    result: SuiteResult,
+    severity: str = "ERROR",
+):
     """Compare two sorted lists element-by-element."""
     if expected != actual:
         # Find first difference
         for i, (e, a) in enumerate(zip(expected, actual)):
             if e != a:
-                result.mismatches.append(Mismatch(
-                    field=f"{field}[{i}]",
-                    expected=e, actual=a,
-                    severity=severity,
-                    message=f"{field}[{i}]: expected {e!r}, got {a!r}",
-                ))
+                result.mismatches.append(
+                    Mismatch(
+                        field=f"{field}[{i}]",
+                        expected=e,
+                        actual=a,
+                        severity=severity,
+                        message=f"{field}[{i}]: expected {e!r}, got {a!r}",
+                    )
+                )
                 break
         if len(expected) != len(actual):
-            result.mismatches.append(Mismatch(
-                field=f"{field} (length)",
-                expected=len(expected), actual=len(actual),
-                severity=severity,
-                message=f"{field}: expected {len(expected)} items, got {len(actual)}",
-            ))
+            result.mismatches.append(
+                Mismatch(
+                    field=f"{field} (length)",
+                    expected=len(expected),
+                    actual=len(actual),
+                    severity=severity,
+                    message=f"{field}: expected {len(expected)} items, got {len(actual)}",
+                )
+            )
 
 
-def _compare_similarity(field: str, expected: float, actual: float,
-                        result: SuiteResult, tolerance: float = 0.05):
+def _compare_similarity(
+    field: str,
+    expected: float,
+    actual: float,
+    result: SuiteResult,
+    tolerance: float = 0.05,
+):
     """Compare float similarity values with tolerance."""
     if abs(expected - actual) > tolerance:
-        result.mismatches.append(Mismatch(
-            field=field,
-            expected=expected, actual=actual,
-            severity="WARN",
-            message=f"{field}: expected ~{expected:.3f}, got {actual:.3f} (tol={tolerance})",
-        ))
+        result.mismatches.append(
+            Mismatch(
+                field=field,
+                expected=expected,
+                actual=actual,
+                severity="WARN",
+                message=f"{field}: expected ~{expected:.3f}, got {actual:.3f} (tol={tolerance})",
+            )
+        )
 
 
 def _verify_hard_counts(exp, rust_stats, result):
     """L1: Verify total functions/classes/files/lines match exactly."""
-    _compare_scalar("total_functions", exp.get("total_functions"),
-                    rust_stats.get("total_functions"), result)
-    _compare_scalar("total_classes", exp.get("total_classes"),
-                    rust_stats.get("total_classes"), result)
-    _compare_scalar("total_files", exp.get("total_files"),
-                    rust_stats.get("total_files"), result)
-    _compare_scalar("total_lines", exp.get("total_lines"),
-                    rust_stats.get("total_lines"), result)
+    _compare_scalar(
+        "total_functions",
+        exp.get("total_functions"),
+        rust_stats.get("total_functions"),
+        result,
+    )
+    _compare_scalar(
+        "total_classes",
+        exp.get("total_classes"),
+        rust_stats.get("total_classes"),
+        result,
+    )
+    _compare_scalar(
+        "total_files", exp.get("total_files"), rust_stats.get("total_files"), result
+    )
+    _compare_scalar(
+        "total_lines", exp.get("total_lines"), rust_stats.get("total_lines"), result
+    )
 
 
 def _verify_smells(exp, rust_smells, rust_issues, result):
     """L2: Verify smell counts, categories, and fingerprints."""
-    _compare_scalar("smell_total", exp.get("smell_total"),
-                    rust_smells.get("total"), result)
+    _compare_scalar(
+        "smell_total", exp.get("smell_total"), rust_smells.get("total"), result
+    )
 
     exp_sev = exp.get("smell_severities", {})
     rust_sev = {
@@ -235,21 +291,25 @@ def _verify_smells(exp, rust_smells, rust_issues, result):
         "info": sum(1 for s in rust_issues if s.get("severity") == "info"),
     }
     for sev in ("critical", "warning", "info"):
-        _compare_scalar(f"smell_{sev}_count",
-                        exp_sev.get(sev, 0), rust_sev.get(sev, 0), result)
+        _compare_scalar(
+            f"smell_{sev}_count", exp_sev.get(sev, 0), rust_sev.get(sev, 0), result
+        )
 
     exp_cats = set(exp.get("smell_categories", []))
     rust_cats = set(s.get("category", "") for s in rust_issues)
     _compare_set("smell_categories", exp_cats, rust_cats, result)
 
-    rust_fingerprints = sorted([
-        f"{s.get('file', '')}:{s.get('line', 0)}:{s.get('category', '')}:"
-        f"{s.get('severity', '')}:{s.get('name', '')}"
-        for s in rust_issues
-    ])
+    rust_fingerprints = sorted(
+        [
+            f"{s.get('file', '')}:{s.get('line', 0)}:{s.get('category', '')}:"
+            f"{s.get('severity', '')}:{s.get('name', '')}"
+            for s in rust_issues
+        ]
+    )
     exp_fingerprints = exp.get("smell_fingerprints", [])
-    _compare_list_sorted("smell_fingerprints", exp_fingerprints,
-                         rust_fingerprints, result)
+    _compare_list_sorted(
+        "smell_fingerprints", exp_fingerprints, rust_fingerprints, result
+    )
 
 
 def _count_dup_types(groups: list) -> dict:
@@ -265,31 +325,45 @@ def _verify_dup_group_keys(exp_group_keys, rust_group_keys, result):
     if len(exp_group_keys) == len(rust_group_keys):
         for i, (eg, rg) in enumerate(zip(exp_group_keys, rust_group_keys)):
             if eg != rg:
-                result.mismatches.append(Mismatch(
-                    field=f"dup_group[{i}].keys",
-                    expected=eg, actual=rg,
-                    severity="ERROR",
-                    message=f"Group {i} membership differs",
-                ))
+                result.mismatches.append(
+                    Mismatch(
+                        field=f"dup_group[{i}].keys",
+                        expected=eg,
+                        actual=rg,
+                        severity="ERROR",
+                        message=f"Group {i} membership differs",
+                    )
+                )
     elif exp_group_keys or rust_group_keys:
-        result.mismatches.append(Mismatch(
-            field="dup_group_count",
-            expected=len(exp_group_keys), actual=len(rust_group_keys),
-            severity="ERROR",
-            message=f"Group count mismatch: {len(exp_group_keys)} vs {len(rust_group_keys)}",
-        ))
+        result.mismatches.append(
+            Mismatch(
+                field="dup_group_count",
+                expected=len(exp_group_keys),
+                actual=len(rust_group_keys),
+                severity="ERROR",
+                message=f"Group count mismatch: {len(exp_group_keys)} vs {len(rust_group_keys)}",
+            )
+        )
 
 
 def _verify_duplicates(exp, rust_dups, rust_groups, golden, result):
     """L2: Verify duplicate group counts and membership."""
-    _compare_scalar("dup_total_groups", exp.get("dup_total_groups"),
-                    rust_dups.get("total_groups"), result)
+    _compare_scalar(
+        "dup_total_groups",
+        exp.get("dup_total_groups"),
+        rust_dups.get("total_groups"),
+        result,
+    )
 
     exp_dtypes = exp.get("dup_types", {})
     rust_dtypes = _count_dup_types(rust_groups)
     for dtype in ("exact", "structural", "near", "semantic"):
-        _compare_scalar(f"dup_{dtype}_count",
-                        exp_dtypes.get(dtype, 0), rust_dtypes.get(dtype, 0), result)
+        _compare_scalar(
+            f"dup_{dtype}_count",
+            exp_dtypes.get(dtype, 0),
+            rust_dtypes.get(dtype, 0),
+            result,
+        )
 
     exp_group_keys = exp.get("dup_group_keys", [])
     rust_group_keys = [
@@ -317,8 +391,7 @@ def _verify_duplicates(exp, rust_dups, rust_groups, golden, result):
 
 def _verify_lib_suggestions(exp, rust_lib, result):
     """L2: Verify library suggestion counts and modules."""
-    _compare_scalar("lib_total", exp.get("lib_total"),
-                    rust_lib.get("total"), result)
+    _compare_scalar("lib_total", exp.get("lib_total"), rust_lib.get("total"), result)
     exp_modules = set(exp.get("lib_modules", []))
     rust_modules = set(s.get("module", "") for s in rust_lib.get("suggestions", []))
     _compare_set("lib_modules", exp_modules, rust_modules, result, severity="WARN")
@@ -335,12 +408,15 @@ def _check_nested_excluded(exp, rust_groups, rust_issues, result):
     for s in rust_issues:
         all_names.add(s.get("name", ""))
     if "_inner_helper" in all_names:
-        result.mismatches.append(Mismatch(
-            field="assert_nested_excluded",
-            expected="no _inner_helper", actual="_inner_helper found",
-            severity="ERROR",
-            message="Nested function _inner_helper should not be extracted!",
-        ))
+        result.mismatches.append(
+            Mismatch(
+                field="assert_nested_excluded",
+                expected="no _inner_helper",
+                actual="_inner_helper found",
+                severity="ERROR",
+                message="Nested function _inner_helper should not be extracted!",
+            )
+        )
 
 
 def _verify_suite_assertions(exp, rust_data, result):
@@ -351,25 +427,33 @@ def _verify_suite_assertions(exp, rust_data, result):
     rust_smells = rust_data["smells"]
     rust_dtypes = rust_data["dtypes"]
     if exp.get("assert_zero_smells") and rust_smells.get("total", 0) > 0:
-        result.mismatches.append(Mismatch(
-            field="assert_zero_smells",
-            expected=0, actual=rust_smells["total"],
-            severity="ERROR",
-            message="Clean code suite should produce zero smells!",
-        ))
+        result.mismatches.append(
+            Mismatch(
+                field="assert_zero_smells",
+                expected=0,
+                actual=rust_smells["total"],
+                severity="ERROR",
+                message="Clean code suite should produce zero smells!",
+            )
+        )
 
     for dtype_assert in ("exact", "structural", "near", "semantic"):
         flag = f"assert_has_{dtype_assert}_groups"
         if exp.get(flag) and rust_dtypes.get(dtype_assert, 0) == 0:
-            result.mismatches.append(Mismatch(
-                field=flag,
-                expected=f">0 {dtype_assert} groups", actual=0,
-                severity="ERROR",
-                message=f"Expected at least one {dtype_assert} duplicate group!",
-            ))
+            result.mismatches.append(
+                Mismatch(
+                    field=flag,
+                    expected=f">0 {dtype_assert} groups",
+                    actual=0,
+                    severity="ERROR",
+                    message=f"Expected at least one {dtype_assert} duplicate group!",
+                )
+            )
 
     if exp.get("assert_has_async_function"):
-        result.warnings.append("Note: async function detection not yet verified in JSON")
+        result.warnings.append(
+            "Note: async function detection not yet verified in JSON"
+        )
 
     _check_nested_excluded(exp, rust_data["groups"], rust_data["issues"], result)
 
@@ -389,10 +473,15 @@ def verify_suite(golden: dict, rust_report: dict) -> SuiteResult:
 
     if not rust_report:
         result.status = "ERROR"
-        result.mismatches.append(Mismatch(
-            field="report", expected="valid JSON", actual=None,
-            severity="ERROR", message="Rust produced no JSON output.",
-        ))
+        result.mismatches.append(
+            Mismatch(
+                field="report",
+                expected="valid JSON",
+                actual=None,
+                severity="ERROR",
+                message="Rust produced no JSON output.",
+            )
+        )
         return result
 
     rust_stats = rust_report.get("stats", {})
@@ -406,10 +495,16 @@ def verify_suite(golden: dict, rust_report: dict) -> SuiteResult:
     _verify_smells(exp, rust_smells, rust_issues, result)
     rust_dtypes = _verify_duplicates(exp, rust_dups, rust_groups, golden, result)
     _verify_lib_suggestions(exp, rust_lib, result)
-    _verify_suite_assertions(exp, {
-        "smells": rust_smells, "dtypes": rust_dtypes,
-        "issues": rust_issues, "groups": rust_groups,
-    }, result)
+    _verify_suite_assertions(
+        exp,
+        {
+            "smells": rust_smells,
+            "dtypes": rust_dtypes,
+            "issues": rust_issues,
+            "groups": rust_groups,
+        },
+        result,
+    )
 
     result.status = "FAIL" if result.error_count > 0 else "PASS"
     return result
@@ -419,6 +514,7 @@ def verify_suite(golden: dict, rust_report: dict) -> SuiteResult:
 #  Report generator
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _format_suite_line(r: SuiteResult) -> str:
     """Format a single suite result line."""
     icon = "✓" if r.passed else "✗"
@@ -426,8 +522,10 @@ def _format_suite_line(r: SuiteResult) -> str:
     if r.rust_time_ms > 0 and r.python_time_ms > 0:
         r.speedup = r.python_time_ms / r.rust_time_ms if r.rust_time_ms > 0 else 0
         perf = f" ({r.rust_time_ms:.0f}ms, {r.speedup:.1f}x faster)"
-    return (f"    {icon} {r.name:<25s} {r.status:<6s}"
-            f"  errors={r.error_count} warns={r.warn_count}{perf}")
+    return (
+        f"    {icon} {r.name:<25s} {r.status:<6s}"
+        f"  errors={r.error_count} warns={r.warn_count}{perf}"
+    )
 
 
 def _print_suite_details(r: SuiteResult, verbose: bool):
@@ -447,24 +545,26 @@ def print_results(results: List[SuiteResult], verbose: bool = False):
     passed = sum(1 for r in results if r.passed)
     failed = total - passed
 
-    print(f"\n  {'='*60}")
+    print(f"\n  {'=' * 60}")
     print("    RUST VERIFICATION REPORT")
-    print(f"  {'='*60}")
+    print(f"  {'=' * 60}")
 
     for r in results:
         _print_suite_details(r, verbose)
 
-    print(f"\n  {'-'*60}")
+    print(f"\n  {'-' * 60}")
     print(f"    Total: {total}  ✓ Passed: {passed}  ✗ Failed: {failed}")
 
     rust_total = sum(r.rust_time_ms for r in results)
     py_total = sum(r.python_time_ms for r in results)
     if rust_total > 0 and py_total > 0:
         overall_speedup = py_total / rust_total
-        print(f"\n    Performance: Python {py_total:.0f}ms → Rust {rust_total:.0f}ms "
-              f"({overall_speedup:.1f}x speedup)")
+        print(
+            f"\n    Performance: Python {py_total:.0f}ms → Rust {rust_total:.0f}ms "
+            f"({overall_speedup:.1f}x speedup)"
+        )
 
-    print(f"  {'='*60}\n")
+    print(f"  {'=' * 60}\n")
     return failed == 0
 
 
@@ -472,19 +572,24 @@ def print_results(results: List[SuiteResult], verbose: bool = False):
 #  Main
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def main():
     """Execute the Rust verification test suite and print results."""
     parser = argparse.ArgumentParser(
         description="Verify Rust X-Ray binary against Python golden outputs",
     )
-    parser.add_argument("--rust-bin", required=True,
-                        help="Path to the Rust X-Ray binary")
-    parser.add_argument("--suite", default=None,
-                        help="Run only this suite (default: all)")
-    parser.add_argument("--verbose", "-v", action="store_true",
-                        help="Show all comparison details")
-    parser.add_argument("--timeout", type=int, default=120,
-                        help="Timeout per suite in seconds")
+    parser.add_argument(
+        "--rust-bin", required=True, help="Path to the Rust X-Ray binary"
+    )
+    parser.add_argument(
+        "--suite", default=None, help="Run only this suite (default: all)"
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Show all comparison details"
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=120, help="Timeout per suite in seconds"
+    )
     args = parser.parse_args()
 
     # Discover golden files

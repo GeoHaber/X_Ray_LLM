@@ -1,6 +1,7 @@
 """
 Tests for Analysis.tracer — FunctionTracer runtime I/O capture.
 """
+
 from __future__ import annotations
 
 import json
@@ -15,6 +16,7 @@ from Analysis.tracer import (
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _add(a: int, b: int) -> int:
     """Simple pure function for testing."""
@@ -39,6 +41,7 @@ def _noop() -> None:
 
 
 # ── _type_tag / _safe_repr tests ────────────────────────────────────────────
+
 
 class TestTypeTagAndRepr:
     """Tests for the _type_tag and _safe_repr helper functions."""
@@ -72,6 +75,7 @@ class TestTypeTagAndRepr:
 
 
 # ── FunctionTracer.wrap ─────────────────────────────────────────────────────
+
 
 class TestTracerWrap:
     """Tests for FunctionTracer.wrap preserving behaviour and capturing I/O."""
@@ -149,6 +153,7 @@ class TestTracerWrap:
 
 # ── Exception tracking ──────────────────────────────────────────────────────
 
+
 class TestTracerExceptions:
     """Tests for exception tracking in FunctionTracer."""
 
@@ -209,6 +214,7 @@ class TestTracerExceptions:
 
 # ── Sample cap ───────────────────────────────────────────────────────────────
 
+
 class TestTracerSampleCap:
     """Tests for the MAX_SAMPLES cap on recorded I/O pairs."""
 
@@ -224,6 +230,7 @@ class TestTracerSampleCap:
 
 
 # ── profile_for ──────────────────────────────────────────────────────────────
+
 
 class TestProfileFor:
     """Tests for the profile_for lookup method."""
@@ -241,6 +248,7 @@ class TestProfileFor:
 
 
 # ── Noop function ────────────────────────────────────────────────────────────
+
 
 class TestTracerNoop:
     """Tests for tracing a no-arg, no-return function."""
@@ -261,6 +269,7 @@ class TestTracerNoop:
 
 
 # ── Serialisation roundtrip ─────────────────────────────────────────────────
+
 
 class TestTracerSerialisation:
     """Tests for save/load JSON roundtrip."""
@@ -296,37 +305,51 @@ class TestTracerSerialisation:
 
 # ── TraceProfile properties ─────────────────────────────────────────────────
 
+
 class TestTraceProfileProperties:
     """Tests for derived properties on TraceProfile."""
 
     def test_avg_time_us(self):
         """Average time is computed correctly."""
         tp = TraceProfile(
-            func_name="f", module="m", qualname="m.f",
-            param_names=[], call_count=10, total_time_us=1000,
+            func_name="f",
+            module="m",
+            qualname="m.f",
+            param_names=[],
+            call_count=10,
+            total_time_us=1000,
         )
         assert tp.avg_time_us == 100.0
 
     def test_avg_time_us_zero_calls(self):
         """avg_time_us handles zero calls without division error."""
         tp = TraceProfile(
-            func_name="f", module="m", qualname="m.f",
-            param_names=[], call_count=0, total_time_us=0,
+            func_name="f",
+            module="m",
+            qualname="m.f",
+            param_names=[],
+            call_count=0,
+            total_time_us=0,
         )
         assert tp.avg_time_us == 0.0
 
     def test_dominant_return_type(self):
         """dominant_return_type returns the first seen type."""
         tp = TraceProfile(
-            func_name="f", module="m", qualname="m.f",
-            param_names=[], observed_return_types={"int", "str"},
+            func_name="f",
+            module="m",
+            qualname="m.f",
+            param_names=[],
+            observed_return_types={"int", "str"},
         )
         assert tp.dominant_return_type in ("int", "str")
 
     def test_dominant_return_type_empty(self):
         """dominant_return_type returns 'unknown' when no types seen."""
         tp = TraceProfile(
-            func_name="f", module="m", qualname="m.f",
+            func_name="f",
+            module="m",
+            qualname="m.f",
             param_names=[],
         )
         assert tp.dominant_return_type == "unknown"
@@ -334,8 +357,12 @@ class TestTraceProfileProperties:
     def test_to_dict(self):
         """to_dict produces a JSON-serialisable dict."""
         tp = TraceProfile(
-            func_name="f", module="m", qualname="m.f",
-            param_names=["x"], call_count=1, total_time_us=500,
+            func_name="f",
+            module="m",
+            qualname="m.f",
+            param_names=["x"],
+            call_count=1,
+            total_time_us=500,
             observed_return_types={"int"},
         )
         d = tp.to_dict()
@@ -345,6 +372,7 @@ class TestTraceProfileProperties:
 
 
 # ── Reset ────────────────────────────────────────────────────────────────────
+
 
 class TestTracerReset:
     """Tests for FunctionTracer.reset clearing all data."""

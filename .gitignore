@@ -20,6 +20,8 @@ dist/
 build/
 
 # Temporary scan results (regeneratable)
+quality-check.log
+results.json
 bandit_self.json
 xray_self_scan.json
 xray_self_scan_v2.json

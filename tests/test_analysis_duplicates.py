@@ -1,6 +1,7 @@
 """
 Tests for Analysis/duplicates.py — DuplicateFinder.
 """
+
 import pytest
 from Analysis.duplicates import DuplicateFinder, _func_to_dict, _is_valid_group
 from tests.conftest import make_func as _func
@@ -9,6 +10,7 @@ from tests.conftest import make_func as _func
 # ════════════════════════════════════════════════════════════════════
 #  Exact duplicates
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestExactDuplicates:
     """Tests for exact duplicate detection."""
@@ -46,8 +48,20 @@ class TestExactDuplicates:
 
     def test_no_duplicates(self):
         funcs = [
-            _func(name="a", file_path="a.py", code_hash="H1", structure_hash="S1", code="x=1"),
-            _func(name="b", file_path="b.py", code_hash="H2", structure_hash="S2", code="y=2"),
+            _func(
+                name="a",
+                file_path="a.py",
+                code_hash="H1",
+                structure_hash="S1",
+                code="x=1",
+            ),
+            _func(
+                name="b",
+                file_path="b.py",
+                code_hash="H2",
+                structure_hash="S2",
+                code="y=2",
+            ),
         ]
         finder = DuplicateFinder()
         groups = finder.find(funcs)
@@ -58,12 +72,24 @@ class TestExactDuplicates:
 #  Structural duplicates
 # ════════════════════════════════════════════════════════════════════
 
-class TestStructuralDuplicates:
 
+class TestStructuralDuplicates:
     def test_structural_match(self):
         funcs = [
-            _func(name="a", file_path="a.py", code_hash="H1", structure_hash="SAME", size_lines=10),
-            _func(name="b", file_path="b.py", code_hash="H2", structure_hash="SAME", size_lines=10),
+            _func(
+                name="a",
+                file_path="a.py",
+                code_hash="H1",
+                structure_hash="SAME",
+                size_lines=10,
+            ),
+            _func(
+                name="b",
+                file_path="b.py",
+                code_hash="H2",
+                structure_hash="SAME",
+                size_lines=10,
+            ),
         ]
         finder = DuplicateFinder()
         groups = finder.find(funcs)
@@ -73,8 +99,20 @@ class TestStructuralDuplicates:
     def test_structural_skip_small_functions(self):
         """Functions < 4 lines are excluded from structural check."""
         funcs = [
-            _func(name="a", file_path="a.py", code_hash="H1", structure_hash="SAME", size_lines=2),
-            _func(name="b", file_path="b.py", code_hash="H2", structure_hash="SAME", size_lines=2),
+            _func(
+                name="a",
+                file_path="a.py",
+                code_hash="H1",
+                structure_hash="SAME",
+                size_lines=2,
+            ),
+            _func(
+                name="b",
+                file_path="b.py",
+                code_hash="H2",
+                structure_hash="SAME",
+                size_lines=2,
+            ),
         ]
         finder = DuplicateFinder()
         groups = finder.find(funcs)
@@ -82,8 +120,22 @@ class TestStructuralDuplicates:
 
     def test_structural_empty_hash_skipped(self):
         funcs = [
-            _func(name="a", file_path="a.py", code_hash="H1", structure_hash="", size_lines=10, code="x=1"),
-            _func(name="b", file_path="b.py", code_hash="H2", structure_hash="", size_lines=10, code="y=2"),
+            _func(
+                name="a",
+                file_path="a.py",
+                code_hash="H1",
+                structure_hash="",
+                size_lines=10,
+                code="x=1",
+            ),
+            _func(
+                name="b",
+                file_path="b.py",
+                code_hash="H2",
+                structure_hash="",
+                size_lines=10,
+                code="y=2",
+            ),
         ]
         finder = DuplicateFinder()
         groups = finder.find(funcs)
@@ -94,12 +146,23 @@ class TestStructuralDuplicates:
 #  Boilerplate skipping
 # ════════════════════════════════════════════════════════════════════
 
-class TestBoilerplateSkipping:
 
-    @pytest.mark.parametrize("name", [
-        "__init__", "__repr__", "__str__", "__eq__", "__hash__",
-        "__len__", "__iter__", "__next__", "__enter__", "__exit__",
-    ])
+class TestBoilerplateSkipping:
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "__init__",
+            "__repr__",
+            "__str__",
+            "__eq__",
+            "__hash__",
+            "__len__",
+            "__iter__",
+            "__next__",
+            "__enter__",
+            "__exit__",
+        ],
+    )
     def test_boilerplate_excluded(self, name):
         funcs = [
             _func(name=name, file_path="a.py", code_hash="SAME"),
@@ -114,8 +177,8 @@ class TestBoilerplateSkipping:
 #  _is_valid_group / _func_to_dict
 # ════════════════════════════════════════════════════════════════════
 
-class TestHelpers:
 
+class TestHelpers:
     def test_single_function_not_valid(self):
         assert _is_valid_group([_func()], cross_file=True) is False
 
@@ -131,6 +194,7 @@ class TestHelpers:
 # ════════════════════════════════════════════════════════════════════
 #  Edge cases
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestEdgeCases:
     """Tests for edge cases in duplicate detection."""
@@ -158,10 +222,34 @@ class TestEdgeCases:
 
     def test_groups_get_incrementing_ids(self):
         funcs = [
-            _func(name="a", file_path="a.py", code_hash="H1", structure_hash="S1", size_lines=10),
-            _func(name="b", file_path="b.py", code_hash="H1", structure_hash="S1", size_lines=10),
-            _func(name="c", file_path="c.py", code_hash="H2", structure_hash="S2", size_lines=10),
-            _func(name="d", file_path="d.py", code_hash="H3", structure_hash="S2", size_lines=10),
+            _func(
+                name="a",
+                file_path="a.py",
+                code_hash="H1",
+                structure_hash="S1",
+                size_lines=10,
+            ),
+            _func(
+                name="b",
+                file_path="b.py",
+                code_hash="H1",
+                structure_hash="S1",
+                size_lines=10,
+            ),
+            _func(
+                name="c",
+                file_path="c.py",
+                code_hash="H2",
+                structure_hash="S2",
+                size_lines=10,
+            ),
+            _func(
+                name="d",
+                file_path="d.py",
+                code_hash="H3",
+                structure_hash="S2",
+                size_lines=10,
+            ),
         ]
         finder = DuplicateFinder()
         groups = finder.find(funcs, cross_file_only=True)

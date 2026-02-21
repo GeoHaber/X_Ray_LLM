@@ -21,9 +21,9 @@ from Analysis._analyzer_base import BaseStaticAnalyzer
 
 # Bandit severity → X-Ray severity
 _SEVERITY_MAP: Dict[str, str] = {
-    "HIGH":   Severity.CRITICAL,
+    "HIGH": Severity.CRITICAL,
     "MEDIUM": Severity.WARNING,
-    "LOW":    Severity.INFO,
+    "LOW": Severity.INFO,
 }
 
 # Well-known Bandit test IDs → human-readable categories
@@ -75,8 +75,9 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
     TOOL_TIMEOUT = 300
     TOOL_LOG_NAME = "Bandit"
 
-    def __init__(self, severity_threshold: str = "low",
-                 extra_args: Optional[List[str]] = None):
+    def __init__(
+        self, severity_threshold: str = "low", extra_args: Optional[List[str]] = None
+    ):
         """
         Parameters
         ----------
@@ -90,8 +91,7 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
 
     # -- overrides ---------------------------------------------------------
 
-    def _build_command(self, root: Path,
-                       exclude: Optional[List[str]]) -> List[str]:
+    def _build_command(self, root: Path, exclude: Optional[List[str]]) -> List[str]:
         """Assemble the bandit CLI command list."""
         cmd = [self._tool_path, "-r", str(root), "-f", "json"]
 
@@ -105,10 +105,21 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
 
         # Auto-exclude common non-project directories
         auto_exclude = [
-            ".venv", "venv", ".env", "__pycache__", "node_modules",
-            ".git", "target", ".mypy_cache", ".pytest_cache",
-            "dist", "build", ".eggs", "*.egg-info",
-            "_scratch", ".github",
+            ".venv",
+            "venv",
+            ".env",
+            "__pycache__",
+            "node_modules",
+            ".git",
+            "target",
+            ".mypy_cache",
+            ".pytest_cache",
+            "dist",
+            "build",
+            ".eggs",
+            "*.egg-info",
+            "_scratch",
+            ".github",
         ]
         all_exclude = list(auto_exclude)
         if exclude:
@@ -151,7 +162,11 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
         # Skip B101 (assert-used) in test files — asserts are expected in tests
         if test_id == "B101":
             fn_lower = filename.replace("\\", "/").lower()
-            if "/test" in fn_lower or fn_lower.startswith("test") or "conftest" in fn_lower:
+            if (
+                "/test" in fn_lower
+                or fn_lower.startswith("test")
+                or "conftest" in fn_lower
+            ):
                 return None
 
         # Skip B404 (import-subprocess) — importing is not a vulnerability
@@ -221,6 +236,7 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
     def summary(self, issues: List[SmellIssue]) -> Dict[str, Any]:
         """Build summary with additional ``by_confidence`` breakdown."""
         from collections import Counter
+
         result = super().summary(issues)
         by_confidence = Counter(s.confidence for s in issues)
         result["by_confidence"] = dict(by_confidence)

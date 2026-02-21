@@ -1,6 +1,7 @@
 # Automated Code Quality CI/CD Setup
 
 > **Philosophy:** Less is more. Simple automated checks that keep quality high without friction.
+> See [SECURITY.md](SECURITY.md) for dependency and code security practices.
 
 ## What's Included
 
@@ -21,6 +22,10 @@ The workflow file `.github/workflows/quality.yml` runs automatically on:
 
 **What it does:**
 ```
+pip-audit → Check deps for CVEs
+         ↓
+pyright → Type check (permissive, non-blocking)
+         ↓
 pytest → ✅ Tests pass
          ↓
 x_ray_claude.py → Generate smell report
@@ -68,19 +73,25 @@ python x_ray_claude.py --full-scan --graph --path .
 
 ## Quality Gates (Configurable)
 
-Edit `.github/scripts/check_quality.py` to adjust thresholds:
+Edit `.github/scripts/check_quality.py` to adjust thresholds. **CRITICAL** gates fail the build; **WARNING** gates are advisory.
 
 ```python
 QUALITY_GATES = {
-    "max_critical_smells": 20,      # Fail if > 20 critical issues
-    "max_long_functions": 25,       # Fail if > 25 functions > 120 lines
-    "max_complex_functions": 30,    # Fail if > 30 functions with complexity > 20
-    "max_total_smells": 200,        # Fail if > 200 total smells
-    "max_duplicate_groups": 50,     # Warn if > 50 duplicate groups
+    # CRITICAL (fail build)
+    "max_critical_smells": 20,
+    "max_total_smells": 200,
+    # WARNING (advisory)
+    "max_warning_smells": 100,
+    "max_long_functions": 25,
+    "max_complex_functions": 30,
+    "max_deep_nesting": 15,
+    "max_god_classes": 5,
+    "max_bare_except": 5,
+    "max_mutable_default_arg": 10,
+    "max_too_many_params": 20,
+    "max_duplicate_groups": 50,
 }
 ```
-
-**Current Status:** X-Ray itself: 148 smells, 16 critical (your own code!)
 
 ---
 
@@ -138,8 +149,8 @@ git commit --no-verify
 **Adjust GitHub Actions trigger:**
 Edit `.github/workflows/quality.yml` — change `on:` section
 
-**Add more smells checks:**
-Edit `x_ray_claude.py --smell --path .` to add custom rules
+**Add more smell rules:**
+Edit `Analysis/smells.py` or thresholds in `Core/config.py`
 
 **Different Python versions:**
 Change `matrix.python-version` in `quality.yml`
@@ -168,11 +179,11 @@ Change `matrix.python-version` in `quality.yml`
 **Q: CI is failing, what do I do?**  
 A: Download the `code-quality-report` artifact, check `quality-check.log`, fix issues, push again.
 
-**Q: Pre-commit hook is slow**  
-A: Use `--smell` instead of `--full-scan` (1-2 sec vs 10 sec)
+**Q: Pre-commit hook is slow?**  
+A: Use `--smell` instead of `--full-scan` (faster: ~2 s vs ~15 s).
 
 **Q: Can I adjust quality gates per repo?**  
-A: Yes, edit `QUALITY_GATES` dict in `.github/scripts/check_quality.py`
+A: Yes — edit `QUALITY_GATES` in `.github/scripts/check_quality.py`.
 
 **Q: What if tests pass but smells fail?**  
 A: Build still fails (quality gate). Fix smells or adjust thresholds.

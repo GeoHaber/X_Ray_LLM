@@ -42,13 +42,14 @@ from typing import Any, Dict, List, Optional, Tuple
 # ═══════════════════════════════════════════════════════════════════════════
 
 try:
-    from _mothership.hardware_detection import detect_hardware   # noqa: F401
-    from _mothership.models import HardwareProfile               # noqa: F401
+    from _mothership.hardware_detection import detect_hardware  # noqa: F401
+    from _mothership.models import HardwareProfile  # noqa: F401
 except ImportError:
     # ── Minimal fallback when _mothership is not vendored yet ──────────
     @dataclass
-    class HardwareProfile:                        # type: ignore[no-redef]
+    class HardwareProfile:  # type: ignore[no-redef]
         """Minimal fallback — run mothership_sync to get the full version."""
+
         os_name: str = ""
         os_version: str = ""
         arch: str = ""
@@ -82,7 +83,7 @@ except ImportError:
         def to_dict(self) -> Dict[str, Any]:
             return {"tier": "minimal", "note": "mothership not installed"}
 
-    def detect_hardware() -> HardwareProfile:     # type: ignore[no-redef]
+    def detect_hardware() -> HardwareProfile:  # type: ignore[no-redef]
         """Fallback detector — less capable than mothership version."""
         return HardwareProfile(
             os_name=platform.system(),
@@ -99,34 +100,34 @@ except ImportError:
         )
 
 
-
-
 # ═══════════════════════════════════════════════════════════════════════════
 #  2.  LLM Model Catalog
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class ModelCard:
     """Human-readable model description."""
-    id: str                     # e.g. "qwen2.5-coder-7b-q4"
-    name: str                   # "Qwen 2.5 Coder 7B"
-    family: str                 # "Qwen", "DeepSeek", "Llama", "Phi", "Gemma"
-    params: str                 # "7B", "3B", "14B"
-    quant: str                  # "Q4_K_M", "Q5_K_M", "Q8_0"
-    size_gb: float              # download size
-    ram_needed_gb: float        # minimum RAM to run
-    vram_needed_gb: float       # VRAM if GPU offloading
-    min_tier: str               # "minimal", "low", "medium", "high"
+
+    id: str  # e.g. "qwen2.5-coder-7b-q4"
+    name: str  # "Qwen 2.5 Coder 7B"
+    family: str  # "Qwen", "DeepSeek", "Llama", "Phi", "Gemma"
+    params: str  # "7B", "3B", "14B"
+    quant: str  # "Q4_K_M", "Q5_K_M", "Q8_0"
+    size_gb: float  # download size
+    ram_needed_gb: float  # minimum RAM to run
+    vram_needed_gb: float  # VRAM if GPU offloading
+    min_tier: str  # "minimal", "low", "medium", "high"
 
     # ── Human-readable capability summary ──
-    speed: str                  # "⚡ Fast", "🏃 Medium", "🐢 Slow"
-    code_quality: str           # "★★★★★", "★★★★☆", etc.
-    reasoning: str              # "★★★☆☆" etc.
-    best_for: str               # one-line description
+    speed: str  # "⚡ Fast", "🏃 Medium", "🐢 Slow"
+    code_quality: str  # "★★★★★", "★★★★☆", etc.
+    reasoning: str  # "★★★☆☆" etc.
+    best_for: str  # one-line description
 
     # Download info
-    gguf_url: str = ""          # direct .gguf download URL (HuggingFace)
-    gguf_filename: str = ""     # e.g. "qwen2.5-coder-7b-q4_k_m.gguf"
+    gguf_url: str = ""  # direct .gguf download URL (HuggingFace)
+    gguf_filename: str = ""  # e.g. "qwen2.5-coder-7b-q4_k_m.gguf"
 
     @property
     def stars(self) -> str:
@@ -149,112 +150,196 @@ MODEL_CATALOG: List[ModelCard] = [
     # ── Tiny (minimal tier) ──
     ModelCard(
         id="qwen2.5-coder-1.5b-q4",
-        name="Qwen 2.5 Coder 1.5B", family="Qwen", params="1.5B",
-        quant="Q4_K_M", size_gb=1.0, ram_needed_gb=4, vram_needed_gb=2,
+        name="Qwen 2.5 Coder 1.5B",
+        family="Qwen",
+        params="1.5B",
+        quant="Q4_K_M",
+        size_gb=1.0,
+        ram_needed_gb=4,
+        vram_needed_gb=2,
         min_tier="minimal",
-        speed="⚡ Very Fast", code_quality="★★★☆☆", reasoning="★★☆☆☆",
+        speed="⚡ Very Fast",
+        code_quality="★★★☆☆",
+        reasoning="★★☆☆☆",
         best_for="Quick code suggestions on weak hardware",
         gguf_filename="qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
     ),
     ModelCard(
         id="phi-3.5-mini-q4",
-        name="Phi 3.5 Mini 3.8B", family="Phi", params="3.8B",
-        quant="Q4_K_M", size_gb=2.3, ram_needed_gb=6, vram_needed_gb=4,
+        name="Phi 3.5 Mini 3.8B",
+        family="Phi",
+        params="3.8B",
+        quant="Q4_K_M",
+        size_gb=2.3,
+        ram_needed_gb=6,
+        vram_needed_gb=4,
         min_tier="low",
-        speed="⚡ Fast", code_quality="★★★★☆", reasoning="★★★☆☆",
+        speed="⚡ Fast",
+        code_quality="★★★★☆",
+        reasoning="★★★☆☆",
         best_for="Good balance of speed and quality on 8 GB machines",
         gguf_filename="Phi-3.5-mini-instruct-Q4_K_M.gguf",
     ),
     # ── Medium tier ──
     ModelCard(
         id="qwen2.5-coder-7b-q4",
-        name="Qwen 2.5 Coder 7B", family="Qwen", params="7B",
-        quant="Q4_K_M", size_gb=4.4, ram_needed_gb=10, vram_needed_gb=6,
+        name="Qwen 2.5 Coder 7B",
+        family="Qwen",
+        params="7B",
+        quant="Q4_K_M",
+        size_gb=4.4,
+        ram_needed_gb=10,
+        vram_needed_gb=6,
         min_tier="medium",
-        speed="🏃 Medium", code_quality="★★★★★", reasoning="★★★★☆",
+        speed="🏃 Medium",
+        code_quality="★★★★★",
+        reasoning="★★★★☆",
         best_for="Best code model for 16 GB RAM — excellent refactoring",
         gguf_filename="qwen2.5-coder-7b-instruct-q4_k_m.gguf",
     ),
     ModelCard(
         id="deepseek-coder-v2-lite-q4",
-        name="DeepSeek Coder V2 Lite 16B", family="DeepSeek", params="16B (MoE)",
-        quant="Q4_K_M", size_gb=5.5, ram_needed_gb=12, vram_needed_gb=8,
+        name="DeepSeek Coder V2 Lite 16B",
+        family="DeepSeek",
+        params="16B (MoE)",
+        quant="Q4_K_M",
+        size_gb=5.5,
+        ram_needed_gb=12,
+        vram_needed_gb=8,
         min_tier="medium",
-        speed="🏃 Medium", code_quality="★★★★★", reasoning="★★★★☆",
+        speed="🏃 Medium",
+        code_quality="★★★★★",
+        reasoning="★★★★☆",
         best_for="Strong code + reasoning via Mixture-of-Experts",
         gguf_filename="DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf",
     ),
     ModelCard(
         id="codellama-13b-q4",
-        name="Code Llama 13B", family="Llama", params="13B",
-        quant="Q4_K_M", size_gb=7.3, ram_needed_gb=16, vram_needed_gb=10,
+        name="Code Llama 13B",
+        family="Llama",
+        params="13B",
+        quant="Q4_K_M",
+        size_gb=7.3,
+        ram_needed_gb=16,
+        vram_needed_gb=10,
         min_tier="medium",
-        speed="🐢 Slower", code_quality="★★★★☆", reasoning="★★★☆☆",
+        speed="🐢 Slower",
+        code_quality="★★★★☆",
+        reasoning="★★★☆☆",
         best_for="Battle-tested code generation & infilling",
         gguf_filename="codellama-13b-instruct.Q4_K_M.gguf",
     ),
     # ── High tier (GPU needed) ──
     ModelCard(
         id="qwen2.5-coder-32b-q4",
-        name="Qwen 2.5 Coder 32B", family="Qwen", params="32B",
-        quant="Q4_K_M", size_gb=19, ram_needed_gb=24, vram_needed_gb=20,
+        name="Qwen 2.5 Coder 32B",
+        family="Qwen",
+        params="32B",
+        quant="Q4_K_M",
+        size_gb=19,
+        ram_needed_gb=24,
+        vram_needed_gb=20,
         min_tier="high",
-        speed="🐢 Slow", code_quality="★★★★★", reasoning="★★★★★",
+        speed="🐢 Slow",
+        code_quality="★★★★★",
+        reasoning="★★★★★",
         best_for="Near-GPT-4 code quality — needs 24 GB+ VRAM",
         gguf_filename="qwen2.5-coder-32b-instruct-q4_k_m.gguf",
     ),
     ModelCard(
         id="deepseek-r1-7b-q4",
-        name="DeepSeek R1 Distill 7B", family="DeepSeek", params="7B",
-        quant="Q4_K_M", size_gb=4.7, ram_needed_gb=10, vram_needed_gb=6,
+        name="DeepSeek R1 Distill 7B",
+        family="DeepSeek",
+        params="7B",
+        quant="Q4_K_M",
+        size_gb=4.7,
+        ram_needed_gb=10,
+        vram_needed_gb=6,
         min_tier="medium",
-        speed="🏃 Medium", code_quality="★★★★☆", reasoning="★★★★★",
+        speed="🏃 Medium",
+        code_quality="★★★★☆",
+        reasoning="★★★★★",
         best_for="Best reasoning model for code refactoring decisions",
         gguf_filename="DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
     ),
     ModelCard(
         id="gemma-2-9b-q4",
-        name="Gemma 2 9B", family="Gemma", params="9B",
-        quant="Q4_K_M", size_gb=5.5, ram_needed_gb=12, vram_needed_gb=8,
+        name="Gemma 2 9B",
+        family="Gemma",
+        params="9B",
+        quant="Q4_K_M",
+        size_gb=5.5,
+        ram_needed_gb=12,
+        vram_needed_gb=8,
         min_tier="medium",
-        speed="🏃 Medium", code_quality="★★★★☆", reasoning="★★★★☆",
+        speed="🏃 Medium",
+        code_quality="★★★★☆",
+        reasoning="★★★★☆",
         best_for="Google's versatile model — great general + code",
         gguf_filename="gemma-2-9b-it-Q4_K_M.gguf",
     ),
     # ── Transpiler-specialized models (Python → Rust) ─────────────────
     ModelCard(
         id="starcoder2-7b-q4",
-        name="StarCoder2 7B", family="StarCoder", params="7B",
-        quant="Q4_K_M", size_gb=4.2, ram_needed_gb=10, vram_needed_gb=6,
+        name="StarCoder2 7B",
+        family="StarCoder",
+        params="7B",
+        quant="Q4_K_M",
+        size_gb=4.2,
+        ram_needed_gb=10,
+        vram_needed_gb=6,
         min_tier="medium",
-        speed="🏃 Medium", code_quality="★★★★★", reasoning="★★★☆☆",
+        speed="🏃 Medium",
+        code_quality="★★★★★",
+        reasoning="★★★☆☆",
         best_for="Code translation & completion — trained on The Stack v2",
         gguf_filename="starcoder2-7b-Q4_K_M.gguf",
     ),
     ModelCard(
         id="deepseek-coder-v2-7b-q4",
-        name="DeepSeek Coder V2 7B", family="DeepSeek", params="7B",
-        quant="Q4_K_M", size_gb=4.0, ram_needed_gb=10, vram_needed_gb=6,
+        name="DeepSeek Coder V2 7B",
+        family="DeepSeek",
+        params="7B",
+        quant="Q4_K_M",
+        size_gb=4.0,
+        ram_needed_gb=10,
+        vram_needed_gb=6,
         min_tier="medium",
-        speed="🏃 Medium", code_quality="★★★★★", reasoning="★★★★☆",
+        speed="🏃 Medium",
+        code_quality="★★★★★",
+        reasoning="★★★★☆",
         best_for="Python→Rust transpilation — top cross-language model",
         gguf_filename="DeepSeek-Coder-V2-Instruct-Q4_K_M.gguf",
     ),
     ModelCard(
         id="codegemma-7b-q4",
-        name="CodeGemma 7B", family="Gemma", params="7B",
-        quant="Q4_K_M", size_gb=4.3, ram_needed_gb=10, vram_needed_gb=6,
+        name="CodeGemma 7B",
+        family="Gemma",
+        params="7B",
+        quant="Q4_K_M",
+        size_gb=4.3,
+        ram_needed_gb=10,
+        vram_needed_gb=6,
         min_tier="medium",
-        speed="🏃 Medium", code_quality="★★★★☆", reasoning="★★★★☆",
+        speed="🏃 Medium",
+        code_quality="★★★★☆",
+        reasoning="★★★★☆",
         best_for="Code generation with strong multi-language support",
         gguf_filename="codegemma-7b-it-Q4_K_M.gguf",
     ),
     ModelCard(
         id="qwen2.5-coder-3b-q4",
-        name="Qwen 2.5 Coder 3B", family="Qwen", params="3B",
-        quant="Q4_K_M", size_gb=1.9, ram_needed_gb=6, vram_needed_gb=3,
+        name="Qwen 2.5 Coder 3B",
+        family="Qwen",
+        params="3B",
+        quant="Q4_K_M",
+        size_gb=1.9,
+        ram_needed_gb=6,
+        vram_needed_gb=3,
         min_tier="low",
-        speed="⚡ Fast", code_quality="★★★★☆", reasoning="★★★☆☆",
+        speed="⚡ Fast",
+        code_quality="★★★★☆",
+        reasoning="★★★☆☆",
         best_for="Lightweight transpiler model — fits 8 GB RAM",
         gguf_filename="qwen2.5-coder-3b-instruct-q4_k_m.gguf",
     ),
@@ -262,14 +347,14 @@ MODEL_CATALOG: List[ModelCard] = [
 
 # Models recommended for Python→Rust transpilation, ordered by quality
 TRANSPILER_MODEL_IDS = [
-    "qwen2.5-coder-7b-q4",        # Best overall code model
-    "deepseek-coder-v2-7b-q4",    # Strong cross-language
-    "starcoder2-7b-q4",           # Trained on multi-lang code
-    "qwen2.5-coder-32b-q4",       # Best quality (needs GPU)
-    "deepseek-coder-v2-lite-q4",   # MoE — good reasoning
-    "codegemma-7b-q4",            # Solid alternative
-    "qwen2.5-coder-3b-q4",        # Lightweight fallback
-    "qwen2.5-coder-1.5b-q4",      # Minimal hardware
+    "qwen2.5-coder-7b-q4",  # Best overall code model
+    "deepseek-coder-v2-7b-q4",  # Strong cross-language
+    "starcoder2-7b-q4",  # Trained on multi-lang code
+    "qwen2.5-coder-32b-q4",  # Best quality (needs GPU)
+    "deepseek-coder-v2-lite-q4",  # MoE — good reasoning
+    "codegemma-7b-q4",  # Solid alternative
+    "qwen2.5-coder-3b-q4",  # Lightweight fallback
+    "qwen2.5-coder-1.5b-q4",  # Minimal hardware
 ]
 
 TIER_ORDER = {"minimal": 0, "low": 1, "medium": 2, "high": 3}
@@ -292,15 +377,17 @@ def recommend_models(hw: HardwareProfile) -> List[ModelCard]:
 #  3.  llama.cpp Runtime Manager
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class RuntimeInfo:
     """Status of the llama.cpp runtime."""
+
     installed: bool
-    path: str               # path to llama-server / llama-cli
-    version: str            # e.g. "b4532"
-    backend: str            # "cpu", "cuda", "metal", "vulkan"
-    server_running: bool    # is llama-server currently running?
-    server_port: int        # port if running
+    path: str  # path to llama-server / llama-cli
+    version: str  # e.g. "b4532"
+    backend: str  # "cpu", "cuda", "metal", "vulkan"
+    server_running: bool  # is llama-server currently running?
+    server_port: int  # port if running
 
 
 def detect_runtime() -> RuntimeInfo:
@@ -324,15 +411,24 @@ def detect_runtime() -> RuntimeInfo:
             Path("/usr/local/bin"),
         ]
         found_path = next(
-            (str(d / (name + suffix))
-             for d in common_dirs for name in names
-             if (d / (name + suffix)).exists()),
-            "")
+            (
+                str(d / (name + suffix))
+                for d in common_dirs
+                for name in names
+                if (d / (name + suffix)).exists()
+            ),
+            "",
+        )
 
     if not found_path:
         return RuntimeInfo(
-            installed=False, path="", version="",
-            backend="none", server_running=False, server_port=0)
+            installed=False,
+            path="",
+            version="",
+            backend="none",
+            server_running=False,
+            server_port=0,
+        )
 
     # Get version
     version = _get_runtime_version(found_path)
@@ -357,7 +453,8 @@ def _get_runtime_version(path: str) -> str:
     """Get llama.cpp version string."""
     try:
         result = subprocess.run(
-            [path, "--version"], capture_output=True, text=True, timeout=10)
+            [path, "--version"], capture_output=True, text=True, timeout=10
+        )
         text = result.stdout + result.stderr
         m = re.search(r"b(\d{3,5})", text)
         if m:
@@ -368,8 +465,11 @@ def _get_runtime_version(path: str) -> str:
 
 
 _BACKEND_KEYWORDS = [
-    ("cuda", "cuda"), ("metal", "metal"), ("vulkan", "vulkan"),
-    ("rocm", "rocm"), ("hip", "rocm"),
+    ("cuda", "cuda"),
+    ("metal", "metal"),
+    ("vulkan", "vulkan"),
+    ("rocm", "rocm"),
+    ("hip", "rocm"),
 ]
 
 
@@ -377,7 +477,8 @@ def _detect_backend(path: str) -> str:
     """Heuristic: check which backend the llama.cpp binary uses."""
     try:
         result = subprocess.run(
-            [path, "--version"], capture_output=True, text=True, timeout=10)
+            [path, "--version"], capture_output=True, text=True, timeout=10
+        )
         text = (result.stdout + result.stderr).lower()
         for keyword, backend in _BACKEND_KEYWORDS:
             if keyword in text:
@@ -390,6 +491,7 @@ def _detect_backend(path: str) -> str:
 def _port_has_health(port: int) -> bool:
     """Check if a health endpoint responds on the given port."""
     from Core.utils import url_responds
+
     return url_responds(f"http://localhost:{port}/health", timeout=2)
 
 
@@ -449,14 +551,14 @@ SETTINGS_FILE = "xray_settings.json"
 
 DEFAULT_SETTINGS = {
     "llm": {
-        "runtime": "llama.cpp",          # "llama.cpp", "ollama", "openai-compat"
-        "model_id": "",                  # from catalog or custom
-        "model_path": "",                # path to .gguf file
+        "runtime": "llama.cpp",  # "llama.cpp", "ollama", "openai-compat"
+        "model_id": "",  # from catalog or custom
+        "model_path": "",  # path to .gguf file
         "server_url": "http://localhost:8080/v1",
         "api_key": "sk-placeholder",
         "context_size": 4096,
-        "gpu_layers": -1,               # -1 = auto
-        "threads": 0,                   # 0 = auto (cpu_count)
+        "gpu_layers": -1,  # -1 = auto
+        "threads": 0,  # 0 = auto (cpu_count)
         "temperature": 0.7,
         "max_tokens": 1024,
     },
@@ -486,8 +588,7 @@ def load_settings(project_dir: Optional[Path] = None) -> Dict[str, Any]:
     return settings
 
 
-def save_settings(settings: Dict[str, Any],
-                  project_dir: Optional[Path] = None) -> Path:
+def save_settings(settings: Dict[str, Any], project_dir: Optional[Path] = None) -> Path:
     """Save settings to xray_settings.json."""
     if project_dir:
         path = Path(project_dir) / SETTINGS_FILE
@@ -501,9 +602,10 @@ def save_settings(settings: Dict[str, Any],
 
 # _deep_merge imported from _mothership (canonical) with inline fallback
 try:
-    from _mothership.settings_service import _deep_merge       # noqa: E402, F811
+    from _mothership.settings_service import _deep_merge  # noqa: E402, F811
 except ImportError:
-    def _deep_merge(base: dict, overlay: dict) -> dict:        # type: ignore[no-redef]
+
+    def _deep_merge(base: dict, overlay: dict) -> dict:  # type: ignore[no-redef]
         """Flat merge fallback when _mothership is not vendored."""
         base.update(overlay)
         return base
@@ -512,6 +614,7 @@ except ImportError:
 # ═══════════════════════════════════════════════════════════════════════════
 #  5.  Unified Manager
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class LLMManager:
     """All-in-one manager: hardware, runtime, models, settings."""
@@ -547,7 +650,9 @@ class LLMManager:
         ]
         if hw.gpu_vram_gb > 0:
             lines.append(f" │  VRAM:   {hw.gpu_vram_gb:.1f} GB")
-        lines.append(f" │  AVX2:   {'✓' if hw.avx2 else '✗'}   AVX-512: {'✓' if hw.avx512 else '✗'}   NEON: {'✓' if hw.neon else '✗'}")
+        lines.append(
+            f" │  AVX2:   {'✓' if hw.avx2 else '✗'}   AVX-512: {'✓' if hw.avx512 else '✗'}   NEON: {'✓' if hw.neon else '✗'}"
+        )
         lines.append(f" │  Tier:   {hw.tier_label}")
         lines.append("  └─────────────────────────────────────────────────────┘")
         return "\n".join(lines)
@@ -590,8 +695,12 @@ class LLMManager:
             tag = " ← BEST FIT" if i == 1 else ""
             lines.append("  │")
             lines.append(f"  │  {i}. {m.name} ({m.params}, {m.quant}){tag}")
-            lines.append(f"  │     {m.speed}  |  Code: {m.code_quality}  Reasoning: {m.reasoning}")
-            lines.append(f"  │     RAM: {m.ram_needed_gb:.0f} GB   Download: {m.size_gb:.1f} GB")
+            lines.append(
+                f"  │     {m.speed}  |  Code: {m.code_quality}  Reasoning: {m.reasoning}"
+            )
+            lines.append(
+                f"  │     RAM: {m.ram_needed_gb:.0f} GB   Download: {m.size_gb:.1f} GB"
+            )
             lines.append(f"  │     {m.best_for}")
         lines.append("  │")
         lines.append("  └─────────────────────────────────────────────────────┘")
@@ -622,8 +731,11 @@ class LLMManager:
         if self.runtime.installed:
             latest = get_latest_release()
             result["latest_version"] = latest.get("tag", "")
-            if (result["latest_version"] and self.runtime.version
-                    and result["latest_version"] != self.runtime.version):
+            if (
+                result["latest_version"]
+                and self.runtime.version
+                and result["latest_version"] != self.runtime.version
+            ):
                 result["needs_upgrade"] = True
 
         # Recommend models
@@ -650,17 +762,20 @@ class LLMManager:
         ctx = self.settings["llm"].get("context_size", 4096)
         cmd = [
             self.runtime.path,
-            "-m", model_path,
-            "--port", str(port),
-            "-c", str(ctx),
-            "-t", str(threads),
+            "-m",
+            model_path,
+            "--port",
+            str(port),
+            "-c",
+            str(ctx),
+            "-t",
+            str(threads),
         ]
         if gpu_layers != 0 and hw.gpu_vram_gb > 0:
             cmd.extend(["-ngl", str(gpu_layers)])
         return cmd
 
-    def start_server(self, model_path: str = "",
-                     port: int = 8080) -> bool:
+    def start_server(self, model_path: str = "", port: int = 8080) -> bool:
         """Start llama-server with the selected model."""
         if not self.runtime or not self.runtime.installed:
             return False
@@ -669,8 +784,7 @@ class LLMManager:
             return False
         try:
             cmd = self._build_server_cmd(model_path, port)
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return True
         except Exception:
             return False

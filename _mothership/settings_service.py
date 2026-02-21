@@ -45,27 +45,27 @@ SETTINGS_FILENAME = "local_llm_settings.json"
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "llm": {
-        "runtime": "llama.cpp",              # "llama.cpp" | "ollama" | "openai-compat"
-        "model_id": "",                      # catalog model id or custom
-        "model_path": "",                    # path to .gguf file
+        "runtime": "llama.cpp",  # "llama.cpp" | "ollama" | "openai-compat"
+        "model_id": "",  # catalog model id or custom
+        "model_path": "",  # path to .gguf file
         "server_url": "http://localhost:8001/v1",
         "api_key": "sk-placeholder",
         "context_size": 4096,
-        "gpu_layers": -1,                   # -1 = auto-detect
-        "threads": 0,                       # 0 = auto (os.cpu_count)
+        "gpu_layers": -1,  # -1 = auto-detect
+        "threads": 0,  # 0 = auto (os.cpu_count)
         "temperature": 0.7,
         "top_p": 0.9,
         "max_tokens": 2048,
     },
     "models": {
-        "directory": "",                     # empty → use DEFAULT_MODELS_DIR
+        "directory": "",  # empty → use DEFAULT_MODELS_DIR
         "auto_discover": True,
         "min_size_mb": 50,
     },
     "hardware": {
-        "gpu_layers_override": None,         # None = auto
-        "threads_override": None,            # None = auto
-        "tier_override": None,               # None = auto-detect
+        "gpu_layers_override": None,  # None = auto
+        "threads_override": None,  # None = auto
+        "tier_override": None,  # None = auto-detect
     },
 }
 
@@ -74,14 +74,11 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
 # DEEP MERGE
 # ============================================================================
 
+
 def _deep_merge(base: Dict, overlay: Dict) -> Dict:
     """Recursively merge *overlay* into *base* (in-place). Returns base."""
     for key, value in overlay.items():
-        if (
-            key in base
-            and isinstance(base[key], dict)
-            and isinstance(value, dict)
-        ):
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
             _deep_merge(base[key], value)
         else:
             base[key] = value
@@ -91,6 +88,7 @@ def _deep_merge(base: Dict, overlay: Dict) -> Dict:
 # ============================================================================
 # SEARCH PATHS
 # ============================================================================
+
 
 def _settings_search_paths(project_dir: Optional[Path] = None) -> List[Path]:
     """Return candidate paths for the settings file, ordered by priority."""
@@ -108,6 +106,7 @@ def _settings_search_paths(project_dir: Optional[Path] = None) -> List[Path]:
 # ============================================================================
 # PUBLIC API
 # ============================================================================
+
 
 def load_settings(project_dir: Optional[Path] = None) -> Dict[str, Any]:
     """Load settings, merging user overrides on top of defaults.

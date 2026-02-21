@@ -1,19 +1,15 @@
-# X-Ray Claude — Usage Guide
+# X-Ray — Usage Guide
 
 ## Installation
 
-No installation required. X-Ray Claude is a single Python file with no external
-dependencies (Python 3.10+ stdlib only).
+Core scanning works with **Python 3.10+ stdlib only** — no install needed.
 
 ```bash
-# Just copy and run
 python x_ray_claude.py --help
 ```
 
-For testing, install pytest:
-```bash
-pip install pytest
-```
+For **full-scan** (lint, security, format), install: `pip install -r requirements.txt`  
+For **testing**: `pip install pytest` (or `uv sync`)
 
 ---
 
@@ -25,7 +21,7 @@ pip install pytest
 | `--smell` | Run code smell detection |
 | `--duplicates` | Find cross-file function duplicates |
 | `--suggest-library` | Suggest library extractions from duplicate groups |
-| `--full-scan` | Run all features (smell + duplicates + library) |
+| `--full-scan` | Run all features (smells, duplicates, lint, security, format, library, graph) |
 | `--graph` | Generate interactive HTML graph |
 | `--report FILE` | Save full JSON report to FILE |
 | `--use-llm` | Enable LLM enrichment (requires Local LLM backend) |
@@ -121,11 +117,16 @@ Requires a running Local LLM backend (`Core.services.inference_engine`).
 | `long-function` | Function exceeds line limit | > 60 lines (warning) / > 120 (critical) |
 | `god-class` | Class with too many methods | > 15 methods |
 | `deep-nesting` | Excessive nesting depth | > 4 levels (warning) / > 6 (critical) |
-| `high-complexity` | High cyclomatic complexity | > 10 (warning) / > 20 (critical) |
+| `complex-function` | High cyclomatic complexity | > 10 (warning) / > 20 (critical) |
 | `too-many-params` | Too many function parameters | > 6 params |
 | `missing-docstring` | Public function without docstring | functions > 15 lines |
 | `too-many-returns` | Too many return statements | > 5 returns |
 | `boolean-blindness` | Bool return without question-style name | — |
+| `mutable-default-arg` | PEP 8: def f(x=[]) — mutable defaults cause bugs | — |
+| `bare-except` | PEP 8: use specific exceptions, not bare `except:` | — |
+| `complex-comprehension` | Nested list/dict comprehension (prefer explicit loops) | — |
+| `utility-class-name` | Class named Common/Utils/Helper with many methods | ≥ 5 methods |
+| `new-overuse` | Class defines both `__new__` and `__init__` | — |
 | `large-class` | Class exceeds line limit | > 500 lines |
 | `missing-class-docstring` | Class without docstring | classes > 30 lines |
 | `dataclass-candidate` | Simple class that could be @dataclass | ≤ 3 methods, no bases |
@@ -135,6 +136,23 @@ Requires a running Local LLM backend (`Core.services.inference_engine`).
 - **Token cosine** (0.0–1.0): Measures vocabulary overlap using TF-IDF vectors
 - **Code similarity** (0.0–1.0): SequenceMatcher ratio on raw source code
 - **Average similarity**: Weighted combination used for grouping
+
+---
+
+## Why Duplicates Appear
+
+X-Ray groups functions by **structural** (AST hash) and **semantic** (token/ngram similarity)
+similarity. Common sources:
+
+| Type | Why | How to reduce |
+|------|-----|----------------|
+| **Exact/structural** | Same test names or near-identical fixtures across test files | Use shared `conftest` factories (e.g. `make_func`, `make_cls`) |
+| **Command builders** | `_build_command` / `_build_format_cmd` in format, lint, security — each builds subprocess args | Extract shared `_build_tool_cmd(tool, base_args, exclude)` |
+| **Tool → SmellIssue** | `_to_smell_issue` in lint and security — both map JSON to SmellIssue | Hard to unify (different tool output formats); accept or add a generic mapper |
+| **Analyzer pattern** | `analyze`, `summary` across FormatAnalyzer, LintAnalyzer, SecurityAnalyzer | Inherit from `_AnalyzerBase`; keep overrides minimal |
+| **LLM enrichment** | `enrich_with_llm` in smells vs duplicates — same prompt/response flow | Extract shared `_enrich_with_llm(entities, prompt_fn, attr_name)` |
+| **main()** | Entry points in x_ray_claude, x_ray_exe, x_ray_ui, etc. | Acceptable — each is a different CLI; low priority |
+| **Test setup** | Similar `def test_*` patterns (arrange/act/assert) | Use parametrize or shared helpers; some duplication is normal in tests |
 
 ---
 
@@ -174,6 +192,8 @@ report = build_json_report(root, functions, classes, smells, duplicates, suggest
 ---
 
 ## Tips
+
+See [README.md](../README.md) for architecture, grading formula, and Rustification.
 
 1. **Start with `--smell`** to get a quick health check
 2. **Use `--full-scan --graph`** for the most comprehensive view

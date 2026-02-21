@@ -2,20 +2,30 @@
 Tests for Core/types.py — FunctionRecord, ClassRecord, SmellIssue,
 DuplicateGroup, LibrarySuggestion, Severity.
 """
+
 from Core.types import (
     SmellIssue,
-    DuplicateGroup, LibrarySuggestion, Severity,
+    DuplicateGroup,
+    LibrarySuggestion,
+    Severity,
 )
 from tests.conftest import make_func, make_cls
 
 
 # ── thin wrappers with test-specific defaults ────────────────────────────────
 
+
 def _func(name="foo", file_path="utils/helpers.py", **overrides):
     defaults = dict(
-        size_lines=5, parameters=["a", "b"], return_type="int",
-        docstring="docstring", calls_to=["bar"], complexity=2,
-        nesting_depth=1, code_hash="abc123", structure_hash="def456",
+        size_lines=5,
+        parameters=["a", "b"],
+        return_type="int",
+        docstring="docstring",
+        calls_to=["bar"],
+        complexity=2,
+        nesting_depth=1,
+        code_hash="abc123",
+        structure_hash="def456",
         code="def foo(a, b): return a + b",
     )
     defaults.update(overrides)
@@ -25,7 +35,8 @@ def _func(name="foo", file_path="utils/helpers.py", **overrides):
 def _cls(name="MyClass", **overrides):
     defaults = dict(
         file_path="models.py",
-        base_classes=["Base"], docstring="A class",
+        base_classes=["Base"],
+        docstring="A class",
         methods=["__init__", "run", "stop"],
     )
     defaults.update(overrides)
@@ -35,6 +46,7 @@ def _cls(name="MyClass", **overrides):
 # ════════════════════════════════════════════════════════════════════
 #  FunctionRecord
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestFunctionRecord:
     """Tests for FunctionRecord data type."""
@@ -88,8 +100,8 @@ class TestFunctionRecord:
 #  ClassRecord
 # ════════════════════════════════════════════════════════════════════
 
-class TestClassRecord:
 
+class TestClassRecord:
     def test_fields(self):
         c = _cls()
         assert c.name == "MyClass"
@@ -110,23 +122,33 @@ class TestClassRecord:
 #  SmellIssue
 # ════════════════════════════════════════════════════════════════════
 
-class TestSmellIssue:
 
+class TestSmellIssue:
     def test_defaults(self):
         s = SmellIssue(
-            file_path="f.py", line=1, end_line=10,
-            category="long-function", severity=Severity.WARNING,
-            message="too long", suggestion="split it",
-            name="big_fn", metric_value=120,
+            file_path="f.py",
+            line=1,
+            end_line=10,
+            category="long-function",
+            severity=Severity.WARNING,
+            message="too long",
+            suggestion="split it",
+            name="big_fn",
+            metric_value=120,
         )
         assert s.llm_analysis == ""
 
     def test_llm_analysis_override(self):
         s = SmellIssue(
-            file_path="f.py", line=1, end_line=10,
-            category="x", severity="info",
-            message="m", suggestion="s",
-            name="n", metric_value=1,
+            file_path="f.py",
+            line=1,
+            end_line=10,
+            category="x",
+            severity="info",
+            message="m",
+            suggestion="s",
+            name="n",
+            metric_value=1,
             llm_analysis="Use early return",
         )
         assert s.llm_analysis == "Use early return"
@@ -136,18 +158,21 @@ class TestSmellIssue:
 #  DuplicateGroup
 # ════════════════════════════════════════════════════════════════════
 
-class TestDuplicateGroup:
 
+class TestDuplicateGroup:
     def test_defaults(self):
         g = DuplicateGroup(
-            group_id=0, similarity_type="exact",
-            avg_similarity=1.0, functions=[],
+            group_id=0,
+            similarity_type="exact",
+            avg_similarity=1.0,
+            functions=[],
         )
         assert g.merge_suggestion == ""
 
     def test_with_suggestion(self):
         g = DuplicateGroup(
-            group_id=1, similarity_type="structural",
+            group_id=1,
+            similarity_type="structural",
             avg_similarity=0.95,
             functions=[{"key": "a.foo"}, {"key": "b.foo"}],
             merge_suggestion="Unify names",
@@ -159,11 +184,12 @@ class TestDuplicateGroup:
 #  LibrarySuggestion
 # ════════════════════════════════════════════════════════════════════
 
-class TestLibrarySuggestion:
 
+class TestLibrarySuggestion:
     def test_fields(self):
         lib = LibrarySuggestion(
-            module_name="utils", description="Shared helpers",
+            module_name="utils",
+            description="Shared helpers",
             functions=[{"name": "do"}],
             unified_api="def do(x): ...",
             rationale="DRY",
@@ -176,8 +202,8 @@ class TestLibrarySuggestion:
 #  Severity
 # ════════════════════════════════════════════════════════════════════
 
-class TestSeverity:
 
+class TestSeverity:
     def test_constants(self):
         assert Severity.CRITICAL == "critical"
         assert Severity.WARNING == "warning"

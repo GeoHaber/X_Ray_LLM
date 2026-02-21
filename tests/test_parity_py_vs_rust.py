@@ -50,8 +50,11 @@ def _suggest_module_name_py(func_names):
 
 
 _MARGIN_BANDS = [
-    (-0.15, "SAFE_MISS"), (-0.05, "NEAR_MISS"), (0.0, "BOUNDARY_MISS"),
-    (0.05, "BOUNDARY_HIT"), (0.15, "NEAR_HIT"),
+    (-0.15, "SAFE_MISS"),
+    (-0.05, "NEAR_MISS"),
+    (0.0, "BOUNDARY_MISS"),
+    (0.05, "BOUNDARY_HIT"),
+    (0.15, "NEAR_HIT"),
 ]
 
 
@@ -68,8 +71,7 @@ def classify_margin_py(margin: float) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 RUST_EXE = os.path.join(
-    os.path.dirname(__file__), "..",
-    "_rustified_exe", "target", "release", "x_ray.exe"
+    os.path.dirname(__file__), "..", "_rustified_exe", "target", "release", "x_ray.exe"
 )
 
 
@@ -84,6 +86,7 @@ HAS_RUST_EXE = _rust_exe_available()
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _suggest_module_name  Parity
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSuggestModuleNameParity:
     """Verify _suggest_module_name Python == Rust for all input categories."""
@@ -103,14 +106,16 @@ class TestSuggestModuleNameParity:
         (["compute_hash"], "shared_utils"),
     ]
 
-    @pytest.mark.parametrize("func_names,expected", VECTORS,
-                             ids=[v[0][0] for v in VECTORS])
+    @pytest.mark.parametrize(
+        "func_names,expected", VECTORS, ids=[v[0][0] for v in VECTORS]
+    )
     def test_python_output(self, func_names, expected):
         """Python implementation returns correct value."""
         assert _suggest_module_name_py(func_names) == expected
 
-    @pytest.mark.parametrize("func_names,expected", VECTORS,
-                             ids=[v[0][0] for v in VECTORS])
+    @pytest.mark.parametrize(
+        "func_names,expected", VECTORS, ids=[v[0][0] for v in VECTORS]
+    )
     def test_rust_matches_python(self, func_names, expected):
         """Rust transpilation returns same value as Python for each input.
 
@@ -160,6 +165,7 @@ class TestSuggestModuleNameParity:
 #  2. _infer_type_from_name  Parity
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestInferTypeFromNameParity:
     """Verify _infer_type_from_name Python == Rust for various param names."""
 
@@ -180,14 +186,12 @@ class TestInferTypeFromNameParity:
         ("unknown_param", "&str"),  # default
     ]
 
-    @pytest.mark.parametrize("name,expected", VECTORS,
-                             ids=[v[0] for v in VECTORS])
+    @pytest.mark.parametrize("name,expected", VECTORS, ids=[v[0] for v in VECTORS])
     def test_python_output(self, name, expected):
         """Python _infer_type_from_name returns correct value."""
         assert _infer_type_from_name(name) == expected
 
-    @pytest.mark.parametrize("name,expected", VECTORS,
-                             ids=[v[0] for v in VECTORS])
+    @pytest.mark.parametrize("name,expected", VECTORS, ids=[v[0] for v in VECTORS])
     def test_rust_matches_python(self, name, expected):
         """Rust transpilation of _infer_type_from_name returns same value."""
         from Analysis.transpiler import transpile_function_code
@@ -239,33 +243,36 @@ class TestInferTypeFromNameParity:
 #  3. classify_margin  Parity
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestClassifyMarginParity:
     """Verify classify_margin Python == Rust for boundary values."""
 
     VECTORS = [
         (-0.50, "SAFE_MISS"),
         (-0.20, "SAFE_MISS"),
-        (-0.15, "NEAR_MISS"),     # boundary: exactly -0.15
+        (-0.15, "NEAR_MISS"),  # boundary: exactly -0.15
         (-0.10, "NEAR_MISS"),
         (-0.05, "BOUNDARY_MISS"),  # boundary: exactly -0.05
         (-0.01, "BOUNDARY_MISS"),
-        (0.0, "BOUNDARY_HIT"),     # boundary: exactly 0.0
+        (0.0, "BOUNDARY_HIT"),  # boundary: exactly 0.0
         (0.03, "BOUNDARY_HIT"),
-        (0.05, "NEAR_HIT"),        # boundary: exactly 0.05
+        (0.05, "NEAR_HIT"),  # boundary: exactly 0.05
         (0.10, "NEAR_HIT"),
-        (0.15, "SAFE_HIT"),        # boundary: exactly 0.15
+        (0.15, "SAFE_HIT"),  # boundary: exactly 0.15
         (0.50, "SAFE_HIT"),
         (1.0, "SAFE_HIT"),
     ]
 
-    @pytest.mark.parametrize("margin,expected", VECTORS,
-                             ids=[f"m={v[0]}" for v in VECTORS])
+    @pytest.mark.parametrize(
+        "margin,expected", VECTORS, ids=[f"m={v[0]}" for v in VECTORS]
+    )
     def test_python_output(self, margin, expected):
         """Python classify_margin returns correct value."""
         assert classify_margin_py(margin) == expected
 
-    @pytest.mark.parametrize("margin,expected", VECTORS,
-                             ids=[f"m={v[0]}" for v in VECTORS])
+    @pytest.mark.parametrize(
+        "margin,expected", VECTORS, ids=[f"m={v[0]}" for v in VECTORS]
+    )
     def test_rust_matches_python(self, margin, expected):
         """Rust transpilation of classify_margin returns same value."""
         from Analysis.transpiler import transpile_function_code
@@ -311,6 +318,7 @@ class TestClassifyMarginParity:
 
 import tempfile  # noqa: E402
 
+
 def _compile_and_run(rust_source: str) -> str | None:
     """Compile a Rust source string and run it, returning stdout.
 
@@ -331,7 +339,9 @@ def _compile_and_run(rust_source: str) -> str | None:
         # Compile
         comp = subprocess.run(
             ["rustc", "--edition", "2021", src_path, "-o", exe_path],
-            capture_output=True, text=True, timeout=30
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if comp.returncode != 0:
             pytest.fail(
@@ -340,9 +350,7 @@ def _compile_and_run(rust_source: str) -> str | None:
             )
 
         # Run
-        run = subprocess.run(
-            [exe_path], capture_output=True, text=True, timeout=10
-        )
+        run = subprocess.run([exe_path], capture_output=True, text=True, timeout=10)
         if run.returncode != 0:
             pytest.fail(f"Rust exe crashed:\n{run.stderr}")
 
@@ -353,6 +361,7 @@ def _compile_and_run(rust_source: str) -> str | None:
 #  4. Summary: Cross-check all real functions
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestTranspiledExeOutput:
     """Verify the generated _rustified_exe prints correct demo output."""
 
@@ -360,7 +369,11 @@ class TestTranspiledExeOutput:
     def test_exe_runs_without_crash(self):
         """The generated exe runs and exits cleanly."""
         result = subprocess.run(
-            [RUST_EXE], capture_output=True, timeout=10, encoding="utf-8", errors="replace"
+            [RUST_EXE],
+            capture_output=True,
+            timeout=10,
+            encoding="utf-8",
+            errors="replace",
         )
         assert result.returncode == 0, f"Exit code {result.returncode}: {result.stderr}"
 
@@ -368,7 +381,11 @@ class TestTranspiledExeOutput:
     def test_exe_reports_function_count(self):
         """The exe reports the number of transpiled functions."""
         result = subprocess.run(
-            [RUST_EXE], capture_output=True, timeout=10, encoding="utf-8", errors="replace"
+            [RUST_EXE],
+            capture_output=True,
+            timeout=10,
+            encoding="utf-8",
+            errors="replace",
         )
         assert "functions transpiled" in result.stdout
         assert "real Rust" in result.stdout
@@ -377,7 +394,11 @@ class TestTranspiledExeOutput:
     def test_exe_suggest_module_name(self):
         """The exe's _suggest_module_name output matches Python."""
         result = subprocess.run(
-            [RUST_EXE], capture_output=True, timeout=10, encoding="utf-8", errors="replace"
+            [RUST_EXE],
+            capture_output=True,
+            timeout=10,
+            encoding="utf-8",
+            errors="replace",
         )
         # The default demo call passes vec!["parse_config", "load_data"]
         # which starts with "parse_config" → should return "utils"
@@ -387,7 +408,11 @@ class TestTranspiledExeOutput:
     def test_exe_infer_type(self):
         """The exe's _infer_type_from_name output matches Python."""
         result = subprocess.run(
-            [RUST_EXE], capture_output=True, timeout=10, encoding="utf-8", errors="replace"
+            [RUST_EXE],
+            capture_output=True,
+            timeout=10,
+            encoding="utf-8",
+            errors="replace",
         )
         assert '"&str"' in result.stdout
 
@@ -395,7 +420,11 @@ class TestTranspiledExeOutput:
     def test_exe_classify_margin(self):
         """The exe's classify_margin outputs match Python."""
         result = subprocess.run(
-            [RUST_EXE], capture_output=True, timeout=10, encoding="utf-8", errors="replace"
+            [RUST_EXE],
+            capture_output=True,
+            timeout=10,
+            encoding="utf-8",
+            errors="replace",
         )
         # classify_margin(0.03) should be "BOUNDARY_HIT"
         assert "BOUNDARY_HIT" in result.stdout

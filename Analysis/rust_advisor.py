@@ -49,23 +49,64 @@ except ImportError:
 
 # ── Side-effect indicators (heuristic AST scan) ─────────────────────────────
 
-_IMPURE_CALLS = frozenset({
-    "print", "open", "write", "read", "input",
-    "connect", "send", "recv", "request",
-    "get", "post", "put", "delete", "patch",
-    "execute", "commit", "rollback",
-    "mkdir", "rmdir", "unlink", "remove", "rename",
-    "subprocess", "system", "popen",
-    "sleep", "time",
-    "logging", "log", "warn", "error", "info", "debug",
-    "random", "randint", "choice", "shuffle",
-})
+_IMPURE_CALLS = frozenset(
+    {
+        "print",
+        "open",
+        "write",
+        "read",
+        "input",
+        "connect",
+        "send",
+        "recv",
+        "request",
+        "get",
+        "post",
+        "put",
+        "delete",
+        "patch",
+        "execute",
+        "commit",
+        "rollback",
+        "mkdir",
+        "rmdir",
+        "unlink",
+        "remove",
+        "rename",
+        "subprocess",
+        "system",
+        "popen",
+        "sleep",
+        "time",
+        "logging",
+        "log",
+        "warn",
+        "error",
+        "info",
+        "debug",
+        "random",
+        "randint",
+        "choice",
+        "shuffle",
+    }
+)
 
-_IMPURE_ATTRS = frozenset({
-    "append", "extend", "insert", "pop", "remove", "clear",
-    "update", "setdefault",  # dict/set mutation
-    "seek", "write", "close", "flush",  # I/O
-})
+_IMPURE_ATTRS = frozenset(
+    {
+        "append",
+        "extend",
+        "insert",
+        "pop",
+        "remove",
+        "clear",
+        "update",
+        "setdefault",  # dict/set mutation
+        "seek",
+        "write",
+        "close",
+        "flush",  # I/O
+    }
+)
 
 
 def _mutates_attribute(node) -> bool:
@@ -99,7 +140,7 @@ def _is_impure_node(node) -> bool:
 
 def _detect_purity(func: FunctionRecord) -> bool:
     """Return True if the function appears pure (no side effects).
-    
+
     Improved heuristic: checks for known impure calls, global/nonlocal,
     and common state-mutating attribute names.
     """
@@ -121,17 +162,19 @@ def _count_external_deps(func: FunctionRecord) -> int:
 
 # ── Candidate dataclass ─────────────────────────────────────────────────────
 
+
 @dataclass
 class RustCandidate:
     """A scored function ready for Rustification ranking."""
+
     func: FunctionRecord
     score: float
     is_pure: bool
     external_deps: int
-    call_count: int = 0           # from tracer (0 = unknown)
-    avg_time_us: float = 0.0     # from tracer
+    call_count: int = 0  # from tracer (0 = unknown)
+    avg_time_us: float = 0.0  # from tracer
     observed_types: Dict[str, List[str]] = field(default_factory=dict)
-    reason: str = ""              # human-readable explanation
+    reason: str = ""  # human-readable explanation
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialise for JSON reports."""
@@ -154,18 +197,19 @@ class RustCandidate:
 # ── Scoring weights ─────────────────────────────────────────────────────────
 
 _WEIGHTS = {
-    "purity_bonus":    15.0,
-    "complexity":       1.0,
-    "size":             0.1,
-    "call_count":       0.5,   # per 100 calls
-    "time_per_call":    0.01,  # per µs average
-    "external_dep":    -8.0,   # per impure dep
-    "param_penalty":   -0.5,   # per param above 3
-    "async_penalty":  -20.0,   # async functions are hard to port
+    "purity_bonus": 15.0,
+    "complexity": 1.0,
+    "size": 0.1,
+    "call_count": 0.5,  # per 100 calls
+    "time_per_call": 0.01,  # per µs average
+    "external_dep": -8.0,  # per impure dep
+    "param_penalty": -0.5,  # per param above 3
+    "async_penalty": -20.0,  # async functions are hard to port
 }
 
 
 # ── RustAdvisor ──────────────────────────────────────────────────────────────
+
 
 class RustAdvisor:
     """
@@ -178,9 +222,12 @@ class RustAdvisor:
     def __init__(self, weights: Optional[Dict[str, float]] = None):
         self.weights = {**_WEIGHTS, **(weights or {})}
 
-    def score(self, functions: List[FunctionRecord],
-              traces: Optional[List] = None,
-              min_lines: int = 5) -> List[RustCandidate]:
+    def score(
+        self,
+        functions: List[FunctionRecord],
+        traces: Optional[List] = None,
+        min_lines: int = 5,
+    ) -> List[RustCandidate]:
         """Score and rank all functions. Returns sorted list (best first)."""
         trace_map: Dict[str, Any] = {}
         if traces:
@@ -197,8 +244,9 @@ class RustAdvisor:
         candidates.sort(key=lambda c: c.score, reverse=True)
         return candidates
 
-    def _score_one(self, func: FunctionRecord,
-                   trace: Optional[Any] = None) -> RustCandidate:
+    def _score_one(
+        self, func: FunctionRecord, trace: Optional[Any] = None
+    ) -> RustCandidate:
         """Compute Rust-suitability score for a single function."""
         w = self.weights
         pure = _detect_purity(func)
@@ -206,13 +254,17 @@ class RustAdvisor:
 
         score, reasons = self._compute_static_score(func, pure, ext_deps, w)
         trace_score, call_count, avg_time_us, observed_types = (
-            self._apply_trace_bonuses(trace, w, reasons))
+            self._apply_trace_bonuses(trace, w, reasons)
+        )
         score += trace_score
 
         return RustCandidate(
-            func=func, score=max(0, round(score, 1)),
-            is_pure=pure, external_deps=ext_deps,
-            call_count=call_count, avg_time_us=avg_time_us,
+            func=func,
+            score=max(0, round(score, 1)),
+            is_pure=pure,
+            external_deps=ext_deps,
+            call_count=call_count,
+            avg_time_us=avg_time_us,
             observed_types=observed_types,
             reason=", ".join(reasons) if reasons else "baseline",
         )
@@ -269,9 +321,12 @@ class RustAdvisor:
 
     # ── Golden fixture generation ────────────────────────────────────────
 
-    def generate_golden(self, candidate: RustCandidate,
-                        trace: Optional[Any] = None,
-                        output_dir: str = "golden") -> Optional[str]:
+    def generate_golden(
+        self,
+        candidate: RustCandidate,
+        trace: Optional[Any] = None,
+        output_dir: str = "golden",
+    ) -> Optional[str]:
         """Generate a golden JSON fixture from trace samples.
 
         Returns the path to the written file, or None if no samples.
@@ -279,16 +334,25 @@ class RustAdvisor:
         samples = []
         if trace is not None:
             for s in trace.samples:
-                samples.append({
-                    "args": s.args_repr,
-                    "args_json": [json.dumps(a) for a in getattr(s, 'args_raw', [])],
-                    "kwargs": s.kwargs_repr,
-                    "kwargs_json": {k: json.dumps(v) for k, v in getattr(s, 'kwargs_raw', {}).items()},
-                    "expected_output": s.output_repr,
-                    "expected_output_json": json.dumps(getattr(s, 'output_raw', None)),
-                    "expected_type": s.output_type,
-                    "error": s.error,
-                })
+                samples.append(
+                    {
+                        "args": s.args_repr,
+                        "args_json": [
+                            json.dumps(a) for a in getattr(s, "args_raw", [])
+                        ],
+                        "kwargs": s.kwargs_repr,
+                        "kwargs_json": {
+                            k: json.dumps(v)
+                            for k, v in getattr(s, "kwargs_raw", {}).items()
+                        },
+                        "expected_output": s.output_repr,
+                        "expected_output_json": json.dumps(
+                            getattr(s, "output_raw", None)
+                        ),
+                        "expected_type": s.output_type,
+                        "error": s.error,
+                    }
+                )
 
         if not samples:
             return None
@@ -329,8 +393,9 @@ class RustAdvisor:
         return literal_eval(case["expected_output"])
 
     @staticmethod
-    def _verify_single_case(rust_fn: Callable, case: Dict[str, Any],
-                            index: int) -> Tuple[str, Optional[Dict[str, Any]]]:
+    def _verify_single_case(
+        rust_fn: Callable, case: Dict[str, Any], index: int
+    ) -> Tuple[str, Optional[Dict[str, Any]]]:
         """Verify one golden case. Returns (status, detail_or_None)."""
         if case.get("error"):
             return "skip", None
@@ -338,11 +403,15 @@ class RustAdvisor:
             args, kwargs = RustAdvisor._load_case_args(case)
             result = rust_fn(*args, **kwargs)
             expected = RustAdvisor._load_case_expected(case)
-            if json.dumps(result, sort_keys=True) == json.dumps(expected, sort_keys=True):
+            if json.dumps(result, sort_keys=True) == json.dumps(
+                expected, sort_keys=True
+            ):
                 return "passed", None
             return "failed", {
-                "case": index, "status": "MISMATCH",
-                "expected": repr(expected), "actual": repr(result),
+                "case": index,
+                "status": "MISMATCH",
+                "expected": repr(expected),
+                "actual": repr(result),
             }
         except Exception as exc:
             return "error", {"case": index, "status": "ERROR", "error": str(exc)}
@@ -377,29 +446,40 @@ class RustAdvisor:
     # ── Reporting ────────────────────────────────────────────────────────
 
     @staticmethod
-    def print_candidates(candidates: List[RustCandidate],
-                         top_n: int = 20) -> None:
+    def print_candidates(candidates: List[RustCandidate], top_n: int = 20) -> None:
         """Print a ranked table of Rust candidates."""
-        print(f"\n{'='*72}")
+        print(f"\n{'=' * 72}")
         print("  RUST CANDIDATE RANKING")
-        print(f"{'='*72}")
-        print(f"  {'#':>3}  {'Score':>6}  {'Pure':>4}  {'CC':>3}  "
-              f"{'Lines':>5}  {'Calls':>6}  Function")
-        print(f"  {'─'*3}  {'─'*6}  {'─'*4}  {'─'*3}  "
-              f"{'─'*5}  {'─'*6}  {'─'*40}")
+        print(f"{'=' * 72}")
+        print(
+            f"  {'#':>3}  {'Score':>6}  {'Pure':>4}  {'CC':>3}  "
+            f"{'Lines':>5}  {'Calls':>6}  Function"
+        )
+        print(
+            f"  {'─' * 3}  {'─' * 6}  {'─' * 4}  {'─' * 3}  "
+            f"{'─' * 5}  {'─' * 6}  {'─' * 40}"
+        )
 
         for i, c in enumerate(candidates[:top_n], 1):
             pure_icon = "Yes" if c.is_pure else " - "
             calls = str(c.call_count) if c.call_count else "  -"
             loc = f"{c.func.file_path}:{c.func.line_start}"
-            print(f"  {i:>3}  {c.score:>6.1f}  {pure_icon:>4}  "
-                  f"{c.func.complexity:>3}  {c.func.size_lines:>5}  "
-                  f"{calls:>6}  {c.func.name}")
-            print(f"  {'':>3}  {'':>6}  {'':>4}  {'':>3}  "
-                  f"{'':>5}  {'':>6}  {loc}  ({c.reason})")
+            print(
+                f"  {i:>3}  {c.score:>6.1f}  {pure_icon:>4}  "
+                f"{c.func.complexity:>3}  {c.func.size_lines:>5}  "
+                f"{calls:>6}  {c.func.name}"
+            )
+            print(
+                f"  {'':>3}  {'':>6}  {'':>4}  {'':>3}  "
+                f"{'':>5}  {'':>6}  {loc}  ({c.reason})"
+            )
 
         total_pure = sum(1 for c in candidates if c.is_pure)
-        print(f"\n  {len(candidates)} functions scored, "
-              f"{total_pure} pure, "
-              f"top score: {candidates[0].score:.1f}" if candidates else "")
-        print(f"{'='*72}\n")
+        print(
+            f"\n  {len(candidates)} functions scored, "
+            f"{total_pure} pure, "
+            f"top score: {candidates[0].score:.1f}"
+            if candidates
+            else ""
+        )
+        print(f"{'=' * 72}\n")

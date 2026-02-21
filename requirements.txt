@@ -1,5 +1,6 @@
 # X-Ray Claude — Dependencies
 # The analyzer itself has ZERO external dependencies (stdlib only).
 # These are only needed for development/testing.
+# Pin with upper bound for reproducible installs; Dependabot will propose updates.
 
-pytest>=7.0
+pytest>=7.0,<9

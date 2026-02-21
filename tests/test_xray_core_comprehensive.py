@@ -1,4 +1,3 @@
-
 import pytest
 import sys
 from pathlib import Path
@@ -9,7 +8,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 try:
     from Core import x_ray_core
 except ImportError:
-    pytest.fail("Could not import x_ray_core extension. Is it built and in path?", pytrace=False)
+    pytest.fail(
+        "Could not import x_ray_core extension. Is it built and in path?", pytrace=False
+    )
+
 
 class TestXRayCoreComprehensive:
     """Comprehensive tests for X-Ray core module."""
@@ -33,12 +35,12 @@ class TestXRayCoreComprehensive:
         # type alias
         code = "type Point = tuple[float, float]"
         tokens = x_ray_core.normalized_token_stream(code)
-        # 'type' is a soft keyword in 3.12. If our Rust tokenizer treats it as ID or keyword doesn't matter 
+        # 'type' is a soft keyword in 3.12. If our Rust tokenizer treats it as ID or keyword doesn't matter
         # as long as it handles the structure.
         # Rust lib.rs has "match", "case", "type", "_" in SOFT_KEYWORDS.
         # So "type" should be kept as "type".
         assert "type" in tokens
-        
+
         # match statement
         code = """
 match status:
@@ -58,7 +60,7 @@ match status:
     # --- N-gram Fingerprints Tests ---
 
     def test_ngram_fingerprints_basic(self):
-        code = "def foo(): pass" # tokens: def ID ( ) : pass
+        code = "def foo(): pass"  # tokens: def ID ( ) : pass
         tokens = x_ray_core.normalized_token_stream(code)
         fps = x_ray_core.ngram_fingerprints(tokens, n=3, w=2)
         assert len(fps) > 0
@@ -76,7 +78,7 @@ match status:
 
     def test_ngram_fingerprints_window_size_violation(self):
         with pytest.raises(ValueError, match="Window size w must be > 0"):
-            x_ray_core.ngram_fingerprints(["a"]*10, n=2, w=0)
+            x_ray_core.ngram_fingerprints(["a"] * 10, n=2, w=0)
 
     # --- AST Histogram Tests ---
 
@@ -100,8 +102,8 @@ def func():
         # Our tokenizer treats "async" and "await" as keywords
         # In `ast_histogram_from_tokens`:
         # "await" -> inc!("Await")
-        # "async" isn't explicitly counted in the match statement in the snippet I saw, 
-        # but `def` counts FunctionDef. 
+        # "async" isn't explicitly counted in the match statement in the snippet I saw,
+        # but `def` counts FunctionDef.
         # Let's check what is counted.
         if "Await" in hist:
             assert hist["Await"] >= 1
@@ -133,21 +135,17 @@ class TestXRayCoreExtended:
 
     def test_batch_similarity_matrix_properties(self):
         """Verify batch similarity matrix has correct mathematical properties."""
-        codes = [
-            "def a(): pass",
-            "def b(): pass",
-            "class C: pass"
-        ]
+        codes = ["def a(): pass", "def b(): pass", "class C: pass"]
         matrix = x_ray_core.batch_code_similarity(codes)
-        
+
         # Dimensions
         assert len(matrix) == 3
         assert all(len(row) == 3 for row in matrix)
-        
+
         # Diagonal is 1.0
         for i in range(3):
             assert matrix[i][i] == pytest.approx(1.0)
-            
+
         # Symmetry
         assert matrix[0][1] == matrix[1][0]
         assert matrix[0][2] == matrix[2][0]
@@ -166,5 +164,5 @@ def foo():
         norm = x_ray_core.normalize_code(code)
         assert "docstring" not in norm
         assert "# comment" not in norm
-        assert "\n\n\n" not in norm # blank lines reduced
+        assert "\n\n\n" not in norm  # blank lines reduced
         assert "def foo():" in norm
