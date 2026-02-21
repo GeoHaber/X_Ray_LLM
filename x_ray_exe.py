@@ -378,6 +378,14 @@ def _is_interactive_console() -> bool:
         return False
 
 
+def _is_interactive_console() -> bool:
+    """Return True when the .exe was likely double-clicked (not piped)."""
+    try:
+        return sys.stdin is not None and sys.stdin.isatty()
+    except Exception:
+        return False
+
+
 if __name__ == "__main__":
     try:
         main()
