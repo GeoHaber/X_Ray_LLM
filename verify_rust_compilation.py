@@ -13,11 +13,9 @@ This is the REAL test — not "does it look right" but "does rustc accept it".
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 import subprocess
-import sys
 import time
 from collections import Counter
 from pathlib import Path
@@ -195,10 +193,8 @@ def map_errors_to_functions(errors: List[Dict], pairs: List[Dict],
         file_match = re.match(r'src/batch_(\d+)\.rs', err["file"])
         if not file_match:
             continue
-        batch_idx = int(file_match.group(1))
 
         # Find which function in that batch (by line number)
-        offset = batch_idx * batch_size
         err_line = err["line"]
 
         # Find the nearest comment marker above the error line
@@ -269,7 +265,7 @@ def main():
     analysis = map_errors_to_functions(errors, pairs)
 
     print(f"\n  {'='*60}")
-    print(f"  COMPILATION RESULTS")
+    print("  COMPILATION RESULTS")
     print(f"  {'='*60}")
     print(f"  Total functions:  {len(pairs)}")
     print(f"  Total errors:     {len(errors)}")
@@ -277,7 +273,7 @@ def main():
     print(f"  Error locations:  {len(error_files_lines)}")
 
     # Error code breakdown
-    print(f"\n  Error code breakdown:")
+    print("\n  Error code breakdown:")
     for code, count in analysis["error_code_counts"].items():
         print(f"    {code:15s}: {count:5d}")
 
@@ -305,7 +301,7 @@ def main():
 
     # Print the raw stderr tail for context
     stderr_lines = stderr.strip().splitlines()
-    summary_lines = [l for l in stderr_lines if "error" in l.lower() and "generated" in l.lower()]
+    summary_lines = [line for line in stderr_lines if "error" in line.lower() and "generated" in line.lower()]
     if summary_lines:
         print(f"\n  Cargo summary: {summary_lines[-1].strip()}")
 

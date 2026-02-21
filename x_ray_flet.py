@@ -25,15 +25,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import math
-import os
 import subprocess
 import sys
 import textwrap
 import time
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import flet as ft
 
@@ -42,18 +40,17 @@ ROOT = Path(__file__).parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from Core.types import FunctionRecord, ClassRecord, SmellIssue
-from Core.config import __version__, SMELL_THRESHOLDS
-from Core.i18n import t, set_locale, get_locale, LOCALES
-from Analysis.ast_utils import extract_functions_from_file, collect_py_files
-from Analysis.smells import CodeSmellDetector
-from Analysis.duplicates import DuplicateFinder
-from Analysis.reporting import compute_grade
-from Analysis.rust_advisor import RustAdvisor
-from Analysis.smart_graph import SmartGraph
+from Core.types import FunctionRecord  # noqa: E402
+from Core.config import __version__, SMELL_THRESHOLDS  # noqa: E402
+from Core.i18n import t, set_locale, get_locale, LOCALES  # noqa: E402
+from Analysis.ast_utils import extract_functions_from_file, collect_py_files  # noqa: E402
+from Analysis.smells import CodeSmellDetector  # noqa: E402
+from Analysis.duplicates import DuplicateFinder  # noqa: E402
+from Analysis.reporting import compute_grade  # noqa: E402
+from Analysis.rust_advisor import RustAdvisor  # noqa: E402
 
-import ast
-import concurrent.futures
+import ast  # noqa: E402
+import concurrent.futures  # noqa: E402
 
 # ── Conditional imports for auto-rustify ─────────────────────────────────────
 try:
@@ -86,8 +83,23 @@ SEV_COLORS = {"critical": ft.Colors.RED_400, "warning": ft.Colors.AMBER_400,
               "info": ft.Colors.GREEN_400}
 
 
-class TH:
-    """Dynamic theme — call TH.x() to get current palette value."""
+class _THMeta(type):
+    """Metaclass: lets TH.accent return a colour string directly (no parens)."""
+    _KEYS = frozenset({
+        "accent", "accent2", "bg", "card", "surface", "border", "text",
+        "dim", "muted", "code_bg", "sidebar", "shadow", "divider",
+        "bar_bg", "chip",
+    })
+
+    def __getattr__(cls, name: str) -> str:
+        if name in cls._KEYS:
+            p = cls._DARK if cls._dark else cls._LIGHT
+            return p[name]
+        raise AttributeError(name)
+
+
+class TH(metaclass=_THMeta):
+    """Dynamic theme — access colours as TH.accent, TH.bg, etc."""
 
     _dark = True
 
@@ -109,46 +121,9 @@ class TH:
     )
 
     @classmethod
-    def _p(cls): return cls._DARK if cls._dark else cls._LIGHT
-
-    @classmethod
-    def is_dark(cls): return cls._dark
+    def is_dark(cls) -> bool: return cls._dark
     @classmethod
     def toggle(cls): cls._dark = not cls._dark
-    @classmethod
-    def set_dark(cls, v: bool): cls._dark = v
-
-    # colour accessors ────────────────────────────────────────────────────
-    @classmethod
-    def accent(cls):   return cls._p()["accent"]
-    @classmethod
-    def accent2(cls):  return cls._p()["accent2"]
-    @classmethod
-    def bg(cls):       return cls._p()["bg"]
-    @classmethod
-    def card(cls):     return cls._p()["card"]
-    @classmethod
-    def surface(cls):  return cls._p()["surface"]
-    @classmethod
-    def border(cls):   return cls._p()["border"]
-    @classmethod
-    def text(cls):     return cls._p()["text"]
-    @classmethod
-    def dim(cls):      return cls._p()["dim"]
-    @classmethod
-    def muted(cls):    return cls._p()["muted"]
-    @classmethod
-    def code_bg(cls):  return cls._p()["code_bg"]
-    @classmethod
-    def sidebar(cls):  return cls._p()["sidebar"]
-    @classmethod
-    def shadow(cls):   return cls._p()["shadow"]
-    @classmethod
-    def divider(cls):  return cls._p()["divider"]
-    @classmethod
-    def bar_bg(cls):   return cls._p()["bar_bg"]
-    @classmethod
-    def chip(cls):     return cls._p()["chip"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -157,34 +132,34 @@ class TH:
 
 def glass_card(content, padding=20, expand=False, **kw):
     return ft.Container(
-        content=content, bgcolor=TH.card(),
-        border=ft.Border.all(1, TH.border()), border_radius=16,
+        content=content, bgcolor=TH.card,
+        border=ft.Border.all(1, TH.border), border_radius=16,
         padding=padding, expand=expand,
-        shadow=ft.BoxShadow(blur_radius=8, color=TH.shadow()), **kw)
+        shadow=ft.BoxShadow(blur_radius=8, color=TH.shadow), **kw)
 
 
 def metric_tile(icon: str, value, label: str, color=None):
-    color = color or TH.accent()
+    color = color or TH.accent
     return ft.Container(
         content=ft.Column([
             ft.Text(icon, size=24, text_align=ft.TextAlign.CENTER),
             ft.Text(str(value), size=20, weight=ft.FontWeight.BOLD,
                     color=color, font_family=MONO_FONT,
                     text_align=ft.TextAlign.CENTER),
-            ft.Text(label, size=10, color=TH.dim(),
+            ft.Text(label, size=10, color=TH.dim,
                     text_align=ft.TextAlign.CENTER),
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
-        bgcolor=TH.card(), border=ft.Border.all(1, TH.border()),
+        bgcolor=TH.card, border=ft.Border.all(1, TH.border),
         border_radius=14,
         padding=ft.Padding.symmetric(vertical=14, horizontal=10),
         expand=True,
-        shadow=ft.BoxShadow(blur_radius=6, color=TH.shadow()))
+        shadow=ft.BoxShadow(blur_radius=6, color=TH.shadow))
 
 
 def section_title(text: str, icon: str = ""):
     return ft.Text(f"{icon}  {text}" if icon else text,
                    size=15, weight=ft.FontWeight.BOLD,
-                   color=TH.accent(), font_family=MONO_FONT)
+                   color=TH.accent, font_family=MONO_FONT)
 
 
 def sev_badge(severity: str):
@@ -204,15 +179,15 @@ def bar_row(label: str, count: int, max_count: int, color: str):
     pct = count / max(max_count, 1)
     return ft.Row([
         ft.Text(label, size=12, width=160, font_family=MONO_FONT,
-                color=TH.dim(), no_wrap=True,
+                color=TH.dim, no_wrap=True,
                 overflow=ft.TextOverflow.ELLIPSIS),
         ft.Container(
             content=ft.Container(bgcolor=color, border_radius=4,
                                  width=max(4, pct * 400), height=14),
-            bgcolor=TH.bar_bg(), border_radius=4, width=400, height=14,
+            bgcolor=TH.bar_bg, border_radius=4, width=400, height=14,
             clip_behavior=ft.ClipBehavior.HARD_EDGE),
         ft.Text(str(count), size=12, weight=ft.FontWeight.BOLD,
-                font_family=MONO_FONT, width=50, color=TH.text()),
+                font_family=MONO_FONT, width=50, color=TH.text),
     ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
 
@@ -221,7 +196,7 @@ def bar_chart(items: list, label_width=160):
     if not items:
         return ft.Container()
     mx = max(c for _, c, _ in items) if items else 1
-    return ft.Column([bar_row(l, c, mx, col) for l, c, col in items],
+    return ft.Column([bar_row(lbl, c, mx, col) for lbl, c, col in items],
                      spacing=4)
 
 
@@ -253,6 +228,59 @@ def _scan_codebase(root: Path, exclude: List[str], progress_cb=None):
             if err:
                 errors.append(f"{fpath}: {err}")
     return funcs, classes, errors, total
+
+
+# ── Individual scan phase helpers (keep _run_scan lean) ──────────────────────
+
+def _phase_smells(functions, classes, thresholds, results):
+    det = CodeSmellDetector(thresholds=thresholds)
+    smells = det.detect(functions, classes)
+    results["smells"] = det.summary()
+    results["_smell_issues"] = smells
+
+
+def _phase_duplicates(functions, results):
+    finder = DuplicateFinder()
+    finder.find(functions)
+    results["duplicates"] = finder.summary()
+    results["_dup_groups"] = finder.groups
+
+
+def _phase_lint(root, exclude, results):
+    try:
+        from Core.scan_phases import run_lint_phase
+        linter, lint_issues = run_lint_phase(root, exclude=exclude or None)
+        if linter:
+            results["lint"] = linter.summary(lint_issues)
+            results["_lint_issues"] = lint_issues
+        else:
+            results["lint"] = {"error": "Ruff not installed"}
+    except Exception as exc:
+        results["lint"] = {"error": str(exc)}
+
+
+def _phase_security(root, exclude, results):
+    try:
+        from Core.scan_phases import run_security_phase
+        sec, sec_issues = run_security_phase(root, exclude=exclude or None)
+        if sec:
+            results["security"] = sec.summary(sec_issues)
+            results["_sec_issues"] = sec_issues
+        else:
+            results["security"] = {"error": "Bandit not installed"}
+    except Exception as exc:
+        results["security"] = {"error": str(exc)}
+
+
+def _phase_rustify(functions, results):
+    advisor = RustAdvisor()
+    candidates = advisor.score(functions)
+    results["rustify"] = {
+        "total_scored": len(candidates),
+        "pure_count": sum(1 for c in candidates if c.is_pure),
+        "top_score": candidates[0].score if candidates else 0,
+    }
+    results["_rust_candidates"] = candidates
 
 
 def _run_scan(root: Path, modes: Dict[str, bool],
@@ -302,71 +330,26 @@ def _run_scan(root: Path, modes: Dict[str, bool],
     def _phase_frac():
         return 0.4 + (step / max(total_steps, 1)) * 0.55
 
-    if modes.get("smells"):
+    # Dispatch table: (mode_key, progress_label, runner_callable)
+    _phases = [
+        ("smells", "Detecting code smells…",
+         lambda: _phase_smells(functions, classes, thresholds, results)),
+        ("duplicates", "Finding duplicates…",
+         lambda: _phase_duplicates(functions, results)),
+        ("lint", "Running Ruff lint…",
+         lambda: _phase_lint(root, exclude, results)),
+        ("security", "Running Bandit security…",
+         lambda: _phase_security(root, exclude, results)),
+        ("rustify", "Scoring Rust candidates…",
+         lambda: _phase_rustify(functions, results)),
+    ]
+    for mode_key, label, runner in _phases:
+        if not modes.get(mode_key):
+            continue
         step += 1
         if progress_cb:
-            progress_cb(_phase_frac(), "Detecting code smells…",
-                        0, 0, -1)
-        det = CodeSmellDetector(thresholds=thresholds)
-        smells = det.detect(functions, classes)
-        results["smells"] = det.summary()
-        results["_smell_issues"] = smells
-
-    if modes.get("duplicates"):
-        step += 1
-        if progress_cb:
-            progress_cb(_phase_frac(), "Finding duplicates…", 0, 0, -1)
-        finder = DuplicateFinder()
-        finder.find(functions)
-        results["duplicates"] = finder.summary()
-        results["_dup_groups"] = finder.groups
-
-    if modes.get("lint"):
-        step += 1
-        if progress_cb:
-            progress_cb(_phase_frac(), "Running Ruff lint…", 0, 0, -1)
-        try:
-            from Core.scan_phases import run_lint_phase
-            linter, lint_issues = run_lint_phase(root,
-                                                 exclude=exclude or None)
-            if linter:
-                results["lint"] = linter.summary(lint_issues)
-                results["_lint_issues"] = lint_issues
-            else:
-                results["lint"] = {"error": "Ruff not installed"}
-        except Exception as e:
-            results["lint"] = {"error": str(e)}
-
-    if modes.get("security"):
-        step += 1
-        if progress_cb:
-            progress_cb(_phase_frac(), "Running Bandit security…",
-                        0, 0, -1)
-        try:
-            from Core.scan_phases import run_security_phase
-            sec, sec_issues = run_security_phase(root,
-                                                 exclude=exclude or None)
-            if sec:
-                results["security"] = sec.summary(sec_issues)
-                results["_sec_issues"] = sec_issues
-            else:
-                results["security"] = {"error": "Bandit not installed"}
-        except Exception as e:
-            results["security"] = {"error": str(e)}
-
-    if modes.get("rustify"):
-        step += 1
-        if progress_cb:
-            progress_cb(_phase_frac(), "Scoring Rust candidates…",
-                        0, 0, -1)
-        advisor = RustAdvisor()
-        candidates = advisor.score(functions)
-        results["rustify"] = {
-            "total_scored": len(candidates),
-            "pure_count": sum(1 for c in candidates if c.is_pure),
-            "top_score": candidates[0].score if candidates else 0,
-        }
-        results["_rust_candidates"] = candidates
+            progress_cb(_phase_frac(), label, 0, 0, -1)
+        runner()
 
     results["grade"] = compute_grade(results)
     results["meta"]["duration"] = round(time.time() - t0, 2)
@@ -491,25 +474,25 @@ def _build_smells_tab(results: Dict[str, Any]) -> ft.Control:
         if code:
             tile_controls.append(ft.Container(
                 content=ft.Text(code[:500], font_family=MONO_FONT, size=11,
-                                color=TH.dim(), selectable=True,
+                                color=TH.dim, selectable=True,
                                 no_wrap=False),
-                bgcolor=TH.code_bg(), border_radius=8, padding=10,
+                bgcolor=TH.code_bg, border_radius=8, padding=10,
                 margin=ft.Margin.only(top=6)))
         issue_tiles.append(ft.ExpansionTile(
             title=ft.Text(f"{icon} [{s.category}] {s.name}", size=13),
             subtitle=ft.Text(f"{s.file_path}:{s.line}", size=11,
-                             italic=True, color=TH.muted()),
+                             italic=True, color=TH.muted),
             controls=[ft.Container(
                 content=ft.Column(tile_controls), padding=15,
-                bgcolor=ft.Colors.with_opacity(0.03, TH.text()),
+                bgcolor=ft.Colors.with_opacity(0.03, TH.text),
                 border_radius=8)],
             initially_expanded=False))
 
     return ft.Column([
         metrics,
-        ft.Divider(color=TH.divider(), height=30),
+        ft.Divider(color=TH.divider, height=30),
         cat_chart,
-        ft.Divider(color=TH.divider(), height=20),
+        ft.Divider(color=TH.divider, height=20),
         section_title(t("all_issues"), "📋"),
         ft.ListView(controls=issue_tiles, expand=True, spacing=4,
                     padding=5, auto_scroll=False),
@@ -555,19 +538,19 @@ def _build_duplicates_tab(results: Dict[str, Any]) -> ft.Control:
                 ft.Text(f"📄 {loc} — {f.get('name', '?')} "
                         f"({f.get('size', '?')} lines)",
                         size=12, font_family=MONO_FONT,
-                        color=TH.accent()),
+                        color=TH.accent),
                 ft.Container(
                     content=ft.Text(code[:400] if code else "N/A",
                                     font_family=MONO_FONT, size=11,
-                                    selectable=True, color=TH.dim(),
+                                    selectable=True, color=TH.dim,
                                     no_wrap=False),
-                    bgcolor=TH.code_bg(), border_radius=8,
+                    bgcolor=TH.code_bg, border_radius=8,
                     padding=10) if code else ft.Container(),
             ], spacing=4))
         group_tiles.append(ft.ExpansionTile(
             title=ft.Text(f"Group {g.group_id} — {g.similarity_type}"
                           f" ({sim_pct})", size=13),
-            subtitle=ft.Text(func_names, size=11, color=TH.muted()),
+            subtitle=ft.Text(func_names, size=11, color=TH.muted),
             controls=[ft.Container(
                 content=ft.Column(controls, spacing=8), padding=12)]))
 
@@ -575,7 +558,7 @@ def _build_duplicates_tab(results: Dict[str, Any]) -> ft.Control:
         metrics,
         metric_tile("🔗", summary.get("total_functions_involved", 0),
                     t("involved")),
-        ft.Divider(color=TH.divider(), height=20),
+        ft.Divider(color=TH.divider, height=20),
         ft.ListView(controls=group_tiles, expand=True, spacing=4,
                     auto_scroll=False),
     ], spacing=10, expand=True)
@@ -602,7 +585,7 @@ def _build_lint_tab(results: Dict[str, Any],
         metric_tile("🟡", summary.get("warning", 0), t("warning"),
                     ft.Colors.AMBER_400),
         metric_tile("🔧", summary.get("fixable", 0), t("auto_fixable"),
-                    TH.accent2()),
+                    TH.accent2),
     ], spacing=8)
 
     fix_result = ft.Text("", size=12)
@@ -631,7 +614,7 @@ def _build_lint_tab(results: Dict[str, Any],
         fix_btn = ft.Row([
             ft.Button(
                 f"🔧 {t('auto_fix')} ({summary['fixable']})",
-                on_click=on_auto_fix, bgcolor=TH.accent2(),
+                on_click=on_auto_fix, bgcolor=TH.accent2,
                 color=ft.Colors.WHITE),
             fix_result,
         ], spacing=12)
@@ -654,7 +637,7 @@ def _build_lint_tab(results: Dict[str, Any],
                 f"{icon} [{getattr(s, 'rule_code', 'LINT')}] "
                 f"{s.message[:80]}{fix_tag}", size=12),
             subtitle=ft.Text(f"{s.file_path}:{s.line}", size=11,
-                             color=TH.muted()),
+                             color=TH.muted),
             controls=[ft.Container(
                 content=ft.Column([
                     ft.Text(f"{t('issue')}: {s.message}",
@@ -663,14 +646,14 @@ def _build_lint_tab(results: Dict[str, Any],
                             color=ft.Colors.BLUE_200)
                     if s.suggestion else ft.Container(),
                 ]), padding=12,
-                bgcolor=ft.Colors.with_opacity(0.03, TH.text()),
+                bgcolor=ft.Colors.with_opacity(0.03, TH.text),
                 border_radius=8)]))
 
     return ft.Column([
         metrics, fix_btn,
-        ft.Divider(color=TH.divider(), height=20),
+        ft.Divider(color=TH.divider, height=20),
         rule_chart,
-        ft.Divider(color=TH.divider(), height=20),
+        ft.Divider(color=TH.divider, height=20),
         section_title(t("all_issues"), "📋"),
         ft.ListView(controls=issue_tiles, expand=True, spacing=4,
                     auto_scroll=False),
@@ -709,24 +692,24 @@ def _build_security_tab(results: Dict[str, Any]) -> ft.Control:
                                  color=ft.Colors.BLUE_200))
         if getattr(s, "confidence", ""):
             ctrls.append(ft.Text(f"Confidence: {s.confidence}", size=11,
-                                 color=TH.muted()))
+                                 color=TH.muted))
         issue_tiles.append(ft.ExpansionTile(
             title=ft.Text(
                 f"{icon} [{getattr(s, 'rule_code', '?')}] "
                 f"{s.message[:70]}", size=12),
             subtitle=ft.Text(f"{s.file_path}:{s.line}", size=11,
-                             color=TH.muted()),
+                             color=TH.muted),
             leading=ft.Icon(
                 ft.Icons.SECURITY,
                 color=SEV_COLORS.get(sev, ft.Colors.GREY_400)),
             controls=[ft.Container(
                 content=ft.Column(ctrls), padding=12,
-                bgcolor=ft.Colors.with_opacity(0.03, TH.text()),
+                bgcolor=ft.Colors.with_opacity(0.03, TH.text),
                 border_radius=8)]))
 
     return ft.Column([
         metrics,
-        ft.Divider(color=TH.divider(), height=20),
+        ft.Divider(color=TH.divider, height=20),
         section_title(t("all_issues"), "🔒"),
         ft.ListView(controls=issue_tiles, expand=True, spacing=4,
                     auto_scroll=False),
@@ -741,14 +724,14 @@ def _build_rustify_tab(results: Dict[str, Any]) -> ft.Control:
     if not candidates:
         return ft.Text("No Rustify candidates. "
                        "Need functions with 5+ lines.",
-                       color=TH.dim())
+                       color=TH.dim)
 
     metrics = ft.Row([
         metric_tile("🦀", summary.get("total_scored", 0), t("scored")),
         metric_tile("✅", summary.get("pure_count", 0), t("pure"),
                     ft.Colors.GREEN_400),
         metric_tile("🏆", summary.get("top_score", 0), t("top_score"),
-                    TH.accent()),
+                    TH.accent),
         metric_tile("⚠️",
                     summary.get("total_scored", 0) -
                     summary.get("pure_count", 0),
@@ -767,15 +750,15 @@ def _build_rustify_tab(results: Dict[str, Any]) -> ft.Control:
             ft.Row([
                 ft.Text(f"Score: {cand.score}",
                         weight=ft.FontWeight.BOLD,
-                        color=TH.accent()),
+                        color=TH.accent),
                 ft.Text(f"| {purity}", size=12),
                 ft.Text(f"| CC={fn.complexity}", size=12,
-                        color=TH.dim()),
+                        color=TH.dim),
                 ft.Text(f"| {fn.size_lines} lines", size=12,
-                        color=TH.dim()),
+                        color=TH.dim),
             ], spacing=8),
             ft.Text(f"📄 {fn.file_path}:{fn.line_start}", size=11,
-                    color=TH.muted()),
+                    color=TH.muted),
         ]
         if cand.reason:
             ctrls.append(ft.Text(f"💡 {cand.reason}", size=11,
@@ -792,9 +775,9 @@ def _build_rustify_tab(results: Dict[str, Any]) -> ft.Control:
                         content=ft.Text(code[:600],
                                         font_family=MONO_FONT,
                                         size=10, selectable=True,
-                                        color=TH.dim(),
+                                        color=TH.dim,
                                         no_wrap=False),
-                        bgcolor=TH.code_bg(), border_radius=8,
+                        bgcolor=TH.code_bg, border_radius=8,
                         padding=10, expand=True),
                 ], expand=True, spacing=4),
                 ft.Column([
@@ -805,9 +788,9 @@ def _build_rustify_tab(results: Dict[str, Any]) -> ft.Control:
                         content=ft.Text(rust_code[:600],
                                         font_family=MONO_FONT,
                                         size=10, selectable=True,
-                                        color=TH.dim(),
+                                        color=TH.dim,
                                         no_wrap=False),
-                        bgcolor=TH.code_bg(), border_radius=8,
+                        bgcolor=TH.code_bg, border_radius=8,
                         padding=10, expand=True),
                 ], expand=True, spacing=4),
             ], spacing=12, expand=True))
@@ -821,7 +804,7 @@ def _build_rustify_tab(results: Dict[str, Any]) -> ft.Control:
             leading=ft.Icon(
                 ft.Icons.BOLT,
                 color=(ft.Colors.GREEN_400 if cand.score > 20
-                       else TH.accent())),
+                       else TH.accent)),
             controls=[ft.Container(
                 content=ft.Column(ctrls, spacing=6), padding=12)]))
 
@@ -846,13 +829,13 @@ def _build_rustify_tab(results: Dict[str, Any]) -> ft.Control:
 
     return ft.Column([
         metrics,
-        ft.Divider(color=TH.divider(), height=20),
+        ft.Divider(color=TH.divider, height=20),
         section_title(
             f"🏆 Top Rust Candidates ({min(30, len(candidates))})",
             ""),
         ft.ListView(controls=cand_tiles, expand=True, spacing=4,
                     auto_scroll=False),
-        ft.Divider(color=TH.divider(), height=20),
+        ft.Divider(color=TH.divider, height=20),
         dist,
     ], spacing=10, expand=True)
 
@@ -882,7 +865,7 @@ def _build_heatmap_tab(results: Dict[str, Any]) -> ft.Control:
             content=ft.Row([
                 ft.Text(f"🔥 {display}", size=12,
                         font_family=MONO_FONT,
-                        color=TH.dim(), expand=True,
+                        color=TH.dim, expand=True,
                         no_wrap=True,
                         overflow=ft.TextOverflow.ELLIPSIS),
                 ft.Container(
@@ -890,7 +873,7 @@ def _build_heatmap_tab(results: Dict[str, Any]) -> ft.Control:
                                          border_radius=3,
                                          width=max(4, pct * 200),
                                          height=12),
-                    bgcolor=TH.bar_bg(), border_radius=3, width=200,
+                    bgcolor=TH.bar_bg, border_radius=3, width=200,
                     height=12,
                     clip_behavior=ft.ClipBehavior.HARD_EDGE),
                 ft.Text(str(total), size=12,
@@ -900,7 +883,7 @@ def _build_heatmap_tab(results: Dict[str, Any]) -> ft.Control:
                vertical_alignment=ft.CrossAxisAlignment.CENTER),
             padding=ft.Padding.symmetric(6, 10),
             border=ft.Border.only(left=ft.BorderSide(3, color)),
-            bgcolor=TH.card(), border_radius=8,
+            bgcolor=TH.card, border_radius=8,
             margin=ft.Margin.only(bottom=4)))
 
     total_issues = sum(file_issues.values())
@@ -908,7 +891,7 @@ def _build_heatmap_tab(results: Dict[str, Any]) -> ft.Control:
         section_title(t("worst_files"), "🔥"),
         ft.Text(f"{total_issues} {t('issues_across')} "
                 f"{len(file_issues)} {t('files')}",
-                size=12, color=TH.muted()),
+                size=12, color=TH.muted),
         ft.ListView(controls=tiles, expand=True, spacing=2,
                     auto_scroll=False),
     ], spacing=10, expand=True)
@@ -919,7 +902,7 @@ def _build_complexity_tab(results: Dict[str, Any]) -> ft.Control:
     if not functions:
         return ft.Text("No functions available. "
                        "Enable Smells or Duplicates.",
-                       color=TH.dim())
+                       color=TH.dim)
 
     complexities = [f.complexity for f in functions]
     sizes = [f.size_lines for f in functions]
@@ -980,7 +963,7 @@ def _build_complexity_tab(results: Dict[str, Any]) -> ft.Control:
             subtitle=ft.Text(
                 f"{fn.file_path}:{fn.line_start} "
                 f"({fn.size_lines} lines)",
-                size=11, color=TH.muted()),
+                size=11, color=TH.muted),
             leading=ft.Container(
                 content=ft.Text(str(fn.complexity), size=14,
                                 weight=ft.FontWeight.BOLD,
@@ -993,18 +976,18 @@ def _build_complexity_tab(results: Dict[str, Any]) -> ft.Control:
                 content=ft.Text(code[:500] if code else "N/A",
                                 font_family=MONO_FONT, size=11,
                                 selectable=True,
-                                color=TH.dim(),
+                                color=TH.dim,
                                 no_wrap=False),
-                bgcolor=TH.code_bg(), border_radius=8,
+                bgcolor=TH.code_bg, border_radius=8,
                 padding=10)] if code else []))
 
     return ft.Column([
         metrics,
-        ft.Divider(color=TH.divider(), height=20),
+        ft.Divider(color=TH.divider, height=20),
         cc_chart,
-        ft.Divider(color=TH.divider(), height=20),
+        ft.Divider(color=TH.divider, height=20),
         sz_chart,
-        ft.Divider(color=TH.divider(), height=20),
+        ft.Divider(color=TH.divider, height=20),
         section_title(t("most_complex"), "🔥"),
         ft.ListView(controls=fn_tiles, expand=True, spacing=4,
                     auto_scroll=False),
@@ -1025,9 +1008,9 @@ def _build_auto_rustify_tab(results: Dict[str, Any],
                     "Target"),
     ], spacing=8)
 
-    status_text = ft.Text("", size=12, color=TH.dim())
-    progress = ft.ProgressBar(width=500, color=TH.accent(),
-                              bgcolor=TH.card(),
+    status_text = ft.Text("", size=12, color=TH.dim)
+    progress = ft.ProgressBar(width=500, color=TH.accent,
+                              bgcolor=TH.card,
                               value=0, visible=False)
 
     def on_run(e):
@@ -1069,16 +1052,16 @@ def _build_auto_rustify_tab(results: Dict[str, Any],
         glass_card(ft.Column([
             ft.Text(f"⚙️ {t('tab_auto_rustify')} Pipeline", size=16,
                     weight=ft.FontWeight.BOLD, font_family=MONO_FONT,
-                    color=TH.accent()),
+                    color=TH.accent),
             ft.Text("End-to-end: Scan → Score → Transpile → "
                     "Compile → Verify",
-                    size=12, color=TH.muted()),
+                    size=12, color=TH.muted),
         ])),
         sys_row,
-        ft.Divider(color=TH.divider(), height=20),
+        ft.Divider(color=TH.divider, height=20),
         ft.Row([
             ft.Button(f"🚀 {t('run_pipeline')}", on_click=on_run,
-                      bgcolor=TH.accent2(),
+                      bgcolor=TH.accent2,
                       color=ft.Colors.WHITE, height=44),
             status_text,
         ], spacing=12),
@@ -1103,11 +1086,11 @@ def _show_onboarding(page: ft.Page):
 
     title_text = ft.Text(steps[0][0], size=20,
                          weight=ft.FontWeight.BOLD,
-                         color=TH.accent())
-    desc_text = ft.Text(steps[0][1], size=14, color=TH.dim())
-    icon_ctrl = ft.Icon(steps[0][2], size=48, color=TH.accent())
+                         color=TH.accent)
+    desc_text = ft.Text(steps[0][1], size=14, color=TH.dim)
+    icon_ctrl = ft.Icon(steps[0][2], size=48, color=TH.accent)
     step_indicator = ft.Text(f"1 / {len(steps)}", size=12,
-                             color=TH.muted())
+                             color=TH.muted)
 
     def _update():
         i = step_idx[0]
@@ -1135,14 +1118,14 @@ def _show_onboarding(page: ft.Page):
     back_btn = ft.TextButton(t("onboard_back"), on_click=on_back,
                              visible=False)
     next_btn = ft.Button(t("onboard_next"), on_click=on_next,
-                         bgcolor=TH.accent(),
+                         bgcolor=TH.accent,
                          color=ft.Colors.WHITE)
 
     dlg = ft.AlertDialog(
         modal=True,
         title=ft.Row([
             ft.Text(t("onboard_title"), size=22,
-                    weight=ft.FontWeight.BOLD, color=TH.accent()),
+                    weight=ft.FontWeight.BOLD, color=TH.accent),
         ]),
         content=ft.Container(
             content=ft.Column([
@@ -1160,6 +1143,590 @@ def _show_onboarding(page: ft.Page):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  EXTRACTED HELPERS FOR main()
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _build_main_dashboard(page, state, main_content, results):
+    """Build the full results dashboard (grade card + tabs + export bar)."""
+    grade = results.get("grade", {})
+    meta = results.get("meta", {})
+    letter = grade.get("letter", "?")
+    score = grade.get("score", 0)
+    color = GRADE_COLORS.get(letter, "#888")
+
+    # Grade card
+    grade_card = ft.Container(
+        content=ft.Column([
+            ft.Text(letter, size=56, weight=ft.FontWeight.BOLD,
+                    color=color,
+                    text_align=ft.TextAlign.CENTER,
+                    font_family=MONO_FONT),
+            ft.Text(f"{score} / 100", size=18,
+                    color=ft.Colors.with_opacity(0.8, color),
+                    text_align=ft.TextAlign.CENTER),
+            ft.Text(t("quality_score").upper(), size=10,
+                    color=TH.muted,
+                    text_align=ft.TextAlign.CENTER),
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+           spacing=2),
+        bgcolor=ft.Colors.with_opacity(0.1, color),
+        border=ft.Border.all(
+            1, ft.Colors.with_opacity(0.4, color)),
+        border_radius=16, padding=20, width=190,
+        shadow=ft.BoxShadow(
+            blur_radius=20,
+            color=ft.Colors.with_opacity(0.15, color)),
+        animate=ft.Animation(500, ft.AnimationCurve.EASE_OUT))
+
+    # Stats row
+    stats = ft.Row([
+        metric_tile("📄", meta.get("files", 0), t("files")),
+        metric_tile("⚡", meta.get("functions", 0),
+                    t("functions")),
+        metric_tile("📦", meta.get("classes", 0), t("classes")),
+        metric_tile("⏱️", f"{meta.get('duration', 0):.1f}s",
+                    t("duration")),
+    ], spacing=8, expand=True)
+
+    # Penalty summary
+    breakdown = grade.get("breakdown", {})
+    penalty_chips = []
+    labels_map = {"smells": "🔍 Smells", "duplicates": "📋 Dups",
+                  "lint": "🧹 Lint", "security": "🔒 Sec"}
+    for k, d in breakdown.items():
+        p = d.get("penalty", 0)
+        if p > 0:
+            penalty_chips.append(ft.Chip(
+                label=ft.Text(
+                    f"{labels_map.get(k, k)} -{p:.0f}",
+                    size=11, color=TH.text),
+                bgcolor=TH.chip))
+
+    header = ft.Row([
+        grade_card,
+        ft.Column([
+            stats,
+            (ft.Row(penalty_chips, spacing=6)
+             if penalty_chips else ft.Container()),
+        ], expand=True, spacing=10),
+    ], spacing=20,
+       vertical_alignment=ft.CrossAxisAlignment.START)
+
+    # ── Tabs ─────────────────────────────────────────────────────────
+    tabs_list = []
+    if (results.get("smells")
+            and not results["smells"].get("error")):
+        tabs_list.append(ft.Tab(
+            text=f"🔍 {t('tab_smells')}",
+            content=_build_smells_tab(results)))
+    if (results.get("duplicates")
+            and not results.get("duplicates", {}).get("error")):
+        tabs_list.append(ft.Tab(
+            text=f"📋 {t('tab_duplicates')}",
+            content=_build_duplicates_tab(results)))
+    if (results.get("lint")
+            and not results.get("lint", {}).get("error")):
+        tabs_list.append(ft.Tab(
+            text=f"🧹 {t('tab_lint')}",
+            content=_build_lint_tab(results, page)))
+    if (results.get("security")
+            and not results.get("security", {}).get("error")):
+        tabs_list.append(ft.Tab(
+            text=f"🔒 {t('tab_security')}",
+            content=_build_security_tab(results)))
+    if results.get("rustify"):
+        tabs_list.append(ft.Tab(
+            text=f"🦀 {t('tab_rustify')}",
+            content=_build_rustify_tab(results)))
+
+    has_issues = (results.get("_smell_issues")
+                  or results.get("_lint_issues")
+                  or results.get("_sec_issues"))
+    if has_issues:
+        tabs_list.append(ft.Tab(
+            text=f"🔥 {t('tab_heatmap')}",
+            content=_build_heatmap_tab(results)))
+    if results.get("_functions"):
+        tabs_list.append(ft.Tab(
+            text=f"📊 {t('tab_complexity')}",
+            content=_build_complexity_tab(results)))
+        tabs_list.append(ft.Tab(
+            text=f"⚙️ {t('tab_auto_rustify')}",
+            content=_build_auto_rustify_tab(results, page)))
+
+    result_tabs = ft.Tabs(
+        tabs=tabs_list, selected_index=0,
+        animation_duration=300, expand=True,
+        label_color=TH.accent,
+        unselected_label_color=TH.muted,
+        indicator_color=TH.accent,
+        divider_color=TH.divider)
+
+    # ── Export bar ────────────────────────────────────────────────────
+    def on_export_json(e):
+        export = {k: v for k, v in results.items()
+                  if not k.startswith("_")}
+        path = Path(state["root_path"]) / "xray_report.json"
+        path.write_text(
+            json.dumps(export, indent=2, default=str),
+            encoding="utf-8")
+        sb = ft.SnackBar(
+            content=ft.Text(f"📥 Saved to {path}"), open=True)
+        page.overlay.append(sb)
+        page.update()
+
+    def on_export_md(e):
+        md = _build_markdown_report(results)
+        path = Path(state["root_path"]) / "xray_report.md"
+        path.write_text(md, encoding="utf-8")
+        sb = ft.SnackBar(
+            content=ft.Text(f"📥 Saved to {path}"), open=True)
+        page.overlay.append(sb)
+        page.update()
+
+    export_bar = ft.Row([
+        ft.Button(f"📥 {t('export_json')}",
+                  on_click=on_export_json,
+                  bgcolor=TH.card,
+                  color=TH.text),
+        ft.Button(f"📥 {t('export_markdown')}",
+                  on_click=on_export_md,
+                  bgcolor=TH.card,
+                  color=TH.text),
+    ], spacing=12)
+
+    main_content.controls = [
+        ft.Container(
+            content=ft.Column([
+                header,
+                ft.Divider(color=TH.divider, height=30),
+                result_tabs,
+                ft.Divider(color=TH.divider, height=20),
+                export_bar,
+            ], spacing=10, expand=True),
+            padding=30, expand=True)
+    ]
+    page.update()
+
+
+def _build_main_landing(page, main_content):
+    """Build the welcome / landing page."""
+    main_content.controls = [
+        ft.Container(
+            content=ft.Column([
+                ft.Container(height=50),
+                # Logo area
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("🔬", size=56,
+                                text_align=ft.TextAlign.CENTER),
+                        ft.Text("X-RAY", size=40,
+                                weight=ft.FontWeight.BOLD,
+                                color=TH.accent,
+                                font_family=MONO_FONT,
+                                text_align=ft.TextAlign.CENTER),
+                        ft.Text(t("app_subtitle"), size=14,
+                                color=TH.muted,
+                                text_align=ft.TextAlign.CENTER),
+                    ], horizontal_alignment=(
+                        ft.CrossAxisAlignment.CENTER),
+                       spacing=4),
+                    animate=ft.Animation(
+                        600, ft.AnimationCurve.EASE_OUT)),
+                ft.Container(height=30),
+                # 3-step instruction cards
+                ft.Row([
+                    glass_card(ft.Column([
+                        ft.Container(
+                            content=ft.Icon(ft.Icons.FOLDER_OPEN,
+                                            color=TH.accent,
+                                            size=30),
+                            bgcolor=ft.Colors.with_opacity(
+                                0.08, TH.accent),
+                            border_radius=12, width=56, height=56,
+                            alignment=ft.Alignment(0, 0)),
+                        ft.Text("1. Configure",
+                                weight=ft.FontWeight.BOLD,
+                                size=14, color=TH.text),
+                        ft.Text("Set path & analyzers\n"
+                                "in the sidebar", size=11,
+                                color=TH.muted,
+                                text_align=ft.TextAlign.CENTER),
+                    ], horizontal_alignment=(
+                        ft.CrossAxisAlignment.CENTER), spacing=8),
+                        padding=24, expand=True),
+                    glass_card(ft.Column([
+                        ft.Container(
+                            content=ft.Icon(
+                                ft.Icons.PLAY_ARROW_ROUNDED,
+                                color=TH.accent2, size=30),
+                            bgcolor=ft.Colors.with_opacity(
+                                0.08, TH.accent2),
+                            border_radius=12, width=56, height=56,
+                            alignment=ft.Alignment(0, 0)),
+                        ft.Text("2. Scan",
+                                weight=ft.FontWeight.BOLD,
+                                size=14, color=TH.text),
+                        ft.Text(f"Press '{t('scan_start')}'\n"
+                                "to analyze code", size=11,
+                                color=TH.muted,
+                                text_align=ft.TextAlign.CENTER),
+                    ], horizontal_alignment=(
+                        ft.CrossAxisAlignment.CENTER), spacing=8),
+                        padding=24, expand=True),
+                    glass_card(ft.Column([
+                        ft.Container(
+                            content=ft.Icon(
+                                ft.Icons.INSIGHTS,
+                                color="#00c853", size=30),
+                            bgcolor=ft.Colors.with_opacity(
+                                0.08, "#00c853"),
+                            border_radius=12, width=56, height=56,
+                            alignment=ft.Alignment(0, 0)),
+                        ft.Text("3. Explore",
+                                weight=ft.FontWeight.BOLD,
+                                size=14, color=TH.text),
+                        ft.Text("Browse results in\n"
+                                "interactive tabs", size=11,
+                                color=TH.muted,
+                                text_align=ft.TextAlign.CENTER),
+                    ], horizontal_alignment=(
+                        ft.CrossAxisAlignment.CENTER), spacing=8),
+                        padding=24, expand=True),
+                ], spacing=16,
+                   alignment=ft.MainAxisAlignment.CENTER),
+                ft.Container(height=30),
+                ft.Text("AST Smells · Ruff Lint · Bandit Security"
+                        " · Duplicates · Rust Advisor",
+                        size=12, color=TH.muted,
+                        text_align=ft.TextAlign.CENTER),
+                ft.TextButton(
+                    "📖 Show Tutorial",
+                    on_click=lambda _: _show_onboarding(page)),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+               spacing=8),
+            expand=True, alignment=ft.Alignment(0, 0))
+    ]
+
+
+async def _start_scan_handler(page, state, progress, main_content,
+                              build_dashboard_fn):
+    """Run scan with rich progress, then show dashboard."""
+    progress_bar = progress["bar"]
+    progress_ring = progress["ring"]
+    progress_label = progress["label"]
+    progress_detail = progress["detail"]
+    progress_eta = progress["eta"]
+
+    if not state["root_path"]:
+        sb = ft.SnackBar(
+            content=ft.Text(t("select_dir_first")),
+            bgcolor=ft.Colors.RED_400, open=True)
+        page.overlay.append(sb)
+        page.update()
+        return
+
+    # Show rich progress screen
+    progress_bar.visible = True
+    progress_bar.value = 0
+    progress_ring.visible = True
+    progress_label.value = t("scanning")
+    progress_detail.value = ""
+    progress_eta.value = ""
+
+    # Build progress panel in main content
+    main_content.controls = [
+        ft.Container(
+            content=ft.Column([
+                ft.Container(height=80),
+                ft.Text("🔬", size=48,
+                        text_align=ft.TextAlign.CENTER),
+                ft.Text(t("scanning").upper(), size=22,
+                        weight=ft.FontWeight.BOLD,
+                        color=TH.accent,
+                        font_family=MONO_FONT,
+                        text_align=ft.TextAlign.CENTER),
+                ft.Container(height=20),
+                # Progress ring + label row
+                ft.Row([
+                    progress_ring,
+                    progress_label,
+                ], spacing=10,
+                   alignment=ft.MainAxisAlignment.CENTER),
+                ft.Container(height=8),
+                # File counter
+                progress_detail,
+                # ETA
+                progress_eta,
+                ft.Container(height=12),
+                # Progress bar with percentage
+                ft.Container(
+                    content=progress_bar,
+                    width=400,
+                    alignment=ft.Alignment(0, 0)),
+                ft.Container(height=30),
+                ft.Text("Analyzing Python source code\u2026",
+                        size=12, color=TH.muted, italic=True,
+                        text_align=ft.TextAlign.CENTER),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+               spacing=6),
+            expand=True, alignment=ft.Alignment(0, 0))
+    ]
+    page.update()
+
+    loop = asyncio.get_event_loop()
+    scan_t0 = time.time()
+
+    def progress_cb(frac, label, files_done=0, total_files=0,
+                    eta_secs=-1):
+        progress_bar.value = min(frac, 1.0)
+        progress_label.value = label
+
+        if total_files > 0:
+            progress_detail.value = (
+                f"📄  {files_done} / {total_files} files")
+        else:
+            elapsed = time.time() - scan_t0
+            progress_detail.value = (
+                f"⏱️  {elapsed:.0f}s elapsed")
+
+        if eta_secs > 0:
+            mins = int(eta_secs) // 60
+            secs = int(eta_secs) % 60
+            if mins > 0:
+                progress_eta.value = (
+                    f"⏳  ETA: ~{mins}m {secs:02d}s remaining")
+            else:
+                progress_eta.value = (
+                    f"⏳  ETA: ~{secs}s remaining")
+        elif eta_secs == 0:
+            progress_eta.value = ""
+        # eta_secs == -1 means unknown, keep current text
+
+        try:
+            page.update()
+        except Exception:
+            pass
+
+    results = await loop.run_in_executor(
+        None,
+        lambda: _run_scan(
+            Path(state["root_path"]), state["modes"],
+            state["exclude"], state["thresholds"],
+            progress_cb=progress_cb))
+
+    results["_scan_path"] = state["root_path"]
+    state["results"] = results
+
+    # Clean up progress
+    progress_bar.visible = False
+    progress_ring.visible = False
+    progress_label.value = ""
+    progress_detail.value = ""
+    progress_eta.value = ""
+
+    # Show completion summary briefly
+    dur = results["meta"].get("duration", 0)
+    n_files = results["meta"].get("files", 0)
+    n_funcs = results["meta"].get("functions", 0)
+    main_content.controls = [
+        ft.Container(
+            content=ft.Column([
+                ft.Container(height=80),
+                ft.Text("✅", size=56,
+                        text_align=ft.TextAlign.CENTER),
+                ft.Text(t("scan_complete"), size=22,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.GREEN_400,
+                        text_align=ft.TextAlign.CENTER),
+                ft.Text(
+                    f"{n_files} {t('files')} \u00b7 "
+                    f"{n_funcs} {t('functions')} \u00b7 "
+                    f"{dur:.1f}s",
+                    size=14, color=TH.dim,
+                    text_align=ft.TextAlign.CENTER),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+               spacing=8),
+            expand=True, alignment=ft.Alignment(0, 0),
+            animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT))
+    ]
+    page.update()
+
+    # Short pause then show dashboard
+    await asyncio.sleep(0.8)
+    build_dashboard_fn(results)
+
+
+def _build_app_sidebar(pick_directory, path_text, mode_checks, start_scan,
+                       theme_icon, lang_dd, progress):
+    """Build the left sidebar Container."""
+    progress_ring = progress["ring"]
+    progress_label = progress["label"]
+    progress_detail = progress["detail"]
+    progress_eta = progress["eta"]
+    return ft.Container(
+        content=ft.Column([
+            # Logo
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("X-RAY", size=26,
+                            weight=ft.FontWeight.BOLD,
+                            color=TH.accent,
+                            font_family=MONO_FONT,
+                            text_align=ft.TextAlign.CENTER),
+                    ft.Text(t("app_subtitle").upper(), size=9,
+                            color=TH.muted,
+                            text_align=ft.TextAlign.CENTER),
+                    ft.Text(f"v{__version__}", size=10,
+                            color=TH.muted,
+                            text_align=ft.TextAlign.CENTER),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                   spacing=2),
+                padding=ft.Padding.only(top=16, bottom=4)),
+
+            # Theme + Language row
+            ft.Row([
+                theme_icon,
+                ft.Icon(ft.Icons.LANGUAGE, size=16,
+                        color=TH.muted),
+                lang_dd,
+            ], spacing=4,
+               vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Divider(color=TH.divider, height=16),
+
+            # Directory
+            ft.Text(t("project_scope").upper(), size=10,
+                    weight=ft.FontWeight.BOLD, color=TH.muted),
+            ft.Button(
+                t("select_directory"), icon=ft.Icons.FOLDER_OPEN,
+                on_click=pick_directory,
+                width=260, color=TH.accent, bgcolor=TH.card),
+            path_text,
+            ft.Divider(color=TH.divider, height=12),
+
+            # Modes
+            ft.Text(t("scan_modes").upper(), size=10,
+                    weight=ft.FontWeight.BOLD, color=TH.muted),
+            mode_checks,
+            ft.Divider(color=TH.divider, height=12),
+
+            # Scan button
+            ft.Button(
+                f"⚡ {t('scan_start')}",
+                width=260, height=48,
+                color=ft.Colors.WHITE,
+                bgcolor=TH.accent2,
+                style=ft.ButtonStyle(
+                    shape=ft.RoundedRectangleBorder(radius=12)),
+                on_click=start_scan),
+
+            ft.Container(height=4),
+            ft.Row([progress_ring, progress_label], spacing=6),
+            progress_detail,
+            progress_eta,
+
+            # Footer
+            ft.Container(expand=True),
+            ft.Divider(color=TH.divider),
+            ft.Text("AST \u00b7 Ruff \u00b7 Bandit \u00b7 Rust", size=9,
+                    color=TH.muted,
+                    text_align=ft.TextAlign.CENTER),
+            ft.TextButton(
+                "github.com/GeoHaber/X_Ray",
+                url="https://github.com/GeoHaber/X_Ray",
+                style=ft.ButtonStyle(color=TH.muted)),
+        ], scroll=ft.ScrollMode.AUTO, spacing=6),
+        width=280, bgcolor=TH.surface,
+        border=ft.Border.only(right=ft.BorderSide(1, TH.border)),
+        padding=ft.Padding.symmetric(horizontal=12, vertical=8))
+
+
+def _build_mode_checks(state):
+    """Build the mode-toggle checkboxes column."""
+    def on_mode(e):
+        state["modes"][e.control.data] = e.control.value
+
+    _m = state["modes"]
+    return ft.Column([
+        ft.Checkbox(label=t("smells"), value=_m["smells"],
+                    on_change=on_mode, data="smells",
+                    fill_color=TH.accent, check_color=ft.Colors.WHITE),
+        ft.Checkbox(label=t("duplicates"), value=_m["duplicates"],
+                    on_change=on_mode, data="duplicates",
+                    fill_color=TH.accent, check_color=ft.Colors.WHITE),
+        ft.Checkbox(label=t("lint"), value=_m["lint"],
+                    on_change=on_mode, data="lint",
+                    fill_color=TH.accent, check_color=ft.Colors.WHITE),
+        ft.Checkbox(label=t("security"), value=_m["security"],
+                    on_change=on_mode, data="security",
+                    fill_color=TH.accent, check_color=ft.Colors.WHITE),
+        ft.Checkbox(label=t("rustify"), value=_m["rustify"],
+                    on_change=on_mode, data="rustify",
+                    fill_color=TH.accent, check_color=ft.Colors.WHITE),
+    ], spacing=0)
+
+
+def _build_theme_lang_controls(page, main_fn):
+    """Build theme toggle icon and language dropdown."""
+    theme_icon = ft.IconButton(
+        icon=(ft.Icons.LIGHT_MODE if TH.is_dark()
+              else ft.Icons.DARK_MODE),
+        icon_color=TH.accent,
+        tooltip="Toggle Light / Dark",
+        icon_size=20)
+
+    def on_theme_toggle(e):
+        TH.toggle()
+        page.data["_onboarded"] = True
+        try:
+            page.pop_dialog()
+        except Exception:
+            pass
+        page.controls.clear()
+        page.run_task(main_fn, page)
+
+    theme_icon.on_click = on_theme_toggle
+
+    def on_lang_change(e):
+        set_locale(e.control.value)
+        page.data = page.data or {}
+        page.data["_onboarded"] = True
+        try:
+            page.pop_dialog()
+        except Exception:
+            pass
+        page.controls.clear()
+        page.run_task(main_fn, page)
+
+    lang_dd = ft.Dropdown(
+        value=get_locale(), width=120, dense=True,
+        border_color=TH.border, color=TH.text,
+        options=[ft.dropdown.Option(key=k, text=f"{v}")
+                 for k, v in LOCALES.items()],
+        on_select=on_lang_change)
+    return theme_icon, lang_dd
+
+
+def _build_progress_widgets():
+    """Create the progress bar, ring, label, detail, and ETA widgets."""
+    return {
+        "bar": ft.ProgressBar(width=240, color=TH.accent,
+                              bgcolor=TH.card,
+                              value=0, visible=False),
+        "ring": ft.ProgressRing(width=20, height=20,
+                                stroke_width=2.5,
+                                color=TH.accent,
+                                visible=False),
+        "label": ft.Text("", size=12, color=TH.dim,
+                         weight=ft.FontWeight.W_500),
+        "detail": ft.Text("", size=10, color=TH.muted,
+                          font_family=MONO_FONT),
+        "eta": ft.Text("", size=10, color=TH.muted,
+                       italic=True),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  MAIN APPLICATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1168,7 +1735,7 @@ async def main(page: ft.Page):
     page.title = t("app_title")
     page.theme_mode = (ft.ThemeMode.DARK if TH.is_dark()
                        else ft.ThemeMode.LIGHT)
-    page.bgcolor = TH.bg()
+    page.bgcolor = TH.bg
     page.window.width = 1360
     page.window.height = 880
     page.padding = 0
@@ -1177,10 +1744,10 @@ async def main(page: ft.Page):
 
     # Material 3 seed-color themes
     page.theme = ft.Theme(
-        color_scheme_seed=TH.accent(),
+        color_scheme_seed=TH.accent,
         font_family="Segoe UI, Roboto, Helvetica, Arial, sans-serif")
     page.dark_theme = ft.Theme(
-        color_scheme_seed=TH.accent(),
+        color_scheme_seed=TH.accent,
         font_family="Segoe UI, Roboto, Helvetica, Arial, sans-serif")
 
     # ── State (persisted in page.data so theme / lang rebuilds keep it) ──
@@ -1212,7 +1779,7 @@ async def main(page: ft.Page):
     _prev_path = state.get("root_path", "")
     path_text = ft.Text(
         _prev_path if _prev_path else t("no_dir_selected"),
-        color=TH.accent() if _prev_path else TH.muted(),
+        color=TH.accent if _prev_path else TH.muted,
         size=12, italic=not bool(_prev_path), max_lines=2,
         overflow=ft.TextOverflow.ELLIPSIS)
 
@@ -1222,566 +1789,36 @@ async def main(page: ft.Page):
         if result:
             state["root_path"] = result
             path_text.value = result
-            path_text.color = TH.accent()
+            path_text.color = TH.accent
             page.update()
 
     # ── Mode checkboxes ──────────────────────────────────────────────────
-    def on_mode(e):
-        state["modes"][e.control.data] = e.control.value
-
-    _m = state["modes"]
-    mode_checks = ft.Column([
-        ft.Checkbox(label=t("smells"), value=_m["smells"],
-                    on_change=on_mode, data="smells",
-                    fill_color=TH.accent(), check_color=ft.Colors.WHITE),
-        ft.Checkbox(label=t("duplicates"), value=_m["duplicates"],
-                    on_change=on_mode, data="duplicates",
-                    fill_color=TH.accent(), check_color=ft.Colors.WHITE),
-        ft.Checkbox(label=t("lint"), value=_m["lint"],
-                    on_change=on_mode, data="lint",
-                    fill_color=TH.accent(), check_color=ft.Colors.WHITE),
-        ft.Checkbox(label=t("security"), value=_m["security"],
-                    on_change=on_mode, data="security",
-                    fill_color=TH.accent(), check_color=ft.Colors.WHITE),
-        ft.Checkbox(label=t("rustify"), value=_m["rustify"],
-                    on_change=on_mode, data="rustify",
-                    fill_color=TH.accent(), check_color=ft.Colors.WHITE),
-    ], spacing=0)
+    mode_checks = _build_mode_checks(state)
 
     # ── Theme & language pickers ─────────────────────────────────────────
-    theme_icon = ft.IconButton(
-        icon=(ft.Icons.LIGHT_MODE if TH.is_dark()
-              else ft.Icons.DARK_MODE),
-        icon_color=TH.accent(),
-        tooltip="Toggle Light / Dark",
-        icon_size=20)
-
-    def on_theme_toggle(e):
-        TH.toggle()
-        page.data["_onboarded"] = True
-        try:
-            page.pop_dialog()
-        except Exception:
-            pass
-        page.controls.clear()
-        page.run_task(main, page)
-
-    theme_icon.on_click = on_theme_toggle
-
-    def on_lang_change(e):
-        set_locale(e.control.value)
-        page.data = page.data or {}
-        page.data["_onboarded"] = True
-        try:
-            page.pop_dialog()
-        except Exception:
-            pass
-        page.controls.clear()
-        page.run_task(main, page)
-
-    lang_dd = ft.Dropdown(
-        value=get_locale(), width=120, dense=True,
-        border_color=TH.border(), color=TH.text(),
-        options=[ft.dropdown.Option(key=k, text=f"{v}")
-                 for k, v in LOCALES.items()],
-        on_select=on_lang_change)
+    theme_icon, lang_dd = _build_theme_lang_controls(page, main)
 
     # ── Progress UI (rich, with ETA) ─────────────────────────────────────
-    progress_bar = ft.ProgressBar(width=240, color=TH.accent(),
-                                  bgcolor=TH.card(),
-                                  value=0, visible=False)
-    # Animated spinner
-    progress_ring = ft.ProgressRing(width=20, height=20,
-                                    stroke_width=2.5,
-                                    color=TH.accent(),
-                                    visible=False)
-    progress_label = ft.Text("", size=12, color=TH.dim(),
-                             weight=ft.FontWeight.W_500)
-    progress_detail = ft.Text("", size=10, color=TH.muted(),
-                              font_family=MONO_FONT)
-    progress_eta = ft.Text("", size=10, color=TH.muted(),
-                           italic=True)
+    progress = _build_progress_widgets()
 
     # ── Main content area ────────────────────────────────────────────────
     main_content = ft.Column([], expand=True, scroll=ft.ScrollMode.AUTO)
 
-    # ── Build dashboard from scan results ────────────────────────────────
-    def build_dashboard(results: Dict[str, Any]):
-        grade = results.get("grade", {})
-        meta = results.get("meta", {})
-        letter = grade.get("letter", "?")
-        score = grade.get("score", 0)
-        color = GRADE_COLORS.get(letter, "#888")
+    def build_dashboard(results):
+        _build_main_dashboard(page, state, main_content, results)
 
-        # Grade card
-        grade_card = ft.Container(
-            content=ft.Column([
-                ft.Text(letter, size=56, weight=ft.FontWeight.BOLD,
-                        color=color,
-                        text_align=ft.TextAlign.CENTER,
-                        font_family=MONO_FONT),
-                ft.Text(f"{score} / 100", size=18,
-                        color=ft.Colors.with_opacity(0.8, color),
-                        text_align=ft.TextAlign.CENTER),
-                ft.Text(t("quality_score").upper(), size=10,
-                        color=TH.muted(),
-                        text_align=ft.TextAlign.CENTER),
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-               spacing=2),
-            bgcolor=ft.Colors.with_opacity(0.1, color),
-            border=ft.Border.all(
-                1, ft.Colors.with_opacity(0.4, color)),
-            border_radius=16, padding=20, width=190,
-            shadow=ft.BoxShadow(
-                blur_radius=20,
-                color=ft.Colors.with_opacity(0.15, color)),
-            animate=ft.Animation(500, ft.AnimationCurve.EASE_OUT))
-
-        # Stats row
-        stats = ft.Row([
-            metric_tile("📄", meta.get("files", 0), t("files")),
-            metric_tile("⚡", meta.get("functions", 0),
-                        t("functions")),
-            metric_tile("📦", meta.get("classes", 0), t("classes")),
-            metric_tile("⏱️", f"{meta.get('duration', 0):.1f}s",
-                        t("duration")),
-        ], spacing=8, expand=True)
-
-        # Penalty summary
-        breakdown = grade.get("breakdown", {})
-        penalty_chips = []
-        labels_map = {"smells": "🔍 Smells", "duplicates": "📋 Dups",
-                      "lint": "🧹 Lint", "security": "🔒 Sec"}
-        for k, d in breakdown.items():
-            p = d.get("penalty", 0)
-            if p > 0:
-                penalty_chips.append(ft.Chip(
-                    label=ft.Text(
-                        f"{labels_map.get(k, k)} -{p:.0f}",
-                        size=11, color=TH.text()),
-                    bgcolor=TH.chip()))
-
-        header = ft.Row([
-            grade_card,
-            ft.Column([
-                stats,
-                (ft.Row(penalty_chips, spacing=6)
-                 if penalty_chips else ft.Container()),
-            ], expand=True, spacing=10),
-        ], spacing=20,
-           vertical_alignment=ft.CrossAxisAlignment.START)
-
-        # ── Tabs ─────────────────────────────────────────────────────
-        tabs_list = []
-        if (results.get("smells")
-                and not results["smells"].get("error")):
-            tabs_list.append(ft.Tab(
-                text=f"🔍 {t('tab_smells')}",
-                content=_build_smells_tab(results)))
-        if (results.get("duplicates")
-                and not results.get("duplicates", {}).get("error")):
-            tabs_list.append(ft.Tab(
-                text=f"📋 {t('tab_duplicates')}",
-                content=_build_duplicates_tab(results)))
-        if (results.get("lint")
-                and not results.get("lint", {}).get("error")):
-            tabs_list.append(ft.Tab(
-                text=f"🧹 {t('tab_lint')}",
-                content=_build_lint_tab(results, page)))
-        if (results.get("security")
-                and not results.get("security", {}).get("error")):
-            tabs_list.append(ft.Tab(
-                text=f"🔒 {t('tab_security')}",
-                content=_build_security_tab(results)))
-        if results.get("rustify"):
-            tabs_list.append(ft.Tab(
-                text=f"🦀 {t('tab_rustify')}",
-                content=_build_rustify_tab(results)))
-
-        has_issues = (results.get("_smell_issues")
-                      or results.get("_lint_issues")
-                      or results.get("_sec_issues"))
-        if has_issues:
-            tabs_list.append(ft.Tab(
-                text=f"🔥 {t('tab_heatmap')}",
-                content=_build_heatmap_tab(results)))
-        if results.get("_functions"):
-            tabs_list.append(ft.Tab(
-                text=f"📊 {t('tab_complexity')}",
-                content=_build_complexity_tab(results)))
-            tabs_list.append(ft.Tab(
-                text=f"⚙️ {t('tab_auto_rustify')}",
-                content=_build_auto_rustify_tab(results, page)))
-
-        result_tabs = ft.Tabs(
-            tabs=tabs_list, selected_index=0,
-            animation_duration=300, expand=True,
-            label_color=TH.accent(),
-            unselected_label_color=TH.muted(),
-            indicator_color=TH.accent(),
-            divider_color=TH.divider())
-
-        # ── Export bar ───────────────────────────────────────────────
-        def on_export_json(e):
-            export = {k: v for k, v in results.items()
-                      if not k.startswith("_")}
-            path = Path(state["root_path"]) / "xray_report.json"
-            path.write_text(
-                json.dumps(export, indent=2, default=str),
-                encoding="utf-8")
-            sb = ft.SnackBar(
-                content=ft.Text(f"📥 Saved to {path}"), open=True)
-            page.overlay.append(sb)
-            page.update()
-
-        def on_export_md(e):
-            md = _build_markdown_report(results)
-            path = Path(state["root_path"]) / "xray_report.md"
-            path.write_text(md, encoding="utf-8")
-            sb = ft.SnackBar(
-                content=ft.Text(f"📥 Saved to {path}"), open=True)
-            page.overlay.append(sb)
-            page.update()
-
-        export_bar = ft.Row([
-            ft.Button(f"📥 {t('export_json')}",
-                      on_click=on_export_json,
-                      bgcolor=TH.card(),
-                      color=TH.text()),
-            ft.Button(f"📥 {t('export_markdown')}",
-                      on_click=on_export_md,
-                      bgcolor=TH.card(),
-                      color=TH.text()),
-        ], spacing=12)
-
-        main_content.controls = [
-            ft.Container(
-                content=ft.Column([
-                    header,
-                    ft.Divider(color=TH.divider(), height=30),
-                    result_tabs,
-                    ft.Divider(color=TH.divider(), height=20),
-                    export_bar,
-                ], spacing=10, expand=True),
-                padding=30, expand=True)
-        ]
-        page.update()
-
-    # ── Landing page ─────────────────────────────────────────────────────
     def build_landing():
-        main_content.controls = [
-            ft.Container(
-                content=ft.Column([
-                    ft.Container(height=50),
-                    # Logo area
-                    ft.Container(
-                        content=ft.Column([
-                            ft.Text("🔬", size=56,
-                                    text_align=ft.TextAlign.CENTER),
-                            ft.Text("X-RAY", size=40,
-                                    weight=ft.FontWeight.BOLD,
-                                    color=TH.accent(),
-                                    font_family=MONO_FONT,
-                                    text_align=ft.TextAlign.CENTER),
-                            ft.Text(t("app_subtitle"), size=14,
-                                    color=TH.muted(),
-                                    text_align=ft.TextAlign.CENTER),
-                        ], horizontal_alignment=(
-                            ft.CrossAxisAlignment.CENTER),
-                           spacing=4),
-                        animate=ft.Animation(
-                            600, ft.AnimationCurve.EASE_OUT)),
-                    ft.Container(height=30),
-                    # 3-step instruction cards
-                    ft.Row([
-                        glass_card(ft.Column([
-                            ft.Container(
-                                content=ft.Icon(ft.Icons.FOLDER_OPEN,
-                                                color=TH.accent(),
-                                                size=30),
-                                bgcolor=ft.Colors.with_opacity(
-                                    0.08, TH.accent()),
-                                border_radius=12, width=56, height=56,
-                                alignment=ft.Alignment(0, 0)),
-                            ft.Text("1. Configure",
-                                    weight=ft.FontWeight.BOLD,
-                                    size=14, color=TH.text()),
-                            ft.Text("Set path & analyzers\n"
-                                    "in the sidebar", size=11,
-                                    color=TH.muted(),
-                                    text_align=ft.TextAlign.CENTER),
-                        ], horizontal_alignment=(
-                            ft.CrossAxisAlignment.CENTER), spacing=8),
-                            padding=24, expand=True),
-                        glass_card(ft.Column([
-                            ft.Container(
-                                content=ft.Icon(
-                                    ft.Icons.PLAY_ARROW_ROUNDED,
-                                    color=TH.accent2(), size=30),
-                                bgcolor=ft.Colors.with_opacity(
-                                    0.08, TH.accent2()),
-                                border_radius=12, width=56, height=56,
-                                alignment=ft.Alignment(0, 0)),
-                            ft.Text("2. Scan",
-                                    weight=ft.FontWeight.BOLD,
-                                    size=14, color=TH.text()),
-                            ft.Text(f"Press '{t('scan_start')}'\n"
-                                    "to analyze code", size=11,
-                                    color=TH.muted(),
-                                    text_align=ft.TextAlign.CENTER),
-                        ], horizontal_alignment=(
-                            ft.CrossAxisAlignment.CENTER), spacing=8),
-                            padding=24, expand=True),
-                        glass_card(ft.Column([
-                            ft.Container(
-                                content=ft.Icon(
-                                    ft.Icons.INSIGHTS,
-                                    color="#00c853", size=30),
-                                bgcolor=ft.Colors.with_opacity(
-                                    0.08, "#00c853"),
-                                border_radius=12, width=56, height=56,
-                                alignment=ft.Alignment(0, 0)),
-                            ft.Text("3. Explore",
-                                    weight=ft.FontWeight.BOLD,
-                                    size=14, color=TH.text()),
-                            ft.Text("Browse results in\n"
-                                    "interactive tabs", size=11,
-                                    color=TH.muted(),
-                                    text_align=ft.TextAlign.CENTER),
-                        ], horizontal_alignment=(
-                            ft.CrossAxisAlignment.CENTER), spacing=8),
-                            padding=24, expand=True),
-                    ], spacing=16,
-                       alignment=ft.MainAxisAlignment.CENTER),
-                    ft.Container(height=30),
-                    ft.Text("AST Smells · Ruff Lint · Bandit Security"
-                            " · Duplicates · Rust Advisor",
-                            size=12, color=TH.muted(),
-                            text_align=ft.TextAlign.CENTER),
-                    ft.TextButton(
-                        "📖 Show Tutorial",
-                        on_click=lambda _: _show_onboarding(page)),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                   spacing=8),
-                expand=True, alignment=ft.Alignment(0, 0))
-        ]
+        _build_main_landing(page, main_content)
 
-    # ── Scan handler (with rich progress) ────────────────────────────────
+    # ── Scan handler ─────────────────────────────────────────────────────
     async def start_scan(e):
-        if not state["root_path"]:
-            sb = ft.SnackBar(
-                content=ft.Text(t("select_dir_first")),
-                bgcolor=ft.Colors.RED_400, open=True)
-            page.overlay.append(sb)
-            page.update()
-            return
-
-        # Show rich progress screen
-        progress_bar.visible = True
-        progress_bar.value = 0
-        progress_ring.visible = True
-        progress_label.value = t("scanning")
-        progress_detail.value = ""
-        progress_eta.value = ""
-
-        # Build progress panel in main content
-        main_content.controls = [
-            ft.Container(
-                content=ft.Column([
-                    ft.Container(height=80),
-                    ft.Text("🔬", size=48,
-                            text_align=ft.TextAlign.CENTER),
-                    ft.Text(t("scanning").upper(), size=22,
-                            weight=ft.FontWeight.BOLD,
-                            color=TH.accent(),
-                            font_family=MONO_FONT,
-                            text_align=ft.TextAlign.CENTER),
-                    ft.Container(height=20),
-                    # Progress ring + label row
-                    ft.Row([
-                        progress_ring,
-                        progress_label,
-                    ], spacing=10,
-                       alignment=ft.MainAxisAlignment.CENTER),
-                    ft.Container(height=8),
-                    # File counter
-                    progress_detail,
-                    # ETA
-                    progress_eta,
-                    ft.Container(height=12),
-                    # Progress bar with percentage
-                    ft.Container(
-                        content=progress_bar,
-                        width=400,
-                        alignment=ft.Alignment(0, 0)),
-                    ft.Container(height=30),
-                    ft.Text("Analyzing Python source code…",
-                            size=12, color=TH.muted(), italic=True,
-                            text_align=ft.TextAlign.CENTER),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                   spacing=6),
-                expand=True, alignment=ft.Alignment(0, 0))
-        ]
-        page.update()
-
-        loop = asyncio.get_event_loop()
-        scan_t0 = time.time()
-
-        def progress_cb(frac, label, files_done=0, total_files=0,
-                        eta_secs=-1):
-            progress_bar.value = min(frac, 1.0)
-            progress_label.value = label
-
-            if total_files > 0:
-                progress_detail.value = (
-                    f"📄  {files_done} / {total_files} files")
-            else:
-                elapsed = time.time() - scan_t0
-                progress_detail.value = (
-                    f"⏱️  {elapsed:.0f}s elapsed")
-
-            if eta_secs > 0:
-                mins = int(eta_secs) // 60
-                secs = int(eta_secs) % 60
-                if mins > 0:
-                    progress_eta.value = (
-                        f"⏳  ETA: ~{mins}m {secs:02d}s remaining")
-                else:
-                    progress_eta.value = (
-                        f"⏳  ETA: ~{secs}s remaining")
-            elif eta_secs == 0:
-                progress_eta.value = ""
-            # eta_secs == -1 means unknown, keep current text
-
-            try:
-                page.update()
-            except Exception:
-                pass
-
-        results = await loop.run_in_executor(
-            None,
-            lambda: _run_scan(
-                Path(state["root_path"]), state["modes"],
-                state["exclude"], state["thresholds"],
-                progress_cb=progress_cb))
-
-        results["_scan_path"] = state["root_path"]
-        state["results"] = results
-
-        # Clean up progress
-        progress_bar.visible = False
-        progress_ring.visible = False
-        progress_label.value = ""
-        progress_detail.value = ""
-        progress_eta.value = ""
-
-        # Show completion summary briefly
-        dur = results["meta"].get("duration", 0)
-        n_files = results["meta"].get("files", 0)
-        n_funcs = results["meta"].get("functions", 0)
-        main_content.controls = [
-            ft.Container(
-                content=ft.Column([
-                    ft.Container(height=80),
-                    ft.Text("✅", size=56,
-                            text_align=ft.TextAlign.CENTER),
-                    ft.Text(t("scan_complete"), size=22,
-                            weight=ft.FontWeight.BOLD,
-                            color=ft.Colors.GREEN_400,
-                            text_align=ft.TextAlign.CENTER),
-                    ft.Text(
-                        f"{n_files} {t('files')} · "
-                        f"{n_funcs} {t('functions')} · "
-                        f"{dur:.1f}s",
-                        size=14, color=TH.dim(),
-                        text_align=ft.TextAlign.CENTER),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                   spacing=8),
-                expand=True, alignment=ft.Alignment(0, 0),
-                animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT))
-        ]
-        page.update()
-
-        # Short pause then show dashboard
-        await asyncio.sleep(0.8)
-        build_dashboard(results)
+        await _start_scan_handler(page, state, progress, main_content,
+                                  build_dashboard)
 
     # ── Sidebar ──────────────────────────────────────────────────────────
-    sidebar = ft.Container(
-        content=ft.Column([
-            # Logo
-            ft.Container(
-                content=ft.Column([
-                    ft.Text("X-RAY", size=26,
-                            weight=ft.FontWeight.BOLD,
-                            color=TH.accent(),
-                            font_family=MONO_FONT,
-                            text_align=ft.TextAlign.CENTER),
-                    ft.Text(t("app_subtitle").upper(), size=9,
-                            color=TH.muted(),
-                            text_align=ft.TextAlign.CENTER),
-                    ft.Text(f"v{__version__}", size=10,
-                            color=TH.muted(),
-                            text_align=ft.TextAlign.CENTER),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                   spacing=2),
-                padding=ft.Padding.only(top=16, bottom=4)),
-
-            # Theme + Language row
-            ft.Row([
-                theme_icon,
-                ft.Icon(ft.Icons.LANGUAGE, size=16,
-                        color=TH.muted()),
-                lang_dd,
-            ], spacing=4,
-               vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            ft.Divider(color=TH.divider(), height=16),
-
-            # Directory
-            ft.Text(t("project_scope").upper(), size=10,
-                    weight=ft.FontWeight.BOLD, color=TH.muted()),
-            ft.Button(
-                t("select_directory"), icon=ft.Icons.FOLDER_OPEN,
-                on_click=pick_directory,
-                width=260, color=TH.accent(), bgcolor=TH.card()),
-            path_text,
-            ft.Divider(color=TH.divider(), height=12),
-
-            # Modes
-            ft.Text(t("scan_modes").upper(), size=10,
-                    weight=ft.FontWeight.BOLD, color=TH.muted()),
-            mode_checks,
-            ft.Divider(color=TH.divider(), height=12),
-
-            # Scan button
-            ft.Button(
-                f"⚡ {t('scan_start')}",
-                width=260, height=48,
-                color=ft.Colors.WHITE,
-                bgcolor=TH.accent2(),
-                style=ft.ButtonStyle(
-                    shape=ft.RoundedRectangleBorder(radius=12)),
-                on_click=start_scan),
-
-            ft.Container(height=4),
-            ft.Row([progress_ring, progress_label], spacing=6),
-            progress_detail,
-            progress_eta,
-
-            # Footer
-            ft.Container(expand=True),
-            ft.Divider(color=TH.divider()),
-            ft.Text("AST · Ruff · Bandit · Rust", size=9,
-                    color=TH.muted(),
-                    text_align=ft.TextAlign.CENTER),
-            ft.TextButton(
-                "github.com/GeoHaber/X_Ray",
-                url="https://github.com/GeoHaber/X_Ray",
-                style=ft.ButtonStyle(color=TH.muted())),
-        ], scroll=ft.ScrollMode.AUTO, spacing=6),
-        width=280, bgcolor=TH.surface(),
-        border=ft.Border.only(right=ft.BorderSide(1, TH.border())),
-        padding=ft.Padding.symmetric(horizontal=12, vertical=8))
+    sidebar = _build_app_sidebar(
+        pick_directory, path_text, mode_checks, start_scan,
+        theme_icon, lang_dd, progress)
 
     # ── Layout ───────────────────────────────────────────────────────────
     # If we already have scan results (e.g. after theme/lang toggle), show dashboard
