@@ -17,10 +17,10 @@ Tests the AST-based Python → Rust transpiler at every level:
 
 import json
 import os
-import re
 import subprocess
 import tempfile
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -30,7 +30,6 @@ from Analysis.transpiler import (
     transpile_batch_json,
     _sanitize_generated,
     _infer_type_from_name,
-    _infer_return_type,
 )
 
 
@@ -50,6 +49,24 @@ def _rustc_available() -> bool:
 HAS_RUSTC = _rustc_available()
 
 
+_RUST_PRELUDE = (
+    "#![allow(unused_variables, unused_mut, dead_code, unused_imports)]\n"
+    "#![allow(unreachable_code, unused_assignments)]\n"
+    "use std::collections::{HashMap, HashSet};\n\n"
+)
+
+
+def _wrap_rust_source(rust_code: str) -> str:
+    """Wrap a Rust code snippet in a compilable source file."""
+    if "#![allow" in rust_code:
+        full = rust_code
+    else:
+        full = f"{_RUST_PRELUDE}{rust_code}\n\n"
+    if "fn main()" not in full:
+        full += 'fn main() {}\n'
+    return full
+
+
 def assert_compiles(rust_code: str, *, allow_warnings: bool = True):
     """Assert that a Rust source string compiles with rustc.
 
@@ -58,20 +75,7 @@ def assert_compiles(rust_code: str, *, allow_warnings: bool = True):
     if not HAS_RUSTC:
         pytest.skip("rustc not available")
 
-    # If the code already has #![allow...] and use statements (batch output),
-    # use it as-is; otherwise wrap in a stub
-    if "#![allow" in rust_code:
-        full = rust_code
-    else:
-        full = (
-            "#![allow(unused_variables, unused_mut, dead_code, unused_imports)]\n"
-            "#![allow(unreachable_code, unused_assignments)]\n"
-            "use std::collections::{HashMap, HashSet};\n\n"
-            f"{rust_code}\n\n"
-        )
-    # Add main() if not present
-    if "fn main()" not in full:
-        full += 'fn main() {}\n'
+    full = _wrap_rust_source(rust_code)
 
     with tempfile.NamedTemporaryFile(suffix=".rs", mode="w", delete=False,
                                      encoding="utf-8") as f:
@@ -86,8 +90,7 @@ def assert_compiles(rust_code: str, *, allow_warnings: bool = True):
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode != 0:
-            # Filter out warnings — only fail on errors
-            errors = [l for l in result.stderr.splitlines() if "error" in l.lower()]
+            errors = [line for line in result.stderr.splitlines() if "error" in line.lower()]
             if errors:
                 pytest.fail(
                     f"Rust compilation failed:\n{result.stderr}\n\n"
@@ -95,10 +98,8 @@ def assert_compiles(rust_code: str, *, allow_warnings: bool = True):
                 )
     finally:
         for path in [tmp, tmp + ".out"]:
-            try:
+            if os.path.exists(path):
                 os.unlink(path)
-            except OSError:
-                pass
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -226,6 +227,17 @@ class TestExpressions:
         body = self._fn_body("x = []")
         assert "vec![]" in body
 
+
+class TestExpressionsAdvanced:
+    """Test advanced Python expression transpilation (dict, set, in, ternary, lambda)."""
+
+    def _fn_body(self, python_body: str) -> str:
+        """Helper: wrap body in a function, transpile, return body lines."""
+        code = f"def test_fn():\n    {python_body}"
+        rust = transpile_function_code(code)
+        body = rust[rust.index("{") + 1:rust.rindex("}")].strip()
+        return body
+
     def test_dict_literal(self):
         body = self._fn_body('x = {"a": 1}')
         assert "HashMap" in body or "hash_map" in body.lower() or ".into()" in body
@@ -316,6 +328,15 @@ class TestBuiltinRewrites:
         assert ".min(" in body
         body2 = self._fn_body("return max(a, b)")
         assert ".max(" in body2
+
+
+class TestBuiltinRewritesAdvanced:
+    """Test advanced Python builtin → Rust rewrites."""
+
+    def _fn_body(self, python_body: str) -> str:
+        code = f"def test_fn():\n    {python_body}"
+        rust = transpile_function_code(code)
+        return rust[rust.index("{") + 1:rust.rindex("}")].strip()
 
     def test_sum(self):
         body = self._fn_body("return sum(items)")
@@ -524,6 +545,10 @@ class TestStatements:
         assert "break;" in rust
         assert "continue;" in rust
 
+
+class TestStatementsMisc:
+    """Test miscellaneous Python statement transpilation."""
+
     def test_try_except_becomes_comment(self):
         code = textwrap.dedent("""\
         def f():
@@ -654,6 +679,10 @@ class TestFullFunction:
         rust = transpile_function_code(code)
         assert "-> bool" in rust
 
+
+class TestFullFunctionEdgeCases:
+    """Test edge cases in full function transpilation."""
+
     def test_return_type_inference_list(self):
         code = "def f():\n    return [1, 2, 3]"
         rust = transpile_function_code(code)
@@ -689,7 +718,7 @@ class TestFullFunction:
         rust = transpile_function_code(code)
         assert "\\n" in rust
         # Should NOT contain an actual newline in the string literal
-        lines_in_return = [l for l in rust.splitlines() if "return" in l]
+        lines_in_return = [line for line in rust.splitlines() if "return" in line]
         assert len(lines_in_return) == 1  # return should be on one line
 
 
@@ -852,7 +881,10 @@ class TestCallRewrites:
         assert ".count()" in rust
         assert "as i64" in rust
 
-    # ── Compilation of new rewrites ───────────────────────────────
+
+class TestCallRewritesCompilation:
+    """Test that call rewrite outputs compile with rustc."""
+
     def test_logger_rewrite_compiles(self):
         code = 'def log_stuff(msg: str, count: int):\n    logger.info("Found %d items: %s", count, msg)'
         rust = transpile_function_code(code)
@@ -1083,7 +1115,6 @@ class TestCompilation:
 
     def test_generated_exe_still_compiles(self):
         """The actual _rustified_exe/src/main.rs should compile."""
-        from pathlib import Path
         main_rs = Path("_rustified_exe/src/main.rs")
         if not main_rs.exists():
             pytest.skip("_rustified_exe not generated yet")
@@ -1091,4 +1122,3 @@ class TestCompilation:
         assert_compiles(content)
 
 
-from pathlib import Path

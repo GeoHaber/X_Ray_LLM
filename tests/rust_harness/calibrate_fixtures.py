@@ -47,7 +47,7 @@ SEMANTIC_MIN_LINES  = 8
 def load_all_functions() -> dict[str, list[FunctionRecord]]:
     """Load functions from every fixture file, keyed by filename."""
     result: dict[str, list[FunctionRecord]] = {}
-    for py_file in sorted(FIXTURES.glob("*.py")):
+    for py_file in sorted([*FIXTURES.glob("*.py"), *FIXTURES.glob("*.pysrc")]):
         funcs, _, err = _extract_functions_from_file(py_file, FIXTURES)
         if err:
             print(f"  WARN: {py_file.name}: {err}")
@@ -55,37 +55,35 @@ def load_all_functions() -> dict[str, list[FunctionRecord]]:
     return result
 
 
-def score_pair_detailed(f1: FunctionRecord, f2: FunctionRecord) -> dict:
-    """Run every similarity channel on a pair and return detailed scores."""
-    # Token cosine (used as pre-filter)
+def _compute_similarity_channels(f1: FunctionRecord, f2: FunctionRecord) -> dict:
+    """Compute all similarity metrics between two functions."""
     text1 = " ".join([f1.name, f1.docstring or "", " ".join(f1.parameters),
                        f1.return_type or "", " ".join(f1.calls_to), f1.code or ""])
     text2 = " ".join([f2.name, f2.docstring or "", " ".join(f2.parameters),
                        f2.return_type or "", " ".join(f2.calls_to), f2.code or ""])
     tok1 = _term_freq(tokenize(text1))
     tok2 = _term_freq(tokenize(text2))
-    tok_cos = cosine_similarity(tok1, tok2)
 
-    # SequenceMatcher code similarity (Stage 2)
-    code_sim = code_similarity(f1.code, f2.code)
-
-    # Semantic components (Stage 3)
-    ns = name_similarity(f1.name, f2.name)
-    ss = signature_similarity(f1, f2)
-    cg = callgraph_overlap(f1, f2)
-
-    # Docstring cosine
     da = _term_freq(tokenize(f1.docstring or ""))
     db = _term_freq(tokenize(f2.docstring or ""))
-    ds = cosine_similarity(da, db) if (da and db) else 0.0
 
-    sem = semantic_similarity(f1, f2)
+    return {
+        "tok_cos": cosine_similarity(tok1, tok2),
+        "code_sim": code_similarity(f1.code, f2.code),
+        "ns": name_similarity(f1.name, f2.name),
+        "ss": signature_similarity(f1, f2),
+        "cg": callgraph_overlap(f1, f2),
+        "ds": cosine_similarity(da, db) if (da and db) else 0.0,
+        "sem": semantic_similarity(f1, f2),
+    }
 
-    # Size ratio
+
+def score_pair_detailed(f1: FunctionRecord, f2: FunctionRecord) -> dict:
+    """Run every similarity channel on a pair and return detailed scores."""
+    ch = _compute_similarity_channels(f1, f2)
+
     ratio = (min(f1.size_lines, f2.size_lines) /
              max(f1.size_lines, f2.size_lines)) if max(f1.size_lines, f2.size_lines) > 0 else 0
-
-    # Hash checks
     exact = f1.code_hash == f2.code_hash
     structural = f1.structure_hash == f2.structure_hash and f1.structure_hash is not None
 
@@ -95,45 +93,39 @@ def score_pair_detailed(f1: FunctionRecord, f2: FunctionRecord) -> dict:
         "f1_lines": f1.size_lines,
         "f2_lines": f2.size_lines,
         "size_ratio": round(ratio, 3),
-        # Stage 1
         "exact_hash": exact,
         "structural_hash": structural,
-        # Stage 2
-        "token_cosine": round(tok_cos, 3),
-        "code_similarity": round(code_sim, 3),
-        # Stage 3 components
-        "name_sim": round(ns, 3),
-        "signature_sim": round(ss, 3),
-        "callgraph_overlap": round(cg, 3),
-        "docstring_sim": round(ds, 3),
-        "semantic_composite": round(sem, 3),
-        # Detection results
+        "token_cosine": round(ch["tok_cos"], 3),
+        "code_similarity": round(ch["code_sim"], 3),
+        "name_sim": round(ch["ns"], 3),
+        "signature_sim": round(ch["ss"], 3),
+        "callgraph_overlap": round(ch["cg"], 3),
+        "docstring_sim": round(ch["ds"], 3),
+        "semantic_composite": round(ch["sem"], 3),
         "detected_as": (
             "exact" if exact else
             "structural" if structural else
-            "near" if code_sim >= NEAR_DUP_THRESHOLD else
-            "semantic" if sem >= SEMANTIC_THRESHOLD else
+            "near" if ch["code_sim"] >= NEAR_DUP_THRESHOLD else
+            "semantic" if ch["sem"] >= SEMANTIC_THRESHOLD else
             "NONE"
         ),
-        "near_margin": round(code_sim - NEAR_DUP_THRESHOLD, 3),
-        "semantic_margin": round(sem - SEMANTIC_THRESHOLD, 3),
+        "near_margin": round(ch["code_sim"] - NEAR_DUP_THRESHOLD, 3),
+        "semantic_margin": round(ch["sem"] - SEMANTIC_THRESHOLD, 3),
     }
+
+
+_MARGIN_BANDS = [
+    (-0.15, "SAFE_MISS"), (-0.05, "NEAR_MISS"), (0.0, "BOUNDARY_MISS"),
+    (0.05, "BOUNDARY_HIT"), (0.15, "NEAR_HIT"),
+]
 
 
 def classify_margin(margin: float) -> str:
     """Classify how close a score is to its threshold."""
-    if margin < -0.15:
-        return "SAFE_MISS"    # comfortably below threshold
-    elif margin < -0.05:
-        return "NEAR_MISS"    # getting close to threshold
-    elif margin < 0.0:
-        return "BOUNDARY_MISS"  # barely missed
-    elif margin < 0.05:
-        return "BOUNDARY_HIT"   # barely detected
-    elif margin < 0.15:
-        return "NEAR_HIT"       # comfortable detection
-    else:
-        return "SAFE_HIT"       # strongly above threshold
+    for threshold, label in _MARGIN_BANDS:
+        if margin < threshold:
+            return label
+    return "SAFE_HIT"
 
 
 def run_full_pipeline():
@@ -162,10 +154,10 @@ def run_full_pipeline():
 # ── Calibration helpers (extracted from main) ───────────────────────────────
 
 _INTENDED_PAIRS = [
-    ("dup_exact_a.py", "dup_exact_b.py"),
-    ("dup_near_a.py", "dup_near_b.py"),
-    ("dup_structural_a.py", "dup_structural_b.py"),
-    ("dup_semantic_a.py", "dup_semantic_b.py"),
+    ("dup_exact_a.pysrc", "dup_exact_b.pysrc"),
+    ("dup_near_a.pysrc", "dup_near_b.pysrc"),
+    ("dup_structural_a.pysrc", "dup_structural_b.pysrc"),
+    ("dup_semantic_a.pysrc", "dup_semantic_b.pysrc"),
 ]
 
 _INTENDED_PAIR_KEYS = {tuple(sorted(p)) for p in _INTENDED_PAIRS}
@@ -191,6 +183,29 @@ def _print_inventory(by_file):
         print()
 
 
+def _score_file_pair(funcs_a, funcs_b, all_scores, verbose):
+    """Score all function pairs between two files."""
+    for fa in funcs_a:
+        for fb in funcs_b:
+            scores = score_pair_detailed(fa, fb)
+            all_scores.append(scores)
+            det = scores["detected_as"]
+            print(f"    {fa.name:25s} <-> {fb.name:25s} => {_DET_STYLE[det]}")
+            if not verbose and det != "NONE":
+                continue
+            print(f"      tok_cos={scores['token_cosine']:.3f}  "
+                  f"code_sim={scores['code_similarity']:.3f}  "
+                  f"sem={scores['semantic_composite']:.3f}")
+            print(f"      name={scores['name_sim']:.3f}  "
+                  f"sig={scores['signature_sim']:.3f}  "
+                  f"callgraph={scores['callgraph_overlap']:.3f}  "
+                  f"doc={scores['docstring_sim']:.3f}")
+            print(f"      near_margin={scores['near_margin']:+.3f} "
+                  f"({classify_margin(scores['near_margin'])})  "
+                  f"sem_margin={scores['semantic_margin']:+.3f} "
+                  f"({classify_margin(scores['semantic_margin'])})")
+
+
 def _score_pairs(by_file, verbose=False):
     """Score intended cross-file pairs and return all score dicts."""
     print(f"\n  {'='*70}")
@@ -206,24 +221,7 @@ def _score_pairs(by_file, verbose=False):
             continue
 
         print(f"  --- {file_a} <-> {file_b} ---")
-        for fa in funcs_a:
-            for fb in funcs_b:
-                scores = score_pair_detailed(fa, fb)
-                all_scores.append(scores)
-                det = scores["detected_as"]
-                print(f"    {fa.name:25s} <-> {fb.name:25s} => {_DET_STYLE[det]}")
-                if verbose or det == "NONE":
-                    print(f"      tok_cos={scores['token_cosine']:.3f}  "
-                          f"code_sim={scores['code_similarity']:.3f}  "
-                          f"sem={scores['semantic_composite']:.3f}")
-                    print(f"      name={scores['name_sim']:.3f}  "
-                          f"sig={scores['signature_sim']:.3f}  "
-                          f"callgraph={scores['callgraph_overlap']:.3f}  "
-                          f"doc={scores['docstring_sim']:.3f}")
-                    print(f"      near_margin={scores['near_margin']:+.3f} "
-                          f"({classify_margin(scores['near_margin'])})  "
-                          f"sem_margin={scores['semantic_margin']:+.3f} "
-                          f"({classify_margin(scores['semantic_margin'])})")
+        _score_file_pair(funcs_a, funcs_b, all_scores, verbose)
         print()
     return all_scores
 
@@ -245,14 +243,12 @@ def _scan_false_positives(by_file):
             pair_key = tuple(sorted([fa_file, fb_file]))
 
             scores = score_pair_detailed(fa, fb)
-            if scores["detected_as"] != "NONE":
-                is_intended = pair_key in _INTENDED_PAIR_KEYS
-                if not is_intended:
-                    fp_count += 1
-                    print(f"    [FALSE_POS] {fa.name} ({fa_file}) <-> "
-                          f"{fb.name} ({fb_file})  => {scores['detected_as']} "
-                          f"(sem={scores['semantic_composite']:.3f}, "
-                          f"code={scores['code_similarity']:.3f})")
+            if scores["detected_as"] != "NONE" and pair_key not in _INTENDED_PAIR_KEYS:
+                fp_count += 1
+                print(f"    [FALSE_POS] {fa.name} ({fa_file}) <-> "
+                      f"{fb.name} ({fb_file})  => {scores['detected_as']} "
+                      f"(sem={scores['semantic_composite']:.3f}, "
+                      f"code={scores['code_similarity']:.3f})")
 
     if fp_count == 0:
         print("    No false positives detected!")

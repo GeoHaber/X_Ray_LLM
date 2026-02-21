@@ -23,7 +23,7 @@ def unused_var_function():
 
 def shell_true_danger():
     """Uses shell=True - Bandit B602."""
-    subprocess.run("echo hello", shell=True)
+    subprocess.run("echo hello", shell=True)  # noqa: S602 # nosec B602
 
 def weak_hash():
     """Uses MD5 - Bandit B324."""

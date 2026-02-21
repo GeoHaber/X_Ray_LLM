@@ -192,61 +192,69 @@ def _run_rust_once(rust_bin: str, scan_path: Path,
     return elapsed, report
 
 
+def _measure_linux_rss(rust_bin: str, scan_path: Path) -> float:
+    """Measure peak RSS on Linux via /usr/bin/time -v."""
+    with tempfile.NamedTemporaryFile(
+        suffix=".json", delete=False, mode="w"
+    ) as tmp:
+        report_path = tmp.name
+    cmd = [
+        "/usr/bin/time", "-v",
+        rust_bin, "--path", str(scan_path),
+        "--full-scan", "--report", report_path, "--quiet",
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        rss_line = next(
+            (line for line in proc.stderr.splitlines()
+             if "Maximum resident set size" in line), None)
+        if rss_line:
+            return float(rss_line.split(":")[-1].strip())
+    except Exception:
+        pass
+    finally:
+        Path(report_path).unlink(missing_ok=True)
+    return 0.0
+
+
+def _measure_windows_rss(rust_bin: str, scan_path: Path) -> float:
+    """Measure peak working set on Windows via PowerShell."""
+    with tempfile.NamedTemporaryFile(
+        suffix=".json", delete=False, mode="w"
+    ) as tmp:
+        report_path = tmp.name
+    ps_cmd = (
+        f'$p = Start-Process -FilePath "{rust_bin}" '
+        f'-ArgumentList "--path","{scan_path}","--full-scan",'
+        f'"--report","{report_path}","--quiet" '
+        f'-PassThru -NoNewWindow -Wait; '
+        f'$p.PeakWorkingSet64 / 1024'
+    )
+    try:
+        proc = subprocess.run(
+            ["powershell", "-Command", ps_cmd],
+            capture_output=True, text=True, timeout=120,
+        )
+        return float(proc.stdout.strip())
+    except Exception:
+        pass
+    finally:
+        Path(report_path).unlink(missing_ok=True)
+    return 0.0
+
+
+_RSS_MEASURERS = {"Linux": _measure_linux_rss, "Windows": _measure_windows_rss}
+
+
 def _get_rust_peak_memory(rust_bin: str, scan_path: Path) -> float:
     """
     Estimate Rust peak RSS in KB.
 
-    On Windows, use the job object approach or just measure from outside.
-    On Linux, use /usr/bin/time -v.
-    Falls back to 0 if not measurable.
+    Delegates to platform-specific helpers; falls back to 0.
     """
     import platform
-
-    if platform.system() == "Linux":
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", delete=False, mode="w"
-        ) as tmp:
-            report_path = tmp.name
-        cmd = [
-            "/usr/bin/time", "-v",
-            rust_bin, "--path", str(scan_path),
-            "--full-scan", "--report", report_path, "--quiet",
-        ]
-        try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            for line in proc.stderr.splitlines():
-                if "Maximum resident set size" in line:
-                    return float(line.split(":")[-1].strip())
-        except Exception:
-            pass
-        finally:
-            Path(report_path).unlink(missing_ok=True)
-
-    elif platform.system() == "Windows":
-        # Use PowerShell to get peak working set
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", delete=False, mode="w"
-        ) as tmp:
-            report_path = tmp.name
-        ps_cmd = (
-            f'$p = Start-Process -FilePath "{rust_bin}" '
-            f'-ArgumentList "--path","{scan_path}","--full-scan",'
-            f'"--report","{report_path}","--quiet" '
-            f'-PassThru -NoNewWindow -Wait; '
-            f'$p.PeakWorkingSet64 / 1024'
-        )
-        try:
-            proc = subprocess.run(
-                ["powershell", "-Command", ps_cmd],
-                capture_output=True, text=True, timeout=120,
-            )
-            return float(proc.stdout.strip())
-        except Exception:
-            pass
-        finally:
-            Path(report_path).unlink(missing_ok=True)
-
-    return 0.0
+    measurer = _RSS_MEASURERS.get(platform.system())
+    return measurer(rust_bin, scan_path) if measurer else 0.0
 
 
 def bench_rust(rust_bin: str, scan_path: Path,
@@ -356,6 +364,62 @@ def save_benchmark_json(suites: List[BenchmarkSuite], output_path: Path):
 #  Main
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _count_functions_in_files(py_files: List[Path]) -> int:
+    """Count approximate function definitions in a list of Python files."""
+    count = 0
+    for pf in py_files:
+        try:
+            content = pf.read_text(encoding="utf-8", errors="replace")
+            count += content.count("\ndef ") + content.count("\n    def ")
+        except OSError:
+            pass
+    return count
+
+
+def _bench_fixtures_suite(args) -> BenchmarkSuite:
+    """Benchmark Suite 1: fixture files (small)."""
+    suite = BenchmarkSuite(name="fixtures (small)", path=FIXTURES_DIR)
+    print(f"\n  Benchmarking: {suite.name}")
+    print(f"  Path: {FIXTURES_DIR}")
+
+    py_files = list(FIXTURES_DIR.glob("*.py"))
+    suite.file_count = len(py_files)
+    suite.function_count = _count_functions_in_files(py_files)
+
+    suite.python = bench_python(FIXTURES_DIR, args.iterations, warmup=args.warmup)
+    if not args.python_only:
+        suite.rust = bench_rust(
+            args.rust_bin, FIXTURES_DIR, args.iterations, warmup=args.warmup)
+    return suite
+
+
+def _bench_project_suite(args) -> BenchmarkSuite | None:
+    """Benchmark Suite 2: real-world project (optional)."""
+    if not args.project:
+        return None
+    project_path = Path(args.project)
+    if not project_path.is_dir():
+        print(f"  WARN: Project path not found: {args.project}")
+        return None
+
+    suite = BenchmarkSuite(
+        name=f"project ({project_path.name})", path=project_path)
+
+    all_py = list(project_path.rglob("*.py"))
+    suite.file_count = len(all_py)
+    suite.function_count = _count_functions_in_files(all_py[:200])
+
+    print(f"\n  Benchmarking: {suite.name}")
+    print(f"  Path: {project_path}")
+    print(f"  Files: {suite.file_count}, ~{suite.function_count} functions")
+
+    suite.python = bench_python(project_path, args.iterations, warmup=args.warmup)
+    if not args.python_only:
+        suite.rust = bench_rust(
+            args.rust_bin, project_path, args.iterations, warmup=args.warmup)
+    return suite
+
+
 def main():
     """Run the Rust vs Python performance benchmark suite."""
     parser = argparse.ArgumentParser(description="Benchmark Python vs Rust X-Ray")
@@ -373,78 +437,13 @@ def main():
     args = parser.parse_args()
 
     suites: list[BenchmarkSuite] = []
+    suites.append(_bench_fixtures_suite(args))
 
-    # ── Suite 1: Fixtures (small) ────────────────────────────────────────────
-    suite_fixtures = BenchmarkSuite(
-        name="fixtures (small)",
-        path=FIXTURES_DIR,
-    )
+    project_suite = _bench_project_suite(args)
+    if project_suite:
+        suites.append(project_suite)
 
-    print(f"\n  Benchmarking: {suite_fixtures.name}")
-    print(f"  Path: {FIXTURES_DIR}")
-
-    # Count files/functions
-    py_files = list(FIXTURES_DIR.glob("*.py"))
-    suite_fixtures.file_count = len(py_files)
-    func_count = 0
-    for pf in py_files:
-        content = pf.read_text(encoding="utf-8", errors="replace")
-        func_count += content.count("\ndef ") + content.count("\n    def ")
-    suite_fixtures.function_count = func_count
-
-    suite_fixtures.python = bench_python(
-        FIXTURES_DIR, args.iterations, warmup=args.warmup
-    )
-
-    if not args.python_only:
-        suite_fixtures.rust = bench_rust(
-            args.rust_bin, FIXTURES_DIR, args.iterations, warmup=args.warmup
-        )
-
-    suites.append(suite_fixtures)
-
-    # ── Suite 2: Real project (optional) ─────────────────────────────────────
-    if args.project:
-        project_path = Path(args.project)
-        if not project_path.is_dir():
-            print(f"  WARN: Project path not found: {args.project}")
-        else:
-            suite_project = BenchmarkSuite(
-                name=f"project ({project_path.name})",
-                path=project_path,
-            )
-
-            # Count files
-            all_py = list(project_path.rglob("*.py"))
-            suite_project.file_count = len(all_py)
-            fc = 0
-            for pf in all_py[:200]:  # Sample for speed
-                try:
-                    content = pf.read_text(encoding="utf-8", errors="replace")
-                    fc += content.count("\ndef ") + content.count("\n    def ")
-                except OSError:
-                    pass
-            suite_project.function_count = fc
-
-            print(f"\n  Benchmarking: {suite_project.name}")
-            print(f"  Path: {project_path}")
-            print(f"  Files: {suite_project.file_count}, ~{fc} functions")
-
-            suite_project.python = bench_python(
-                project_path, args.iterations, warmup=args.warmup
-            )
-
-            if not args.python_only:
-                suite_project.rust = bench_rust(
-                    args.rust_bin, project_path,
-                    args.iterations, warmup=args.warmup
-                )
-
-            suites.append(suite_project)
-
-    # ── Report ───────────────────────────────────────────────────────────────
     print_benchmark_report(suites)
-
     if args.output:
         save_benchmark_json(suites, Path(args.output))
 

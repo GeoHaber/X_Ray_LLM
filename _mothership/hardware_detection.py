@@ -30,7 +30,8 @@ import os
 import platform
 import re
 import subprocess
-from typing import Any, Dict, Tuple
+from pathlib import Path
+from typing import Optional, Tuple
 
 from .models import HardwareProfile
 
@@ -41,6 +42,43 @@ logger = logging.getLogger(__name__)
 # CPU
 # ============================================================================
 
+def _cpu_brand_windows() -> Optional[str]:
+    """Read CPU brand from Windows registry."""
+    import winreg
+    key = winreg.OpenKey(
+        winreg.HKEY_LOCAL_MACHINE,
+        r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
+    )
+    name, _ = winreg.QueryValueEx(key, "ProcessorNameString")
+    winreg.CloseKey(key)
+    return name.strip()
+
+
+def _cpu_brand_linux() -> Optional[str]:
+    """Read CPU brand from /proc/cpuinfo."""
+    with open("/proc/cpuinfo", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if line.startswith("model name"):
+                return line.split(":", 1)[1].strip()
+    return None
+
+
+def _cpu_brand_darwin() -> Optional[str]:
+    """Read CPU brand via sysctl."""
+    out = subprocess.check_output(
+        ["sysctl", "-n", "machdep.cpu.brand_string"],
+        text=True, timeout=5,
+    ).strip()
+    return out or None
+
+
+_CPU_BRAND_DISPATCH = {
+    "Windows": _cpu_brand_windows,
+    "Linux": _cpu_brand_linux,
+    "Darwin": _cpu_brand_darwin,
+}
+
+
 def _detect_cpu_brand() -> str:
     """Best-effort CPU brand string using native OS APIs.
 
@@ -49,37 +87,69 @@ def _detect_cpu_brand() -> str:
     macOS   : sysctl -n machdep.cpu.brand_string
     Fallback: platform.processor()
     """
-    system = platform.system()
-    try:
-        if system == "Windows":
-            import winreg
-            key = winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE,
-                r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
-            )
-            name, _ = winreg.QueryValueEx(key, "ProcessorNameString")
-            winreg.CloseKey(key)
-            return name.strip()
-        elif system == "Linux":
-            with open("/proc/cpuinfo", encoding="utf-8", errors="replace") as f:
-                for line in f:
-                    if line.startswith("model name"):
-                        return line.split(":", 1)[1].strip()
-        elif system == "Darwin":
-            out = subprocess.check_output(
-                ["sysctl", "-n", "machdep.cpu.brand_string"],
-                text=True, timeout=5,
-            ).strip()
-            if out:
-                return out
-    except Exception as exc:
-        logger.debug("CPU brand detection failed: %s", exc)
+    handler = _CPU_BRAND_DISPATCH.get(platform.system())
+    if handler:
+        try:
+            result = handler()
+            if result:
+                return result
+        except Exception as exc:
+            logger.debug("CPU brand detection failed: %s", exc)
     return platform.processor() or "Unknown CPU"
 
 
 # ============================================================================
 # RAM
 # ============================================================================
+
+def _ram_gb_windows() -> float:
+    """Read total RAM via Windows ctypes."""
+    import ctypes
+
+    class MEMORYSTATUSEX(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", ctypes.c_ulong),
+            ("dwMemoryLoad", ctypes.c_ulong),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+
+    mem = MEMORYSTATUSEX()
+    mem.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+    ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem))
+    return mem.ullTotalPhys / (1024 ** 3)
+
+
+def _ram_gb_linux() -> Optional[float]:
+    """Read total RAM from /proc/meminfo."""
+    with open("/proc/meminfo", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("MemTotal"):
+                kb = int(re.search(r"\d+", line).group())
+                return kb / (1024 ** 2)
+    return None
+
+
+def _ram_gb_darwin() -> float:
+    """Read total RAM via sysctl."""
+    out = subprocess.check_output(
+        ["sysctl", "-n", "hw.memsize"],
+        text=True, timeout=5,
+    ).strip()
+    return int(out) / (1024 ** 3)
+
+
+_RAM_GB_DISPATCH = {
+    "Windows": _ram_gb_windows,
+    "Linux": _ram_gb_linux,
+    "Darwin": _ram_gb_darwin,
+}
+
 
 def _detect_ram_gb() -> float:
     """Detect total physical RAM in GB.
@@ -89,43 +159,65 @@ def _detect_ram_gb() -> float:
     macOS   : sysctl -n hw.memsize
     Fallback: 8.0 GB (safe conservative assumption)
     """
-    system = platform.system()
-    try:
-        if system == "Windows":
-            import ctypes
-
-            class MEMORYSTATUSEX(ctypes.Structure):
-                _fields_ = [
-                    ("dwLength", ctypes.c_ulong),
-                    ("dwMemoryLoad", ctypes.c_ulong),
-                    ("ullTotalPhys", ctypes.c_ulonglong),
-                    ("ullAvailPhys", ctypes.c_ulonglong),
-                    ("ullTotalPageFile", ctypes.c_ulonglong),
-                    ("ullAvailPageFile", ctypes.c_ulonglong),
-                    ("ullTotalVirtual", ctypes.c_ulonglong),
-                    ("ullAvailVirtual", ctypes.c_ulonglong),
-                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
-                ]
-
-            mem = MEMORYSTATUSEX()
-            mem.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem))
-            return mem.ullTotalPhys / (1024 ** 3)
-        elif system == "Linux":
-            with open("/proc/meminfo", encoding="utf-8") as f:
-                for line in f:
-                    if line.startswith("MemTotal"):
-                        kb = int(re.search(r"\d+", line).group())
-                        return kb / (1024 ** 2)
-        elif system == "Darwin":
-            out = subprocess.check_output(
-                ["sysctl", "-n", "hw.memsize"],
-                text=True, timeout=5,
-            ).strip()
-            return int(out) / (1024 ** 3)
-    except Exception as exc:
-        logger.debug("RAM detection failed: %s", exc)
+    handler = _RAM_GB_DISPATCH.get(platform.system())
+    if handler:
+        try:
+            result = handler()
+            if result is not None:
+                return result
+        except Exception as exc:
+            logger.debug("RAM detection failed: %s", exc)
     return 8.0  # conservative fallback
+
+
+def _avail_ram_gb_windows() -> float:
+    """Read available RAM via Windows ctypes."""
+    import ctypes
+
+    class MEMORYSTATUSEX(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", ctypes.c_ulong),
+            ("dwMemoryLoad", ctypes.c_ulong),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+
+    mem = MEMORYSTATUSEX()
+    mem.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+    ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem))
+    return mem.ullAvailPhys / (1024 ** 3)
+
+
+def _avail_ram_gb_linux() -> Optional[float]:
+    """Read available RAM from /proc/meminfo."""
+    with open("/proc/meminfo", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("MemAvailable"):
+                kb = int(re.search(r"\d+", line).group())
+                return kb / (1024 ** 2)
+    return None
+
+
+def _avail_ram_gb_darwin() -> float:
+    """Estimate available RAM via sysctl (rough: total × 0.5)."""
+    out = subprocess.check_output(
+        ["sysctl", "-n", "hw.memsize"],
+        text=True, timeout=5,
+    ).strip()
+    total = int(out) / (1024 ** 3)
+    return total * 0.5
+
+
+_AVAIL_RAM_DISPATCH = {
+    "Windows": _avail_ram_gb_windows,
+    "Linux": _avail_ram_gb_linux,
+    "Darwin": _avail_ram_gb_darwin,
+}
 
 
 def _detect_available_ram_gb() -> float:
@@ -136,43 +228,14 @@ def _detect_available_ram_gb() -> float:
     macOS   : vm_stat + sysctl
     Fallback: total_ram * 0.5
     """
-    system = platform.system()
-    try:
-        if system == "Windows":
-            import ctypes
-
-            class MEMORYSTATUSEX(ctypes.Structure):
-                _fields_ = [
-                    ("dwLength", ctypes.c_ulong),
-                    ("dwMemoryLoad", ctypes.c_ulong),
-                    ("ullTotalPhys", ctypes.c_ulonglong),
-                    ("ullAvailPhys", ctypes.c_ulonglong),
-                    ("ullTotalPageFile", ctypes.c_ulonglong),
-                    ("ullAvailPageFile", ctypes.c_ulonglong),
-                    ("ullTotalVirtual", ctypes.c_ulonglong),
-                    ("ullAvailVirtual", ctypes.c_ulonglong),
-                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
-                ]
-
-            mem = MEMORYSTATUSEX()
-            mem.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem))
-            return mem.ullAvailPhys / (1024 ** 3)
-        elif system == "Linux":
-            with open("/proc/meminfo", encoding="utf-8") as f:
-                for line in f:
-                    if line.startswith("MemAvailable"):
-                        kb = int(re.search(r"\d+", line).group())
-                        return kb / (1024 ** 2)
-        elif system == "Darwin":
-            out = subprocess.check_output(
-                ["sysctl", "-n", "hw.memsize"],
-                text=True, timeout=5,
-            ).strip()
-            total = int(out) / (1024 ** 3)
-            return total * 0.5  # rough estimate
-    except Exception as exc:
-        logger.debug("Available RAM detection failed: %s", exc)
+    handler = _AVAIL_RAM_DISPATCH.get(platform.system())
+    if handler:
+        try:
+            result = handler()
+            if result is not None:
+                return result
+        except Exception as exc:
+            logger.debug("Available RAM detection failed: %s", exc)
     return _detect_ram_gb() * 0.5
 
 
@@ -180,28 +243,13 @@ def _detect_available_ram_gb() -> float:
 # GPU
 # ============================================================================
 
-def _detect_gpu() -> Tuple[str, float]:
-    """Detect GPU name and VRAM in GB.
-
-    Checks in order:
-        1. NVIDIA (nvidia-smi — name + VRAM)
-        2. AMD ROCm (rocm-smi)
-        3. Apple Metal (ARM + sysctl unified memory)
-        4. Windows WMI fallback (Intel UHD, AMD integrated, any GPU)
-
-    The WMI fallback was taken from swarm_test's ``_get_gpu_name()`` —
-    it catches integrated GPUs that nvidia-smi and rocm-smi miss.
-
-    Returns:
-        (gpu_name, vram_gb) — ("none", 0.0) if nothing found
-    """
-    # 1. NVIDIA
+def _detect_gpu_nvidia() -> Optional[Tuple[str, float]]:
+    """Try NVIDIA GPU via nvidia-smi."""
     try:
         out = subprocess.check_output(
             ["nvidia-smi", "--query-gpu=name,memory.total",
              "--format=csv,noheader,nounits"],
-            text=True, timeout=10,
-            stderr=subprocess.DEVNULL,
+            text=True, timeout=10, stderr=subprocess.DEVNULL,
         ).strip()
         if out:
             parts = out.split(",")
@@ -210,13 +258,15 @@ def _detect_gpu() -> Tuple[str, float]:
             return (f"NVIDIA {name}", vram_mb / 1024)
     except Exception:
         pass
+    return None
 
-    # 2. AMD ROCm
+
+def _detect_gpu_amd() -> Optional[Tuple[str, float]]:
+    """Try AMD GPU via rocm-smi."""
     try:
         out = subprocess.check_output(
             ["rocm-smi", "--showmeminfo", "vram"],
-            text=True, timeout=10,
-            stderr=subprocess.DEVNULL,
+            text=True, timeout=10, stderr=subprocess.DEVNULL,
         )
         if "Total" in out:
             m = re.search(r"Total Memory.*?(\d+)", out)
@@ -224,38 +274,52 @@ def _detect_gpu() -> Tuple[str, float]:
             return ("AMD GPU (ROCm)", vram)
     except Exception:
         pass
+    return None
 
-    # 3. Apple Metal (M1/M2/M3/M4) — unified memory, shared with CPU
+
+def _detect_gpu_apple() -> Optional[Tuple[str, float]]:
+    """Try Apple Metal (M-series unified memory)."""
     if platform.system() == "Darwin" and "arm" in platform.machine().lower():
         ram = _detect_ram_gb()
-        # Apple Silicon shares RAM; effective GPU memory ≈ 75% of total
         return (f"Apple {platform.machine()} (Metal)", ram * 0.75)
+    return None
 
-    # 4. Windows WMI fallback — catches Intel UHD, AMD integrated, etc.
-    #    (from swarm_test._get_gpu_name — proven reliable)
-    if platform.system() == "Windows":
-        try:
-            out = subprocess.check_output(
-                ["powershell", "-NoProfile", "-Command",
-                 "(Get-CimInstance Win32_VideoController).Name"],
-                text=True, timeout=10,
-                stderr=subprocess.DEVNULL,
-                encoding="utf-8", errors="replace",
-            ).strip()
-            if out:
-                names = [n.strip() for n in out.splitlines() if n.strip()]
-                # Prefer discrete GPU over virtual adapters
-                discrete = [
-                    n for n in names
-                    if not any(x in n.lower() for x in
-                               ["microsoft basic", "virtual", "remote"])
-                ]
-                gpu_name = discrete[0] if discrete else names[0]
-                return (gpu_name, 0.0)  # WMI doesn't give VRAM easily
-        except Exception:
-            pass
 
-    return ("none", 0.0)
+def _detect_gpu_wmi() -> Optional[Tuple[str, float]]:
+    """Try Windows WMI fallback for Intel UHD, AMD integrated, etc."""
+    if platform.system() != "Windows":
+        return None
+    try:
+        out = subprocess.check_output(
+            ["powershell", "-NoProfile", "-Command",
+             "(Get-CimInstance Win32_VideoController).Name"],
+            text=True, timeout=10, stderr=subprocess.DEVNULL,
+            encoding="utf-8", errors="replace",
+        ).strip()
+        if out:
+            names = [n.strip() for n in out.splitlines() if n.strip()]
+            discrete = [
+                n for n in names
+                if not any(x in n.lower() for x in
+                           ["microsoft basic", "virtual", "remote"])
+            ]
+            return (discrete[0] if discrete else names[0], 0.0)
+    except Exception:
+        pass
+    return None
+
+
+def _detect_gpu() -> Tuple[str, float]:
+    """Detect GPU name and VRAM in GB.
+
+    Checks in order: NVIDIA → AMD ROCm → Apple Metal → Windows WMI.
+    Returns (gpu_name, vram_gb) — ("none", 0.0) if nothing found.
+    """
+    return (_detect_gpu_nvidia()
+            or _detect_gpu_amd()
+            or _detect_gpu_apple()
+            or _detect_gpu_wmi()
+            or ("none", 0.0))
 
 
 # ============================================================================
@@ -285,22 +349,20 @@ def _detect_avx() -> Tuple[bool, bool]:
             m = re.search(r"Model\s+(\d+)", ident)
             if m:
                 model = int(m.group(1))
-                if model >= 60:
-                    avx2 = True
-                if model >= 85:
-                    avx512 = True
-        elif system == "Linux":
-            with open("/proc/cpuinfo", encoding="utf-8") as f:
-                text = f.read()
-            avx2 = "avx2" in text
-            avx512 = "avx512" in text
-        elif system == "Darwin":
+                avx2 = model >= 60
+                avx512 = model >= 85
+            return avx2, avx512
+        if system == "Linux":
+            text = Path("/proc/cpuinfo").read_text(encoding="utf-8")
+            return "avx2" in text, "avx512" in text
+        if system == "Darwin":
             out = subprocess.check_output(
                 ["sysctl", "-a"], text=True, timeout=5,
                 stderr=subprocess.DEVNULL,
             )
             avx2 = "hw.optional.avx2_0: 1" in out
             avx512 = "hw.optional.avx512" in out and ": 1" in out
+            return avx2, avx512
     except Exception as exc:
         logger.debug("AVX detection failed: %s", exc)
     return avx2, avx512

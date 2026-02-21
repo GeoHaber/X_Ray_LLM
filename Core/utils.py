@@ -58,6 +58,31 @@ def get_cpu_info() -> str:
     # but we'll stick to stdlib for now to minimize dependencies.
     return platform.processor() or "Unknown CPU"
 
+# === NETWORKING ===
+
+def url_responds(url: str, timeout: int = 2) -> bool:
+    """Return *True* if a GET request to *url* succeeds with HTTP 200."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310  # nosec B310
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+def find_free_port(preferred: int = 8666) -> int:
+    """Return *preferred* if available, else find any free port."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("127.0.0.1", preferred))
+            return preferred
+        except OSError:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
+
 _verified_cache = False
 
 def verify_rust_environment():

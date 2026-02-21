@@ -19,11 +19,12 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import socket
 import webbrowser
 import threading
 import time
 from pathlib import Path
+
+from Core.utils import find_free_port
 
 # ---------------------------------------------------------------------------
 # PyInstaller frozen-app fixups
@@ -63,17 +64,6 @@ else:
     _EXE_DIR = _BUNDLE_DIR
 
 
-def _find_free_port(preferred: int = 8666) -> int:
-    """Return *preferred* if available, else find any free port."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind(("127.0.0.1", preferred))
-            return preferred
-        except OSError:
-            s.bind(("127.0.0.1", 0))
-            return s.getsockname()[1]
-
-
 def _open_browser_delayed(url: str, delay: float = 2.5):
     """Open the default browser after a short delay (gives server time to start)."""
     time.sleep(delay)
@@ -92,7 +82,7 @@ def _print_banner(port: int):
   =========================================
 """)
     print(f"  Starting server on http://localhost:{port}")
-    print(f"  Press Ctrl+C to stop.\n")
+    print("  Press Ctrl+C to stop.\n")
 
 
 def main():
@@ -101,7 +91,7 @@ def main():
     parser.add_argument("--no-browser", action="store_true", help="Don't auto-open browser")
     args = parser.parse_args()
 
-    port = _find_free_port(args.port)
+    port = find_free_port(args.port)
     _print_banner(port)
 
     # Locate the UI script

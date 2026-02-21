@@ -5,7 +5,7 @@ import urllib.request
 import urllib.error
 from typing import Optional, Dict, Any
 import asyncio
-from .utils import logger
+from .utils import logger, url_responds
 from .config import LLM_CONFIG, load_llm_config
 
 # Merge persisted settings on import
@@ -26,13 +26,7 @@ class LLMHelper:
         """Check if the LLM server is reachable."""
         if getattr(self, '_force_unavailable', False):
             return False
-        try:
-            # Simple health check or models listing
-            req = urllib.request.Request(f"{self.base_url}/models", method='GET')
-            with urllib.request.urlopen(req, timeout=2) as response:
-                return response.status == 200
-        except Exception:
-            return False
+        return url_responds(f"{self.base_url}/models", timeout=2)
 
     def query_sync(self, prompt: str, **kwargs) -> str:
         """Synchronous query wrapper. Raises RuntimeError if LLM is not available."""
@@ -73,27 +67,24 @@ class LLMHelper:
                 url, data=json.dumps(data).encode("utf-8"),
                 headers=headers, method="POST",
             )
-            with urllib.request.urlopen(req, timeout=LLM_CONFIG["timeout"]) as response:
+            with urllib.request.urlopen(req, timeout=LLM_CONFIG["timeout"]) as response:  # noqa: S310  # nosec B310
                 if response.status == 200:
                     result = json.loads(response.read().decode("utf-8"))
                     return result["choices"][0]["message"]["content"]
                 logger.error(f"LLM API Error: {response.status}")
-                return ""
         except urllib.error.HTTPError as e:
             if e.code in (429, 500, 502, 503, 504) and attempt < 3:
                 self._backoff(attempt, f"LLM Error {e.code}")
                 return None
             logger.error(f"LLM API HTTP Error: {e.code} - {e.reason}")
-            return ""
         except urllib.error.URLError as e:
             if attempt < 3:
                 self._backoff(attempt, f"LLM Connection Failed: {e}")
                 return None
             logger.error(f"LLM Connection Failed after retries: {e}")
-            return ""
         except Exception as e:
             logger.error(f"LLM Helper Unexpected Error: {e}")
-            return ""
+        return ""
 
     @staticmethod
     def _backoff(attempt: int, reason: str) -> None:
@@ -144,3 +135,17 @@ class LLMHelper:
         except json.JSONDecodeError:
             logger.error(f"Failed to parse JSON from LLM: {response[:100]}...")
             return None
+
+
+async def _llm_enrich_one(prompt: str, on_result, llm, sem):
+    """Shared async helper: send *prompt* to *llm* under *sem* and deliver result.
+
+    *on_result* is called with the stripped response string on success.
+    Any exception is silently logged at DEBUG level.
+    """
+    async with sem:
+        try:
+            resp = await llm.completion_async(prompt)
+            on_result(resp.strip())
+        except Exception as e:
+            logger.debug("LLM enrichment failed: %s", e)

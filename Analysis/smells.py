@@ -5,7 +5,7 @@ from collections import Counter
 
 from Core.types import FunctionRecord, ClassRecord, SmellIssue, Severity
 from Core.config import SMELL_THRESHOLDS
-from Core.inference import LLMHelper
+from Core.inference import LLMHelper, _llm_enrich_one
 from Core.utils import logger
 
 _BOOL_PREFIXES = ("is_", "has_", "can_", "should_", "check_",
@@ -29,17 +29,16 @@ def _check_boolean_blindness(func: FunctionRecord, smells: list):
 async def _enrich_smell_async(smell: SmellIssue, llm: LLMHelper,
                               sem: asyncio.Semaphore):
     """Enrich a single smell with LLM analysis (used by async enrichment)."""
-    async with sem:
-        prompt = (
-            f"Analyze this code smell: {smell.category} in {smell.name}.\n"
-            f"Message: {smell.message}\n"
-            f"Suggest a specific refactoring (2 sentences max)."
-        )
-        try:
-            suggestion = await llm.completion_async(prompt)
-            smell.llm_analysis = suggestion.strip()
-        except Exception as e:
-            logger.debug(f"Async LLM enrichment failed: {e}")
+    prompt = (
+        f"Analyze this code smell: {smell.category} in {smell.name}.\n"
+        f"Message: {smell.message}\n"
+        f"Suggest a specific refactoring (2 sentences max)."
+    )
+    await _llm_enrich_one(
+        prompt,
+        lambda resp: setattr(smell, 'llm_analysis', resp),
+        llm, sem,
+    )
 
 
 class CodeSmellDetector:

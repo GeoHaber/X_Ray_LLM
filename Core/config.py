@@ -68,9 +68,11 @@ _ALWAYS_SKIP = frozenset({
     "_archive", "_Old", "_old", "_bin",
     "_scratch", ".github",
     "portable", "target",
+    "build_exe", "build_web",
+    "X_Ray_Desktop", "X_Ray_Standalone", "X_Ray_Rust_Full",
 })
 
-import builtins as _builtins_mod
+import builtins as _builtins_mod  # noqa: E402
 _BUILTIN_NAMES = frozenset(dir(_builtins_mod))
 
 _STOP_WORDS = frozenset(

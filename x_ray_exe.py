@@ -37,9 +37,8 @@ import shutil
 import subprocess
 import sys
 import time
-import concurrent.futures
 from pathlib import Path
-from typing import List, Tuple, Dict, Any, Optional
+from typing import Dict, Any, Optional
 
 # ---------------------------------------------------------------------------
 # Fix for PyInstaller frozen bundles: ensure our package root is on sys.path
@@ -57,15 +56,11 @@ else:
 # ---------------------------------------------------------------------------
 # Imports from the X-Ray project
 # ---------------------------------------------------------------------------
-from Core.types import FunctionRecord, ClassRecord
 from Core.config import __version__
-
-from Analysis.ast_utils import extract_functions_from_file, collect_py_files
-from Analysis.smells import CodeSmellDetector
-from Analysis.duplicates import DuplicateFinder
-from Analysis.reporting import (
-    print_smells, print_duplicates, print_lint_report,
-    print_security_report, print_unified_grade,
+from Analysis._analyzer_base import _find_tool  # noqa: E402
+from Core.scan_phases import (
+    scan_codebase, run_smell_phase, run_duplicate_phase,
+    run_lint_phase, run_security_phase, run_rustify_scan, collect_reports,
 )
 
 # ---------------------------------------------------------------------------
@@ -83,7 +78,7 @@ _EXE_BANNER = f"""
 # Logging
 # ---------------------------------------------------------------------------
 
-from Core.utils import setup_logger
+from Core.utils import setup_logger  # noqa: E402
 log = setup_logger("x_ray_exe")
 
 
@@ -91,58 +86,24 @@ log = setup_logger("x_ray_exe")
 # Hardware detection
 # ---------------------------------------------------------------------------
 
-def detect_hardware() -> Dict[str, Any]:
-    """Detect CPU, OS, RAM and other hardware info."""
+def _wmic_value(query: str, field: str) -> Optional[str]:
+    """Run a wmic query and return the value for *field*, or None."""
+    try:
+        result = subprocess.run(
+            ["wmic"] + query.split() + ["/value"],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.strip().split('\n'):
+            if line.startswith(f"{field}="):
+                return line.split('=', 1)[1].strip()
+    except Exception:
+        pass
+    return None
+
+
+def _detect_rust_info() -> Dict[str, Any]:
+    """Detect Rust toolchain and x_ray_core availability."""
     info: Dict[str, Any] = {}
-
-    # OS
-    info["os"] = platform.system()
-    info["os_version"] = platform.version()
-    info["os_release"] = platform.release()
-    info["machine"] = platform.machine()
-
-    # CPU
-    info["processor"] = platform.processor() or "Unknown"
-    info["cpu_count_logical"] = os.cpu_count() or 1
-
-    # Physical cores (Windows)
-    try:
-        result = subprocess.run(
-            ["wmic", "cpu", "get", "NumberOfCores", "/value"],
-            capture_output=True, text=True, timeout=5
-        )
-        for line in result.stdout.strip().split('\n'):
-            if line.startswith("NumberOfCores="):
-                info["cpu_count_physical"] = int(line.split('=')[1].strip())
-    except Exception:
-        info["cpu_count_physical"] = info["cpu_count_logical"]
-
-    # RAM (Windows)
-    try:
-        result = subprocess.run(
-            ["wmic", "os", "get", "TotalVisibleMemorySize", "/value"],
-            capture_output=True, text=True, timeout=5
-        )
-        for line in result.stdout.strip().split('\n'):
-            if line.startswith("TotalVisibleMemorySize="):
-                kb = int(line.split('=')[1].strip())
-                info["ram_gb"] = round(kb / 1024 / 1024, 1)
-    except Exception:
-        info["ram_gb"] = "unknown"
-
-    # CPU name
-    try:
-        result = subprocess.run(
-            ["wmic", "cpu", "get", "Name", "/value"],
-            capture_output=True, text=True, timeout=5
-        )
-        for line in result.stdout.strip().split('\n'):
-            if line.startswith("Name="):
-                info["cpu_name"] = line.split('=', 1)[1].strip()
-    except Exception:
-        info["cpu_name"] = info["processor"]
-
-    # Check for Rust environment
     info["rust_available"] = shutil.which("rustc") is not None
     if info["rust_available"]:
         try:
@@ -153,13 +114,36 @@ def detect_hardware() -> Dict[str, Any]:
             info["rust_version"] = result.stdout.strip()
         except Exception:
             info["rust_version"] = "unknown"
-
-    # Check for x_ray_core (Rust acceleration)
     try:
         import x_ray_core  # noqa: F401
         info["rust_acceleration"] = True
     except ImportError:
         info["rust_acceleration"] = False
+    return info
+
+
+def detect_hardware() -> Dict[str, Any]:
+    """Detect CPU, OS, RAM and other hardware info.
+
+    Delegates to ``_mothership.hardware_detection`` for the core profile,
+    then layers on Rust-toolchain specifics needed by the .exe workflow.
+    """
+    from _mothership.hardware_detection import detect_hardware as _detect_hw
+
+    hw = _detect_hw()
+    info = hw.to_dict()
+
+    # Remap field names to match the dict keys print_hardware() expects
+    info.setdefault("os", info.pop("os_name", platform.system()))
+    info.setdefault("os_release", info.pop("os_version", platform.release()))
+    info.setdefault("machine", info.get("arch", platform.machine()))
+    info.setdefault("processor", info.get("cpu_brand", "Unknown"))
+    info.setdefault("cpu_name", info.get("cpu_brand", info.get("processor", "")))
+    info.setdefault("cpu_count_logical", info.get("cpu_cores", os.cpu_count() or 1))
+    info.setdefault("cpu_count_physical", info.get("cpu_cores", info["cpu_count_logical"]))
+
+    # Rust environment (x_ray_exe specific)
+    info.update(_detect_rust_info())
 
     return info
 
@@ -178,7 +162,7 @@ def print_hardware(hw: Dict[str, Any]) -> None:
     if hw.get('rust_available'):
         print(f"  Rust:         {hw.get('rust_version', 'available')}")
     else:
-        print(f"  Rust:         not installed")
+        print("  Rust:         not installed")
     print(f"  Accelerator:  {'x_ray_core (Rust)' if hw.get('rust_acceleration') else 'Pure Python'}")
     print(f"{'='*50}\n")
 
@@ -187,26 +171,7 @@ def print_hardware(hw: Dict[str, Any]) -> None:
 # Tool availability (ruff / bandit)
 # ---------------------------------------------------------------------------
 
-def _find_tool(name: str) -> Optional[str]:
-    """Find an external tool. Checks: PATH, bundled dir, .exe dir."""
-    # 1. System PATH
-    found = shutil.which(name)
-    if found:
-        return found
-
-    # 2. Bundled inside PyInstaller
-    if getattr(sys, 'frozen', False):
-        bundled = _BUNDLE_DIR / f"{name}.exe"
-        if bundled.is_file():
-            return str(bundled)
-        # Also check _EXE_DIR/tools/
-        tools_dir = _EXE_DIR / "tools"
-        if tools_dir.is_dir():
-            tool_path = tools_dir / f"{name}.exe"
-            if tool_path.is_file():
-                return str(tool_path)
-
-    return None
+# _find_tool is imported from Analysis._analyzer_base (canonical implementation)
 
 
 def check_tools() -> Dict[str, str]:
@@ -219,103 +184,8 @@ def check_tools() -> Dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# Core scanning (same as x_ray_claude.py but self-contained)
+# Scan phases and report collection imported from Core.scan_phases
 # ---------------------------------------------------------------------------
-
-def scan_codebase(root: Path, exclude: List[str] = None,
-                  include: List[str] = None,
-                  verbose: bool = False) -> Tuple[
-        List[FunctionRecord], List[ClassRecord], List[str]]:
-    """Parallel-scan the codebase, returning functions, classes, and errors."""
-    py_files = collect_py_files(root, exclude, include)
-    all_functions: List[FunctionRecord] = []
-    all_classes: List[ClassRecord] = []
-    errors: List[str] = []
-    total = len(py_files)
-    done = 0
-
-    print(f"  Scanning {total} files using {os.cpu_count() or 4} threads...")
-
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = {
-            executor.submit(extract_functions_from_file, f, root): f
-            for f in py_files
-        }
-        for future in concurrent.futures.as_completed(futures):
-            funcs, clses, err = future.result()
-            all_functions.extend(funcs)
-            all_classes.extend(clses)
-            if err:
-                errors.append(f"{futures[future]}: {err}")
-            done += 1
-            if verbose and total > 20 and done % max(1, total // 10) == 0:
-                pct = done * 100 // total
-                print(f"    [{pct:3d}%] {done}/{total} files scanned...",
-                      flush=True)
-
-    return all_functions, all_classes, errors
-
-
-def run_smell_phase(functions, classes):
-    """Run AST smell detection."""
-    detector = CodeSmellDetector()
-    print("\n  >> Analyzing Code Smells (X-Ray AST)...")
-    smells = detector.detect(functions, classes)
-    return detector, smells
-
-
-def run_duplicate_phase(functions):
-    """Run duplicate detection."""
-    finder = DuplicateFinder()
-    print("\n  >> Detecting Duplicates (X-Ray)...")
-    finder.find(functions)
-    return finder
-
-
-def run_lint_phase(root: Path, exclude=None):
-    """Run Ruff lint analysis."""
-    from Analysis.lint import LintAnalyzer
-    linter = LintAnalyzer()
-    if linter.available:
-        print("\n  >> Running Linter (Ruff)...")
-        return linter, linter.analyze(root, exclude=exclude)
-    print("\n  [!] Ruff not found — skipping lint analysis.")
-    return None, []
-
-
-def run_security_phase(root: Path, exclude=None):
-    """Run Bandit security analysis."""
-    from Analysis.security import SecurityAnalyzer
-    sec = SecurityAnalyzer()
-    if sec.available:
-        print("\n  >> Running Security Scan (Bandit)...")
-        return sec, sec.analyze(root, exclude=exclude)
-    print("\n  [!] Bandit not found — skipping security scan.")
-    return None, []
-
-
-def run_rustify(root: Path, exclude=None) -> dict:
-    """Rank functions by Rust-porting suitability."""
-    from Analysis.rust_advisor import RustAdvisor
-
-    print("\n  >> Scanning codebase for Rust candidates...")
-    functions, classes, errors = scan_codebase(root, exclude=exclude)
-    if not functions:
-        print("  No functions found.")
-        return {"rustify": {"candidates": []}}
-
-    advisor = RustAdvisor()
-    candidates = advisor.score(functions)
-    advisor.print_candidates(candidates)
-
-    return {
-        "rustify": {
-            "total_functions": len(functions),
-            "scored": len(candidates),
-            "pure_count": sum(1 for c in candidates if c.is_pure),
-            "candidates": [c.to_dict() for c in candidates],
-        }
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -324,52 +194,27 @@ def run_rustify(root: Path, exclude=None) -> dict:
 
 def _parse_args() -> argparse.Namespace:
     """Parse and normalise CLI arguments."""
+    from Core.cli_args import add_common_scan_args, normalize_scan_args
+
     parser = argparse.ArgumentParser(
         description=_EXE_BANNER,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--path", default=".", help="Root directory to scan")
-    parser.add_argument("--smell", action="store_true", help="Code smell detection")
-    parser.add_argument("--duplicates", action="store_true", help="Duplicate detection")
-    parser.add_argument("--lint", action="store_true", help="Ruff linter analysis")
-    parser.add_argument("--security", action="store_true", help="Bandit security scan")
-    parser.add_argument("--full-scan", action="store_true", help="Run ALL analyses")
-    parser.add_argument("--rustify", action="store_true",
-                        help="Rank functions by Rust-porting suitability")
-    parser.add_argument("--report", help="Save JSON report to file")
-    parser.add_argument("--exclude", nargs="*", help="Exclude directories")
+    add_common_scan_args(parser)
+    # x_ray_exe-specific flags
     parser.add_argument("--hw", action="store_true", help="Show hardware info and exit")
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
     args = parser.parse_args()
 
-    # Auto-select defaults
-    has_specific = args.smell or args.duplicates or args.lint or args.security or args.rustify
-    if args.full_scan or (not has_specific and not args.hw):
-        args.smell = True
-        args.lint = True
-        args.security = True
-        if args.full_scan:
-            args.duplicates = True
+    # --hw bypasses default-selection logic
+    if not args.hw:
+        normalize_scan_args(args)
 
     return args
 
 
-def main():
-    """Main entry point for x_ray.exe."""
-    args = _parse_args()
-
-    print(_EXE_BANNER)
-
-    # ── Hardware detection ──
-    hw = detect_hardware()
-    print_hardware(hw)
-
-    if args.hw:
-        # Just hardware info — exit
-        return
-
-    # ── Tool check ──
-    tools = check_tools()
+def _print_tool_status(tools: dict) -> None:
+    """Print tool availability status."""
     print("  Tool Status:")
     for name, path in tools.items():
         status = f"OK ({path})" if path else "not found (skipped)"
@@ -381,25 +226,19 @@ def main():
         print(f"    {'x_ray_core':10s}  not available (using pure Python)")
     print()
 
-    # ── Resolve target path ──
+
+def _resolve_target(args) -> Path:
+    """Resolve and validate target path."""
     root = Path(args.path).resolve()
     if not root.is_dir():
         print(f"  ERROR: {root} is not a directory.")
         sys.exit(1)
     print(f"  Target: {root}\n")
+    return root
 
-    # ── Rustify mode ──
-    if args.rustify:
-        results = run_rustify(root, exclude=args.exclude)
-        if args.report:
-            with open(args.report, "w", encoding="utf-8") as f:
-                json.dump(results, f, indent=2)
-            print(f"\n  Report saved to {args.report}")
-        return
 
-    # ── Standard scan phases ──
-    start_time = time.time()
-    results: Dict[str, Any] = {}
+def _run_scan_phases(args, root: Path):
+    """Execute all requested scan phases and collect results."""
     all_issues = []
 
     if args.smell or args.duplicates:
@@ -409,65 +248,66 @@ def main():
         if errors:
             print(f"  ({len(errors)} parse errors)")
     else:
-        functions, classes, errors = [], [], []
+        functions, classes = [], []
 
-    # Smells
+    detector = None
     if args.smell:
-        detector, smells = run_smell_phase(functions, classes)
-        all_issues.extend(smells)
-    else:
-        detector = None
+        detector, smell_issues = run_smell_phase(functions, classes)
+        all_issues.extend(smell_issues)
 
-    # Duplicates
-    if args.duplicates:
-        finder = run_duplicate_phase(functions)
-    else:
-        finder = None
+    finder = run_duplicate_phase(functions) if args.duplicates else None
 
-    # Lint
     if args.lint:
         linter, lint_issues = run_lint_phase(root, exclude=args.exclude)
         all_issues.extend(lint_issues)
     else:
         linter, lint_issues = None, []
 
-    # Security
     if args.security:
         sec_analyzer, sec_issues = run_security_phase(root, exclude=args.exclude)
         all_issues.extend(sec_issues)
     else:
         sec_analyzer, sec_issues = None, []
 
-    # ── Reporting ──
-    if detector:
-        summary = detector.summary()
-        print_smells(detector.smells, summary)
-        results["smells"] = summary
+    return detector, finder, linter, lint_issues, sec_analyzer, sec_issues
 
-    if finder:
-        summary = finder.summary()
-        print_duplicates(finder.groups, summary)
-        results["duplicates"] = summary
 
-    if linter and lint_issues:
-        summary = linter.summary(lint_issues)
-        print_lint_report(lint_issues, summary)
-        results["lint"] = summary
+def main():
+    """Main entry point for x_ray.exe."""
+    args = _parse_args()
+    print(_EXE_BANNER)
 
-    if sec_analyzer and sec_issues:
-        summary = sec_analyzer.summary(sec_issues)
-        print_security_report(sec_issues, summary)
-        results["security"] = summary
+    hw = detect_hardware()
+    print_hardware(hw)
+    if args.hw:
+        return
 
-    # ── Unified grade ──
-    grade_info = print_unified_grade(results)
-    results["grade"] = grade_info
+    _print_tool_status(check_tools())
+    root = _resolve_target(args)
+
+    # Rustify mode — separate workflow
+    if args.rustify:
+        results = run_rustify_scan(root, exclude=args.exclude)
+        if args.report:
+            with open(args.report, "w", encoding="utf-8") as f:
+                json.dump(results, f, indent=2)
+            print(f"\n  Report saved to {args.report}")
+        return
+
+    # Standard scan
+    start_time = time.time()
+    detector, finder, linter, lint_issues, sec_analyzer, sec_issues = \
+        _run_scan_phases(args, root)
+
+    from Core.scan_phases import AnalysisComponents
+    results = collect_reports(AnalysisComponents(
+        detector, finder, linter, lint_issues,
+        sec_analyzer, sec_issues))
     results["hardware"] = hw
 
     duration = time.time() - start_time
     print(f"\n  Total scan time: {duration:.2f}s")
 
-    # ── Save report ──
     if args.report:
         with open(args.report, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2, default=str)

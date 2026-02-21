@@ -1,8 +1,17 @@
 
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, NamedTuple
 from Core.types import FunctionRecord, ClassRecord, SmellIssue, DuplicateGroup, LibrarySuggestion, Severity
 from Core.config import __version__, SEP
+
+
+class ScanData(NamedTuple):
+    """Bundle of analysis results for report generation."""
+    functions: List[FunctionRecord]
+    classes: List[ClassRecord]
+    smells: List[SmellIssue]
+    duplicates: List[DuplicateGroup]
+    suggestions: List[LibrarySuggestion]
 
 def print_smells(smells: List[SmellIssue], summary: Dict[str, Any]):
     """Print the ASCII smell report."""
@@ -196,21 +205,11 @@ def _print_breakdown(breakdown: Dict[str, Any]) -> None:
         print(f"    -{penalty:5.1f} pts  {tool:20s}  ({details})")
 
 
-def print_unified_grade(results: Dict[str, Any]) -> Dict[str, Any]:
+def compute_grade(results: Dict[str, Any]) -> Dict[str, Any]:
+    """Calculate quality grade from scan results (no printing).
+
+    Returns dict with score, letter, breakdown, tools_run.
     """
-    Calculate and print a unified code quality grade based on all scanners.
-
-    The grading system:
-      - Starts at 100 points (A+)
-      - Deducts points for issues found by each scanner
-      - Maps final score to letter grade
-
-    Returns grade_info dict with score, letter, and breakdown.
-    """
-    print(f"\n{'='*64}")
-    print("  UNIFIED CODE QUALITY GRADE")
-    print(f"{'='*64}")
-
     score = 100.0
     breakdown: Dict[str, Any] = {}
     tools_run: List[str] = []
@@ -227,18 +226,38 @@ def print_unified_grade(results: Dict[str, Any]) -> Dict[str, Any]:
     score = max(0, round(score, 1))
     letter = _score_to_letter(score)
 
-    print(f"\n  Tools used: {', '.join(tools_run)}")
-    print(f"\n  Score: {score}/100  Grade: {letter}")
-    print("")
-    _print_breakdown(breakdown)
-    print(f"\n{'='*64}\n")
-
     return {
         "score": score,
         "letter": letter,
         "breakdown": breakdown,
         "tools_run": tools_run,
     }
+
+
+def print_unified_grade(results: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Calculate and print a unified code quality grade based on all scanners.
+
+    The grading system:
+      - Starts at 100 points (A+)
+      - Deducts points for issues found by each scanner
+      - Maps final score to letter grade
+
+    Returns grade_info dict with score, letter, and breakdown.
+    """
+    print(f"\n{'='*64}")
+    print("  UNIFIED CODE QUALITY GRADE")
+    print(f"{'='*64}")
+
+    grade_info = compute_grade(results)
+
+    print(f"\n  Tools used: {', '.join(grade_info['tools_run'])}")
+    print(f"\n  Score: {grade_info['score']}/100  Grade: {grade_info['letter']}")
+    print("")
+    _print_breakdown(grade_info["breakdown"])
+    print(f"\n{'='*64}\n")
+
+    return grade_info
 
 
 def print_library_report(suggestions: List[LibrarySuggestion], summary: Dict[str, Any]):
@@ -262,17 +281,9 @@ def print_library_report(suggestions: List[LibrarySuggestion], summary: Dict[str
             print(f"    ... and {len(s.functions)-3} more")
         print("")
 
-def build_json_report(root: Path, 
-                      functions: List[FunctionRecord], 
-                      classes: List[ClassRecord],
-                      smells: List[SmellIssue], 
-                      duplicates: List[DuplicateGroup], 
-                      suggestions: List[LibrarySuggestion], 
-                      scan_time: float) -> Dict[str, Any]:
-    """Construct the full JSON report dictionary."""
-    
-    # Summaries
-    smell_summary = {
+def _build_smell_summary(smells):
+    """Build smell summary dict."""
+    return {
         "total": len(smells),
         "critical": sum(1 for s in smells if s.severity == Severity.CRITICAL),
         "warning": sum(1 for s in smells if s.severity == Severity.WARNING),
@@ -285,20 +296,26 @@ def build_json_report(root: Path,
             } for s in smells
         ]
     }
-    
-    dup_summary = {
+
+
+def _build_dup_summary(duplicates):
+    """Build duplicate summary dict."""
+    return {
         "total_groups": len(duplicates),
         "total_functions_involved": sum(len(g.functions) for g in duplicates),
         "groups": [
             {
-                "id": g.group_id, "type": g.similarity_type, 
+                "id": g.group_id, "type": g.similarity_type,
                 "avg_sim": g.avg_similarity,
                 "functions": g.functions
             } for g in duplicates
         ]
     }
 
-    lib_summary = {
+
+def _build_lib_summary(suggestions):
+    """Build library suggestion summary dict."""
+    return {
         "total": len(suggestions),
         "suggestions": [
             {
@@ -307,6 +324,13 @@ def build_json_report(root: Path,
             } for s in suggestions
         ]
     }
+
+
+def build_json_report(root: Path, scan_data: ScanData,
+                      scan_time: float) -> Dict[str, Any]:
+    """Construct the full JSON report dictionary."""
+    functions = scan_data.functions
+    classes = scan_data.classes
 
     return {
         "version": __version__,
@@ -317,9 +341,9 @@ def build_json_report(root: Path,
             "total_classes": len(classes),
             "avg_complexity": sum(f.complexity for f in functions) / len(functions) if functions else 0
         },
-        "smells": smell_summary,
-        "duplicates": dup_summary,
-        "library_suggestions": lib_summary,
+        "smells": _build_smell_summary(scan_data.smells),
+        "duplicates": _build_dup_summary(scan_data.duplicates),
+        "library_suggestions": _build_lib_summary(scan_data.suggestions),
         "functions": [
             {"name": f.name, "file": f.file_path, "complexity": f.complexity, "loc": f.size_lines}
             for f in functions

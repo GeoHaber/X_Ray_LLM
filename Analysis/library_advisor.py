@@ -37,11 +37,23 @@ class LibraryAdvisor:
                 rationale=f"Found {len(group.functions)} {group.similarity_type} duplicates.",
             ))
 
+    @staticmethod
+    def _is_dunder(name: str) -> bool:
+        return name.startswith("__") and name.endswith("__")
+
+    def _is_cross_file_candidate(self, name: str, funcs: List[FunctionRecord],
+                                  covered_keys: set) -> bool:
+        """Check if a group of same-named functions qualifies for suggestion."""
+        if len(funcs) < 2:
+            return False
+        files = {f.file_path for f in funcs}
+        return len(files) >= 2 and not any(f.key in covered_keys for f in funcs)
+
     def _from_name_repetition(self, functions: List[FunctionRecord]) -> None:
         """Create suggestions from cross-file name repetition."""
         name_map: Dict[str, List[FunctionRecord]] = defaultdict(list)
         for f in functions:
-            if not (f.name.startswith("__") and f.name.endswith("__")):
+            if not self._is_dunder(f.name):
                 name_map[f.name].append(f)
 
         covered_keys = {
@@ -49,18 +61,14 @@ class LibraryAdvisor:
         }
 
         for name, funcs in name_map.items():
-            if len(funcs) < 2:
-                continue
-            files = {f.file_path for f in funcs}
-            if len(files) < 2:
-                continue
-            if any(f.key in covered_keys for f in funcs):
+            if not self._is_cross_file_candidate(name, funcs, covered_keys):
                 continue
             module_name = self._suggest_module_name([name])
             func_dicts = [
                 {"name": f.name, "file": f.file_path, "line": f.line_start, "key": f.key}
                 for f in funcs
             ]
+            files = {f.file_path for f in funcs}
             self.suggestions.append(LibrarySuggestion(
                 module_name=module_name,
                 description=f"Multiple functions named '{name}' across {len(files)} files",
@@ -70,17 +78,19 @@ class LibraryAdvisor:
             ))
 
 
+    _MODULE_KEYWORDS = [
+        (("parse",), "utils"),
+        (("read", "write", "load"), "io_helpers"),
+        (("validate", "check"), "validators"),
+        (("search", "find"), "search"),
+    ]
+
     def _suggest_module_name(self, func_names: List[str]) -> str:
         """Heuristic to name the module based on function names."""
         name = func_names[0].lower()
-        if "parse" in name:
-            return "utils"
-        if "read" in name or "write" in name or "load" in name:
-            return "io_helpers"
-        if "validate" in name or "check" in name:
-            return "validators"
-        if "search" in name or "find" in name:
-            return "search"
+        for keywords, module in self._MODULE_KEYWORDS:
+            if any(kw in name for kw in keywords):
+                return module
         return "shared_utils"
 
     def summary(self) -> Dict[str, Any]:

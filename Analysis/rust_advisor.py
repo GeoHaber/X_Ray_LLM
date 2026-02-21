@@ -37,7 +37,7 @@ import ast
 from ast import literal_eval
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from Core.types import FunctionRecord
 
@@ -68,26 +68,46 @@ _IMPURE_ATTRS = frozenset({
 })
 
 
+def _mutates_attribute(node) -> bool:
+    """Return True if the node mutates an attribute (e.g. self.x = ...)."""
+    if isinstance(node, ast.Assign):
+        return any(isinstance(t, ast.Attribute) for t in node.targets)
+    if isinstance(node, ast.AnnAssign):
+        return isinstance(node.target, ast.Attribute)
+    return False
+
+
+def _is_impure_call(node) -> bool:
+    """Return True if an ast.Call node calls a known impure function."""
+    if isinstance(node.func, ast.Name):
+        return node.func.id in _IMPURE_CALLS
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr in _IMPURE_ATTRS or node.func.attr in _IMPURE_CALLS
+    return False
+
+
+def _is_impure_node(node) -> bool:
+    """Return True if a single AST node indicates impurity."""
+    if isinstance(node, (ast.Global, ast.Nonlocal)):
+        return True
+    if _mutates_attribute(node):
+        return True
+    if isinstance(node, ast.Call) and _is_impure_call(node):
+        return True
+    return False
+
+
 def _detect_purity(func: FunctionRecord) -> bool:
-    """Return True if the function appears pure (no side effects)."""
+    """Return True if the function appears pure (no side effects).
+    
+    Improved heuristic: checks for known impure calls, global/nonlocal,
+    and common state-mutating attribute names.
+    """
     try:
         tree = ast.parse(func.code)
     except SyntaxError:
         return False
-
-    for node in ast.walk(tree):
-        # Global/nonlocal assignments
-        if isinstance(node, (ast.Global, ast.Nonlocal)):
-            return False
-        # Calls to known impure functions
-        if isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name) and node.func.id in _IMPURE_CALLS:
-                return False
-            if isinstance(node.func, ast.Attribute) and node.func.attr in _IMPURE_ATTRS:
-                return False
-            if isinstance(node.func, ast.Attribute) and node.func.attr in _IMPURE_CALLS:
-                return False
-    return True
+    return not any(_is_impure_node(node) for node in ast.walk(tree))
 
 
 def _count_external_deps(func: FunctionRecord) -> int:
@@ -184,65 +204,68 @@ class RustAdvisor:
         pure = _detect_purity(func)
         ext_deps = _count_external_deps(func)
 
+        score, reasons = self._compute_static_score(func, pure, ext_deps, w)
+        trace_score, call_count, avg_time_us, observed_types = (
+            self._apply_trace_bonuses(trace, w, reasons))
+        score += trace_score
+
+        return RustCandidate(
+            func=func, score=max(0, round(score, 1)),
+            is_pure=pure, external_deps=ext_deps,
+            call_count=call_count, avg_time_us=avg_time_us,
+            observed_types=observed_types,
+            reason=", ".join(reasons) if reasons else "baseline",
+        )
+
+    @staticmethod
+    def _compute_static_score(func, pure, ext_deps, w):
+        """Compute static AST-based score. Returns (score, reasons_list)."""
         score = 0.0
         reasons = []
 
-        # Purity bonus
         if pure:
             score += w["purity_bonus"]
             reasons.append("pure")
         else:
             reasons.append("impure")
 
-        # Complexity reward
         score += func.complexity * w["complexity"]
         if func.complexity >= 10:
             reasons.append(f"complex({func.complexity})")
 
-        # Size reward
         score += func.size_lines * w["size"]
-
-        # External dependency penalty
         score += ext_deps * w["external_dep"]
         if ext_deps > 0:
             reasons.append(f"deps({ext_deps})")
 
-        # Param penalty (above 3)
         excess_params = max(0, len(func.parameters) - 3)
         score += excess_params * w["param_penalty"]
 
-        # Async penalty
         if func.is_async:
             score += w["async_penalty"]
             reasons.append("async")
 
-        # Runtime trace bonuses
+        return score, reasons
+
+    @staticmethod
+    def _apply_trace_bonuses(trace, w, reasons):
+        """Apply runtime trace bonuses. Returns (bonus_score, call_count, avg_time_us, observed_types)."""
         call_count = 0
         avg_time_us = 0.0
+        bonus = 0.0
         observed_types: Dict[str, List[str]] = {}
         if trace is not None:
             call_count = getattr(trace, "call_count", 0)
             avg_time_us = getattr(trace, "avg_time_us", 0.0)
-            score += (call_count / 100) * w["call_count"]
-            score += avg_time_us * w["time_per_call"]
+            bonus += (call_count / 100) * w["call_count"]
+            bonus += avg_time_us * w["time_per_call"]
             if call_count > 100:
                 reasons.append(f"hot({call_count} calls)")
             if avg_time_us > 1000:
                 reasons.append(f"slow({avg_time_us:.0f}µs)")
-            # Merge observed types
             raw = getattr(trace, "observed_arg_types", {})
             observed_types = {k: sorted(v) for k, v in raw.items()}
-
-        return RustCandidate(
-            func=func,
-            score=max(0, round(score, 1)),
-            is_pure=pure,
-            external_deps=ext_deps,
-            call_count=call_count,
-            avg_time_us=avg_time_us,
-            observed_types=observed_types,
-            reason=", ".join(reasons) if reasons else "baseline",
-        )
+        return bonus, call_count, avg_time_us, observed_types
 
     # ── Golden fixture generation ────────────────────────────────────────
 
@@ -255,11 +278,14 @@ class RustAdvisor:
         """
         samples = []
         if trace is not None:
-            for s in getattr(trace, "samples", []):
+            for s in trace.samples:
                 samples.append({
                     "args": s.args_repr,
+                    "args_json": [json.dumps(a) for a in getattr(s, 'args_raw', [])],
                     "kwargs": s.kwargs_repr,
+                    "kwargs_json": {k: json.dumps(v) for k, v in getattr(s, 'kwargs_raw', {}).items()},
                     "expected_output": s.output_repr,
+                    "expected_output_json": json.dumps(getattr(s, 'output_raw', None)),
                     "expected_type": s.output_type,
                     "error": s.error,
                 })
@@ -285,6 +311,43 @@ class RustAdvisor:
     # ── Golden verification ──────────────────────────────────────────────
 
     @staticmethod
+    def _load_case_args(case: Dict[str, Any]) -> Tuple[list, dict]:
+        """Deserialize arguments from a golden case."""
+        args = [json.loads(a) for a in case.get("args_json", [])]
+        if not args and case.get("args"):
+            args = [literal_eval(a) for a in case["args"]]
+        kwargs = {k: json.loads(v) for k, v in case.get("kwargs_json", {}).items()}
+        if not kwargs and case.get("kwargs"):
+            kwargs = {k: literal_eval(v) for k, v in case.get("kwargs", {}).items()}
+        return args, kwargs
+
+    @staticmethod
+    def _load_case_expected(case: Dict[str, Any]):
+        """Deserialize expected output from a golden case."""
+        if "expected_output_json" in case:
+            return json.loads(case["expected_output_json"])
+        return literal_eval(case["expected_output"])
+
+    @staticmethod
+    def _verify_single_case(rust_fn: Callable, case: Dict[str, Any],
+                            index: int) -> Tuple[str, Optional[Dict[str, Any]]]:
+        """Verify one golden case. Returns (status, detail_or_None)."""
+        if case.get("error"):
+            return "skip", None
+        try:
+            args, kwargs = RustAdvisor._load_case_args(case)
+            result = rust_fn(*args, **kwargs)
+            expected = RustAdvisor._load_case_expected(case)
+            if json.dumps(result, sort_keys=True) == json.dumps(expected, sort_keys=True):
+                return "passed", None
+            return "failed", {
+                "case": index, "status": "MISMATCH",
+                "expected": repr(expected), "actual": repr(result),
+            }
+        except Exception as exc:
+            return "error", {"case": index, "status": "ERROR", "error": str(exc)}
+
+    @staticmethod
     def verify_golden(rust_fn: Callable, golden_path: str) -> Dict[str, Any]:
         """Run a Rust function against a golden fixture and report results.
 
@@ -293,46 +356,21 @@ class RustAdvisor:
         data = json.loads(Path(golden_path).read_text(encoding="utf-8"))
         cases = data.get("cases", [])
 
-        passed = 0
-        failed = 0
-        errors = 0
+        counts = {"passed": 0, "failed": 0, "error": 0}
         details: List[Dict[str, Any]] = []
 
         for i, case in enumerate(cases):
-            if case.get("error"):
-                # Skip error cases — we only verify happy-path parity
-                continue
-            try:
-                # Reconstruct args from repr (best-effort via literal_eval)
-                args = [literal_eval(a) for a in case["args"]]
-                kwargs = {k: literal_eval(v) for k, v in case.get("kwargs", {}).items()}
-                result = rust_fn(*args, **kwargs)
-                expected = literal_eval(case["expected_output"])
-
-                if result == expected:
-                    passed += 1
-                else:
-                    failed += 1
-                    details.append({
-                        "case": i,
-                        "status": "MISMATCH",
-                        "expected": case["expected_output"],
-                        "actual": repr(result),
-                    })
-            except Exception as exc:
-                errors += 1
-                details.append({
-                    "case": i,
-                    "status": "ERROR",
-                    "error": str(exc),
-                })
+            status, detail = RustAdvisor._verify_single_case(rust_fn, case, i)
+            counts[status] = counts.get(status, 0) + 1
+            if detail is not None:
+                details.append(detail)
 
         return {
             "golden_file": golden_path,
             "total": len(cases),
-            "passed": passed,
-            "failed": failed,
-            "errors": errors,
+            "passed": counts["passed"],
+            "failed": counts["failed"],
+            "errors": counts["error"],
             "details": details,
         }
 

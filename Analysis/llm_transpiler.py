@@ -56,7 +56,6 @@ import re
 import subprocess
 import tempfile
 import textwrap
-from pathlib import Path
 from typing import Optional, Tuple
 
 from Core.utils import logger
@@ -99,6 +98,16 @@ Output ONLY the Rust `fn` — no markdown, no explanation."""
 #  Rust Compiler Validation
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _cleanup_temp_files(*paths: str):
+    """Remove temp files, ignoring all errors."""
+    for p in paths:
+        try:
+            if p:
+                os.unlink(p)
+        except Exception:
+            pass
+
+
 def _check_rust_compiles(rust_code: str, *, timeout: int = 30) -> Tuple[bool, str]:
     """Validate *rust_code* by running ``rustc --edition 2021 --emit=metadata``.
 
@@ -140,11 +149,33 @@ def _check_rust_compiles(rust_code: str, *, timeout: int = 30) -> Tuple[bool, st
     except Exception as e:
         return False, str(e)
     finally:
-        for p in (tmp_path, tmp_path.replace(".rs", ".rmeta")):
-            try:
-                os.unlink(p)
-            except Exception:
-                pass
+        _cleanup_temp_files(tmp_path, tmp_path.replace(".rs", ".rmeta"))
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """Remove markdown code fences from LLM output."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = "\n".join(text.split("\n")[1:])
+    if text.endswith("```"):
+        text = text[: text.rfind("```")]
+    return text.strip()
+
+
+def _match_braces(text: str, start: int) -> int:
+    """Find the end of a brace-delimited block starting at *start*."""
+    depth = 0
+    in_fn = False
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+            in_fn = True
+            continue
+        if text[i] == "}":
+            depth -= 1
+            if depth == 0 and in_fn:
+                return i + 1
+    return len(text)
 
 
 def _extract_fn_block(text: str) -> str:
@@ -153,14 +184,7 @@ def _extract_fn_block(text: str) -> str:
     LLMs sometimes add explanations or markdown fences around the code.
     This pulls out just the function definition.
     """
-    # Strip markdown fences
-    text = text.strip()
-    if text.startswith("```"):
-        # Remove first line (```rust or ```)
-        text = "\n".join(text.split("\n")[1:])
-    if text.endswith("```"):
-        text = text[: text.rfind("```")]
-    text = text.strip()
+    text = _strip_markdown_fences(text)
 
     # Find the first `fn ` and match braces
     fn_start = -1
@@ -171,28 +195,12 @@ def _extract_fn_block(text: str) -> str:
         return text  # return as-is; caller will validate
 
     # Collect any `use` lines that precede the fn
-    prefix_lines = []
-    for line in text[:fn_start].split("\n"):
-        stripped = line.strip()
-        if stripped.startswith("use ") or stripped.startswith("//"):
-            prefix_lines.append(line)
+    prefix_lines = [
+        line for line in text[:fn_start].split("\n")
+        if line.strip().startswith("use ") or line.strip().startswith("//")
+    ]
 
-    # Brace-match from fn_start
-    depth = 0
-    fn_end = fn_start
-    in_fn = False
-    for i in range(fn_start, len(text)):
-        if text[i] == "{":
-            depth += 1
-            in_fn = True
-        elif text[i] == "}":
-            depth -= 1
-            if depth == 0 and in_fn:
-                fn_end = i + 1
-                break
-    else:
-        fn_end = len(text)
-
+    fn_end = _match_braces(text, fn_start)
     fn_block = text[fn_start:fn_end].strip()
     if prefix_lines:
         return "\n".join(prefix_lines) + "\n" + fn_block
@@ -243,6 +251,31 @@ class LLMTranspiler:
         """Return transpilation statistics."""
         return dict(self._stats)
 
+    def _query_llm(self, prompt: str) -> Optional[str]:
+        """Send *prompt* to the LLM and return the raw response (or None)."""
+        llm = self._get_llm()
+        if llm is None or not llm.available:
+            self._stats["llm_fail"] += 1
+            return None
+        try:
+            raw = llm.completion(prompt, system_prompt=_SYSTEM_PROMPT)
+        except Exception as e:
+            logger.warning("LLMTranspiler: LLM query failed: %s", e)
+            self._stats["llm_fail"] += 1
+            return None
+        if not raw or not raw.strip():
+            self._stats["llm_fail"] += 1
+            return None
+        return raw
+
+    def _finalize(self, rust_fn: str, source_info: str,
+                  name_hint: str) -> str:
+        """Prepend doc comment and record success."""
+        tag = f"LLM-assisted transpilation from {source_info}" if source_info else "LLM-assisted transpilation"
+        self._stats["success"] += 1
+        logger.info("LLMTranspiler: ✓ %s transpiled via LLM", name_hint or "function")
+        return f"/// {tag}\n{rust_fn}"
+
     # ── Core: transpile one function ──────────────────────────────────
 
     def transpile(self, python_code: str, *,
@@ -251,31 +284,9 @@ class LLMTranspiler:
                   error_context: str = "") -> Optional[str]:
         """Ask the LLM to transpile *python_code* to Rust.
 
-        Parameters
-        ----------
-        python_code
-            Complete Python function source (``def …:`` + body).
-        name_hint
-            Expected function name — used in the ``todo!()`` fallback.
-        source_info
-            e.g. ``"module.py:42"`` — injected as a ``///`` doc comment.
-        error_context
-            If this is a **retry** after a ``rustc`` failure, paste the
-            compiler errors here so the LLM can fix its own output.
-
-        Returns
-        -------
-        str | None
-            Valid Rust function code, or *None* if transpilation failed.
+        Returns valid Rust function code, or *None* on failure.
         """
-        llm = self._get_llm()
-        if llm is None or not llm.available:
-            self._stats["llm_fail"] += 1
-            return None
-
         self._stats["attempted"] += 1
-
-        # Build prompt
         user_msg = _USER_TEMPLATE.format(python_code=textwrap.dedent(python_code).strip())
         if error_context:
             user_msg += (
@@ -284,44 +295,25 @@ class LLMTranspiler:
                 "Fix the errors and output ONLY the corrected Rust function."
             )
 
-        # Query LLM
-        try:
-            raw = llm.completion(user_msg, system_prompt=_SYSTEM_PROMPT)
-        except Exception as e:
-            logger.warning(f"LLMTranspiler: LLM query failed: {e}")
-            self._stats["llm_fail"] += 1
+        raw = self._query_llm(user_msg)
+        if raw is None:
             return None
 
-        if not raw or not raw.strip():
-            self._stats["llm_fail"] += 1
-            return None
-
-        # Extract the fn block
         rust_fn = _extract_fn_block(raw)
 
-        # Validate with rustc
         if self._verify:
             ok, errors = _check_rust_compiles(rust_fn)
             if not ok:
                 self._stats["compile_fail"] += 1
                 if self._max_retries > 0:
-                    logger.info(f"LLMTranspiler: compile failed, retrying ({name_hint})")
-                    # Retry with error feedback
+                    logger.info("LLMTranspiler: compile failed, retrying (%s)", name_hint)
                     return self._retry(python_code, rust_fn, errors,
                                        name_hint=name_hint,
                                        source_info=source_info,
                                        retries_left=self._max_retries - 1)
                 return None
 
-        # Prepend source info as doc comment
-        if source_info:
-            rust_fn = f"/// Transpiled from {source_info} (LLM-assisted)\n{rust_fn}"
-        else:
-            rust_fn = f"/// LLM-assisted transpilation\n{rust_fn}"
-
-        self._stats["success"] += 1
-        logger.info(f"LLMTranspiler: ✓ {name_hint or 'function'} transpiled via LLM")
-        return rust_fn
+        return self._finalize(rust_fn, source_info, name_hint)
 
     def _retry(self, python_code: str, previous_rust: str, errors: str,
                *, name_hint: str, source_info: str,
@@ -330,11 +322,6 @@ class LLMTranspiler:
         if retries_left <= 0:
             return None
 
-        llm = self._get_llm()
-        if llm is None or not llm.available:
-            return None
-
-        # Build a repair prompt
         repair_prompt = (
             f"Your previous Rust translation:\n```rust\n{previous_rust}\n```\n\n"
             f"Failed to compile with:\n```\n{errors}\n```\n\n"
@@ -342,37 +329,19 @@ class LLMTranspiler:
             "Fix the Rust code. Output ONLY the corrected Rust function."
         )
 
-        try:
-            raw = llm.completion(repair_prompt, system_prompt=_SYSTEM_PROMPT)
-        except Exception as e:
-            logger.warning(f"LLMTranspiler: retry query failed: {e}")
-            self._stats["llm_fail"] += 1
-            return None
-
-        if not raw or not raw.strip():
-            self._stats["llm_fail"] += 1
+        raw = self._query_llm(repair_prompt)
+        if raw is None:
             return None
 
         rust_fn = _extract_fn_block(raw)
-
         ok, new_errors = _check_rust_compiles(rust_fn)
-        if not ok:
-            self._stats["compile_fail"] += 1
-            if retries_left > 1:
-                return self._retry(python_code, rust_fn, new_errors,
-                                   name_hint=name_hint,
-                                   source_info=source_info,
-                                   retries_left=retries_left - 1)
-            return None
-
-        if source_info:
-            rust_fn = f"/// Transpiled from {source_info} (LLM-assisted)\n{rust_fn}"
-        else:
-            rust_fn = f"/// LLM-assisted transpilation\n{rust_fn}"
-
-        self._stats["success"] += 1
-        logger.info(f"LLMTranspiler: ✓ {name_hint or 'function'} fixed on retry")
-        return rust_fn
+        if ok:
+            return self._finalize(rust_fn, source_info, name_hint)
+        self._stats["compile_fail"] += 1
+        return self._retry(python_code, rust_fn, new_errors,
+                           name_hint=name_hint,
+                           source_info=source_info,
+                           retries_left=retries_left - 1) if retries_left > 1 else None
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -388,6 +357,21 @@ def get_llm_transpiler() -> LLMTranspiler:
     if _default_engine is None:
         _default_engine = LLMTranspiler()
     return _default_engine
+
+
+def get_cached_llm_transpiler() -> Optional[LLMTranspiler]:
+    """Return a cached LLM transpiler if available, else *None*.
+
+    Uses a function-attribute cache so the availability check and
+    ``get_llm_transpiler()`` call happen at most once per process.
+    """
+    if not hasattr(get_cached_llm_transpiler, "_cache"):
+        try:
+            eng = get_llm_transpiler()
+            get_cached_llm_transpiler._cache = eng if eng.available else None
+        except Exception:
+            get_cached_llm_transpiler._cache = None
+    return get_cached_llm_transpiler._cache
 
 
 def llm_transpile_function(python_code: str, *,

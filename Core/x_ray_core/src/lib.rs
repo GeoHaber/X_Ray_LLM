@@ -684,6 +684,64 @@ fn batch_code_similarity_impl(codes: &[String]) -> Vec<Vec<f64>> {
 }
 
 // ============================================================
+//  Parallel Prefilter (O(N^2) hot path moved to Rust)
+// ============================================================
+
+/// Metadata needed for the pre-filter stage.
+#[derive(Debug, Clone)]
+struct PrefilterItem {
+    key: String,
+    file_path: String,
+    size_lines: usize,
+    tokens: FxHashMap<String, u32>,
+}
+
+fn prefilter_parallel_impl(
+    items: &[PrefilterItem],
+    cross_file_only: bool,
+    size_ratio_min: f64,
+    token_sim_min: f64,
+) -> Vec<(String, String, f64)> {
+    let n = items.len();
+    if n < 2 {
+        return Vec::new();
+    }
+
+    // Parallel search for candidate pairs
+    (0..n)
+        .into_par_iter()
+        .flat_map(|i| {
+            let f1 = &items[i];
+            let mut local_results = Vec::new();
+
+            for j in (i + 1)..n {
+                let f2 = &items[j];
+
+                // 1. Cross-file check
+                if cross_file_only && f1.file_path == f2.file_path {
+                    continue;
+                }
+
+                // 2. Size ratio check
+                let s1 = f1.size_lines as f64;
+                let s2 = f2.size_lines as f64;
+                let ratio = s1.min(s2) / s1.max(s2);
+                if ratio < size_ratio_min {
+                    continue;
+                }
+
+                // 3. Token similarity check
+                let sim = cosine_sim(&f1.tokens, &f2.tokens);
+                if sim >= token_sim_min {
+                    local_results.push((f1.key.clone(), f2.key.clone(), sim));
+                }
+            }
+            local_results
+        })
+        .collect()
+}
+
+// ============================================================
 //  normalize_code  (regex: strip docstrings + comments + blanks)
 // ============================================================
 
@@ -784,10 +842,52 @@ fn batch_code_similarity(py: Python<'_>, codes: Vec<String>) -> PyResult<Vec<Vec
     Ok(matrix)
 }
 
-/// Strip docstrings, comments, trailing whitespace, and blank lines.
 #[pyfunction]
 fn normalize_code(code: &str) -> PyResult<String> {
     Ok(normalize_code_impl(code))
+}
+
+/// Metadata for parallel pre-filtering.
+#[derive(FromPyObject)]
+struct PyPrefilterInput {
+    key: String,
+    file_path: String,
+    size_lines: usize,
+}
+
+/// Parallel pre-filter for duplicate detection.
+///
+/// Moves the O(N^2) pair-wise comparison from Python to Rust.
+#[pyfunction]
+#[pyo3(signature = (functions, tokens_map, cross_file_only=true, size_ratio_min=0.35, token_sim_min=0.25))]
+fn prefilter_parallel(
+    py: Python<'_>,
+    functions: Vec<PyPrefilterInput>,
+    tokens_map: FxHashMap<String, FxHashMap<String, u32>>,
+    cross_file_only: bool,
+    size_ratio_min: f64,
+    token_sim_min: f64,
+) -> PyResult<Vec<(String, String, f64)>> {
+    // 1. Convert input to Rust-friendly format
+    let items: Vec<PrefilterItem> = functions
+        .into_iter()
+        .map(|f| {
+            let tokens = tokens_map.get(&f.key).cloned().unwrap_or_default();
+            PrefilterItem {
+                key: f.key,
+                file_path: f.file_path,
+                size_lines: f.size_lines,
+                tokens,
+            }
+        })
+        .collect();
+
+    // 2. Execute parallel check (releasing GIL)
+    let results = py.allow_threads(|| {
+        prefilter_parallel_impl(&items, cross_file_only, size_ratio_min, token_sim_min)
+    });
+
+    Ok(results)
 }
 
 // ============================================================
@@ -817,6 +917,7 @@ fn x_ray_core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(code_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(batch_code_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(normalize_code, m)?)?;
+    m.add_function(wrap_pyfunction!(prefilter_parallel, m)?)?;
 
     Ok(())
 }

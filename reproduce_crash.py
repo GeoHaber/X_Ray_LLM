@@ -32,11 +32,7 @@ def reproduce():
         print("CRASHED!")
         traceback.print_exc()
     finally:
-        if fpath.exists():
-            try:
-                fpath.unlink()
-            except OSError:
-                pass
+        fpath.unlink(missing_ok=True)
 
 if __name__ == "__main__":
     reproduce()

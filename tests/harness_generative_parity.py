@@ -1,13 +1,10 @@
 
 import unittest
 import ctypes
-import tempfile
-import subprocess
-import sys
-from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Any, Dict
 from Analysis.test_gen import TestGenerator
+from tests.harness_common import mock_transpile_to_rust_v2, compile_rust
 
 # -----------------------------------------------------------------------------
 # Phase 1: The "Scan & Capture" Simulation
@@ -48,39 +45,10 @@ class ScanPhaseSimulator:
 # -----------------------------------------------------------------------------
 # Phase 2: The "Rewrite &Verify" Simulation
 # -----------------------------------------------------------------------------
-def mock_transpile_to_rust_v2(python_code: str) -> str:
-    """Generate mock Rust code from a Python function for parity testing."""
-    if "def add(a, b):" in python_code:
-        return r"""
-        #[no_mangle]
-        pub extern "C" def add(a: i32, b: i32) -> i32 {
-            a + b
-        }
-        """
-    if "def multiply(x, y):" in python_code:
-        return r"""
-        #[no_mangle]
-        pub extern "C" def multiply(x: i32, y: i32) -> i32 {
-            x * y
-        }
-        """
-    raise NotImplementedError("Transpiler only supports 'add' and 'multiply'.")
+# Phase 2 uses shared mock_transpile_to_rust_v2 from harness_common
 
 class GenerativeParityHarness(unittest.TestCase):
     """Generative parity test harness."""
-
-    def compile_rust(self, rust_code: str) -> str:
-        tmp_dir = Path(tempfile.mkdtemp())
-        src_file = tmp_dir / "gen.rs"
-        clean_code = rust_code.replace("def ", "fn ")
-        src_file.write_text(clean_code, encoding="utf-8")
-        
-        lib_name = "gen.dll" if sys.platform == "win32" else "libgen.so"
-        out_file = tmp_dir / lib_name
-        
-        cmd = ["rustc", "--crate-type", "cdylib", "-O", str(src_file), "-o", str(out_file)]
-        subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return str(out_file)
 
     def test_end_to_end_flow(self):
         """
@@ -110,7 +78,7 @@ class GenerativeParityHarness(unittest.TestCase):
         rust_src = mock_transpile_to_rust_v2(profile_add.source_code)
         
         # 2. Compile
-        lib_path = self.compile_rust(rust_src)
+        lib_path = compile_rust(rust_src)
         rust_lib = ctypes.CDLL(lib_path)
         
         # 3. Verify against the *Stored Profile*

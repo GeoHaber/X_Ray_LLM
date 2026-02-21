@@ -34,6 +34,7 @@ from x_ray_claude import (  # noqa: E402
     LibraryAdvisor,
     build_json_report,
 )
+from Analysis.reporting import ScanData  # noqa: E402
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -65,35 +66,35 @@ SUITES = [
     {
         "name": "exact_dupes",
         "path": FIXTURES_DIR,
-        "include": ["dup_exact_a.py", "dup_exact_b.py"],
+        "include": ["dup_exact_a.pysrc", "dup_exact_b.pysrc"],
         "description": "Byte-identical functions across two files.",
     },
     # ── Suite 5: Near duplicates ─────────────────────────────────────────────
     {
         "name": "near_dupes",
         "path": FIXTURES_DIR,
-        "include": ["dup_near_a.py", "dup_near_b.py"],
+        "include": ["dup_near_a.pysrc", "dup_near_b.pysrc"],
         "description": "~85-95% similar functions.",
     },
     # ── Suite 6: Structural duplicates ───────────────────────────────────────
     {
         "name": "structural_dupes",
         "path": FIXTURES_DIR,
-        "include": ["dup_structural_a.py", "dup_structural_b.py"],
+        "include": ["dup_structural_a.pysrc", "dup_structural_b.pysrc"],
         "description": "Same AST shape, different variable names.",
     },
     # ── Suite 7: Semantic duplicates ─────────────────────────────────────────
     {
         "name": "semantic_dupes",
         "path": FIXTURES_DIR,
-        "include": ["dup_semantic_a.py", "dup_semantic_b.py"],
+        "include": ["dup_semantic_a.pysrc", "dup_semantic_b.pysrc"],
         "description": "Same purpose, different code.",
     },
     # ── Suite 8: Library candidates ──────────────────────────────────────────
     {
         "name": "library_candidates",
         "path": FIXTURES_DIR,
-        "include": ["lib_candidate_a.py", "lib_candidate_b.py", "lib_candidate_c.py"],
+        "include": ["lib_candidate_a.pysrc", "lib_candidate_b.pysrc", "lib_candidate_c.pysrc"],
         "description": "Cross-file same-name functions → library suggestions.",
     },
     # ── Suite 9: Edge cases ──────────────────────────────────────────────────
@@ -111,20 +112,38 @@ def _filter_files(files: list[Path], include: list[str]) -> list[Path]:
     return [f for f in files if f.name in include]
 
 
+def _scan_pysrc_files(root: Path):
+    """Scan .pysrc fixture files (renamed from .py to avoid dup-scanner)."""
+    from Analysis.ast_utils import extract_functions_from_file
+    fns, cls, errs = [], [], []
+    for f in sorted(root.glob("*.pysrc")):
+        funcs, classes, err = extract_functions_from_file(f, root)
+        fns.extend(funcs)
+        cls.extend(classes)
+        if err:
+            errs.append(f"{f}: {err}")
+    return fns, cls, errs
+
+
 def _run_suite(suite: dict) -> dict:
     """Execute one test suite and return the full JSON report dict."""
     root = suite["path"]
     include = suite.get("include")
 
-    # Scan
+    # Scan .py files via normal pipeline
     t0 = time.perf_counter()
     functions, classes, errors = scan_codebase(root)
     time.perf_counter() - t0
 
+    # Also scan .pysrc fixture files (renamed to avoid dup-scanner)
+    pysrc_fns, pysrc_cls, pysrc_errs = _scan_pysrc_files(root)
+    functions.extend(pysrc_fns)
+    classes.extend(pysrc_cls)
+    errors.extend(pysrc_errs)
+
     # If only specific files requested, filter
     if include:
         fn_set = set(include)
-        # Strip .py → just match the filename part
         functions = [f for f in functions if Path(f.file_path).name in fn_set]
         classes = [c for c in classes if Path(c.file_path).name in fn_set]
 
@@ -144,19 +163,35 @@ def _run_suite(suite: dict) -> dict:
     total_time = time.perf_counter() - t0
 
     report = build_json_report(
-        root, functions, classes, smells, duplicates, lib_suggestions, total_time,
+        root, ScanData(functions, classes, smells, duplicates, lib_suggestions), total_time,
     )
 
     # Augment with per-suite metadata
     report["_suite"] = {
         "name": suite["name"],
         "description": suite["description"],
-        "fixture_files": include or [p.name for p in root.glob("*.py")],
+        "fixture_files": include or [p.name for p in sorted(
+            [*root.glob("*.py"), *root.glob("*.pysrc")])],
     }
     # Add detailed expectations that the Rust harness must match
     report["_expectations"] = _build_expectations(suite, report)
 
     return report
+
+
+_SUITE_ASSERTIONS = {
+    "clean_only": {"assert_zero_smells": True},
+    "exact_dupes": {"assert_has_exact_groups": True},
+    "structural_dupes": {"assert_has_structural_groups": True},
+    "near_dupes": {"assert_has_near_groups": True},
+    "semantic_dupes": {"assert_has_semantic_groups": True},
+    "edge_cases": {"assert_has_async_function": True, "assert_nested_excluded": True},
+}
+
+
+def _count_by_field(items: list, field: str, values: list) -> dict:
+    """Count occurrences of each value in items[field]."""
+    return {v: sum(1 for it in items if it.get(field) == v) for v in values}
 
 
 def _build_expectations(suite: dict, report: dict) -> dict:
@@ -170,59 +205,46 @@ def _build_expectations(suite: dict, report: dict) -> dict:
     lib = report["library_suggestions"]
 
     exp: dict = {
-        # Exact numeric counts
         "total_functions": stats["total_functions"],
         "total_classes": stats["total_classes"],
         "total_files": stats["total_files"],
         "total_lines": stats["total_lines"],
-        # Smell counts
         "smell_total": smells["total"],
         "smell_categories": sorted(set(s["category"] for s in smells["issues"])),
-        "smell_severities": {
-            "critical": sum(1 for s in smells["issues"] if s["severity"] == "critical"),
-            "warning": sum(1 for s in smells["issues"] if s["severity"] == "warning"),
-            "info": sum(1 for s in smells["issues"] if s["severity"] == "info"),
-        },
-        # Per-smell detail: file, line, category, severity, name
+        "smell_severities": _count_by_field(
+            smells["issues"], "severity", ["critical", "warning", "info"]),
         "smell_fingerprints": sorted([
             f"{s['file']}:{s['line']}:{s['category']}:{s['severity']}:{s['name']}"
             for s in smells["issues"]
         ]),
-        # Duplicate counts
         "dup_total_groups": dups["total_groups"],
-        "dup_types": {
-            "exact": sum(1 for g in dups["groups"] if g["type"] == "exact"),
-            "structural": sum(1 for g in dups["groups"] if g["type"] == "structural"),
-            "near": sum(1 for g in dups["groups"] if g["type"] == "near"),
-            "semantic": sum(1 for g in dups["groups"] if g["type"] == "semantic"),
-        },
-        # Duplicate function keys (sorted sets per group)
+        "dup_types": _count_by_field(
+            dups["groups"], "type", ["exact", "structural", "near", "semantic"]),
         "dup_group_keys": [
             sorted([f["key"] for f in g["functions"]])
             for g in sorted(dups["groups"], key=lambda g: g["id"])
         ],
-        # Library suggestion counts
         "lib_total": lib["total"],
         "lib_modules": sorted(set(s["module"] for s in lib["suggestions"])),
     }
 
     # Suite-specific assertions
-    name = suite["name"]
-    if name == "clean_only":
-        exp["assert_zero_smells"] = True
-    if name == "exact_dupes":
-        exp["assert_has_exact_groups"] = True
-    if name == "structural_dupes":
-        exp["assert_has_structural_groups"] = True
-    if name == "near_dupes":
-        exp["assert_has_near_groups"] = True
-    if name == "semantic_dupes":
-        exp["assert_has_semantic_groups"] = True
-    if name == "edge_cases":
-        exp["assert_has_async_function"] = True
-        exp["assert_nested_excluded"] = True
+    exp.update(_SUITE_ASSERTIONS.get(suite["name"], {}))
 
     return exp
+
+
+def _sort_nested_items(data: dict, section: str, items_key: str,
+                       inner_key: str = "", **opts):
+    """Sort items within a section, optionally sorting nested lists first."""
+    inner_sort_key = opts.get("inner_sort_key")
+    outer_sort_key = opts.get("outer_sort_key")
+    if section not in data or items_key not in data[section]:
+        return
+    for item in data[section][items_key]:
+        if inner_key and inner_key in item:
+            item[inner_key].sort(key=inner_sort_key)
+    data[section][items_key].sort(key=outer_sort_key)
 
 
 def _normalize_report(report: dict) -> dict:
@@ -242,20 +264,17 @@ def _normalize_report(report: dict) -> dict:
         )
 
     # Sort duplicate groups by id
-    if "duplicates" in report and "groups" in report["duplicates"]:
-        for g in report["duplicates"]["groups"]:
-            if "functions" in g:
-                g["functions"].sort(key=lambda f: f.get("key", ""))
-        report["duplicates"]["groups"].sort(key=lambda g: g["id"])
+    _sort_nested_items(
+        report, "duplicates", "groups",
+        inner_key="functions", inner_sort_key=lambda f: f.get("key", ""),
+        outer_sort_key=lambda g: g["id"])
 
     # Sort library suggestions
-    if "library_suggestions" in report and "suggestions" in report["library_suggestions"]:
-        for s in report["library_suggestions"]["suggestions"]:
-            if "functions" in s:
-                s["functions"].sort(key=lambda f: (f.get("file", ""), f.get("name", "")))
-        report["library_suggestions"]["suggestions"].sort(
-            key=lambda s: (s["module"], s["description"])
-        )
+    _sort_nested_items(
+        report, "library_suggestions", "suggestions",
+        inner_key="functions",
+        inner_sort_key=lambda f: (f.get("file", ""), f.get("name", "")),
+        outer_sort_key=lambda s: (s["module"], s["description"]))
 
     return report
 

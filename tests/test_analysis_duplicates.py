@@ -2,24 +2,8 @@
 Tests for Analysis/duplicates.py — DuplicateFinder.
 """
 import pytest
-from Core.types import FunctionRecord
-from Analysis.duplicates import DuplicateFinder
-
-
-# ── helpers ──────────────────────────────────────────────────────────
-
-def _func(name="foo", file_path="a.py", code_hash="h1", structure_hash="s1",
-          size_lines=10, code="def foo(): pass", **kw):
-    defaults = dict(
-        name=name, file_path=file_path,
-        line_start=1, line_end=size_lines, size_lines=size_lines,
-        parameters=[], return_type=None, decorators=[], docstring=None,
-        calls_to=[], complexity=1, nesting_depth=0,
-        code_hash=code_hash, structure_hash=structure_hash,
-        code=code, is_async=False,
-    )
-    defaults.update(kw)
-    return FunctionRecord(**defaults)
+from Analysis.duplicates import DuplicateFinder, _func_to_dict, _is_valid_group
+from tests.conftest import make_func as _func
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -133,12 +117,10 @@ class TestBoilerplateSkipping:
 class TestHelpers:
 
     def test_single_function_not_valid(self):
-        finder = DuplicateFinder()
-        assert finder._is_valid_group([_func()], cross_file=True) is False
+        assert _is_valid_group([_func()], cross_file=True) is False
 
     def test_func_to_dict_keys(self):
-        finder = DuplicateFinder()
-        d = finder._func_to_dict(_func(name="bar", file_path="x.py", line_start=5))
+        d = _func_to_dict(_func(name="bar", file_path="x.py", line_start=5))
         assert "key" in d
         assert "name" in d
         assert d["name"] == "bar"

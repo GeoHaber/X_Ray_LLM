@@ -48,7 +48,8 @@ from Analysis.reporting import (
     print_smells as print_smell_report,
     print_duplicates as print_duplicate_report,
     print_library_report,
-    build_json_report
+    build_json_report,
+    ScanData,
 )
 
 from x_ray_claude import scan_codebase
@@ -60,12 +61,13 @@ from x_ray_claude import scan_codebase
 #  Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _make_func(name="test_func", file_path="test.py", line_start=1,
-               size_lines=10, parameters=None, return_type=None,
-               decorators=None, docstring=None, calls_to=None,
-               complexity=2, nesting_depth=1, code=None,
-               is_async=False) -> FunctionRecord:
+def _make_func(name="test_func", file_path="test.py", code=None,
+               complexity=2, **kw) -> FunctionRecord:
     """Helper to create FunctionRecord with defaults."""
+    kw.setdefault('line_start', 1)
+    kw.setdefault('size_lines', 10)
+    kw.setdefault('nesting_depth', 1)
+    kw.setdefault('is_async', False)
     if code is None:
         code = f"def {name}():\n    pass"
     import hashlib
@@ -78,43 +80,34 @@ def _make_func(name="test_func", file_path="test.py", line_start=1,
     except SyntaxError:
         return_count = 0
         branch_count = 0
-    return FunctionRecord(
+    from tests.conftest import make_func
+    kw.setdefault('code_hash', hashlib.sha256(code.encode()).hexdigest())
+    kw.setdefault('structure_hash', hashlib.sha256(code.encode()).hexdigest())
+    return make_func(
         name=name,
         file_path=file_path,
-        line_start=line_start,
-        line_end=line_start + size_lines - 1,
-        size_lines=size_lines,
-        parameters=parameters or [],
-        return_type=return_type,
-        decorators=decorators or [],
-        docstring=docstring,
-        calls_to=calls_to or [],
-        complexity=complexity,
-        nesting_depth=nesting_depth,
-        code_hash=hashlib.sha256(code.encode()).hexdigest(),
-        structure_hash=hashlib.sha256(code.encode()).hexdigest(),
         code=code,
+        complexity=complexity,
         return_count=return_count,
         branch_count=branch_count,
-        is_async=is_async,
+        **kw,
     )
 
 
-def _make_class(name="TestClass", file_path="test.py", line_start=1,
-                size_lines=50, method_count=5, base_classes=None,
-                docstring=None, methods=None, has_init=True) -> ClassRecord:
+def _make_class(name="TestClass", file_path="test.py",
+                size_lines=50, **kw) -> ClassRecord:
     """Helper to create ClassRecord with defaults."""
-    return ClassRecord(
+    kw.setdefault('line_start', 1)
+    kw.setdefault('method_count', 5)
+    kw.setdefault('base_classes', [])
+    kw.setdefault('methods', ["__init__", "run"])
+    kw.setdefault('has_init', True)
+    from tests.conftest import make_cls
+    return make_cls(
         name=name,
         file_path=file_path,
-        line_start=line_start,
-        line_end=line_start + size_lines - 1,
         size_lines=size_lines,
-        method_count=method_count,
-        base_classes=base_classes or [],
-        docstring=docstring,
-        methods=methods or ["__init__", "run"],
-        has_init=has_init,
+        **kw,
     )
 
 
@@ -1105,43 +1098,54 @@ class TestSmartGraph:
 class TestASTExtraction:
     """Tests for AST extraction pipeline."""
 
+    _SAMPLE_CODE = textwrap.dedent("""\
+    def greet(name: str) -> str:
+        \"\"\"Say hello.\"\"\"
+        return f"Hello, {name}!"
+    
+    async def fetch_data(url):
+        pass
+    
+    class MyClass:
+        def __init__(self):
+            self.x = 1
+        
+        def process(self, data):
+            for item in data:
+                if item > 0:
+                    yield item
+    """)
+
+    def _extract_sample(self, tmp_path):
+        """Write sample code and extract functions/classes."""
+        py_file = tmp_path / "sample.py"
+        py_file.write_text(self._SAMPLE_CODE)
+        return _extract_functions_from_file(py_file, tmp_path)
+
     def test_extract_from_temp_file(self, tmp_path):
         """Verify function extraction from temporary Python files."""
-        code = textwrap.dedent("""\
-        def greet(name: str) -> str:
-            \"\"\"Say hello.\"\"\"
-            return f"Hello, {name}!"
-        
-        async def fetch_data(url):
-            pass
-        
-        class MyClass:
-            def __init__(self):
-                self.x = 1
-            
-            def process(self, data):
-                for item in data:
-                    if item > 0:
-                        yield item
-        """)
-        py_file = tmp_path / "sample.py"
-        py_file.write_text(code)
-        functions, classes, error = _extract_functions_from_file(py_file, tmp_path)
+        functions, classes, error = self._extract_sample(tmp_path)
         assert error is None
         assert len(functions) >= 3  # greet, fetch_data, __init__, process
         assert len(classes) == 1
 
-        # Check greet
+    def test_extract_greet_details(self, tmp_path):
+        """Verify 'greet' function metadata."""
+        functions, _, _ = self._extract_sample(tmp_path)
         greet = next(f for f in functions if f.name == "greet")
         assert greet.return_type == "str"
         assert greet.docstring == "Say hello."
         assert "name" in greet.parameters
 
-        # Check async
+    def test_extract_async_flag(self, tmp_path):
+        """Verify async function detection."""
+        functions, _, _ = self._extract_sample(tmp_path)
         fetch = next(f for f in functions if f.name == "fetch_data")
         assert fetch.is_async is True
 
-        # Check class
+    def test_extract_class_details(self, tmp_path):
+        """Verify class extraction details."""
+        _, classes, _ = self._extract_sample(tmp_path)
         cls = classes[0]
         assert cls.name == "MyClass"
         assert cls.has_init is True
@@ -1347,7 +1351,7 @@ class TestJSONReport:
         f = _make_func()
         c = _make_class()
         report = build_json_report(
-            Path("."), [f], [c], [], [], [], 1.23
+            Path("."), ScanData([f], [c], [], [], []), 1.23
         )
         assert report["version"] == __version__
         assert report["scan_time_seconds"] == 1.23
@@ -1356,7 +1360,7 @@ class TestJSONReport:
 
     def test_serializable(self):
         f = _make_func()
-        report = build_json_report(Path("."), [f], [], [], [], [], 0.5)
+        report = build_json_report(Path("."), ScanData([f], [], [], [], []), 0.5)
         # Should be JSON-serializable
         j = json.dumps(report)
         assert isinstance(j, str)
@@ -1367,7 +1371,7 @@ class TestJSONReport:
         f = _make_func(size_lines=130)
         detector = CodeSmellDetector()
         smells = detector.detect([f], [])
-        report = build_json_report(Path("."), [f], [], smells, [], [], 0.1)
+        report = build_json_report(Path("."), ScanData([f], [], smells, [], []), 0.1)
         assert report["smells"]["total"] > 0
         assert len(report["smells"]["issues"]) > 0
 
@@ -1376,7 +1380,7 @@ class TestJSONReport:
             group_id=0, similarity_type="exact", avg_similarity=1.0,
             functions=[{"key": "a.f", "name": "f", "file": "a.py", "line": 1}],
         )
-        report = build_json_report(Path("."), [], [], [], [group], [], 0.1)
+        report = build_json_report(Path("."), ScanData([], [], [], [group], []), 0.1)
         assert report["duplicates"]["total_groups"] == 1
 
     def test_includes_library_suggestions(self):
@@ -1385,7 +1389,7 @@ class TestJSONReport:
             functions=[{"name": "f", "file": "a.py", "line": 1}],
             unified_api="def f():", rationale="reason",
         )
-        report = build_json_report(Path("."), [], [], [], [], [sug], 0.1)
+        report = build_json_report(Path("."), ScanData([], [], [], [], [sug]), 0.1)
         assert report["library_suggestions"]["total"] == 1
 
 
@@ -1396,9 +1400,9 @@ class TestJSONReport:
 class TestFullPipeline:
     """Tests for full analysis pipeline."""
 
-    def test_end_to_end(self, tmp_path):
-        """Test the full pipeline on a mini project."""
-        # Create a small project with deliberate smells and duplicates
+    @staticmethod
+    def _create_test_project(tmp_path):
+        """Create a small project with deliberate smells and duplicates."""
         (tmp_path / "module_a.py").write_text(textwrap.dedent("""\
         def process_data(data):
             result = []
@@ -1446,26 +1450,20 @@ class TestFullPipeline:
             def m16(self): pass
         """))
 
-        # Scan
-        functions, classes, errors = scan_codebase(tmp_path)
-        assert len(functions) >= 2  # at least process_data, big_function, process_text
-        assert len(classes) >= 1
-
+    @staticmethod
+    def _assert_pipeline(tmp_path, functions, classes):
+        """Run smell, duplicate, library, report, and graph assertions."""
         # Smells
         detector = CodeSmellDetector()
         smells = detector.detect(functions, classes)
         categories = {s.category for s in smells}
-        # big_function should trigger: too-many-params, deep-nesting
         assert "too-many-params" in categories or "deep-nesting" in categories
-        # HugeClass should trigger god-class (CRITICAL)
         assert "god-class" in categories
 
         # Duplicates
         finder = DuplicateFinder()
         groups = finder.find(functions)
-        # process_data and process_text should be near-duplicates
-        # (They're quite similar)
-        assert len(groups) >= 0  # may or may not detect depending on thresholds
+        assert len(groups) >= 0
 
         # Library suggestions
         advisor = LibraryAdvisor()
@@ -1473,7 +1471,7 @@ class TestFullPipeline:
 
         # JSON report
         report = build_json_report(
-            tmp_path, functions, classes, smells, groups, lib_sug, 0.5
+            tmp_path, ScanData(functions, classes, smells, groups, lib_sug), 0.5
         )
         assert report["stats"]["total_functions"] >= 2
         j = json.dumps(report)
@@ -1485,6 +1483,17 @@ class TestFullPipeline:
         graph_path = tmp_path / "test_graph.html"
         graph.write_html(graph_path)
         assert graph_path.exists()
+
+    def test_end_to_end(self, tmp_path):
+        """Test the full pipeline on a mini project."""
+        self._create_test_project(tmp_path)
+
+        # Scan
+        functions, classes, errors = scan_codebase(tmp_path)
+        assert len(functions) >= 2
+        assert len(classes) >= 1
+
+        self._assert_pipeline(tmp_path, functions, classes)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

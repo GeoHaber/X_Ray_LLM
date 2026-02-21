@@ -5,6 +5,12 @@ import math
 import pytest
 from collections import Counter
 from Lang.tokenizer import tokenize, term_freq, cosine_similarity
+from tests.shared_tokenize_tests import (
+    assert_tokenize_empty_string,
+    assert_tokenize_snake_case,
+    assert_tokenize_camel_case,
+    assert_cosine_partial_overlap,
+)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -15,19 +21,13 @@ class TestTokenize:
     """Tests for tokenizer functionality."""
 
     def test_empty_string(self):
-        assert tokenize("") == []
+        assert_tokenize_empty_string(tokenize)
 
     def test_snake_case(self):
-        tokens = tokenize("get_user_name")
-        assert "get" in tokens
-        assert "user" in tokens
-        assert "name" in tokens
+        assert_tokenize_snake_case(tokenize)
 
     def test_camel_case(self):
-        tokens = tokenize("getUserName")
-        assert "get" in tokens
-        assert "user" in tokens
-        assert "name" in tokens
+        assert_tokenize_camel_case(tokenize)
 
     def test_stop_words_removed(self):
         tokens = tokenize("self return def class")
@@ -99,10 +99,11 @@ class TestCosineSimilarity:
         assert cosine_similarity(a, b) == 0.0
 
     def test_partial_overlap(self):
-        a = Counter({"hello": 1, "world": 1})
-        b = Counter({"hello": 1, "foo": 1})
-        sim = cosine_similarity(a, b)
-        assert 0.0 < sim < 1.0
+        assert_cosine_partial_overlap(
+            cosine_similarity,
+            Counter({"hello": 1, "world": 1}),
+            Counter({"hello": 1, "foo": 1}),
+        )
 
     def test_empty_a(self):
         assert cosine_similarity(Counter(), Counter({"x": 1})) == 0.0

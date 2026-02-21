@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Dict, List, Set
+from typing import Dict, Set
 
 from Core.types import FunctionRecord
 from Analysis.rust_advisor import (
@@ -15,6 +15,7 @@ from Analysis.rust_advisor import (
     _detect_purity,
     _count_external_deps,
 )
+from tests.conftest import make_func
 
 
 # ── Factories ────────────────────────────────────────────────────────────────
@@ -22,31 +23,25 @@ from Analysis.rust_advisor import (
 def _make_func(
     name: str = "my_func",
     code: str = "def my_func(a, b):\n    return a + b\n",
-    parameters: List[str] = None,
-    calls_to: List[str] = None,
     complexity: int = 1,
     size_lines: int = 10,
-    is_async: bool = False,
-    nesting_depth: int = 1,
+    **kw,
 ) -> FunctionRecord:
     """Create a minimal FunctionRecord for tests."""
-    return FunctionRecord(
+    kw.setdefault('parameters', ["a", "b"])
+    kw.setdefault('calls_to', [])
+    kw.setdefault('is_async', False)
+    kw.setdefault('nesting_depth', 1)
+    kw.setdefault('return_type', 'int')
+    kw.setdefault('docstring', 'Test function.')
+    kw.setdefault('code_hash', 'abc123')
+    kw.setdefault('structure_hash', 'def456')
+    return make_func(
         name=name,
-        file_path="test.py",
-        line_start=1,
-        line_end=size_lines,
-        size_lines=size_lines,
-        parameters=parameters or ["a", "b"],
-        return_type="int",
-        decorators=[],
-        docstring="Test function.",
-        calls_to=calls_to or [],
-        complexity=complexity,
-        nesting_depth=nesting_depth,
-        code_hash="abc123",
-        structure_hash="def456",
         code=code,
-        is_async=is_async,
+        complexity=complexity,
+        size_lines=size_lines,
+        **kw,
     )
 
 

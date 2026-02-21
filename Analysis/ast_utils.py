@@ -46,18 +46,19 @@ class ASTNormalizer(ast.NodeTransformer):
     visit_AsyncFunctionDef = visit_FunctionDef
 
     def visit_Name(self, node):
-        if isinstance(node.ctx, (ast.Store, ast.Load)):
-            if node.id in self.arg_map:
-                node.id = self.arg_map[node.id]
-            elif node.id in _BUILTIN_NAMES:
-                pass  # preserve builtins (print, len, range, etc.)
-            elif node.id not in self.var_map:
-                name = f"var{self.var_count}"
-                self.var_map[node.id] = name
-                self.var_count += 1
-                node.id = name
-            else:
-                node.id = self.var_map[node.id]
+        if not isinstance(node.ctx, (ast.Store, ast.Load)):
+            return node
+        if node.id in self.arg_map:
+            node.id = self.arg_map[node.id]
+        elif node.id in _BUILTIN_NAMES:
+            pass  # preserve builtins (print, len, range, etc.)
+        elif node.id not in self.var_map:
+            name = f"var{self.var_count}"
+            self.var_map[node.id] = name
+            self.var_count += 1
+            node.id = name
+        else:
+            node.id = self.var_map[node.id]
         return node
 
     def visit_arg(self, node):
@@ -124,6 +125,27 @@ def extract_functions_from_file(fpath: Path, root: Path) -> Tuple[
     return functions, classes, None
 
 
+def _extract_calls(node: ast.AST) -> List[str]:
+    """Extract called function/method names from an AST node."""
+    calls = []
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        if isinstance(child.func, ast.Name):
+            calls.append(child.func.id)
+        elif isinstance(child.func, ast.Attribute):
+            calls.append(child.func.attr)
+    return list(set(calls))
+
+
+def _safe_decorators(node: ast.AST) -> List[str]:
+    """Extract decorator strings, returning empty list on failure."""
+    try:
+        return [ast.unparse(d) for d in node.decorator_list]
+    except Exception:
+        return []
+
+
 def _build_function_record(node: ast.AST, rel_path: str, source: str,
                           lines: List[str]) -> FunctionRecord:
     """Extract FunctionRecord from AST node (replaces 50-line inline block)."""
@@ -134,20 +156,6 @@ def _build_function_record(node: ast.AST, rel_path: str, source: str,
     
     params = [a.arg for a in node.args.args if a.arg != "self"]
     ret = ast.unparse(node.returns) if node.returns and hasattr(ast, "unparse") else None
-    
-    try:
-        decorators = [ast.unparse(d) for d in node.decorator_list]
-    except Exception:
-        decorators = []
-
-    # Extract function calls
-    calls = []
-    for child in ast.walk(node):
-        if isinstance(child, ast.Call):
-            if isinstance(child.func, ast.Name):
-                calls.append(child.func.id)
-            elif isinstance(child.func, ast.Attribute):
-                calls.append(child.func.attr)
 
     return FunctionRecord(
         name=node.name,
@@ -157,9 +165,9 @@ def _build_function_record(node: ast.AST, rel_path: str, source: str,
         size_lines=end - start,
         parameters=params,
         return_type=ret,
-        decorators=decorators,
+        decorators=_safe_decorators(node),
         docstring=ast.get_docstring(node) or None,
-        calls_to=list(set(calls)),
+        calls_to=_extract_calls(node),
         complexity=compute_complexity(node),
         nesting_depth=compute_nesting_depth(node),
         code_hash=code_hash,
@@ -220,6 +228,11 @@ def _matches_include_filter(rel_dir: str, include: list) -> bool:
     return any(top.startswith(p) for p in include)
 
 
+def _is_scannable_py(fn: str) -> bool:
+    """Return True if filename is a scannable Python file."""
+    return fn.endswith(".py") and fn not in _ALWAYS_SKIP_FILES
+
+
 def collect_py_files(root: Path, exclude: List[str] = None,
                      include: List[str] = None) -> List[Path]:
     """Walk root and return .py files respecting include/exclude rules."""
@@ -238,7 +251,7 @@ def collect_py_files(root: Path, exclude: List[str] = None,
         if not _matches_include_filter(rel_dir, include):
             continue
         for fn in filenames:
-            if fn.endswith(".py") and fn not in _ALWAYS_SKIP_FILES:
+            if _is_scannable_py(fn):
                 results.append(Path(dirpath) / fn)
     return results
 

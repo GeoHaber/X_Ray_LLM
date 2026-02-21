@@ -19,10 +19,8 @@ The Rust exe is invoked once with a JSON payload on stdin and returns
 a JSON response.  This avoids recompilation for each test.
 """
 
-import json
 import os
 import subprocess
-import sys
 import textwrap
 
 import pytest
@@ -34,35 +32,35 @@ import pytest
 from Analysis.transpiler import _infer_type_from_name
 
 
-# _suggest_module_name is a method on LibraryAdvisor — extract the logic
+_MODULE_KEYWORDS = [
+    (("parse",), "utils"),
+    (("read", "write", "load"), "io_helpers"),
+    (("validate", "check"), "validators"),
+    (("search", "find"), "search"),
+]
+
+
 def _suggest_module_name_py(func_names):
     """Python implementation (extracted from LibraryAdvisor._suggest_module_name)."""
     name = func_names[0].lower()
-    if "parse" in name:
-        return "utils"
-    if "read" in name or "write" in name or "load" in name:
-        return "io_helpers"
-    if "validate" in name or "check" in name:
-        return "validators"
-    if "search" in name or "find" in name:
-        return "search"
+    for keywords, module in _MODULE_KEYWORDS:
+        if any(kw in name for kw in keywords):
+            return module
     return "shared_utils"
+
+
+_MARGIN_BANDS = [
+    (-0.15, "SAFE_MISS"), (-0.05, "NEAR_MISS"), (0.0, "BOUNDARY_MISS"),
+    (0.05, "BOUNDARY_HIT"), (0.15, "NEAR_HIT"),
+]
 
 
 def classify_margin_py(margin: float) -> str:
     """Python implementation (from calibrate_fixtures.py)."""
-    if margin < -0.15:
-        return "SAFE_MISS"
-    elif margin < -0.05:
-        return "NEAR_MISS"
-    elif margin < 0.0:
-        return "BOUNDARY_MISS"
-    elif margin < 0.05:
-        return "BOUNDARY_HIT"
-    elif margin < 0.15:
-        return "NEAR_HIT"
-    else:
-        return "SAFE_HIT"
+    for threshold, label in _MARGIN_BANDS:
+        if margin < threshold:
+            return label
+    return "SAFE_HIT"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -311,7 +309,7 @@ class TestClassifyMarginParity:
 #  Helper: compile & run a Rust program, return stdout
 # ═══════════════════════════════════════════════════════════════════════════
 
-import tempfile
+import tempfile  # noqa: E402
 
 def _compile_and_run(rust_source: str) -> str | None:
     """Compile a Rust source string and run it, returning stdout.

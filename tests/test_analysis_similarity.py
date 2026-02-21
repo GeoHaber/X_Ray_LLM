@@ -20,6 +20,12 @@ from Analysis.similarity import (
     callgraph_overlap,
     semantic_similarity,
 )
+from tests.shared_tokenize_tests import (
+    assert_tokenize_empty_string,
+    assert_tokenize_snake_case,
+    assert_tokenize_camel_case,
+    assert_cosine_partial_overlap,
+)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -30,19 +36,13 @@ class TestTokenize:
     """Tests for tokenization utilities."""
 
     def test_empty_string(self):
-        assert tokenize("") == []
+        assert_tokenize_empty_string(tokenize)
 
     def test_snake_case(self):
-        tokens = tokenize("get_user_name")
-        assert "get" in tokens
-        assert "user" in tokens
-        assert "name" in tokens
+        assert_tokenize_snake_case(tokenize)
 
     def test_camel_case(self):
-        tokens = tokenize("getUserName")
-        assert "get" in tokens
-        assert "user" in tokens
-        assert "name" in tokens
+        assert_tokenize_camel_case(tokenize)
 
     def test_filters_stop_words(self):
         """Keywords like 'self', 'return', 'class' are stop words."""
@@ -194,10 +194,7 @@ class TestCosineSimilarity:
         assert cosine_similarity(Counter(), Counter({"x": 1})) == 0.0
 
     def test_partial_overlap(self):
-        a = Counter({"x": 2, "y": 1})
-        b = Counter({"x": 1, "z": 1})
-        sim = cosine_similarity(a, b)
-        assert 0.0 < sim < 1.0
+        assert_cosine_partial_overlap(cosine_similarity)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -250,15 +247,14 @@ class TestNameSimilarity:
 
 class TestSignatureSimilarity:
 
-    def _mock_func(self, name="f", params=None, ret=None, is_async=False,
-                   calls_to=None, docstring=None):
+    def _mock_func(self, name="f", params=None, ret=None, **kw):
         f = MagicMock()
         f.name = name
         f.parameters = params or []
         f.return_type = ret
-        f.is_async = is_async
-        f.calls_to = calls_to or []
-        f.docstring = docstring
+        f.is_async = kw.get('is_async', False)
+        f.calls_to = kw.get('calls_to', [])
+        f.docstring = kw.get('docstring', None)
         return f
 
     def test_identical_signatures(self):
@@ -313,15 +309,14 @@ class TestCallgraphOverlap:
 class TestSemanticSimilarity:
     """Tests for semantic similarity computation."""
 
-    def _mock_func(self, name="f", params=None, ret=None, is_async=False,
-                   calls_to=None, docstring=None):
+    def _mock_func(self, name="f", params=None, ret=None, **kw):
         f = MagicMock()
         f.name = name
         f.parameters = params or []
         f.return_type = ret
-        f.is_async = is_async
-        f.calls_to = calls_to or []
-        f.docstring = docstring
+        f.is_async = kw.get('is_async', False)
+        f.calls_to = kw.get('calls_to', [])
+        f.docstring = kw.get('docstring', None)
         return f
 
     def test_identical_functions_high(self):

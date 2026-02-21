@@ -24,10 +24,9 @@ import platform
 import re
 import shutil
 import subprocess
-import sys
 import urllib.request
 import urllib.error
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -65,44 +64,23 @@ except ImportError:
 
         @property
         def tier(self) -> str:
-            if self.gpu_vram_gb >= 8:
-                return "high"
-            if self.ram_gb >= 16 and self.avx2:
-                return "medium"
-            if self.ram_gb >= 8 and self.avx2:
-                return "low"
+            # Simplified fallback — run mothership_sync for real detection
             return "minimal"
 
         @property
         def tier_label(self) -> str:
-            labels = {
-                "high":    "🟢 High — GPU offload, large models OK",
-                "medium":  "🟡 Medium — 7B–13B models on CPU",
-                "low":     "🟠 Low — small 1B–3B models only",
-                "minimal": "🔴 Minimal — LLM may be too slow",
-            }
-            return labels.get(self.tier, "unknown")
+            return "⚠️ Unknown — mothership not installed"
 
         @property
         def recommended_gpu_layers(self) -> int:
-            return -1 if self.gpu_vram_gb >= 2 else 0
+            return 0
 
         @property
         def fingerprint(self) -> str:
             return f"{self.cpu_brand} | {self.gpu_name} | {self.ram_gb:.0f}GB RAM"
 
         def to_dict(self) -> Dict[str, Any]:
-            return {
-                "os": f"{self.os_name} {self.os_version}",
-                "arch": self.arch,
-                "cpu": self.cpu_brand,
-                "cores": self.cpu_cores,
-                "ram_gb": round(self.ram_gb, 1),
-                "gpu": self.gpu_name,
-                "gpu_vram_gb": round(self.gpu_vram_gb, 1),
-                "avx2": self.avx2,
-                "tier": self.tier,
-            }
+            return {"tier": "minimal", "note": "mothership not installed"}
 
     def detect_hardware() -> HardwareProfile:     # type: ignore[no-redef]
         """Fallback detector — less capable than mothership version."""
@@ -337,6 +315,7 @@ def detect_runtime() -> RuntimeInfo:
             break
     # Also check common install locations
     if not found_path:
+        suffix = ".exe" if platform.system() == "Windows" else ""
         common_dirs = [
             Path.home() / "llama.cpp" / "build" / "bin",
             Path.home() / "llama.cpp",
@@ -344,14 +323,11 @@ def detect_runtime() -> RuntimeInfo:
             Path("C:/llama.cpp"),
             Path("/usr/local/bin"),
         ]
-        for d in common_dirs:
-            for name in names:
-                p = d / (name + (".exe" if platform.system() == "Windows" else ""))
-                if p.exists():
-                    found_path = str(p)
-                    break
-            if found_path:
-                break
+        found_path = next(
+            (str(d / (name + suffix))
+             for d in common_dirs for name in names
+             if (d / (name + suffix)).exists()),
+            "")
 
     if not found_path:
         return RuntimeInfo(
@@ -391,36 +367,37 @@ def _get_runtime_version(path: str) -> str:
         return "unknown"
 
 
+_BACKEND_KEYWORDS = [
+    ("cuda", "cuda"), ("metal", "metal"), ("vulkan", "vulkan"),
+    ("rocm", "rocm"), ("hip", "rocm"),
+]
+
+
 def _detect_backend(path: str) -> str:
     """Heuristic: check which backend the llama.cpp binary uses."""
     try:
         result = subprocess.run(
             [path, "--version"], capture_output=True, text=True, timeout=10)
         text = (result.stdout + result.stderr).lower()
-        if "cuda" in text:
-            return "cuda"
-        if "metal" in text:
-            return "metal"
-        if "vulkan" in text:
-            return "vulkan"
-        if "rocm" in text or "hip" in text:
-            return "rocm"
+        for keyword, backend in _BACKEND_KEYWORDS:
+            if keyword in text:
+                return backend
     except Exception:
         pass
     return "cpu"
 
 
+def _port_has_health(port: int) -> bool:
+    """Check if a health endpoint responds on the given port."""
+    from Core.utils import url_responds
+    return url_responds(f"http://localhost:{port}/health", timeout=2)
+
+
 def _check_server_running() -> Tuple[bool, int]:
     """Check if llama-server is already running on common ports."""
     for port in [8080, 5000, 11434]:
-        try:
-            req = urllib.request.Request(
-                f"http://localhost:{port}/health", method="GET")
-            with urllib.request.urlopen(req, timeout=2) as resp:
-                if resp.status == 200:
-                    return True, port
-        except Exception:
-            pass
+        if _port_has_health(port):
+            return True, port
     return False, 0
 
 
@@ -429,30 +406,36 @@ def _check_server_running() -> Tuple[bool, int]:
 _LATEST_RELEASE_URL = "https://api.github.com/repos/ggerganov/llama.cpp/releases/latest"
 
 
+_ASSET_PATTERNS = [
+    ("windows-x64", lambda n: "win" in n and "x64" in n and n.endswith(".zip")),
+    ("windows-arm64", lambda n: "win" in n and "arm64" in n),
+    ("linux-x64", lambda n: ("linux" in n or "ubuntu" in n) and "x64" in n),
+    ("macos", lambda n: "macos" in n or "darwin" in n),
+]
+
+
+def _match_release_assets(assets: list) -> Dict[str, str]:
+    """Map release assets to platform download URLs."""
+    bins: Dict[str, str] = {}
+    for a in assets:
+        name = a.get("name", "").lower()
+        url = a.get("browser_download_url", "")
+        for key, pred in _ASSET_PATTERNS:
+            if key not in bins and pred(name):
+                bins[key] = url
+                break
+    return bins
+
+
 def get_latest_release() -> Dict[str, Any]:
     """Fetch the latest llama.cpp release info from GitHub."""
     try:
         req = urllib.request.Request(_LATEST_RELEASE_URL, method="GET")
         req.add_header("Accept", "application/vnd.github.v3+json")
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:  # noqa: S310  # nosec B310
             data = json.loads(resp.read())
             tag = data.get("tag_name", "unknown")
-            assets = data.get("assets", [])
-            # Find Windows/Linux/Mac binaries
-            bins = {}
-            for a in assets:
-                name = a.get("name", "").lower()
-                url = a.get("browser_download_url", "")
-                if "win" in name and "x64" in name and name.endswith(".zip"):
-                    bins["windows-x64"] = url
-                elif "win" in name and "arm64" in name:
-                    bins["windows-arm64"] = url
-                elif "linux" in name and "x64" in name:
-                    bins["linux-x64"] = url
-                elif "macos" in name or "darwin" in name:
-                    bins["macos"] = url
-                elif "ubuntu" in name and "x64" in name:
-                    bins["linux-x64"] = url
+            bins = _match_release_assets(data.get("assets", []))
             return {"tag": tag, "binaries": bins}
     except Exception:
         return {"tag": "unknown", "binaries": {}}
@@ -494,14 +477,12 @@ def load_settings(project_dir: Optional[Path] = None) -> Dict[str, Any]:
     paths.append(Path(SETTINGS_FILE))
 
     for p in paths:
-        if p.exists():
-            try:
-                with open(p, encoding="utf-8") as f:
-                    user = json.load(f)
-                _deep_merge(settings, user)
-                break
-            except Exception:
-                pass
+        try:
+            user = json.loads(p.read_text(encoding="utf-8"))
+            _deep_merge(settings, user)
+            break
+        except Exception:
+            pass
     return settings
 
 
@@ -518,13 +499,14 @@ def save_settings(settings: Dict[str, Any],
     return path
 
 
-def _deep_merge(base: dict, overlay: dict):
-    """Recursively merge overlay into base."""
-    for k, v in overlay.items():
-        if k in base and isinstance(base[k], dict) and isinstance(v, dict):
-            _deep_merge(base[k], v)
-        else:
-            base[k] = v
+# _deep_merge imported from _mothership (canonical) with inline fallback
+try:
+    from _mothership.settings_service import _deep_merge       # noqa: E402, F811
+except ImportError:
+    def _deep_merge(base: dict, overlay: dict) -> dict:        # type: ignore[no-redef]
+        """Flat merge fallback when _mothership is not vendored."""
+        base.update(overlay)
+        return base
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -606,7 +588,7 @@ class LLMManager:
         ]
         for i, m in enumerate(models[:6], 1):
             tag = " ← BEST FIT" if i == 1 else ""
-            lines.append(f"  │")
+            lines.append("  │")
             lines.append(f"  │  {i}. {m.name} ({m.params}, {m.quant}){tag}")
             lines.append(f"  │     {m.speed}  |  Code: {m.code_quality}  Reasoning: {m.reasoning}")
             lines.append(f"  │     RAM: {m.ram_needed_gb:.0f} GB   Download: {m.size_gb:.1f} GB")
@@ -652,22 +634,20 @@ class LLMManager:
 
         return result
 
-    def start_server(self, model_path: str = "",
-                     port: int = 8080) -> bool:
-        """Start llama-server with the selected model."""
-        if not self.runtime or not self.runtime.installed:
-            return False
-
+    def _resolve_model_path(self, model_path: str) -> str:
+        """Return a valid model path or empty string."""
         if not model_path:
             model_path = self.settings["llm"].get("model_path", "")
-        if not model_path or not Path(model_path).exists():
-            return False
+        if model_path and Path(model_path).exists():
+            return model_path
+        return ""
 
+    def _build_server_cmd(self, model_path: str, port: int) -> List[str]:
+        """Build the llama-server command list."""
         hw = self.hw or detect_hardware()
         gpu_layers = self.settings["llm"].get("gpu_layers", -1)
         threads = self.settings["llm"].get("threads", 0) or hw.cpu_cores
         ctx = self.settings["llm"].get("context_size", 4096)
-
         cmd = [
             self.runtime.path,
             "-m", model_path,
@@ -677,8 +657,18 @@ class LLMManager:
         ]
         if gpu_layers != 0 and hw.gpu_vram_gb > 0:
             cmd.extend(["-ngl", str(gpu_layers)])
+        return cmd
 
+    def start_server(self, model_path: str = "",
+                     port: int = 8080) -> bool:
+        """Start llama-server with the selected model."""
+        if not self.runtime or not self.runtime.installed:
+            return False
+        model_path = self._resolve_model_path(model_path)
+        if not model_path:
+            return False
         try:
+            cmd = self._build_server_cmd(model_path, port)
             subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
             return True

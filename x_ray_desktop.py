@@ -27,6 +27,8 @@ import threading
 import time
 from pathlib import Path
 
+from Core.utils import find_free_port
+
 # ---------------------------------------------------------------------------
 # PyInstaller frozen-app fixups
 # ---------------------------------------------------------------------------
@@ -63,17 +65,6 @@ else:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _find_free_port(preferred: int = 8666) -> int:
-    """Return *preferred* if available, else any free port."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind(("127.0.0.1", preferred))
-            return preferred
-        except OSError:
-            s.bind(("127.0.0.1", 0))
-            return s.getsockname()[1]
-
 
 def _wait_for_server(port: int, timeout: float = 30.0) -> bool:
     """Block until localhost:port accepts a TCP connection (or timeout)."""
@@ -157,7 +148,7 @@ def _run_streamlit(port: int, ui_script: Path):
 # ---------------------------------------------------------------------------
 
 def main():
-    port = _find_free_port()
+    port = find_free_port()
     ui_script = _locate_ui_script()
     url = f"http://localhost:{port}"
 
@@ -189,7 +180,7 @@ def main():
     # Open native desktop window
     import webview
 
-    window = webview.create_window(
+    webview.create_window(
         title="X-Ray Code Scanner",
         url=url,
         width=1400,

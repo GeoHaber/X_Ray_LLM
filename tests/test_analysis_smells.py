@@ -2,36 +2,10 @@
 Tests for Analysis/smells.py — CodeSmellDetector.
 """
 from unittest.mock import MagicMock
-from Core.types import FunctionRecord, ClassRecord, Severity
+from Core.types import Severity
 from Core.config import SMELL_THRESHOLDS
 from Analysis.smells import CodeSmellDetector
-
-
-# ── helpers ──────────────────────────────────────────────────────────
-
-def _func(name="foo", size_lines=10, nesting_depth=0, complexity=1,
-          parameters=None, docstring="Default doc", **kw):
-    defaults = dict(
-        name=name, file_path="test.py",
-        line_start=1, line_end=size_lines, size_lines=size_lines,
-        parameters=parameters or [], return_type=None, decorators=[],
-        docstring=docstring, calls_to=[], complexity=complexity,
-        nesting_depth=nesting_depth, code_hash="h", structure_hash="s",
-        code="pass", is_async=False,
-    )
-    defaults.update(kw)
-    return FunctionRecord(**defaults)
-
-
-def _cls(name="Cls", size_lines=50, method_count=3, **kw):
-    defaults = dict(
-        name=name, file_path="test.py",
-        line_start=1, line_end=size_lines, size_lines=size_lines,
-        method_count=method_count, base_classes=["object"],
-        docstring="Default test class.", methods=[], has_init=True,
-    )
-    defaults.update(kw)
-    return ClassRecord(**defaults)
+from tests.conftest import make_func as _func, make_cls as _cls
 
 
 # ════════════════════════════════════════════════════════════════════

@@ -40,7 +40,8 @@ def run_port():
         
         # Determine module name
         name = py_path.stem
-        if name == "types": name = "types_rs"; # Avoid keyword conflict or confusion
+        if name == "types":
+            name = "types_rs"  # Avoid keyword conflict or confusion
         
         rust_path = SRC_DIR / f"{name}.rs"
         rust_path.write_text(rust_code, encoding="utf-8")
@@ -53,7 +54,8 @@ def run_port():
     lib_rs_lines.append("fn x_ray_rust_full(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {")
     for rel_path in FILES_TO_PORT:
         name = Path(rel_path).stem
-        if name == "types": name = "types_rs"
+        if name == "types":
+            name = "types_rs"
         # We need to expose classes/fns from submodules?
         # For now, just let them be regular mods.
         pass

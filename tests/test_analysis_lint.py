@@ -7,8 +7,17 @@ import shutil
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from Core.types import SmellIssue, Severity
+from Core.types import Severity
 from Analysis.lint import LintAnalyzer
+from tests.conftest_analyzers import (
+    make_mock_analyze, assert_empty_output_returns_empty,
+    assert_invalid_json_returns_empty, assert_all_issues_are_smell_issues,
+    assert_not_available_when_tool_missing, assert_returns_empty_when_not_available,
+    assert_timeout_returns_empty, assert_file_not_found_returns_empty,
+)
+
+# Shared mock-analyze callable for LintAnalyzer
+_lint_mock = make_mock_analyze(LintAnalyzer, "/usr/bin/ruff")
 
 
 # ── helpers ──────────────────────────────────────────────────────────
@@ -66,15 +75,10 @@ class TestLintAvailability:
             assert analyzer.available is True
 
     def test_not_available_when_ruff_missing(self):
-        with patch("shutil.which", return_value=None):
-            analyzer = LintAnalyzer()
-            assert analyzer.available is False
+        assert_not_available_when_tool_missing(LintAnalyzer)
 
     def test_returns_empty_when_not_available(self):
-        with patch("shutil.which", return_value=None):
-            analyzer = LintAnalyzer()
-            result = analyzer.analyze(Path("/fake/path"))
-            assert result == []
+        assert_returns_empty_when_not_available(LintAnalyzer)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -133,16 +137,7 @@ class TestLintParsing:
 
     def _mock_analyze(self, ruff_json: str) -> list:
         """Run analyze with mocked subprocess."""
-        with patch("shutil.which", return_value="/usr/bin/ruff"):
-            analyzer = LintAnalyzer()
-
-        mock_result = MagicMock()
-        mock_result.stdout = ruff_json
-        mock_result.returncode = 1
-
-        root = Path("/project")
-        with patch("subprocess.run", return_value=mock_result):
-            return analyzer.analyze(root)
+        return _lint_mock(ruff_json)
 
     def test_parses_sample_output(self):
         issues = self._mock_analyze(SAMPLE_RUFF_OUTPUT)
@@ -150,8 +145,7 @@ class TestLintParsing:
 
     def test_all_issues_are_smell_issues(self):
         issues = self._mock_analyze(SAMPLE_RUFF_OUTPUT)
-        for issue in issues:
-            assert isinstance(issue, SmellIssue)
+        assert_all_issues_are_smell_issues(issues)
 
     def test_source_is_ruff(self):
         issues = self._mock_analyze(SAMPLE_RUFF_OUTPUT)
@@ -185,12 +179,10 @@ class TestLintParsing:
         assert f401.line == 1
 
     def test_empty_output_returns_empty(self):
-        issues = self._mock_analyze("")
-        assert issues == []
+        assert_empty_output_returns_empty(_lint_mock)
 
     def test_invalid_json_returns_empty(self):
-        issues = self._mock_analyze("not json at all {{{")
-        assert issues == []
+        assert_invalid_json_returns_empty(_lint_mock)
 
     def test_sorted_critical_first(self):
         issues = self._mock_analyze(SAMPLE_RUFF_OUTPUT)
@@ -245,21 +237,10 @@ class TestLintSummary:
 class TestLintErrorHandling:
 
     def test_timeout_returns_empty(self):
-        import subprocess as sp
-        with patch("shutil.which", return_value="/usr/bin/ruff"):
-            analyzer = LintAnalyzer()
-
-        with patch("subprocess.run", side_effect=sp.TimeoutExpired(cmd="ruff", timeout=120)):
-            result = analyzer.analyze(Path("/project"))
-            assert result == []
+        assert_timeout_returns_empty(LintAnalyzer, "/usr/bin/ruff", "ruff")
 
     def test_file_not_found_returns_empty(self):
-        with patch("shutil.which", return_value="/usr/bin/ruff"):
-            analyzer = LintAnalyzer()
-
-        with patch("subprocess.run", side_effect=FileNotFoundError):
-            result = analyzer.analyze(Path("/project"))
-            assert result == []
+        assert_file_not_found_returns_empty(LintAnalyzer, "/usr/bin/ruff")
 
 
 # ════════════════════════════════════════════════════════════════════

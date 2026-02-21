@@ -11,47 +11,12 @@ Requires: bandit (pip install bandit)
 
 from __future__ import annotations
 
-import json
-import os
-import shutil
-import subprocess
-import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from Core.types import SmellIssue, Severity
 from Core.utils import logger
-
-
-def _find_bandit() -> Optional[str]:
-    """Locate the bandit executable, including in frozen PyInstaller bundles."""
-    # 1. Normal PATH lookup
-    found = shutil.which("bandit")
-    if found:
-        return found
-
-    # 2. Frozen exe: check the bundle directory (onedir mode)
-    candidates: List[Path] = []
-    if getattr(sys, "frozen", False):
-        meipass = Path(getattr(sys, "_MEIPASS", ""))
-        exe_dir = Path(sys.executable).parent
-        candidates.extend([
-            meipass / "bandit.exe",
-            exe_dir / "bandit.exe",
-            meipass / "bandit",
-            exe_dir / "bandit",
-        ])
-    else:
-        # Dev mode: check .venv/Scripts
-        project = Path(__file__).resolve().parent.parent
-        candidates.append(project / ".venv" / "Scripts" / "bandit.exe")
-
-    for p in candidates:
-        if p.is_file():
-            logger.info(f"Found bandit at: {p}")
-            return str(p)
-
-    return None
+from Analysis._analyzer_base import BaseStaticAnalyzer
 
 
 # Bandit severity → X-Ray severity
@@ -95,7 +60,7 @@ _CATEGORY_MAP: Dict[str, str] = {
 }
 
 
-class SecurityAnalyzer:
+class SecurityAnalyzer(BaseStaticAnalyzer):
     """
     Runs Bandit security scanner and converts results to X-Ray SmellIssue format.
 
@@ -105,6 +70,10 @@ class SecurityAnalyzer:
         if analyzer.available:
             issues = analyzer.analyze(Path("/my/project"))
     """
+
+    TOOL_NAME = "bandit"
+    TOOL_TIMEOUT = 300
+    TOOL_LOG_NAME = "Bandit"
 
     def __init__(self, severity_threshold: str = "low",
                  extra_args: Optional[List[str]] = None):
@@ -117,46 +86,14 @@ class SecurityAnalyzer:
             Extra CLI args passed to bandit.
         """
         self.severity_threshold = severity_threshold
-        self.extra_args = extra_args or []
-        self._bandit_path = _find_bandit()
+        super().__init__(extra_args=extra_args)
 
-    @property
-    def available(self) -> bool:
-        """Check if bandit is installed and executable."""
-        return self._bandit_path is not None
+    # -- overrides ---------------------------------------------------------
 
-    def analyze(self, root: Path, exclude: Optional[List[str]] = None) -> List[SmellIssue]:
-        """
-        Run ``bandit -r`` on `root` and return SmellIssue list.
-
-        Parameters
-        ----------
-        root : Path
-            Directory to scan.
-        exclude : list[str], optional
-            Directory names to exclude.
-
-        Returns
-        -------
-        list[SmellIssue]
-            Security issues found, mapped to X-Ray severity.
-        """
-        if not self.available:
-            logger.warning("Bandit is not installed. Run: pip install bandit")
-            return []
-
-        cmd = self._build_bandit_command(root, exclude)
-        raw = self._run_bandit_subprocess(cmd, root)
-        if raw is None:
-            return []
-        return self._parse_bandit_results(raw, root)
-
-    # -- private helpers (extracted from analyze) ----------------------------
-
-    def _build_bandit_command(self, root: Path,
-                              exclude: Optional[List[str]]) -> List[str]:
+    def _build_command(self, root: Path,
+                       exclude: Optional[List[str]]) -> List[str]:
         """Assemble the bandit CLI command list."""
-        cmd = [self._bandit_path, "-r", str(root), "-f", "json"]
+        cmd = [self._tool_path, "-r", str(root), "-f", "json"]
 
         sev = self.severity_threshold.lower()
         if sev == "high":
@@ -187,29 +124,8 @@ class SecurityAnalyzer:
         cmd.extend(self.extra_args)
         return cmd
 
-    def _run_bandit_subprocess(self, cmd: List[str],
-                               root: Path) -> Optional[str]:
-        """Execute bandit, return raw JSON string or *None* on failure."""
-        logger.info(f"Running Bandit: {' '.join(cmd)}")
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True,
-                encoding="utf-8", errors="replace",
-                timeout=300, cwd=str(root),
-            )
-        except FileNotFoundError:
-            logger.error("Bandit executable not found.")
-            return None
-        except subprocess.TimeoutExpired:
-            logger.error("Bandit timed out after 300s.")
-            return None
-
-        raw = (result.stdout or "").strip()
-        if not raw:
-            logger.info("Bandit returned no output (clean or empty project).")
-            return None
-
-        # Strip progress-bar prefix before JSON
+    def _preprocess_output(self, raw: str) -> Optional[str]:
+        """Strip bandit's progress-bar prefix before JSON."""
         json_start = raw.find("{")
         if json_start > 0:
             raw = raw[json_start:]
@@ -218,27 +134,9 @@ class SecurityAnalyzer:
             return None
         return raw
 
-    def _parse_bandit_results(self, raw: str,
-                              root: Path) -> List[SmellIssue]:
-        """Parse raw JSON string into sorted SmellIssue list."""
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Bandit JSON output: {e}")
-            logger.debug(f"Raw output (first 500 chars): {raw[:500]}")
-            return []
-
-        issues = [
-            issue for item in data.get("results", [])
-            if (issue := self._to_smell_issue(item, root)) is not None
-        ]
-        issues.sort(key=lambda s: (
-            0 if s.severity == Severity.CRITICAL else
-            1 if s.severity == Severity.WARNING else 2,
-            s.file_path, s.line,
-        ))
-        logger.info(f"Bandit found {len(issues)} security issues.")
-        return issues
+    def _extract_items(self, data: Any) -> list:
+        """Bandit wraps results inside a ``results`` key."""
+        return data.get("results", [])
 
     def _to_smell_issue(self, item: Dict[str, Any], root: Path) -> Optional[SmellIssue]:
         """Convert a single Bandit result to SmellIssue.
@@ -321,20 +219,9 @@ class SecurityAnalyzer:
         return suggestions.get(test_id, "Review and apply security best practice.")
 
     def summary(self, issues: List[SmellIssue]) -> Dict[str, Any]:
-        """Build a summary dict from security issues."""
+        """Build summary with additional ``by_confidence`` breakdown."""
         from collections import Counter
-        by_severity = Counter(s.severity for s in issues)
-        by_rule = Counter(s.rule_code for s in issues)
-        by_file = Counter(s.file_path for s in issues)
+        result = super().summary(issues)
         by_confidence = Counter(s.confidence for s in issues)
-
-        return {
-            "total": len(issues),
-            "critical": by_severity.get(Severity.CRITICAL, 0),
-            "warning": by_severity.get(Severity.WARNING, 0),
-            "info": by_severity.get(Severity.INFO, 0),
-            "by_rule": dict(by_rule.most_common(20)),
-            "by_confidence": dict(by_confidence),
-            "worst_files": dict(by_file.most_common(10)),
-            "source": "bandit",
-        }
+        result["by_confidence"] = dict(by_confidence)
+        return result

@@ -123,15 +123,15 @@ def load_settings(project_dir: Optional[Path] = None) -> Dict[str, Any]:
     settings = json.loads(json.dumps(DEFAULT_SETTINGS))
 
     for path in _settings_search_paths(project_dir):
-        if path.exists():
-            try:
-                with open(path, encoding="utf-8") as f:
-                    user = json.load(f)
-                _deep_merge(settings, user)
-                logger.debug("Loaded settings from %s", path)
-                return settings
-            except Exception as exc:
-                logger.warning("Failed to load settings from %s: %s", path, exc)
+        try:
+            user = json.loads(path.read_text(encoding="utf-8"))
+            _deep_merge(settings, user)
+            logger.debug("Loaded settings from %s", path)
+            return settings
+        except FileNotFoundError:
+            continue
+        except Exception as exc:
+            logger.warning("Failed to load settings from %s: %s", path, exc)
 
     logger.debug("No settings file found — using defaults")
     return settings
@@ -169,10 +169,7 @@ def save_settings(
         logger.info("Settings saved to %s", target)
     except Exception:
         # Clean up temp file on failure
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        Path(tmp_path).unlink(missing_ok=True)
         raise
 
     return target

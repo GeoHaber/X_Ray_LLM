@@ -11,48 +11,11 @@ Requires: ruff (pip install ruff)
 
 from __future__ import annotations
 
-import json
-import os
-import shutil
-import subprocess
-import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from Core.types import SmellIssue, Severity
-from Core.utils import logger
-
-
-def _find_ruff() -> Optional[str]:
-    """Locate the ruff executable, including in frozen PyInstaller bundles."""
-    # 1. Normal PATH lookup
-    found = shutil.which("ruff")
-    if found:
-        return found
-
-    # 2. Frozen exe: check the bundle directory (onedir mode)
-    candidates: List[Path] = []
-    if getattr(sys, "frozen", False):
-        # _MEIPASS is the temp extraction dir (onefile) or the exe dir (onedir)
-        meipass = Path(getattr(sys, "_MEIPASS", ""))
-        exe_dir = Path(sys.executable).parent
-        candidates.extend([
-            meipass / "ruff.exe",
-            exe_dir / "ruff.exe",
-            meipass / "ruff",
-            exe_dir / "ruff",
-        ])
-    else:
-        # Dev mode: check .venv/Scripts
-        project = Path(__file__).resolve().parent.parent
-        candidates.append(project / ".venv" / "Scripts" / "ruff.exe")
-
-    for p in candidates:
-        if p.is_file():
-            logger.info(f"Found ruff at: {p}")
-            return str(p)
-
-    return None
+from Analysis._analyzer_base import BaseStaticAnalyzer
 
 
 # Ruff rule code → X-Ray severity mapping
@@ -72,7 +35,7 @@ _SEVERITY_MAP: Dict[str, str] = {
 }
 
 
-class LintAnalyzer:
+class LintAnalyzer(BaseStaticAnalyzer):
     """
     Runs Ruff linter and converts results to X-Ray SmellIssue format.
 
@@ -83,48 +46,17 @@ class LintAnalyzer:
             issues = analyzer.analyze(Path("/my/project"))
     """
 
-    def __init__(self, extra_args: Optional[List[str]] = None):
-        self.extra_args = extra_args or []
-        self._ruff_path = _find_ruff()
+    TOOL_NAME = "ruff"
+    TOOL_TIMEOUT = 120
+    TOOL_LOG_NAME = "Ruff"
 
-    @property
-    def available(self) -> bool:
-        """Check if ruff is installed and executable."""
-        return self._ruff_path is not None
+    # -- overrides ---------------------------------------------------------
 
-    def analyze(self, root: Path, exclude: Optional[List[str]] = None) -> List[SmellIssue]:
-        """
-        Run ``ruff check`` on `root` and return SmellIssue list.
-
-        Parameters
-        ----------
-        root : Path
-            Directory to scan.
-        exclude : list[str], optional
-            Glob patterns to exclude (passed via --exclude).
-
-        Returns
-        -------
-        list[SmellIssue]
-            Issues found, mapped to X-Ray severity levels.
-        """
-        if not self.available:
-            logger.warning("Ruff is not installed. Run: pip install ruff")
-            return []
-
-        cmd = self._build_ruff_command(root, exclude)
-        raw = self._run_ruff_subprocess(cmd, root)
-        if raw is None:
-            return []
-        return self._parse_ruff_results(raw, root)
-
-    # -- private helpers (extracted from analyze) ----------------------------
-
-    def _build_ruff_command(self, root: Path,
-                            exclude: Optional[List[str]]) -> List[str]:
+    def _build_command(self, root: Path,
+                       exclude: Optional[List[str]]) -> List[str]:
         """Assemble the ruff CLI command list."""
         cmd = [
-            self._ruff_path, "check", str(root),
+            self._tool_path, "check", str(root),
             "--output-format=json", "--no-fix",
         ]
         auto_exclude = [
@@ -140,51 +72,6 @@ class LintAnalyzer:
             cmd.extend(["--exclude", pat])
         cmd.extend(self.extra_args)
         return cmd
-
-    def _run_ruff_subprocess(self, cmd: List[str],
-                             root: Path) -> Optional[str]:
-        """Execute ruff, return raw JSON string or *None* on failure."""
-        logger.info(f"Running Ruff: {' '.join(cmd)}")
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True,
-                encoding="utf-8", errors="replace",
-                timeout=120, cwd=str(root),
-            )
-        except FileNotFoundError:
-            logger.error("Ruff executable not found despite which() succeeding.")
-            return None
-        except subprocess.TimeoutExpired:
-            logger.error("Ruff timed out after 120s.")
-            return None
-
-        raw = (result.stdout or "").strip()
-        if not raw:
-            logger.info("Ruff returned no output (clean or empty project).")
-            return None
-        return raw
-
-    def _parse_ruff_results(self, raw: str,
-                            root: Path) -> List[SmellIssue]:
-        """Parse raw JSON string into sorted SmellIssue list."""
-        try:
-            ruff_issues = json.loads(raw)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Ruff JSON output: {e}")
-            logger.debug(f"Raw output (first 500 chars): {raw[:500]}")
-            return []
-
-        issues = [
-            issue for item in ruff_issues
-            if (issue := self._to_smell_issue(item, root)) is not None
-        ]
-        issues.sort(key=lambda s: (
-            0 if s.severity == Severity.CRITICAL else
-            1 if s.severity == Severity.WARNING else 2,
-            s.file_path, s.line,
-        ))
-        logger.info(f"Ruff found {len(issues)} issues.")
-        return issues
 
     def _to_smell_issue(self, item: Dict[str, Any], root: Path) -> Optional[SmellIssue]:
         """Convert a single Ruff JSON object to SmellIssue."""
@@ -233,6 +120,10 @@ class LintAnalyzer:
             fixable=fixable,
         )
 
+    # -- static helpers (ruff-specific) ------------------------------------
+
+    _PREFIX_SEVERITY = {"F": Severity.WARNING, "E": Severity.INFO, "W": Severity.INFO}
+
     @staticmethod
     def _map_severity(code: str) -> str:
         """Map Ruff rule code to X-Ray severity."""
@@ -240,13 +131,7 @@ class LintAnalyzer:
             return _SEVERITY_MAP[code]
         # Fallback by prefix
         prefix = code[0] if code else ""
-        if prefix == "F":
-            return Severity.WARNING      # F = pyflakes (likely bugs)
-        if prefix == "E":
-            return Severity.INFO         # E = pycodestyle (style)
-        if prefix == "W":
-            return Severity.INFO         # W = pycodestyle warnings
-        return Severity.INFO
+        return LintAnalyzer._PREFIX_SEVERITY.get(prefix, Severity.INFO)
 
     @staticmethod
     def _rule_to_category(code: str) -> str:
@@ -264,22 +149,3 @@ class LintAnalyzer:
             "E999": "syntax-error",
         }
         return categories.get(code, f"lint-{code}")
-
-    def summary(self, issues: List[SmellIssue]) -> Dict[str, Any]:
-        """Build a summary dict from lint issues."""
-        from collections import Counter
-        by_severity = Counter(s.severity for s in issues)
-        by_rule = Counter(s.rule_code for s in issues)
-        by_file = Counter(s.file_path for s in issues)
-        fixable_count = sum(1 for s in issues if s.fixable)
-
-        return {
-            "total": len(issues),
-            "critical": by_severity.get(Severity.CRITICAL, 0),
-            "warning": by_severity.get(Severity.WARNING, 0),
-            "info": by_severity.get(Severity.INFO, 0),
-            "fixable": fixable_count,
-            "by_rule": dict(by_rule.most_common(20)),
-            "worst_files": dict(by_file.most_common(10)),
-            "source": "ruff",
-        }

@@ -3,38 +3,33 @@ Tests for Core/types.py — FunctionRecord, ClassRecord, SmellIssue,
 DuplicateGroup, LibrarySuggestion, Severity.
 """
 from Core.types import (
-    FunctionRecord, ClassRecord, SmellIssue,
+    SmellIssue,
     DuplicateGroup, LibrarySuggestion, Severity,
 )
+from tests.conftest import make_func, make_cls
 
 
-# ── helpers ──────────────────────────────────────────────────────────
+# ── thin wrappers with test-specific defaults ────────────────────────────────
 
 def _func(name="foo", file_path="utils/helpers.py", **overrides):
     defaults = dict(
-        name=name, file_path=file_path,
-        line_start=1, line_end=5, size_lines=5,
-        parameters=["a", "b"], return_type="int",
-        decorators=[], docstring="docstring",
-        calls_to=["bar"], complexity=2, nesting_depth=1,
-        code_hash="abc123", structure_hash="def456",
+        size_lines=5, parameters=["a", "b"], return_type="int",
+        docstring="docstring", calls_to=["bar"], complexity=2,
+        nesting_depth=1, code_hash="abc123", structure_hash="def456",
         code="def foo(a, b): return a + b",
-        is_async=False,
     )
     defaults.update(overrides)
-    return FunctionRecord(**defaults)
+    return make_func(name=name, file_path=file_path, **defaults)
 
 
 def _cls(name="MyClass", **overrides):
     defaults = dict(
-        name=name, file_path="models.py",
-        line_start=1, line_end=50, size_lines=50,
-        method_count=3, base_classes=["Base"],
-        docstring="A class", methods=["__init__", "run", "stop"],
-        has_init=True,
+        file_path="models.py",
+        base_classes=["Base"], docstring="A class",
+        methods=["__init__", "run", "stop"],
     )
     defaults.update(overrides)
-    return ClassRecord(**defaults)
+    return make_cls(name=name, **defaults)
 
 
 # ════════════════════════════════════════════════════════════════════

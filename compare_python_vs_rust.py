@@ -117,70 +117,123 @@ def benchmark(func, args, iterations=100, label=""):
     }
 
 
+def _build_correctness_tests(py, rust):
+    """Build the list of (name, py_fn, rust_fn) correctness tests."""
+    return [
+        ("normalize(code_a)",
+         lambda: py['normalize'](SAMPLE_CODE_A),
+         lambda: rust.normalized_token_stream(SAMPLE_CODE_A)),
+        ("similarity(code_a, code_b) — similar",
+         lambda: py['similarity'](SAMPLE_CODE_A, SAMPLE_CODE_B),
+         lambda: rust.code_similarity(SAMPLE_CODE_A, SAMPLE_CODE_B)),
+        ("similarity(code_a, code_c) — different",
+         lambda: py['similarity'](SAMPLE_CODE_A, SAMPLE_CODE_C),
+         lambda: rust.code_similarity(SAMPLE_CODE_A, SAMPLE_CODE_C)),
+        ("similarity(code_a, code_a) — identical",
+         lambda: py['similarity'](SAMPLE_CODE_A, SAMPLE_CODE_A),
+         lambda: rust.code_similarity(SAMPLE_CODE_A, SAMPLE_CODE_A)),
+        ("histogram(code_a)",
+         lambda: py['histogram'](SAMPLE_CODE_A),
+         lambda: rust.ast_node_histogram(SAMPLE_CODE_A)),
+    ]
+
+
+def _compare_result_pair(py_result, rs_result):
+    """Compare a single py vs rust result pair, return (match, diff_str)."""
+    if isinstance(py_result, (int, float)):
+        match = abs(py_result - rs_result) < 0.05
+        diff = f"py={py_result:.4f}  rust={rs_result:.4f}  delta={abs(py_result-rs_result):.4f}"
+    elif isinstance(py_result, list):
+        match = py_result == rs_result
+        diff = f"py_len={len(py_result)}  rust_len={len(rs_result)}"
+        if not match and len(py_result) == len(rs_result):
+            mismatches = [(i, p, r) for i, (p, r) in enumerate(zip(py_result, rs_result)) if p != r]
+            diff += f"  mismatches={len(mismatches)}: {mismatches[:3]}"
+    elif isinstance(py_result, dict):
+        py_keys = set(py_result.keys())
+        rs_keys = set(rs_result.keys())
+        shared = py_keys & rs_keys
+        match = len(shared) > 0 and len(py_keys - rs_keys) < len(py_keys) * 0.3
+        diff = f"py_keys={len(py_keys)}  rust_keys={len(rs_keys)}  shared={len(shared)}"
+    else:
+        match = py_result == rs_result
+        diff = f"py={py_result}  rust={rs_result}"
+    return match, diff
+
+
 def compare_correctness(impls):
     """Compare Python and Rust outputs for correctness."""
     print("\n" + "=" * 70)
     print("  CORRECTNESS COMPARISON: Python vs Rust")
     print("=" * 70)
-    
-    rust = impls['rust']
-    py = impls['python']
-    
-    tests = [
-        ("normalize(code_a)", 
-         lambda: py['normalize'](SAMPLE_CODE_A),
-         lambda: rust.normalized_token_stream(SAMPLE_CODE_A)),
-        
-        ("similarity(code_a, code_b) — similar",
-         lambda: py['similarity'](SAMPLE_CODE_A, SAMPLE_CODE_B),
-         lambda: rust.code_similarity(SAMPLE_CODE_A, SAMPLE_CODE_B)),
-        
-        ("similarity(code_a, code_c) — different",
-         lambda: py['similarity'](SAMPLE_CODE_A, SAMPLE_CODE_C),
-         lambda: rust.code_similarity(SAMPLE_CODE_A, SAMPLE_CODE_C)),
-        
-        ("similarity(code_a, code_a) — identical",
-         lambda: py['similarity'](SAMPLE_CODE_A, SAMPLE_CODE_A),
-         lambda: rust.code_similarity(SAMPLE_CODE_A, SAMPLE_CODE_A)),
 
-        ("histogram(code_a)",
-         lambda: py['histogram'](SAMPLE_CODE_A),
-         lambda: rust.ast_node_histogram(SAMPLE_CODE_A)),
-    ]
-    
+    tests = _build_correctness_tests(impls['python'], impls['rust'])
+
     all_pass = True
     for name, py_fn, rs_fn in tests:
-        py_result = py_fn()
-        rs_result = rs_fn()
-        
-        # Compare
-        if isinstance(py_result, (int, float)):
-            match = abs(py_result - rs_result) < 0.05  # 5% tolerance
-            diff = f"py={py_result:.4f}  rust={rs_result:.4f}  delta={abs(py_result-rs_result):.4f}"
-        elif isinstance(py_result, list):
-            # Token lists may differ slightly in style
-            match = py_result == rs_result
-            diff = f"py_len={len(py_result)}  rust_len={len(rs_result)}"
-            if not match and len(py_result) == len(rs_result):
-                mismatches = [(i, p, r) for i, (p, r) in enumerate(zip(py_result, rs_result)) if p != r]
-                diff += f"  mismatches={len(mismatches)}: {mismatches[:3]}"
-        elif isinstance(py_result, dict):
-            # Compare dict keys at least
-            py_keys = set(py_result.keys())
-            rs_keys = set(rs_result.keys())
-            shared = py_keys & rs_keys
-            match = len(shared) > 0 and len(py_keys - rs_keys) < len(py_keys) * 0.3
-            diff = f"py_keys={len(py_keys)}  rust_keys={len(rs_keys)}  shared={len(shared)}"
-        else:
-            match = py_result == rs_result
-            diff = f"py={py_result}  rust={rs_result}"
-        
+        match, diff = _compare_result_pair(py_fn(), rs_fn())
         if not match:
             all_pass = False
         print(f"  {'[PASS]' if match else '[FAIL]'} {name}")
         print(f"         {diff}")
-    
+
     return all_pass
+
+
+def _run_individual_benchmarks(py, rust):
+    """Run individual Python vs Rust benchmarks, return results list."""
+    benchmarks = [
+        ("normalize_tokens (single)",
+         lambda c: py['normalize'](c),
+         lambda c: rust.normalized_token_stream(c),
+         (SAMPLE_CODE_A,), 500),
+        ("code_similarity (pair)",
+         lambda a, b: py['similarity'](a, b),
+         lambda a, b: rust.code_similarity(a, b),
+         (SAMPLE_CODE_A, SAMPLE_CODE_B), 200),
+        ("histogram (single)",
+         lambda c: py['histogram'](c),
+         lambda c: rust.ast_node_histogram(c),
+         (SAMPLE_CODE_A,), 500),
+    ]
+
+    results = []
+    for name, py_fn, rs_fn, args, iters in benchmarks:
+        py_bench = benchmark(py_fn, args, iters, f"Python {name}")
+        rs_bench = benchmark(rs_fn, args, iters, f"Rust   {name}")
+        speedup = py_bench['avg_ms'] / rs_bench['avg_ms'] if rs_bench['avg_ms'] > 0 else float('inf')
+
+        print(f"\n  {name}:")
+        print(f"    Python: {py_bench['avg_ms']:8.3f} ms avg  (min {py_bench['min_ms']:.3f}, max {py_bench['max_ms']:.3f})")
+        print(f"    Rust:   {rs_bench['avg_ms']:8.3f} ms avg  (min {rs_bench['min_ms']:.3f}, max {rs_bench['max_ms']:.3f})")
+        print(f"    Speedup: {speedup:.1f}x")
+        results.append({'name': name, 'python_avg_ms': py_bench['avg_ms'],
+                        'rust_avg_ms': rs_bench['avg_ms'], 'speedup': speedup})
+    return results
+
+
+def _run_batch_benchmark(py, rust):
+    """Run batch similarity benchmark (Python sequential vs Rust parallel)."""
+    print(f"\n  batch_code_similarity ({len(LARGE_CODES)} functions, N*N matrix):")
+
+    start = time.perf_counter()
+    for i, ca in enumerate(LARGE_CODES):
+        for j, cb in enumerate(LARGE_CODES):
+            if j <= i and i != j:
+                py['similarity'](ca, cb)
+    py_time = time.perf_counter() - start
+
+    start = time.perf_counter()
+    rust.batch_code_similarity(LARGE_CODES)
+    rs_time = time.perf_counter() - start
+
+    batch_speedup = py_time / rs_time if rs_time > 0 else float('inf')
+    print(f"    Python (sequential): {py_time*1000:8.1f} ms")
+    print(f"    Rust   (rayon||):    {rs_time*1000:8.1f} ms")
+    print(f"    Speedup: {batch_speedup:.1f}x")
+    return {'name': f'batch_similarity ({len(LARGE_CODES)} funcs)',
+            'python_avg_ms': py_time * 1000, 'rust_avg_ms': rs_time * 1000,
+            'speedup': batch_speedup}
 
 
 def compare_performance(impls):
@@ -188,80 +241,9 @@ def compare_performance(impls):
     print("\n" + "=" * 70)
     print("  PERFORMANCE COMPARISON: Python vs Rust")
     print("=" * 70)
-    
-    rust = impls['rust']
-    py = impls['python']
-    
-    benchmarks = [
-        # (name, py_fn, rs_fn, args, iterations)
-        ("normalize_tokens (single)",
-         lambda c: py['normalize'](c),
-         lambda c: rust.normalized_token_stream(c),
-         (SAMPLE_CODE_A,), 500),
-        
-        ("code_similarity (pair)",
-         lambda a, b: py['similarity'](a, b),
-         lambda a, b: rust.code_similarity(a, b),
-         (SAMPLE_CODE_A, SAMPLE_CODE_B), 200),
-        
-        ("histogram (single)",
-         lambda c: py['histogram'](c),
-         lambda c: rust.ast_node_histogram(c),
-         (SAMPLE_CODE_A,), 500),
-    ]
-    
-    results = []
-    for name, py_fn, rs_fn, args, iters in benchmarks:
-        py_bench = benchmark(py_fn, args, iters, f"Python {name}")
-        rs_bench = benchmark(rs_fn, args, iters, f"Rust   {name}")
-        
-        speedup = py_bench['avg_ms'] / rs_bench['avg_ms'] if rs_bench['avg_ms'] > 0 else float('inf')
-        
-        print(f"\n  {name}:")
-        print(f"    Python: {py_bench['avg_ms']:8.3f} ms avg  (min {py_bench['min_ms']:.3f}, max {py_bench['max_ms']:.3f})")
-        print(f"    Rust:   {rs_bench['avg_ms']:8.3f} ms avg  (min {rs_bench['min_ms']:.3f}, max {rs_bench['max_ms']:.3f})")
-        print(f"    Speedup: {speedup:.1f}x")
-        
-        results.append({
-            'name': name,
-            'python_avg_ms': py_bench['avg_ms'],
-            'rust_avg_ms': rs_bench['avg_ms'],
-            'speedup': speedup,
-        })
-    
-    # Batch similarity (Rust-only has rayon parallel)
-    print(f"\n  batch_code_similarity ({len(LARGE_CODES)} functions, N*N matrix):")
-    
-    # Python: sequential pairs
-    start = time.perf_counter()
-    py_matrix = []
-    for i, ca in enumerate(LARGE_CODES):
-        row = []
-        for j, cb in enumerate(LARGE_CODES):
-            if j <= i:
-                row.append(py['similarity'](ca, cb) if i != j else 1.0)
-            else:
-                row.append(0.0)  # will mirror
-        py_matrix.append(row)
-    py_time = time.perf_counter() - start
-    
-    # Rust: batch (parallel with rayon)
-    start = time.perf_counter()
-    rust.batch_code_similarity(LARGE_CODES)
-    rs_time = time.perf_counter() - start
-    
-    batch_speedup = py_time / rs_time if rs_time > 0 else float('inf')
-    print(f"    Python (sequential): {py_time*1000:8.1f} ms")
-    print(f"    Rust   (rayon||):    {rs_time*1000:8.1f} ms")
-    print(f"    Speedup: {batch_speedup:.1f}x")
-    
-    results.append({
-        'name': f'batch_similarity ({len(LARGE_CODES)} funcs)',
-        'python_avg_ms': py_time * 1000,
-        'rust_avg_ms': rs_time * 1000,
-        'speedup': batch_speedup,
-    })
-    
+
+    results = _run_individual_benchmarks(impls['python'], impls['rust'])
+    results.append(_run_batch_benchmark(impls['python'], impls['rust']))
     return results
 
 

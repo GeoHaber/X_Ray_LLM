@@ -38,6 +38,7 @@ from Core.types import FunctionRecord
 from Analysis.rust_advisor import RustAdvisor, RustCandidate
 from Analysis.ast_utils import extract_functions_from_file, collect_py_files
 from Analysis.test_gen import TestGenerator
+from Analysis.transpiler import py_type_to_rust as _transpiler_py_type_to_rust
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -114,52 +115,59 @@ def detect_system() -> SystemProfile:
     )
 
 
+def _x86_features_windows() -> List[str]:
+    """Detect x86 features on Windows via registry."""
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
+        ident, _ = winreg.QueryValueEx(key, "Identifier")
+        feats = ["sse4.2", "popcnt"]
+        m = re.search(r"Model\s+(\d+)", ident)
+        if m and int(m.group(1)) >= 60:
+            feats.extend(["avx2", "bmi2"])
+        return feats
+    except Exception:
+        return ["sse4.2"]
+
+
+def _x86_features_linux() -> List[str]:
+    """Detect x86 features on Linux via /proc/cpuinfo."""
+    try:
+        cpuinfo = Path("/proc/cpuinfo").read_text()
+        flags_line = [ln for ln in cpuinfo.split("\n") if ln.startswith("flags")]
+        if not flags_line:
+            return []
+        flags = flags_line[0].split(":")[-1]
+        return [f for f in _X86_FEATURES if f in flags]
+    except Exception:
+        return []
+
+
+def _x86_features_darwin() -> List[str]:
+    """Detect x86 features on macOS via sysctl."""
+    try:
+        out = subprocess.check_output(["sysctl", "-a"], text=True, timeout=10)
+        feats = ["sse4.2", "popcnt"]
+        if "hw.optional.avx2_0: 1" in out:
+            feats.append("avx2")
+        return feats
+    except Exception:
+        return ["sse4.2"]
+
+
+_X86_DETECT_DISPATCH = {
+    "Windows": _x86_features_windows,
+    "Linux":   _x86_features_linux,
+    "Darwin":  _x86_features_darwin,
+}
+
+
 def _detect_x86_features() -> List[str]:
     """Best-effort CPU feature detection for x86_64."""
-    detected: List[str] = []
-    system = platform.system()
-
-    if system == "Windows":
-        # Check via environment or WMIC
-        try:
-            # Registry approach via Python
-            import winreg
-            key = winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE,
-                r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
-            ident, _ = winreg.QueryValueEx(key, "Identifier")
-            # All modern Intel/AMD support SSE4.2
-            detected.append("sse4.2")
-            detected.append("popcnt")
-            # Family 6 model >= 60 likely has AVX2
-            m = re.search(r"Model\s+(\d+)", ident)
-            if m and int(m.group(1)) >= 60:
-                detected.extend(["avx2", "bmi2"])
-        except Exception:
-            detected = ["sse4.2"]
-    elif system == "Linux":
-        try:
-            cpuinfo = Path("/proc/cpuinfo").read_text()
-            flags_line = [line for line in cpuinfo.split("\n")
-                          if line.startswith("flags")]
-            if flags_line:
-                flags = flags_line[0].split(":")[-1]
-                for feat in _X86_FEATURES:
-                    if feat in flags:
-                        detected.append(feat)
-        except Exception:
-            pass
-    elif system == "Darwin":
-        try:
-            out = subprocess.check_output(
-                ["sysctl", "-a"], text=True, timeout=10)
-            if "hw.optional.avx2_0: 1" in out:
-                detected.append("avx2")
-            detected.extend(["sse4.2", "popcnt"])
-        except Exception:
-            detected = ["sse4.2"]
-
-    return detected
+    detector = _X86_DETECT_DISPATCH.get(platform.system())
+    return detector() if detector else []
 
 
 # ── Framework / GUI APIs that cannot be transpiled to Rust ──────────────
@@ -178,115 +186,71 @@ _FRAMEWORK_MARKERS = [
 ]
 
 
+_UNTRANSLATABLE = (
+    " for ", "lambda ", "yield ", "async ", "subprocess.",
+    "importlib.", "getattr(", "setattr(", "**{", "{**",
+    "os.path.", "pathlib.", "open(",
+)
+
+_PY_MODULE_MARKERS = (
+    "argparse", "hashlib", "json.", "re.", "sys.",
+    "collections.", "functools.", "itertools.",
+    "typing.", "dataclasses.", "enum.",
+    "smtplib", "datetime", "time.", "gc.",
+    "shutil.", "socket.", "logging.",
+    "import ",
+)
+
+
+_ALL_BLOCKERS = tuple(_FRAMEWORK_MARKERS) + _UNTRANSLATABLE + _PY_MODULE_MARKERS
+
+
+def _code_has_blockers(code: str) -> bool:
+    """Return True if *code* contains any untranslatable construct."""
+    return any(marker in code for marker in _ALL_BLOCKERS)
+
+
+def _has_name_blocker(name: str) -> bool:
+    """Return True if the function name indicates it should be skipped."""
+    return name.startswith("test_") or (name.startswith("__") and name.endswith("__"))
+
+
+def _has_code_pattern_blocker(code: str) -> bool:
+    """Return True if code patterns disqualify transpilation."""
+    str_chars = sum(len(m.group()) for m in re.finditer(r'["\'].*?["\']', code))
+    mostly_strings = len(code) > 50 and str_chars / len(code) > 0.5
+    too_long = code.count("\n") > 50
+    has_comprehension = bool(
+        re.search(r'\{[^}]+\bfor\b', code) or re.search(r'\[[^\]]+\bfor\b', code)
+    )
+    too_many_external = len(re.findall(r'\b\w+\.\w+\(', code)) > 10
+    return mostly_strings or too_long or has_comprehension or too_many_external
+
+
 def _is_transpilable(func) -> bool:
     """Return False for functions that rely on framework/GUI APIs
     or use Python constructs too complex for the simple transpiler.
     """
     code = getattr(func, "code", "") or ""
     name = getattr(func, "name", "") or ""
-    # Skip test functions
-    if name.startswith("test_"):
+    if _has_name_blocker(name):
         return False
-    # Skip dunder methods
-    if name.startswith("__") and name.endswith("__"):
+    if _code_has_blockers(code) or _has_code_pattern_blocker(code):
         return False
-    # Skip functions whose body uses framework APIs
-    for marker in _FRAMEWORK_MARKERS:
-        if marker in code:
-            return False
-    # Skip functions that are mostly string/HTML (>50% of body is strings)
-    str_chars = sum(len(m.group()) for m in re.finditer(r'["\'].*?["\']', code))
-    if len(code) > 50 and str_chars / len(code) > 0.5:
-        return False
-    # Skip functions using Python constructs the transpiler cannot handle
-    _UNTRANSLATABLE = [
-        " for ",          # generator expressions / list comprehensions (inline)
-        "lambda ",        # lambdas
-        "yield ",         # generators
-        "async ",         # async/await
-        "subprocess.",    # subprocess calls
-        "importlib.",     # dynamic imports
-        "getattr(",       # dynamic attribute access
-        "setattr(",       # dynamic attribute mutation
-        "**{",            # dict unpacking
-        "{**",            # dict merge
-        "os.path.",       # filesystem ops
-        "pathlib.",       # filesystem ops
-        "open(",          # file I/O
-    ]
-    for marker in _UNTRANSLATABLE:
-        if marker in code:
-            return False
-    # Skip very long functions (>50 lines) — too complex for sketch transpiler
-    if code.count("\n") > 50:
-        return False
-    # Skip functions with too many external calls (>10) — unresolvable
-    ext_calls = len(re.findall(r'\b\w+\.\w+\(', code))
-    if ext_calls > 10:
-        return False
-    # Skip functions that use dict/list comprehensions or complex expressions
-    if re.search(r'\{[^}]+\bfor\b', code):   # dict comprehension
-        return False
-    if re.search(r'\[[^\]]+\bfor\b', code):   # list comprehension
-        return False
-    # Skip functions referencing Python-specific modules
-    _PY_MODULES = [
-        "argparse", "hashlib", "json.", "re.", "sys.",
-        "collections.", "functools.", "itertools.",
-        "typing.", "dataclasses.", "enum.",
-        "smtplib", "datetime", "time.", "gc.",
-        "shutil.", "socket.", "logging.",
-        "import ",  # inline imports
-    ]
-    for mod in _PY_MODULES:
-        if mod in code:
-            return False
-    # Skip functions that reference external function calls the Rust
-    # side cannot resolve (things like scan_codebase, tokenize, etc.)
+    # Skip functions referencing too many unresolvable calls
     unresolvable = len(re.findall(r'\b[a-z_]\w+\(', code))
-    own_name_count = code.count(func.name + "(")
-    if unresolvable - own_name_count > 8:
-        return False
-    return True
+    own = code.count(func.name + "(")
+    return (unresolvable - own) <= 8
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  2.  Python → Rust Transpiler  (enhanced version of the UI sketch)
 # ═══════════════════════════════════════════════════════════════════════════
 
-_PY_TO_RUST_TYPES: Dict[str, str] = {
-    "int": "i64", "float": "f64", "str": "String", "bool": "bool",
-    "bytes": "Vec<u8>", "list": "Vec", "dict": "HashMap",
-    "set": "HashSet", "tuple": "tuple", "None": "()",
-    "Optional": "Option", "List": "Vec", "Dict": "HashMap",
-    "Set": "HashSet", "Tuple": "tuple", "Any": "PyObject",
-}
-
 
 def py_type_to_rust(py_type: str) -> str:
-    """Convert a Python type annotation string to Rust type."""
-    if not py_type:
-        return "PyObject"
-    py_type = py_type.strip()
-    # Optional[X]
-    m = re.match(r"Optional\[(.+)\]", py_type)
-    if m:
-        return f"Option<{py_type_to_rust(m.group(1))}>"
-    # List[X], Set[X]
-    m = re.match(r"(List|Set)\[(.+)\]", py_type)
-    if m:
-        container = "Vec" if m.group(1) == "List" else "HashSet"
-        return f"{container}<{py_type_to_rust(m.group(2))}>"
-    # Dict[K, V]
-    m = re.match(r"Dict\[(.+?),\s*(.+)\]", py_type)
-    if m:
-        return f"HashMap<{py_type_to_rust(m.group(1))}, {py_type_to_rust(m.group(2))}>"
-    # Tuple[X, Y]
-    m = re.match(r"Tuple\[(.+)\]", py_type)
-    if m:
-        parts = [py_type_to_rust(p.strip()) for p in m.group(1).split(",")]
-        return f"({', '.join(parts)})"
-    return _PY_TO_RUST_TYPES.get(py_type, "PyObject")
+    """Convert a Python type annotation string to Rust type (PyO3 default)."""
+    return _transpiler_py_type_to_rust(py_type, default="PyObject")
 
 
 def _rust_op(op) -> str:
@@ -352,6 +316,128 @@ def _rustify_expr(expr: str) -> str:
     return expr
 
 
+def _tb_return(stmt, pad, _ind, wrap_ok, ret_type):
+    """Handle ``ast.Return``."""
+    if not stmt.value:
+        return [f"{pad}Ok(())" if wrap_ok else f"{pad}return;"]
+    val = _rustify_expr(ast.unparse(stmt.value))
+    if "String" in ret_type and re.match(r'^"[^"]*"$', val):
+        val = f'{val}.to_string()'
+    return [f"{pad}Ok({val})" if wrap_ok else f"{pad}return {val};"]
+
+
+def _tb_if(stmt, pad, indent, wrap_ok, ret_type):
+    """Handle ``ast.If`` with chained elif."""
+    kw = dict(wrap_ok=wrap_ok, ret_type=ret_type)
+    lines = [f"{pad}if {_rustify_expr(ast.unparse(stmt.test))} {{"]
+    lines.extend(_translate_body(stmt.body, indent + 1, **kw))
+    if stmt.orelse:
+        if len(stmt.orelse) == 1 and isinstance(stmt.orelse[0], ast.If):
+            lines.append(f"{pad}}} else ")
+            inner = _translate_body(stmt.orelse, indent, **kw)
+            if inner:
+                inner[0] = inner[0].lstrip()
+                lines[-1] += inner[0]
+                lines.extend(inner[1:])
+        else:
+            lines.append(f"{pad}}} else {{")
+            lines.extend(_translate_body(stmt.orelse, indent + 1, **kw))
+            lines.append(f"{pad}}}")
+    else:
+        lines.append(f"{pad}}}")
+    return lines
+
+
+def _tb_loop(stmt, pad, indent, wrap_ok, ret_type):
+    """Handle ``ast.For`` and ``ast.While``."""
+    kw = dict(wrap_ok=wrap_ok, ret_type=ret_type)
+    if isinstance(stmt, ast.For):
+        header = f"for {ast.unparse(stmt.target)} in {_rustify_expr(ast.unparse(stmt.iter))}"
+    else:
+        header = f"while {_rustify_expr(ast.unparse(stmt.test))}"
+    lines = [f"{pad}{header} {{"]
+    lines.extend(_translate_body(stmt.body, indent + 1, **kw))
+    lines.append(f"{pad}}}")
+    return lines
+
+
+def _tb_assign(stmt, pad, _ind, _wo, _rt):
+    """Handle ``ast.Assign``."""
+    return [f"{pad}let mut {_rustify_expr(ast.unparse(stmt.targets[0]))} = "
+            f"{_rustify_expr(ast.unparse(stmt.value))};"]
+
+
+def _tb_augassign(stmt, pad, _ind, _wo, _rt):
+    """Handle ``ast.AugAssign``."""
+    return [f"{pad}{_rustify_expr(ast.unparse(stmt.target))} "
+            f"{_rust_op(stmt.op)}= {_rustify_expr(ast.unparse(stmt.value))};"]
+
+
+def _tb_expr(stmt, pad, _ind, _wo, _rt):
+    """Handle ``ast.Expr`` (skip docstrings)."""
+    if isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
+        return None  # docstring → skip
+    return [f"{pad}{_rustify_expr(ast.unparse(stmt.value))};"]
+
+
+def _tb_try(stmt, pad, indent, wrap_ok, ret_type):
+    """Handle ``ast.Try``."""
+    kw = dict(wrap_ok=wrap_ok, ret_type=ret_type)
+    lines = [f"{pad}// try {{"]
+    lines.extend(_translate_body(stmt.body, indent + 1, **kw))
+    for handler in stmt.handlers:
+        exc = handler.type and ast.unparse(handler.type) or "Exception"
+        lines.append(f"{pad}// }} catch {exc} {{")
+        lines.extend(_translate_body(handler.body, indent + 1, **kw))
+    lines.append(f"{pad}// }}")
+    return lines
+
+
+def _tb_with(stmt, pad, indent, wrap_ok, ret_type):
+    """Handle ``ast.With``."""
+    kw = dict(wrap_ok=wrap_ok, ret_type=ret_type)
+    items = ", ".join(ast.unparse(i) for i in stmt.items)
+    lines = [f"{pad}// with {items} {{"]
+    lines.extend(_translate_body(stmt.body, indent + 1, **kw))
+    lines.append(f"{pad}// }}")
+    return lines
+
+
+def _tb_raise(stmt, pad, _ind, wrap_ok, _rt):
+    """Handle ``ast.Raise``."""
+    if not stmt.exc:
+        msg = "raised"
+    else:
+        msg = _rustify_expr(ast.unparse(stmt.exc)).replace('"', '\\"')
+    if wrap_ok:
+        return [f'{pad}return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("{msg}"));']
+    return [f'{pad}panic!("{msg}");']
+
+
+_TB_SIMPLE: Dict[type, str] = {
+    ast.Pass:     "// pass",
+    ast.Break:    "break;",
+    ast.Continue: "continue;",
+}
+
+_TB_DISPATCH: Dict[type, Callable] = {
+    ast.Return:       _tb_return,
+    ast.If:           _tb_if,
+    ast.For:          _tb_loop,
+    ast.While:        _tb_loop,
+    ast.Assign:       _tb_assign,
+    ast.AugAssign:    _tb_augassign,
+    ast.FunctionDef:  lambda s, p, *_: [f"{p}// TODO: nested fn {s.name}()"],
+    ast.AsyncFunctionDef: lambda s, p, *_: [f"{p}// TODO: nested fn {s.name}()"],
+    ast.ClassDef:     lambda s, p, *_: [f"{p}// TODO: nested class {s.name}"],
+    ast.Expr:         _tb_expr,
+    ast.Assert:       lambda s, p, *_: [f"{p}assert!({_rustify_expr(ast.unparse(s.test))});"],
+    ast.Try:          _tb_try,
+    ast.With:         _tb_with,
+    ast.Raise:        _tb_raise,
+}
+
+
 def _translate_body(stmts: list, indent: int = 1, *,
                     wrap_ok: bool = True,
                     ret_type: str = "") -> List[str]:
@@ -368,259 +454,184 @@ def _translate_body(stmts: list, indent: int = 1, *,
     pad = "    " * indent
     lines: List[str] = []
     for stmt in stmts:
-        if isinstance(stmt, ast.Return):
-            if stmt.value:
-                val = _rustify_expr(ast.unparse(stmt.value))
-                # Coerce string literals → .to_string() when return is String
-                needs_to_string = ("String" in ret_type) and re.match(r'^"[^"]*"$', val)
-                if needs_to_string:
-                    val = f'{val}.to_string()'
-                if wrap_ok:
-                    lines.append(f"{pad}Ok({val})")
-                else:
-                    lines.append(f"{pad}return {val};")
-            else:
-                if wrap_ok:
-                    lines.append(f"{pad}Ok(())")
-                else:
-                    lines.append(f"{pad}return;")
-        elif isinstance(stmt, ast.If):
-            test = _rustify_expr(ast.unparse(stmt.test))
-            lines.append(f"{pad}if {test} {{")
-            lines.extend(_translate_body(stmt.body, indent + 1, wrap_ok=wrap_ok, ret_type=ret_type))
-            if stmt.orelse:
-                if len(stmt.orelse) == 1 and isinstance(stmt.orelse[0], ast.If):
-                    lines.append(f"{pad}}} else ")
-                    inner = _translate_body(stmt.orelse, indent, wrap_ok=wrap_ok, ret_type=ret_type)
-                    if inner:
-                        inner[0] = inner[0].lstrip()
-                        lines[-1] += inner[0]
-                        lines.extend(inner[1:])
-                else:
-                    lines.append(f"{pad}}} else {{")
-                    lines.extend(_translate_body(stmt.orelse, indent + 1, wrap_ok=wrap_ok, ret_type=ret_type))
-                    lines.append(f"{pad}}}")
-            else:
-                lines.append(f"{pad}}}")
-        elif isinstance(stmt, ast.For):
-            target = ast.unparse(stmt.target)
-            iter_expr = _rustify_expr(ast.unparse(stmt.iter))
-            lines.append(f"{pad}for {target} in {iter_expr} {{")
-            lines.extend(_translate_body(stmt.body, indent + 1, wrap_ok=wrap_ok, ret_type=ret_type))
-            lines.append(f"{pad}}}")
-        elif isinstance(stmt, ast.While):
-            test = _rustify_expr(ast.unparse(stmt.test))
-            lines.append(f"{pad}while {test} {{")
-            lines.extend(_translate_body(stmt.body, indent + 1, wrap_ok=wrap_ok, ret_type=ret_type))
-            lines.append(f"{pad}}}")
-        elif isinstance(stmt, ast.Assign):
-            targets = _rustify_expr(ast.unparse(stmt.targets[0]))
-            value = _rustify_expr(ast.unparse(stmt.value))
-            lines.append(f"{pad}let mut {targets} = {value};")
-        elif isinstance(stmt, ast.AugAssign):
-            target = _rustify_expr(ast.unparse(stmt.target))
-            op = _rust_op(stmt.op)
-            value = _rustify_expr(ast.unparse(stmt.value))
-            lines.append(f"{pad}{target} {op}= {value};")
-        elif isinstance(stmt, ast.FunctionDef) or isinstance(stmt, ast.AsyncFunctionDef):
-            # Nested function definitions → comment out
-            lines.append(f"{pad}// TODO: nested fn {stmt.name}()")
-        elif isinstance(stmt, ast.ClassDef):
-            lines.append(f"{pad}// TODO: nested class {stmt.name}")
-        elif isinstance(stmt, ast.Expr):
-            expr_str = _rustify_expr(ast.unparse(stmt.value))
-            # Skip docstrings
-            if isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
-                continue
-            lines.append(f"{pad}{expr_str};")
-        elif isinstance(stmt, ast.Pass):
-            lines.append(f"{pad}// pass")
-        elif isinstance(stmt, ast.Break):
-            lines.append(f"{pad}break;")
-        elif isinstance(stmt, ast.Continue):
-            lines.append(f"{pad}continue;")
-        elif isinstance(stmt, ast.Assert):
-            test_expr = _rustify_expr(ast.unparse(stmt.test))
-            lines.append(f"{pad}assert!({test_expr});")
-        elif isinstance(stmt, ast.Try):
-            lines.append(f"{pad}// try {{")
-            lines.extend(_translate_body(stmt.body, indent + 1, wrap_ok=wrap_ok, ret_type=ret_type))
-            for handler in stmt.handlers:
-                exc_name = handler.type and ast.unparse(handler.type) or "Exception"
-                lines.append(f"{pad}// }} catch {exc_name} {{")
-                lines.extend(_translate_body(handler.body, indent + 1, wrap_ok=wrap_ok, ret_type=ret_type))
-            lines.append(f"{pad}// }}")
-        elif isinstance(stmt, ast.With):
-            items = ", ".join(ast.unparse(i) for i in stmt.items)
-            lines.append(f"{pad}// with {items} {{")
-            lines.extend(_translate_body(stmt.body, indent + 1, wrap_ok=wrap_ok, ret_type=ret_type))
-            lines.append(f"{pad}// }}")
-        elif isinstance(stmt, ast.Raise):
-            if stmt.exc:
-                exc = _rustify_expr(ast.unparse(stmt.exc))
-                # Escape inner quotes for panic!/Err strings
-                exc_escaped = exc.replace('"', '\\"')
-                if wrap_ok:
-                    lines.append(f'{pad}return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("{exc_escaped}"));')
-                else:
-                    lines.append(f'{pad}panic!("{exc_escaped}");')
-            else:
-                if wrap_ok:
-                    lines.append(f"{pad}return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(\"raised\"));")
-                else:
-                    lines.append(f'{pad}panic!("raised");')
-        else:
-            try:
-                py_line = ast.unparse(stmt).split("\n")[0]
-            except Exception:
-                py_line = "..."
-            lines.append(f"{pad}// TODO: {py_line}")
+        # One-liner statements
+        simple = _TB_SIMPLE.get(type(stmt))
+        if simple is not None:
+            lines.append(f"{pad}{simple}")
+            continue
+        # Dispatched handlers
+        handler = _TB_DISPATCH.get(type(stmt))
+        if handler:
+            result = handler(stmt, pad, indent, wrap_ok, ret_type)
+            if result is not None:
+                lines.extend(result)
+            continue
+        # Fallback → TODO comment
+        try:
+            py_line = ast.unparse(stmt).split("\n")[0]
+        except Exception:
+            py_line = "..."
+        lines.append(f"{pad}// TODO: {py_line}")
     return lines
 
 
-def transpile_class(class_def: ast.ClassDef, *, pyfunction: bool = True) -> str:
-    """Generate Rust struct and impl from a Python class."""
-    lines: List[str] = []
-    class_name = class_def.name
-    
-    # 1. Struct definition
-    # Iterate over __init__ or __annotations__ to find fields
+def _is_self_attribute(target) -> bool:
+    """Return True if *target* is ``self.xxx``."""
+    return (isinstance(target, ast.Attribute)
+            and isinstance(target.value, ast.Name)
+            and target.value.id == "self")
+
+
+def _fields_from_init(init_method) -> Dict[str, str]:
+    """Extract field names from ``__init__`` assignments to ``self``."""
     fields: Dict[str, str] = {}
-    
-    # Check for __init__ to find fields
+    for stmt in init_method.body:
+        if not isinstance(stmt, ast.Assign):
+            continue
+        for target in stmt.targets:
+            if _is_self_attribute(target):
+                fields[target.attr] = "PyObject"
+    return fields
+
+
+def _fields_from_annotations(class_def: ast.ClassDef) -> Dict[str, str]:
+    """Extract class-level annotated fields."""
+    fields: Dict[str, str] = {}
+    for item in class_def.body:
+        if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+            ftype = py_type_to_rust(ast.unparse(item.annotation)) if item.annotation else "PyObject"
+            fields[item.target.id] = ftype
+    return fields
+
+
+def _extract_class_fields(class_def: ast.ClassDef) -> tuple:
+    """Return (fields dict, init_method or None) from a class definition."""
     init_method = None
     for item in class_def.body:
         if isinstance(item, ast.FunctionDef) and item.name == "__init__":
             init_method = item
             break
-            
-    if init_method:
-        for stmt in init_method.body:
-            if isinstance(stmt, ast.Assign):
-                # self.x = y
-                for target in stmt.targets:
-                    if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
-                        field_name = target.attr
-                        # Infer type? Hard without annotations. Default to PyObject/String?
-                        fields[field_name] = "PyObject" # Default
+    fields = _fields_from_init(init_method) if init_method else {}
+    fields.update(_fields_from_annotations(class_def))
+    return fields, init_method
 
-    # Check for type annotations in class body (Dataclasses)
-    for item in class_def.body:
-        if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-            fname = item.target.id
-            ftype = "PyObject"
-            if item.annotation:
-                ftype = py_type_to_rust(ast.unparse(item.annotation))
-            fields[fname] = ftype
 
-    # Generate Struct
+def _generate_new_method(init_method, fields: Dict[str, str],
+                         class_name: str) -> List[str]:
+    """Generate Rust ``new()`` from Python ``__init__``."""
+    lines = ["    #[new]"]
+    args = []
+    for arg in init_method.args.args:
+        if arg.arg == "self":
+            continue
+        atype = py_type_to_rust(ast.unparse(arg.annotation)) if arg.annotation else "PyObject"
+        args.append(f"{arg.arg}: {atype}")
+    lines.append(f"    fn new({', '.join(args)}) -> Self {{")
+    lines.append(f"        {class_name} {{")
+    arg_names = {a.split(":")[0] for a in args}
+    for fname in fields:
+        if fname in arg_names:
+            lines.append(f"            {fname},")
+        else:
+            lines.append(f"            {fname}: PyObject::default(), // TODO: default??")
+    lines.extend(["        }", "    }"])
+    return lines
+
+
+def transpile_class(class_def: ast.ClassDef, *, pyfunction: bool = True) -> str:
+    """Generate Rust struct and impl from a Python class."""
+    class_name = class_def.name
+    fields, init_method = _extract_class_fields(class_def)
+
+    lines: List[str] = []
+    # Struct
     if pyfunction:
         lines.append("#[pyclass]")
     lines.append(f"struct {class_name} {{")
     for fname, ftype in fields.items():
         lines.append(f"    {fname}: {ftype},")
-    lines.append("}")
-    lines.append("")
+    lines.extend(["}", ""])
 
-    # Generate Impl
+    # Impl
     if pyfunction:
         lines.append("#[pymethods]")
     lines.append(f"impl {class_name} {{")
-    
-    # Generate __init__ as new()
     if init_method:
-        lines.append("    #[new]")
-        # TODO: parse init args
-        args = []
-        for arg in init_method.args.args:
-            if arg.arg == "self":
-                continue
-            # Basic type inference
-            atype = "PyObject"
-            if arg.annotation:
-                atype = py_type_to_rust(ast.unparse(arg.annotation))
-            args.append(f"{arg.arg}: {atype}")
-        args_str = ", ".join(args)
-        
-        lines.append(f"    fn new({args_str}) -> Self {{")
-        lines.append(f"        {class_name} {{")
-        # Initialize fields
-        for fname in fields:
-            # Check if arg matches field
-            if fname in [a.split(":")[0] for a in args]:
-                lines.append(f"            {fname},")
-            else:
-                lines.append(f"            {fname}: PyObject::default(), // TODO: default??")
-        lines.append("        }")
-        lines.append("    }")
-    
-    # Generate other methods
+        lines.extend(_generate_new_method(init_method, fields, class_name))
     for item in class_def.body:
-        if isinstance(item, ast.FunctionDef):
-            if item.name == "__init__":
-                continue
-            # Transpile method
-            # Need to handle 'self' arg = &self
-            # We reuse transpile_function logic but adapted for methods?
-            # For now, just a simplified version
+        if isinstance(item, ast.FunctionDef) and item.name != "__init__":
             lines.append(f"    // Method {item.name}")
-            # ... (Full method transpilation logic would go here)
-            # This is a scratchpad implementation.
-            
     lines.append("}")
     return "\n".join(lines)
+
+
+def _resolve_return_type(func_def, pyfunction: bool) -> str:
+    """Determine the Rust return type for *func_def*."""
+    ret_rust = py_type_to_rust(ast.unparse(func_def.returns)) if func_def.returns else "PyObject"
+    if pyfunction and not ret_rust.startswith("PyResult"):
+        return f"PyResult<{ret_rust}>"
+    if not pyfunction and ret_rust == "PyObject":
+        return "()"
+    return ret_rust
+
+
+def _extract_ast_params(func_def, pyfunction: bool) -> str:
+    """Extract Rust parameters from an AST function node."""
+    params = []
+    for arg in func_def.args.args:
+        if arg.arg == "self":
+            continue
+        ptype = py_type_to_rust(ast.unparse(arg.annotation)) if arg.annotation else "PyObject"
+        if not pyfunction and ptype == "PyObject":
+            ptype = "String"
+        params.append(f"{arg.arg}: {ptype}")
+    return ", ".join(params)
 
 
 def transpile_function_ast(func_def: ast.FunctionDef | ast.AsyncFunctionDef, *, 
                           pyfunction: bool = True) -> str:
     """Generate Rust function from AST node."""
     lines: List[str] = []
-    
-    # Return type
-    ret_rust = "PyObject"
-    if func_def.returns:
-        ret_rust = py_type_to_rust(ast.unparse(func_def.returns))
+    ret_rust = _resolve_return_type(func_def, pyfunction)
 
-    if pyfunction:
-        if not ret_rust.startswith("PyResult"):
-            ret_rust = f"PyResult<{ret_rust}>"
-    else:
-         if ret_rust == "PyObject":
-            ret_rust = "()"
-
-    # Attributes
     if pyfunction:
         lines.append("#[pyfunction]")
-    
-    # Signature
-    fn_name = func_def.name
-    
-    params = []
-    for arg in func_def.args.args:
-        if arg.arg == "self":
-            continue
-        ptype = "PyObject"
-        if arg.annotation:
-            ptype = py_type_to_rust(ast.unparse(arg.annotation))
-        
-        if not pyfunction and ptype == "PyObject":
-            ptype = "String" # Binary mode fallback
-            
-        params.append(f"{arg.arg}: {ptype}")
-    
-    params_str = ", ".join(params)
-    lines.append(f"fn {fn_name}({params_str}) -> {ret_rust} {{")
-    
-    # Body
+
+    params_str = _extract_ast_params(func_def, pyfunction)
+    lines.append(f"fn {func_def.name}({params_str}) -> {ret_rust} {{")
+
     body_lines = _translate_body(func_def.body, indent=1, wrap_ok=pyfunction, ret_type=ret_rust)
     lines.extend(body_lines)
-    
-    if pyfunction:
-         if body_lines and not any("Ok(" in ln for ln in body_lines[-3:]):
-            lines.append("    Ok(())")
-            
+
+    if pyfunction and body_lines and not any("Ok(" in ln for ln in body_lines[-3:]):
+        lines.append("    Ok(())")
+
     lines.append("}")
     return "\n".join(lines)
+
+
+def _transpile_module_node(node, pyo3: bool) -> Optional[str]:
+    """Transpile a single module-level AST node to Rust."""
+    if isinstance(node, ast.ClassDef):
+        return transpile_class(node, pyfunction=pyo3)
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return transpile_function_ast(node, pyfunction=pyo3)
+    if isinstance(node, (ast.Import, ast.ImportFrom)):
+        return f"// {ast.unparse(node)}"
+    return None
+
+
+def _generate_pyo3_module_init(tree) -> List[str]:
+    """Generate the ``#[pymodule]`` init block."""
+    lines = ["", "#[pymodule]",
+             "fn rust_module672(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {"]
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            lines.append(f"    m.add_class::<{node.name}>()?;")
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            lines.append(f"    m.add_function(wrap_pyfunction!({node.name}, m)?)?;")
+    lines.extend(["    Ok(())", "}"])
+    return lines
 
 
 def transpile_module(code: str, *, pyo3: bool = True) -> str:
@@ -629,40 +640,61 @@ def transpile_module(code: str, *, pyo3: bool = True) -> str:
         tree = ast.parse(code)
     except Exception:
         return "// Parse error"
-        
-    lines = []
-    lines.append("// Auto-transpiled module")
-    lines.append("use pyo3::prelude::*;")
-    lines.append("use std::collections::{HashMap, HashSet};")
-    lines.append("")
-    
+
+    lines = [
+        "// Auto-transpiled module",
+        "use pyo3::prelude::*;",
+        "use std::collections::{HashMap, HashSet};",
+        "",
+    ]
     for node in tree.body:
-        if isinstance(node, ast.ClassDef):
-            lines.append(transpile_class(node, pyfunction=pyo3))
+        result = _transpile_module_node(node, pyo3)
+        if result is not None:
+            lines.append(result)
             lines.append("")
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            lines.append(transpile_function_ast(node, pyfunction=pyo3))
-            lines.append("")
-        elif isinstance(node, (ast.Import, ast.ImportFrom)):
-            lines.append(f"// {ast.unparse(node)}")
-        else:
-             # Top-level code? Put in a comment or try to transpile (rare for library modules)
-             pass 
-             
+
     if pyo3:
-        # Generate module init
-        lines.append("")
-        lines.append("#[pymodule]")
-        lines.append("fn rust_module672(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {")
-        for node in tree.body:
-             if isinstance(node, ast.ClassDef):
-                 lines.append(f"    m.add_class::<{node.name}>()?;")
-             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                 lines.append(f"    m.add_function(wrap_pyfunction!({node.name}, m)?)?;")
-        lines.append("    Ok(())")
-        lines.append("}")
+        lines.extend(_generate_pyo3_module_init(tree))
 
     return "\n".join(lines)
+
+
+def _parse_rust_params(func: FunctionRecord, pyfunction: bool) -> str:
+    """Extract and convert Python parameters to Rust parameter string."""
+    try:
+        tree = ast.parse(func.code)
+        func_node = next(
+            (n for n in ast.walk(tree)
+             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
+            None,
+        )
+        if func_node is None:
+            raise ValueError("No function node found")
+        return _extract_ast_params(func_node, pyfunction)
+    except Exception:
+        return ", ".join(
+            f"{p}: PyObject" for p in func.parameters if p != "self")
+
+
+def _transpile_function_body(func: FunctionRecord, pyfunction: bool,
+                             ret_rust: str) -> List[str]:
+    """Translate function body AST to Rust lines."""
+    try:
+        tree = ast.parse(func.code)
+        func_node = next(
+            (n for n in ast.walk(tree)
+             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
+            None,
+        )
+        if func_node is None:
+            raise ValueError("No function node found")
+        body_lines = _translate_body(
+            func_node.body, indent=1, wrap_ok=pyfunction, ret_type=ret_rust)
+        if pyfunction and body_lines and not any("Ok(" in ln for ln in body_lines[-3:]):
+            body_lines.append("    Ok(())")
+        return body_lines
+    except Exception:
+        return ["    // TODO: translate function body", "    todo!()"]
 
 
 def transpile_function(func: FunctionRecord, *,
@@ -684,61 +716,19 @@ def transpile_function(func: FunctionRecord, *,
     if pyfunction:
         if not ret_rust.startswith("PyResult"):
             ret_rust = f"PyResult<{ret_rust}>"
-    else:
-        # Binary mode — use plain Rust types
-        if ret_rust == "PyObject":
-            ret_rust = "()"
+    elif ret_rust == "PyObject":
+        ret_rust = "()"
 
     # 2. Parameters
-    rust_params: List[str] = []
-    try:
-        tree = ast.parse(func.code)
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                for arg in node.args.args:
-                    name = arg.arg
-                    if name == "self":
-                        continue
-                    if arg.annotation:
-                        ann = ast.unparse(arg.annotation)
-                        rtype = py_type_to_rust(ann)
-                    else:
-                        rtype = "String" if not pyfunction else "PyObject"
-                    if not pyfunction and rtype == "PyObject":
-                        rtype = "String"  # fallback for binary mode
-                    rust_params.append(f"{name}: {rtype}")
-                break
-    except Exception:
-        for p in func.parameters:
-            if p != "self":
-                rust_params.append(f"{p}: PyObject")
-
-    params_str = ", ".join(rust_params)
+    params_str = _parse_rust_params(func, pyfunction)
 
     # 3. Signature
     if pyfunction:
         lines.append("#[pyfunction]")
-    fn_name = func.name
-    # Rust naming convention: snake_case (Python already uses it usually)
-    lines.append(f"fn {fn_name}({params_str}) -> {ret_rust} {{")
+    lines.append(f"fn {func.name}({params_str}) -> {ret_rust} {{")
 
     # 4. Body
-    try:
-        tree = ast.parse(func.code)
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                body_lines = _translate_body(node.body, indent=1,
-                                             wrap_ok=pyfunction,
-                                             ret_type=ret_rust)
-                lines.extend(body_lines)
-                # If last line doesn't return, add appropriate return
-                if pyfunction:
-                    if body_lines and not any("Ok(" in ln for ln in body_lines[-3:]):
-                        lines.append("    Ok(())")
-                break
-    except Exception:
-        lines.append("    // TODO: translate function body")
-        lines.append("    todo!()")
+    lines.extend(_transpile_function_body(func, pyfunction, ret_rust))
 
     lines.append("}")
     return "\n".join(lines)
@@ -747,6 +737,37 @@ def transpile_function(func: FunctionRecord, *,
 # ═══════════════════════════════════════════════════════════════════════════
 #  3.  Test Generation for Rust Candidates
 # ═══════════════════════════════════════════════════════════════════════════
+
+def _generate_single_golden_test(fn, safe_name: str, inputs, lines: List[str]) -> None:
+    """Append a single golden-capture test function to *lines*."""
+    mod_path = fn.file_path.replace("\\", "/").replace("/", ".")
+    if mod_path.endswith(".py"):
+        mod_path = mod_path[:-3]
+
+    lines.append(f"def test_golden_{safe_name}():")
+    lines.append(f'    """Golden capture for {fn.name} '
+                 f'({fn.file_path}:{fn.line_start})."""')
+    lines.append("    # Import the original function")
+    lines.append(f'    mod = importlib.import_module("{mod_path}")')
+    lines.append(f'    func = getattr(mod, "{fn.name}", None)')
+    lines.append("    if func is None:")
+    lines.append('        return  # function not importable')
+    lines.append("    results = []")
+    lines.append(f"    test_inputs = {json.dumps(inputs, default=str)}")
+    lines.append("    for kwargs in test_inputs:")
+    lines.append("        try:")
+    lines.append("            out = func(**kwargs)")
+    lines.append('            results.append({"input": kwargs, '
+                 '"output": repr(out), "error": None})')
+    lines.append("        except Exception as e:")
+    lines.append('            results.append({"input": kwargs, '
+                 '"output": None, "error": str(e)})')
+    lines.append(f'    path = FIXTURE_DIR / "{safe_name}_golden.json"')
+    lines.append("    path.write_text(json.dumps(results, indent=2, "
+                 "default=str), encoding='utf-8')")
+    lines.append('    assert len(results) > 0, "No test results captured"')
+    lines.append("")
+
 
 def generate_python_tests(candidates: List[RustCandidate],
                           output_dir: Path) -> Path:
@@ -774,38 +795,10 @@ def generate_python_tests(candidates: List[RustCandidate],
     for cand in candidates:
         fn = cand.func
         safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", fn.name)
-        # Generate test inputs
         inputs = gen.generate_inputs(fn.code)
         if not inputs:
             inputs = [{p: "test" for p in fn.parameters if p != "self"}]
-
-        lines.append(f"def test_golden_{safe_name}():")
-        lines.append(f'    """Golden capture for {fn.name} '
-                     f'({fn.file_path}:{fn.line_start})."""')
-        lines.append(f"    # Import the original function")
-        # Build import path from file
-        mod_path = fn.file_path.replace("\\", "/").replace("/", ".")
-        if mod_path.endswith(".py"):
-            mod_path = mod_path[:-3]
-        lines.append(f'    mod = importlib.import_module("{mod_path}")')
-        lines.append(f'    func = getattr(mod, "{fn.name}", None)')
-        lines.append(f"    if func is None:")
-        lines.append(f'        return  # function not importable')
-        lines.append(f"    results = []")
-        lines.append(f"    test_inputs = {json.dumps(inputs, default=str)}")
-        lines.append(f"    for kwargs in test_inputs:")
-        lines.append(f"        try:")
-        lines.append(f"            out = func(**kwargs)")
-        lines.append(f'            results.append({{"input": kwargs, '
-                     f'"output": repr(out), "error": None}})')
-        lines.append(f"        except Exception as e:")
-        lines.append(f'            results.append({{"input": kwargs, '
-                     f'"output": None, "error": str(e)}})')
-        lines.append(f'    path = FIXTURE_DIR / "{safe_name}_golden.json"')
-        lines.append(f"    path.write_text(json.dumps(results, indent=2, "
-                     f"default=str), encoding='utf-8')")
-        lines.append(f'    assert len(results) > 0, "No test results captured"')
-        lines.append("")
+        _generate_single_golden_test(fn, safe_name, inputs, lines)
 
     test_path.write_text("\n".join(lines), encoding="utf-8")
     return test_path
@@ -825,7 +818,7 @@ def generate_rust_verify_tests(candidates: List[RustCandidate],
         "",
         "try:",
         f"    import {crate_name}",
-        f"    HAS_RUST = True",
+        "    HAS_RUST = True",
         "except ImportError:",
         "    HAS_RUST = False",
         "",
@@ -841,24 +834,24 @@ def generate_rust_verify_tests(candidates: List[RustCandidate],
         lines.append(f"def test_rust_{safe_name}():")
         lines.append(f'    """Verify Rust {fn.name} matches Python golden."""')
         lines.append(f'    golden_path = FIXTURE_DIR / "{safe_name}_golden.json"')
-        lines.append(f"    if not golden_path.exists():")
-        lines.append(f'        pytest.skip("golden fixture not found")')
-        lines.append(f"    goldens = json.loads(golden_path.read_text())")
+        lines.append("    if not golden_path.exists():")
+        lines.append('        pytest.skip("golden fixture not found")')
+        lines.append("    goldens = json.loads(golden_path.read_text())")
         lines.append(f'    rust_fn = getattr({crate_name}, "{fn.name}", None)')
-        lines.append(f"    if rust_fn is None:")
-        lines.append(f'        pytest.skip("function not in Rust module")')
-        lines.append(f"    for case in goldens:")
-        lines.append(f"        if case.get('error'):")
-        lines.append(f"            continue  # skip error cases")
-        lines.append(f"        kwargs = case['input']")
-        lines.append(f"        expected = case['output']")
-        lines.append(f"        try:")
-        lines.append(f"            result = repr(rust_fn(**kwargs))")
-        lines.append(f"        except Exception as e:")
-        lines.append(f'            pytest.fail(f"Rust raised {{e}} for input {{kwargs}}")')
-        lines.append(f'        assert result == expected, (')
-        lines.append(f'            f"Mismatch: Rust={{result}} vs Python={{expected}} '
-                     f'for input={{kwargs}}")')
+        lines.append("    if rust_fn is None:")
+        lines.append('        pytest.skip("function not in Rust module")')
+        lines.append("    for case in goldens:")
+        lines.append("        if case.get('error'):")
+        lines.append("            continue  # skip error cases")
+        lines.append("        kwargs = case['input']")
+        lines.append("        expected = case['output']")
+        lines.append("        try:")
+        lines.append("            result = repr(rust_fn(**kwargs))")
+        lines.append("        except Exception as e:")
+        lines.append('            pytest.fail(f"Rust raised {e} for input {kwargs}")')
+        lines.append('        assert result == expected, (')
+        lines.append('            f"Mismatch: Rust={result} vs Python={expected} '
+                     'for input={kwargs}")')
         lines.append("")
 
     test_path.write_text("\n".join(lines), encoding="utf-8")
@@ -909,18 +902,13 @@ strip = true
 
 
 def _get_llm_engine():
-    """Lazily initialise the LLM transpiler engine (singleton)."""
-    if not hasattr(_get_llm_engine, "_cache"):
-        try:
-            from Analysis.llm_transpiler import get_llm_transpiler
-            eng = get_llm_transpiler()
-            _get_llm_engine._cache = eng if eng.available else None
-            if _get_llm_engine._cache:
-                from Core.utils import logger
-                logger.info("Auto-Rustify: LLM hybrid fallback active")
-        except Exception:
-            _get_llm_engine._cache = None
-    return _get_llm_engine._cache
+    """Lazily initialise the LLM transpiler engine (singleton).
+
+    Delegates to the canonical ``get_cached_llm_transpiler()`` in
+    ``Analysis.llm_transpiler`` to avoid duplicating the caching logic.
+    """
+    from Analysis.llm_transpiler import get_cached_llm_transpiler
+    return get_cached_llm_transpiler()
 
 
 def _transpile_with_fallback(func: FunctionRecord, *,
@@ -928,20 +916,21 @@ def _transpile_with_fallback(func: FunctionRecord, *,
     """AST transpile → if result has todo!(), try LLM fallback."""
     rust_code = transpile_function(func, pyfunction=pyfunction)
 
-    if "todo!()" in rust_code:
-        llm = _get_llm_engine()
-        if llm is not None:
-            llm_result = llm.transpile(
-                func.code, name_hint=func.name,
-                source_info=f"{func.file_path}:{func.line_start}",
-            )
-            if llm_result is not None:
-                # If pyfunction mode, ensure #[pyfunction] attr is present
-                if pyfunction and "#[pyfunction]" not in llm_result:
-                    llm_result = "#[pyfunction]\n" + llm_result
-                rust_code = llm_result
-
-    return rust_code
+    if "todo!()" not in rust_code:
+        return rust_code
+    llm = _get_llm_engine()
+    if llm is None:
+        return rust_code
+    llm_result = llm.transpile(
+        func.code, name_hint=func.name,
+        source_info=f"{func.file_path}:{func.line_start}",
+    )
+    if llm_result is None:
+        return rust_code
+    # If pyfunction mode, ensure #[pyfunction] attr is present
+    if pyfunction and "#[pyfunction]" not in llm_result:
+        llm_result = "#[pyfunction]\n" + llm_result
+    return llm_result
 
 
 def _build_lib_rs(candidates: List[RustCandidate], crate_name: str, *,
@@ -969,8 +958,8 @@ def _build_lib_rs(candidates: List[RustCandidate], crate_name: str, *,
 
     # PyO3 module registration
     if pyo3:
-        sections.append(f"/// Python module registration")
-        sections.append(f"#[pymodule]")
+        sections.append("/// Python module registration")
+        sections.append("#[pymodule]")
         sections.append(f"fn {crate_name}(m: &Bound<'_, PyModule>) -> PyResult<()> {{")
         for name in func_names:
             sections.append(f'    m.add_function(wrap_pyfunction!({name}, m)?)?;')
@@ -1047,11 +1036,11 @@ def _build_rust_tests(candidates: List[RustCandidate]) -> str:
     for cand in candidates:
         fn = cand.func
         safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", fn.name)
-        lines.append(f"    #[test]")
+        lines.append("    #[test]")
         lines.append(f"    fn test_{safe_name}_compiles() {{")
-        lines.append(f'        // Smoke test: function exists and is callable')
-        lines.append(f"        // Full verification done via Python golden tests")
-        lines.append(f"    }}")
+        lines.append('        // Smoke test: function exists and is callable')
+        lines.append("        // Full verification done via Python golden tests")
+        lines.append("    }")
         lines.append("")
 
     lines.append("}")
@@ -1125,6 +1114,30 @@ class CompileResult:
     rustflags: str = ""
 
 
+def _build_cargo_env(system: SystemProfile) -> tuple[dict, str]:
+    """Build environment dict and RUSTFLAGS from system profile."""
+    rustflags = ""
+    if system.cpu_features:
+        rustflags = " ".join(f"-C target-feature=+{f}"
+                             for f in system.cpu_features)
+    env = os.environ.copy()
+    if rustflags:
+        env["RUSTFLAGS"] = rustflags
+    return env, rustflags
+
+
+def _run_cargo_build(project_dir: Path, target: str, env: dict,
+                     timeout: int = 300) -> subprocess.CompletedProcess:
+    """Execute ``cargo build --release`` and return the CompletedProcess."""
+    cmd = ["cargo", "build", "--release"]
+    if target:
+        cmd.extend(["--target", target])
+    return subprocess.run(
+        cmd, cwd=str(project_dir),
+        capture_output=True, text=True, timeout=timeout, env=env,
+    )
+
+
 def compile_crate(project_dir: Path,
                   system: SystemProfile,
                   *,
@@ -1135,64 +1148,28 @@ def compile_crate(project_dir: Path,
     """
     target = system.rust_target
     t0 = time.time()
-
-    # Build RUSTFLAGS with CPU features
-    rustflags = ""
-    if system.cpu_features:
-        feat_flags = " ".join(f"-C target-feature=+{f}"
-                              for f in system.cpu_features)
-        rustflags = feat_flags
-
-    env = os.environ.copy()
-    if rustflags:
-        env["RUSTFLAGS"] = rustflags
-
-    cmd = ["cargo", "build", "--release"]
-    if target:
-        cmd.extend(["--target", target])
+    env, rustflags = _build_cargo_env(system)
 
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(project_dir),
-            capture_output=True,
-            text=True,
-            timeout=300,
-            env=env,
-        )
-
+        result = _run_cargo_build(project_dir, target, env)
         duration = round(time.time() - t0, 2)
-
-        # Find the built artefact
         artefact = ""
         if result.returncode == 0:
             artefact = _find_artefact(project_dir, target, mode=mode)
-
         return CompileResult(
-            success=result.returncode == 0,
-            target_triple=target,
-            artefact_path=artefact,
-            stdout=result.stdout,
-            stderr=result.stderr,
-            duration_s=duration,
-            rustflags=rustflags,
-        )
-
+            success=result.returncode == 0, target_triple=target,
+            artefact_path=artefact, stdout=result.stdout,
+            stderr=result.stderr, duration_s=duration, rustflags=rustflags)
     except subprocess.TimeoutExpired:
         return CompileResult(
-            success=False,
-            target_triple=target,
+            success=False, target_triple=target,
             stderr="Build timed out after 300 seconds",
-            duration_s=300.0,
-            rustflags=rustflags,
-        )
+            duration_s=300.0, rustflags=rustflags)
     except FileNotFoundError:
         return CompileResult(
-            success=False,
-            target_triple=target,
+            success=False, target_triple=target,
             stderr="cargo not found — install Rust from https://rustup.rs",
-            rustflags=rustflags,
-        )
+            rustflags=rustflags)
 
 
 def _parse_error_functions(stderr: str) -> List[str]:
@@ -1204,6 +1181,42 @@ def _parse_error_functions(stderr: str) -> List[str]:
     return list(bad_lines)
 
 
+def _find_fn_ranges(lines: List[str]) -> List[tuple]:
+    """Build a list of (fn_start, fn_end) line index pairs from Rust source."""
+    fn_ranges: List[tuple] = []
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].lstrip()
+        if not (stripped.startswith("fn ") and "{" in lines[i]):
+            i += 1
+            continue
+        fn_start = i
+        depth = 0
+        for j in range(i, len(lines)):
+            depth += lines[j].count("{") - lines[j].count("}")
+            if depth <= 0 and j > fn_start:
+                fn_ranges.append((fn_start, j))
+                i = j + 1
+                break
+        else:
+            fn_ranges.append((fn_start, len(lines) - 1))
+            break
+        continue  # already advanced i
+    return fn_ranges
+
+
+def _identify_failing_fns(fn_ranges: List[tuple], lines: List[str],
+                          bad_lines: List[int]) -> List[tuple]:
+    """Return the subset of *fn_ranges* that contain error lines."""
+    to_replace: List[tuple] = []
+    for fn_start, fn_end in fn_ranges:
+        if "fn main()" in lines[fn_start]:
+            continue
+        if any((fn_start + 1) <= bl <= (fn_end + 1) for bl in bad_lines):
+            to_replace.append((fn_start, fn_end))
+    return to_replace
+
+
 def _comment_out_failing_fns(src_path: Path, bad_lines: List[int]) -> int:
     """Replace functions containing error lines with ``todo!()`` stubs.
 
@@ -1213,37 +1226,9 @@ def _comment_out_failing_fns(src_path: Path, bad_lines: List[int]) -> int:
     source = src_path.read_text(encoding="utf-8")
     lines = source.split("\n")
 
-    # Build map: (fn_start, fn_end) for each function
-    fn_ranges: List[tuple] = []
-    i = 0
-    while i < len(lines):
-        stripped = lines[i].lstrip()
-        if stripped.startswith("fn ") and "{" in lines[i]:
-            fn_start = i
-            depth = 0
-            for j in range(i, len(lines)):
-                depth += lines[j].count("{") - lines[j].count("}")
-                if depth <= 0 and j > fn_start:
-                    fn_ranges.append((fn_start, j))
-                    i = j + 1
-                    break
-            else:
-                fn_ranges.append((fn_start, len(lines) - 1))
-                break
-        i += 1
+    fn_ranges = _find_fn_ranges(lines)
+    to_replace = _identify_failing_fns(fn_ranges, lines, bad_lines)
 
-    # Identify ALL functions that contain error lines
-    to_replace: List[tuple] = []
-    for fn_start, fn_end in fn_ranges:
-        if "fn main()" in lines[fn_start]:
-            continue  # never replace main()
-        has_error = any(
-            (fn_start + 1) <= bl <= (fn_end + 1) for bl in bad_lines
-        )
-        if has_error:
-            to_replace.append((fn_start, fn_end))
-
-    # Replace in reverse order (so indices stay valid)
     for fn_start, fn_end in reversed(to_replace):
         sig_line = lines[fn_start]
         lines[fn_start:fn_end + 1] = [sig_line, "    todo!()", "}"]
@@ -1283,6 +1268,38 @@ def compile_with_repair(project_dir: Path,
     return result
 
 
+_BINARY_SKIP_SUFFIXES = (".d", ".exp")
+
+_CDYLIB_EXTS = {
+    "Windows": [".pyd", ".dll"],
+    "Darwin":  [".dylib", ".so"],
+}
+
+
+def _find_binary_artefact(release_dir: Path) -> str:
+    """Locate a binary artefact in *release_dir*."""
+    ext = ".exe" if platform.system() == "Windows" else ""
+    for f in release_dir.iterdir():
+        if not f.is_file() or f.name.startswith("."):
+            continue
+        if f.suffix != ext:
+            continue
+        if any(f.name.endswith(s) for s in _BINARY_SKIP_SUFFIXES):
+            continue
+        return str(f)
+    return ""
+
+
+def _find_cdylib_artefact(release_dir: Path) -> str:
+    """Locate a PyO3 cdylib artefact in *release_dir*."""
+    exts = _CDYLIB_EXTS.get(platform.system(), [".so"])
+    for ext in exts:
+        for f in release_dir.iterdir():
+            if f.is_file() and f.suffix == ext:
+                return str(f)
+    return ""
+
+
 def _find_artefact(project_dir: Path, target: str, *,
                    mode: str = "pyo3") -> str:
     """Locate the compiled artefact after a successful build."""
@@ -1294,29 +1311,9 @@ def _find_artefact(project_dir: Path, target: str, *,
     if not release_dir.exists():
         return ""
 
-    # Look for the right extension
-    system = platform.system()
     if mode == "binary":
-        ext = ".exe" if system == "Windows" else ""
-        for f in release_dir.iterdir():
-            if f.is_file() and f.suffix == ext and not f.name.startswith("."):
-                if f.name.endswith(".d") or f.name.endswith(".exp"):
-                    continue
-                return str(f)
-    else:
-        # PyO3 cdylib
-        if system == "Windows":
-            exts = [".pyd", ".dll"]
-        elif system == "Darwin":
-            exts = [".dylib", ".so"]
-        else:
-            exts = [".so"]
-        for ext in exts:
-            for f in release_dir.iterdir():
-                if f.is_file() and f.suffix == ext:
-                    return str(f)
-
-    return ""
+        return _find_binary_artefact(release_dir)
+    return _find_cdylib_artefact(release_dir)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1401,6 +1398,16 @@ class PipelineReport:
     errors: List[str] = field(default_factory=list)
     phases: List[Dict[str, Any]] = field(default_factory=list)
 
+
+@dataclass
+class RustifyConfig:
+    """Configuration bundle for RustifyPipeline."""
+    crate_name: str = "xray_rustified"
+    min_score: float = 5.0
+    max_candidates: int = 50
+    mode: str = "pyo3"
+    exclude_dirs: Optional[List[str]] = None
+
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
             "system": self.system.to_dict(),
@@ -1455,12 +1462,17 @@ class RustifyPipeline:
         self,
         project_dir: str | Path,
         output_dir: str | Path | None = None,
-        crate_name: str = "xray_rustified",
-        min_score: float = 5.0,
-        max_candidates: int = 50,
-        mode: str = "pyo3",
-        exclude_dirs: Optional[List[str]] = None,
+        config: Optional[RustifyConfig] = None,
+        **kwargs,
     ):
+        cfg = config or RustifyConfig()
+        # Allow keyword overrides for backward compat
+        crate_name = kwargs.get('crate_name', cfg.crate_name)
+        min_score = kwargs.get('min_score', cfg.min_score)
+        max_candidates = kwargs.get('max_candidates', cfg.max_candidates)
+        mode = kwargs.get('mode', cfg.mode)
+        exclude_dirs = kwargs.get('exclude_dirs', cfg.exclude_dirs)
+
         self.project_dir = Path(project_dir).resolve()
         self.output_dir = (
             Path(output_dir).resolve() if output_dir
@@ -1476,6 +1488,76 @@ class RustifyPipeline:
         ]
         self._progress_cb: Optional[Callable[[float, str], None]] = None
 
+    def _phase_scan(self, report: PipelineReport):
+        """Phase 2: scan, score, filter candidates."""
+        t0 = time.time()
+        candidates = self._scan_and_score()
+        report.scan_duration_s = round(time.time() - t0, 2)
+        report.candidates_total = len(candidates)
+        selected = [c for c in candidates if c.score >= self.min_score]
+        selected = selected[:self.max_candidates]
+        report.candidates_selected = len(selected)
+        if not selected:
+            report.errors.append(
+                f"No candidates above min_score={self.min_score}. "
+                f"Total scored: {len(candidates)}, "
+                f"top score: {candidates[0].score if candidates else 0}")
+            report.phases.append({"name": "score", "status": "no_candidates"})
+            return None
+        report.phases.append({
+            "name": "score", "status": "ok",
+            "total": report.candidates_total,
+            "selected": report.candidates_selected,
+            "top_score": selected[0].score,
+        })
+        return selected
+
+    def _phase_generate(self, selected, report: PipelineReport):
+        """Phase 3+4: generate golden tests and Cargo project."""
+        test_path = generate_python_tests(selected, self.output_dir)
+        report.test_gen_path = str(test_path)
+        report.phases.append({"name": "test_gen", "status": "ok",
+                              "path": str(test_path)})
+        gen = generate_cargo_project
+        cargo_dir = gen(selected, self.output_dir, self.crate_name,
+                        mode="binary" if self.mode == "binary" else "pyo3")
+        report.cargo_project_path = str(cargo_dir)
+        report.phases.append({"name": "cargo_gen", "status": "ok",
+                              "path": str(cargo_dir)})
+        verify_path = generate_rust_verify_tests(
+            selected, self.crate_name, self.output_dir)
+        report.verify_test_path = str(verify_path)
+        return cargo_dir
+
+    def _phase_compile(self, cargo_dir, report: PipelineReport):
+        """Phase 5: compile with auto-repair."""
+        compile_res = compile_with_repair(
+            cargo_dir, report.system, mode=self.mode)
+        report.compile_result = compile_res
+        status = "ok" if compile_res.success else "failed"
+        phase = {"name": "compile", "status": status}
+        if compile_res.success:
+            phase.update(artefact=compile_res.artefact_path,
+                         duration_s=compile_res.duration_s,
+                         rustflags=compile_res.rustflags)
+        else:
+            report.errors.append(f"Compilation failed:\n{compile_res.stderr[:2000]}")
+            phase["stderr"] = compile_res.stderr[:500]
+        report.phases.append(phase)
+
+    def _phase_verify(self, cargo_dir, report: PipelineReport):
+        """Phase 6: cargo test verification."""
+        verify_res = verify_build(cargo_dir)
+        report.verify_result = verify_res
+        if verify_res.success:
+            report.phases.append({"name": "verify", "status": "ok",
+                                  "passed": verify_res.tests_passed})
+        else:
+            report.errors.append(
+                f"Verification failed: {verify_res.tests_failed} test(s)")
+            report.phases.append({"name": "verify", "status": "failed",
+                                  "failed": verify_res.tests_failed})
+
     def run(self, progress_cb: Optional[Callable[[float, str], None]] = None
             ) -> PipelineReport:
         """Execute the full pipeline and return a report.
@@ -1486,107 +1568,23 @@ class RustifyPipeline:
         report = PipelineReport(system=detect_system())
 
         try:
-            # Phase 1: Detect system
             self._report(0.0, "Detecting CPU / OS")
-            report.phases.append({
-                "name": "detect_system",
-                "status": "ok",
-                "detail": report.system.to_dict(),
-            })
+            report.phases.append({"name": "detect_system", "status": "ok",
+                                  "detail": report.system.to_dict()})
 
-            # Phase 2: Scan & score
             self._report(0.05, "Scanning Python project")
-            t0 = time.time()
-            candidates = self._scan_and_score()
-            report.scan_duration_s = round(time.time() - t0, 2)
-            report.candidates_total = len(candidates)
-
-            # Filter by score
-            selected = [c for c in candidates if c.score >= self.min_score]
-            selected = selected[:self.max_candidates]
-            report.candidates_selected = len(selected)
-
+            selected = self._phase_scan(report)
             if not selected:
-                report.errors.append(
-                    f"No candidates above min_score={self.min_score}. "
-                    f"Total scored: {len(candidates)}, "
-                    f"top score: {candidates[0].score if candidates else 0}")
-                report.phases.append({
-                    "name": "score", "status": "no_candidates"})
                 return report
 
-            report.phases.append({
-                "name": "score",
-                "status": "ok",
-                "total": report.candidates_total,
-                "selected": report.candidates_selected,
-                "top_score": selected[0].score,
-            })
+            self._report(0.25, "Generating golden tests & Rust crate")
+            cargo_dir = self._phase_generate(selected, report)
 
-            # Phase 3: Generate golden tests
-            self._report(0.25, "Generating golden tests")
-            test_path = generate_python_tests(selected, self.output_dir)
-            report.test_gen_path = str(test_path)
-            report.phases.append({
-                "name": "test_gen", "status": "ok",
-                "path": str(test_path),
-            })
-
-            # Phase 4: Generate Cargo project
-            self._report(0.40, "Generating Rust crate")
-            cargo_dir = generate_cargo_project(
-                selected, self.output_dir, self.crate_name) if self.mode != "binary" else \
-                generate_cargo_project(
-                    selected, self.output_dir, self.crate_name, mode="binary")
-            report.cargo_project_path = str(cargo_dir)
-            report.phases.append({
-                "name": "cargo_gen", "status": "ok",
-                "path": str(cargo_dir),
-            })
-
-            # Generate Rust verify tests
-            verify_path = generate_rust_verify_tests(
-                selected, self.crate_name, self.output_dir)
-            report.verify_test_path = str(verify_path)
-
-            # Phase 5: Compile (with auto-repair on failure)
             self._report(0.55, f"Compiling → {report.system.rust_target}")
-            compile_res = compile_with_repair(
-                cargo_dir, report.system, mode=self.mode)
-            report.compile_result = compile_res
+            self._phase_compile(cargo_dir, report)
 
-            if compile_res.success:
-                report.phases.append({
-                    "name": "compile", "status": "ok",
-                    "artefact": compile_res.artefact_path,
-                    "duration_s": compile_res.duration_s,
-                    "rustflags": compile_res.rustflags,
-                })
-            else:
-                report.errors.append(
-                    f"Compilation failed:\n{compile_res.stderr[:2000]}")
-                report.phases.append({
-                    "name": "compile", "status": "failed",
-                    "stderr": compile_res.stderr[:500],
-                })
-
-            # Phase 6: Verify (cargo test)
             self._report(0.85, "Running cargo test")
-            verify_res = verify_build(cargo_dir)
-            report.verify_result = verify_res
-
-            if verify_res.success:
-                report.phases.append({
-                    "name": "verify", "status": "ok",
-                    "passed": verify_res.tests_passed,
-                })
-            else:
-                report.errors.append(
-                    f"Verification failed: {verify_res.tests_failed} test(s)")
-                report.phases.append({
-                    "name": "verify", "status": "failed",
-                    "failed": verify_res.tests_failed,
-                })
+            self._phase_verify(cargo_dir, report)
 
             self._report(1.0, "Pipeline complete")
 
@@ -1601,6 +1599,22 @@ class RustifyPipeline:
         if self._progress_cb:
             self._progress_cb(frac, label)
 
+    def _parse_file_functions(self, filepath: str) -> List[FunctionRecord]:
+        """Parse functions from a single file, skipping large files."""
+        try:
+            line_count = Path(filepath).read_text(
+                encoding="utf-8", errors="ignore").count("\n")
+            if line_count > 500:
+                return []
+        except Exception:
+            return []
+        try:
+            funcs, _classes, _err = extract_functions_from_file(
+                filepath, self.project_dir)
+            return funcs
+        except Exception:
+            return []
+
     def _scan_and_score(self) -> List[RustCandidate]:
         """Scan + score all Python functions in the project.
 
@@ -1614,21 +1628,7 @@ class RustifyPipeline:
         all_functions: List[FunctionRecord] = []
 
         for i, f in enumerate(py_files):
-            try:
-                # Skip very large files (>500 lines) — they cause
-                # stack issues and aren't good transpilation targets anyway
-                try:
-                    line_count = Path(f).read_text(encoding="utf-8",
-                                                   errors="ignore").count("\n")
-                    if line_count > 500:
-                        continue
-                except Exception:
-                    pass
-                funcs, _classes, _err = extract_functions_from_file(
-                    f, self.project_dir)
-                all_functions.extend(funcs)
-            except Exception:
-                pass  # skip files that cause parsing issues
+            all_functions.extend(self._parse_file_functions(f))
             if self._progress_cb and py_files:
                 self._report(
                     0.05 + 0.15 * (i + 1) / len(py_files),
@@ -1636,11 +1636,8 @@ class RustifyPipeline:
 
         sys.setrecursionlimit(old_limit)
 
-        # Filter out framework / GUI / test functions that cannot compile
         transpilable = [f for f in all_functions if _is_transpilable(f)]
-
-        advisor = RustAdvisor()
-        scored = advisor.score(transpilable)
+        scored = RustAdvisor().score(transpilable)
 
         # Deduplicate by function name (keep highest-scoring version)
         seen: set = set()

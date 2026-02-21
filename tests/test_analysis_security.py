@@ -7,8 +7,17 @@ import shutil
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from Core.types import SmellIssue, Severity
+from Core.types import Severity
 from Analysis.security import SecurityAnalyzer
+from tests.conftest_analyzers import (
+    make_mock_analyze, assert_empty_output_returns_empty,
+    assert_invalid_json_returns_empty, assert_all_issues_are_smell_issues,
+    assert_not_available_when_tool_missing, assert_returns_empty_when_not_available,
+    assert_timeout_returns_empty, assert_file_not_found_returns_empty,
+)
+
+# Shared mock-analyze callable for SecurityAnalyzer
+_sec_mock = make_mock_analyze(SecurityAnalyzer, "/usr/bin/bandit")
 
 
 # ── helpers ──────────────────────────────────────────────────────────
@@ -106,15 +115,10 @@ class TestSecurityAvailability:
             assert analyzer.available is True
 
     def test_not_available_when_bandit_missing(self):
-        with patch("shutil.which", return_value=None):
-            analyzer = SecurityAnalyzer()
-            assert analyzer.available is False
+        assert_not_available_when_tool_missing(SecurityAnalyzer)
 
     def test_returns_empty_when_not_available(self):
-        with patch("shutil.which", return_value=None):
-            analyzer = SecurityAnalyzer()
-            result = analyzer.analyze(Path("/fake/path"))
-            assert result == []
+        assert_returns_empty_when_not_available(SecurityAnalyzer)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -126,15 +130,7 @@ class TestSecuritySeverityMapping:
 
     def _mock_analyze(self, bandit_json: str) -> list:
         """Run analyze with mocked subprocess."""
-        with patch("shutil.which", return_value="/usr/bin/bandit"):
-            analyzer = SecurityAnalyzer()
-
-        mock_result = MagicMock()
-        mock_result.stdout = bandit_json
-        mock_result.returncode = 1
-
-        with patch("subprocess.run", return_value=mock_result):
-            return analyzer.analyze(Path("/project"))
+        return _sec_mock(bandit_json)
 
     def test_high_maps_to_critical(self):
         issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
@@ -163,15 +159,7 @@ class TestSecurityParsing:
     """Tests for security result parsing."""
 
     def _mock_analyze(self, bandit_json: str) -> list:
-        with patch("shutil.which", return_value="/usr/bin/bandit"):
-            analyzer = SecurityAnalyzer()
-
-        mock_result = MagicMock()
-        mock_result.stdout = bandit_json
-        mock_result.returncode = 1
-
-        with patch("subprocess.run", return_value=mock_result):
-            return analyzer.analyze(Path("/project"))
+        return _sec_mock(bandit_json)
 
     def test_parses_sample_output(self):
         issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
@@ -180,8 +168,7 @@ class TestSecurityParsing:
 
     def test_all_issues_are_smell_issues(self):
         issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
-        for issue in issues:
-            assert isinstance(issue, SmellIssue)
+        assert_all_issues_are_smell_issues(issues)
 
     def test_source_is_bandit(self):
         issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
@@ -234,12 +221,10 @@ class TestSecurityParsing:
         assert issues[0].severity == Severity.CRITICAL
 
     def test_empty_output_returns_empty(self):
-        issues = self._mock_analyze("")
-        assert issues == []
+        assert_empty_output_returns_empty(_sec_mock)
 
     def test_invalid_json_returns_empty(self):
-        issues = self._mock_analyze("not json at all {{{")
-        assert issues == []
+        assert_invalid_json_returns_empty(_sec_mock)
 
     def test_empty_results_returns_empty(self):
         empty = json.dumps({"errors": [], "results": []})
@@ -322,21 +307,10 @@ class TestSecuritySuggestions:
 class TestSecurityErrorHandling:
 
     def test_timeout_returns_empty(self):
-        import subprocess as sp
-        with patch("shutil.which", return_value="/usr/bin/bandit"):
-            analyzer = SecurityAnalyzer()
-
-        with patch("subprocess.run", side_effect=sp.TimeoutExpired(cmd="bandit", timeout=300)):
-            result = analyzer.analyze(Path("/project"))
-            assert result == []
+        assert_timeout_returns_empty(SecurityAnalyzer, "/usr/bin/bandit", "bandit")
 
     def test_file_not_found_returns_empty(self):
-        with patch("shutil.which", return_value="/usr/bin/bandit"):
-            analyzer = SecurityAnalyzer()
-
-        with patch("subprocess.run", side_effect=FileNotFoundError):
-            result = analyzer.analyze(Path("/project"))
-            assert result == []
+        assert_file_not_found_returns_empty(SecurityAnalyzer, "/usr/bin/bandit")
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -421,13 +395,7 @@ class TestSecurityEdgeCases:
     """Tests for security edge case handling."""
 
     def _mock_analyze(self, bandit_json: str) -> list:
-        with patch("shutil.which", return_value="/usr/bin/bandit"):
-            analyzer = SecurityAnalyzer()
-        mock_result = MagicMock()
-        mock_result.stdout = bandit_json
-        mock_result.returncode = 1
-        with patch("subprocess.run", return_value=mock_result):
-            return analyzer.analyze(Path("/project"))
+        return _sec_mock(bandit_json)
 
     def test_b101_in_non_test_file_is_kept(self):
         """B101 (assert-used) in a production file should NOT be filtered."""
