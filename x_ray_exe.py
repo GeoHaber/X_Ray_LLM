@@ -370,5 +370,25 @@ def main():
     print(f"{'=' * 66}\n")
 
 
+def _is_interactive_console() -> bool:
+    """Return True when the .exe was likely double-clicked (not piped)."""
+    try:
+        return sys.stdin is not None and sys.stdin.isatty()
+    except Exception:
+        return False
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n  Interrupted.")
+    except Exception as exc:
+        print(f"\n  FATAL ERROR: {exc}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        # Keep the window open when double-clicked from Explorer
+        if getattr(sys, 'frozen', False) and _is_interactive_console():
+            print()
+            input("  Press Enter to exit...")
