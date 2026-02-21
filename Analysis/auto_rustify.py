@@ -288,9 +288,17 @@ def py_type_to_rust(py_type: str) -> str:
 def _rust_op(op) -> str:
     """AST operator → Rust symbol."""
     return {
-        ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/",
-        ast.Mod: "%", ast.Pow: ".pow", ast.BitOr: "|", ast.BitAnd: "&",
-        ast.BitXor: "^", ast.LShift: "<<", ast.RShift: ">>",
+        ast.Add: "+",
+        ast.Sub: "-",
+        ast.Mult: "*",
+        ast.Div: "/",
+        ast.Mod: "%",
+        ast.Pow: ".pow",
+        ast.BitOr: "|",
+        ast.BitAnd: "&",
+        ast.BitXor: "^",
+        ast.LShift: "<<",
+        ast.RShift: ">>",
         ast.FloorDiv: "/",
     }.get(type(op), "+")
 
