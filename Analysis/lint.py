@@ -12,13 +12,47 @@ Requires: ruff (pip install ruff)
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from Core.types import SmellIssue, Severity
 from Core.utils import logger
+
+
+def _find_ruff() -> Optional[str]:
+    """Locate the ruff executable, including in frozen PyInstaller bundles."""
+    # 1. Normal PATH lookup
+    found = shutil.which("ruff")
+    if found:
+        return found
+
+    # 2. Frozen exe: check the bundle directory (onedir mode)
+    candidates: List[Path] = []
+    if getattr(sys, "frozen", False):
+        # _MEIPASS is the temp extraction dir (onefile) or the exe dir (onedir)
+        meipass = Path(getattr(sys, "_MEIPASS", ""))
+        exe_dir = Path(sys.executable).parent
+        candidates.extend([
+            meipass / "ruff.exe",
+            exe_dir / "ruff.exe",
+            meipass / "ruff",
+            exe_dir / "ruff",
+        ])
+    else:
+        # Dev mode: check .venv/Scripts
+        project = Path(__file__).resolve().parent.parent
+        candidates.append(project / ".venv" / "Scripts" / "ruff.exe")
+
+    for p in candidates:
+        if p.is_file():
+            logger.info(f"Found ruff at: {p}")
+            return str(p)
+
+    return None
 
 
 # Ruff rule code → X-Ray severity mapping
@@ -51,7 +85,7 @@ class LintAnalyzer:
 
     def __init__(self, extra_args: Optional[List[str]] = None):
         self.extra_args = extra_args or []
-        self._ruff_path = shutil.which("ruff")
+        self._ruff_path = _find_ruff()
 
     @property
     def available(self) -> bool:

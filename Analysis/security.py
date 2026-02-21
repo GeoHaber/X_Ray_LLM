@@ -12,13 +12,46 @@ Requires: bandit (pip install bandit)
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from Core.types import SmellIssue, Severity
 from Core.utils import logger
+
+
+def _find_bandit() -> Optional[str]:
+    """Locate the bandit executable, including in frozen PyInstaller bundles."""
+    # 1. Normal PATH lookup
+    found = shutil.which("bandit")
+    if found:
+        return found
+
+    # 2. Frozen exe: check the bundle directory (onedir mode)
+    candidates: List[Path] = []
+    if getattr(sys, "frozen", False):
+        meipass = Path(getattr(sys, "_MEIPASS", ""))
+        exe_dir = Path(sys.executable).parent
+        candidates.extend([
+            meipass / "bandit.exe",
+            exe_dir / "bandit.exe",
+            meipass / "bandit",
+            exe_dir / "bandit",
+        ])
+    else:
+        # Dev mode: check .venv/Scripts
+        project = Path(__file__).resolve().parent.parent
+        candidates.append(project / ".venv" / "Scripts" / "bandit.exe")
+
+    for p in candidates:
+        if p.is_file():
+            logger.info(f"Found bandit at: {p}")
+            return str(p)
+
+    return None
 
 
 # Bandit severity → X-Ray severity
@@ -85,7 +118,7 @@ class SecurityAnalyzer:
         """
         self.severity_threshold = severity_threshold
         self.extra_args = extra_args or []
-        self._bandit_path = shutil.which("bandit")
+        self._bandit_path = _find_bandit()
 
     @property
     def available(self) -> bool:

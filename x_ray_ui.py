@@ -250,18 +250,19 @@ def _generate_unified_function(funcs_data: List[Dict[str, Any]],
 _CUSTOM_CSS = """
 <style>
 /* ── Global overrides ─────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
     --accent:  #00d4ff;
     --accent2: #7c4dff;
     --bg-card: rgba(17, 25, 40, 0.75);
     --border:  rgba(255,255,255,0.08);
+    --font-body: 'Segoe UI', -apple-system, system-ui, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'Cascadia Code', 'Consolas', 'SF Mono', 'Fira Code', monospace;
 }
 
 /* Main container */
 .stApp {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-body);
 }
 
 /* Sidebar styling */
@@ -274,7 +275,7 @@ _CUSTOM_CSS = """
 [data-testid="stSidebar"] .stMarkdown h2,
 [data-testid="stSidebar"] .stMarkdown h3 {
     color: var(--accent) !important;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
 }
 
 /* Metric cards */
@@ -301,7 +302,7 @@ _CUSTOM_CSS = """
 }
 .stTabs [data-baseweb="tab"] {
     border-radius: 8px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.85rem;
     padding: 8px 16px;
 }
@@ -312,20 +313,20 @@ _CUSTOM_CSS = """
 
 /* Expander styling */
 .streamlit-expanderHeader {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.85rem;
     border-radius: 8px;
 }
 
 /* Code blocks */
 code, .stCode {
-    font-family: 'JetBrains Mono', monospace !important;
+    font-family: var(--font-mono) !important;
 }
 
 /* Buttons */
 .stButton > button {
     border-radius: 8px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-weight: 600;
     transition: all 0.2s ease;
 }
@@ -342,7 +343,7 @@ code, .stCode {
 /* Download buttons */
 .stDownloadButton > button {
     border-radius: 8px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
 }
 
 /* Progress bars and sliders */
@@ -569,38 +570,26 @@ def _render_grade_card(grade: Dict[str, Any]):
     st.markdown(f"""
     <div style="
         text-align: center;
-        padding: 2rem 1.5rem;
+        padding: 1.2rem 1rem;
         border-radius: 16px;
         background: linear-gradient(135deg, {color}15, {color}30);
         border: 1px solid {color}66;
-        box-shadow: 0 0 {glow_size}px {color}33, inset 0 1px 0 rgba(255,255,255,0.05);
+        box-shadow: 0 0 {glow_size}px {color}33;
         backdrop-filter: blur(12px);
-        position: relative;
-        overflow: hidden;
     ">
-        <div style="
-            position: absolute; top: -50%; left: -50%;
-            width: 200%; height: 200%;
-            background: radial-gradient(circle at 50% 50%, {color}08, transparent 70%);
-        "></div>
         <p style="
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 5rem; font-weight: 700;
+            font-size: 3.5rem; font-weight: 700;
             margin: 0; color: {color};
-            text-shadow: 0 0 40px {color}66;
-            position: relative;
+            text-shadow: 0 0 30px {color}66;
         ">{letter}</p>
         <p style="
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 1.6rem; font-weight: 600;
+            font-size: 1.2rem; font-weight: 600;
             margin: 0.2rem 0; color: {color}cc;
-            position: relative;
         ">{score} / 100</p>
         <p style="
-            margin: 0; opacity: 0.5; font-size: 0.8rem;
+            margin: 0; opacity: 0.5; font-size: 0.7rem;
             text-transform: uppercase; letter-spacing: 2px;
-            position: relative;
-        ">Combined Quality Score</p>
+        ">Quality Score</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -624,7 +613,7 @@ def _render_stats_bar(meta: Dict[str, Any]):
                 border: 1px solid rgba(255,255,255,0.06);
             ">
                 <p style="font-size: 1.8rem; margin: 0;">{icon}</p>
-                <p style="font-family: 'JetBrains Mono', monospace;
+                <p style="font-family:'Cascadia Code','Consolas',monospace;
                           font-size: 1.3rem; font-weight: 700;
                           margin: 0; color: #00d4ff;">{value}</p>
                 <p style="font-size: 0.75rem; margin: 0; opacity: 0.5;
@@ -674,7 +663,7 @@ def _render_smells_tab(results: Dict[str, Any]):
             pct = int(count / max(max_count, 1) * 100)
             st.markdown(f"""
             <div style="display:flex; align-items:center; gap:10px; margin:4px 0;">
-                <span style="min-width:180px; font-family:'JetBrains Mono',monospace;
+                <span style="min-width:180px; font-family:'Cascadia Code','Consolas',monospace;
                              font-size:0.8rem;">{cat}</span>
                 <div style="flex:1; background:rgba(255,255,255,0.06);
                             border-radius:4px; height:20px; overflow:hidden;">
@@ -682,7 +671,7 @@ def _render_smells_tab(results: Dict[str, Any]):
                                 background:linear-gradient(90deg,#ff6b6b,#ffa06b);
                                 border-radius:4px; transition:width 0.3s;"></div>
                 </div>
-                <span style="font-family:'JetBrains Mono',monospace;
+                <span style="font-family:'Cascadia Code','Consolas',monospace;
                              font-weight:700; min-width:30px;">{count}</span>
             </div>
             """, unsafe_allow_html=True)
@@ -893,7 +882,7 @@ def _render_lint_tab(results: Dict[str, Any]):
             pct = int(count / max(max_count, 1) * 100)
             st.markdown(f"""
             <div style="display:flex; align-items:center; gap:10px; margin:4px 0;">
-                <span style="min-width:120px; font-family:'JetBrains Mono',monospace;
+                <span style="min-width:120px; font-family:'Cascadia Code','Consolas',monospace;
                              font-size:0.82rem; color:#ffa06b;">{rule}</span>
                 <div style="flex:1; background:rgba(255,255,255,0.06);
                             border-radius:4px; height:18px; overflow:hidden;">
@@ -901,7 +890,7 @@ def _render_lint_tab(results: Dict[str, Any]):
                                 background:linear-gradient(90deg,#ff9800,#ff5722);
                                 border-radius:4px;"></div>
                 </div>
-                <span style="font-family:'JetBrains Mono',monospace;
+                <span style="font-family:'Cascadia Code','Consolas',monospace;
                              font-weight:700; min-width:30px;">{count}</span>
             </div>
             """, unsafe_allow_html=True)
@@ -1039,7 +1028,7 @@ def _render_rustify_tab(results: Dict[str, Any]):
             info_cols = st.columns(5)
             info_cols[0].markdown("**Score**")
             info_cols[0].markdown(
-                f"<span style='font-family:JetBrains Mono,monospace; "
+                f"<span style='font-family:'Cascadia Code','Consolas',monospace; "
                 f"font-size:1.4rem; color:{score_color}; "
                 f"font-weight:700;'>{cand.score}</span>",
                 unsafe_allow_html=True)
@@ -1098,14 +1087,14 @@ def _render_rustify_tab(results: Dict[str, Any]):
                      else "#ff5722")
         st.markdown(f"""
         <div style="display:flex; align-items:center; gap:10px; margin:3px 0;">
-            <span style="min-width:60px; font-family:'JetBrains Mono',monospace;
+            <span style="min-width:60px; font-family:'Cascadia Code','Consolas',monospace;
                          font-size:0.8rem; color:#888;">{label}</span>
             <div style="flex:1; background:rgba(255,255,255,0.06);
                         border-radius:4px; height:20px; overflow:hidden;">
                 <div style="width:{pct}%; height:100%; background:{bar_color};
                             border-radius:4px; transition:width 0.3s;"></div>
             </div>
-            <span style="font-family:'JetBrains Mono',monospace;
+            <span style="font-family:'Cascadia Code','Consolas',monospace;
                          font-weight:700; min-width:30px; font-size:0.85rem;">
                 {count}</span>
         </div>
@@ -1180,7 +1169,7 @@ def _render_heatmap_tab(results: Dict[str, Any]):
             st.markdown(f"""
             <div style="margin: 4px 0 8px 0;">
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <span style="font-family:'JetBrains Mono',monospace;
+                    <span style="font-family:'Cascadia Code','Consolas',monospace;
                                  font-weight:700; color:#00d4ff;">
                         {total} issues</span>
                     {tag_html}
@@ -1253,14 +1242,14 @@ def _render_complexity_tab(results: Dict[str, Any]):
         color = bucket_colors.get(label, "#888")
         st.markdown(f"""
         <div style="display:flex; align-items:center; gap:10px; margin:4px 0;">
-            <span style="min-width:170px; font-family:'JetBrains Mono',monospace;
+            <span style="min-width:170px; font-family:'Cascadia Code','Consolas',monospace;
                          font-size:0.8rem;">{label}</span>
             <div style="flex:1; background:rgba(255,255,255,0.06);
                         border-radius:4px; height:22px; overflow:hidden;">
                 <div style="width:{pct}%; height:100%; background:{color};
                             border-radius:4px; transition:width 0.3s;"></div>
             </div>
-            <span style="font-family:'JetBrains Mono',monospace;
+            <span style="font-family:'Cascadia Code','Consolas',monospace;
                          font-weight:700; min-width:40px;
                          font-size:0.85rem;">{count}</span>
         </div>
@@ -1305,14 +1294,14 @@ def _render_complexity_tab(results: Dict[str, Any]):
         color = size_colors.get(label, "#888")
         st.markdown(f"""
         <div style="display:flex; align-items:center; gap:10px; margin:4px 0;">
-            <span style="min-width:80px; font-family:'JetBrains Mono',monospace;
+            <span style="min-width:80px; font-family:'Cascadia Code','Consolas',monospace;
                          font-size:0.8rem;">{label} lines</span>
             <div style="flex:1; background:rgba(255,255,255,0.06);
                         border-radius:4px; height:22px; overflow:hidden;">
                 <div style="width:{pct}%; height:100%; background:{color};
                             border-radius:4px; transition:width 0.3s;"></div>
             </div>
-            <span style="font-family:'JetBrains Mono',monospace;
+            <span style="font-family:'Cascadia Code','Consolas',monospace;
                          font-weight:700; min-width:40px;
                          font-size:0.85rem;">{count}</span>
         </div>
@@ -1336,10 +1325,10 @@ def _render_complexity_tab(results: Dict[str, Any]):
                         padding:6px 10px; margin:2px 0; border-radius:8px;
                         background:rgba(255,255,255,0.03);
                         border-left: 3px solid {cc_color};">
-                <span style="font-family:'JetBrains Mono',monospace;
+                <span style="font-family:'Cascadia Code','Consolas',monospace;
                              font-size:1.1rem; font-weight:700;
                              color:{cc_color};">CC {fn.complexity}</span>
-                <span style="font-family:'JetBrains Mono',monospace;
+                <span style="font-family:'Cascadia Code','Consolas',monospace;
                              font-size:0.82rem; color:#00d4ff;">
                     {fn.name}</span>
                 <span style="font-size:0.72rem; opacity:0.5;
@@ -1367,11 +1356,12 @@ def _render_complexity_tab(results: Dict[str, Any]):
                     st.warning("Source code not available")
 
 
-# ── Function Graph (vis-network) tab ─────────────────────────────────────────
+# ── Function Graph (Plotly) tab ──────────────────────────────────────────────
 
 def _render_graph_tab(results: Dict[str, Any]):
-    """Render interactive function-distribution / connection graph using vis-network."""
-    import streamlit.components.v1 as components
+    """Render interactive function-distribution graph using Plotly (no CDN needed)."""
+    import plotly.graph_objects as go
+    import math
 
     functions: List[FunctionRecord] = results.get("_functions", [])
     smells: List[SmellIssue] = results.get("_smell_issues", [])
@@ -1391,65 +1381,110 @@ def _render_graph_tab(results: Dict[str, Any]):
     edge_count = len(graph.edges)
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("✅ Healthy", healthy)
-    c2.metric("⚠️ Warning", warning)
-    c3.metric("🔴 Critical", critical)
-    c4.metric("🔗 Duplicate Links", edge_count)
+    c1.metric("Healthy", healthy)
+    c2.metric("Warning", warning)
+    c3.metric("Critical", critical)
+    c4.metric("Dup Links", edge_count)
 
-    st.markdown("---")
-    st.markdown(
-        "<small style='opacity:0.5'>Nodes = functions (green ✅ / orange ⚠️ / red 🔴). "
-        "Edges = duplicate pairs. Hover for details. Drag to rearrange.</small>",
-        unsafe_allow_html=True,
+    st.caption(
+        "Nodes = functions (green = healthy, orange = warning, red = critical). "
+        "Edges = duplicate pairs. Hover for details."
     )
 
-    # ── Build self-contained HTML (vis-network CDN) ──
-    import json as _json
-    nodes_js = _json.dumps(graph.nodes)
-    edges_js = _json.dumps(graph.edges)
+    # ── Layout nodes in a force-like circular arrangement ──
+    n_nodes = len(graph.nodes)
+    if n_nodes == 0:
+        st.info("No function nodes to display.")
+        return
 
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-      <style>
-        body {{ margin:0; padding:0; background:#0e1117; }}
-        #net  {{ width:100%; height:580px; }}
-      </style>
-    </head>
-    <body>
-      <div id="net"></div>
-      <script>
-        var nodes = new vis.DataSet({nodes_js});
-        var edges = new vis.DataSet({edges_js});
-        var container = document.getElementById('net');
-        var data = {{ nodes: nodes, edges: edges }};
-        var options = {{
-          nodes: {{
-            shape: 'dot',
-            font: {{ size: 12, color: '#ccc' }}
-          }},
-          edges: {{
-            color: {{ color:'#555', highlight:'#00d4ff' }},
-            smooth: false
-          }},
-          physics: {{
-            stabilization: {{ iterations: 150 }},
-            barnesHut: {{
-              gravitationalConstant: -40000,
-              springConstant: 0.002,
-              springLength: 160
-            }}
-          }},
-          interaction: {{ hover: true, tooltipDelay: 100 }}
-        }};
-        new vis.Network(container, data, options);
-      </script>
-    </body>
-    </html>
-    """
-    components.html(html, height=600, scrolling=False)
+    # Group nodes by their health for clustering
+    groups = {"healthy": [], "warning": [], "critical": []}
+    for i, node in enumerate(graph.nodes):
+        groups.get(node.get("health", "healthy"), groups["healthy"]).append(i)
+
+    # Assign positions — concentric rings by health
+    node_x, node_y = [0.0] * n_nodes, [0.0] * n_nodes
+    ring_configs = [("critical", 1.0), ("warning", 2.5), ("healthy", 4.5)]
+    for health, radius in ring_configs:
+        indices = groups.get(health, [])
+        count = len(indices)
+        for j, idx in enumerate(indices):
+            angle = 2 * math.pi * j / max(count, 1) + (hash(health) % 100) * 0.01
+            node_x[idx] = radius * math.cos(angle)
+            node_y[idx] = radius * math.sin(angle)
+
+    # Build node-id → index map
+    id_to_idx = {node["id"]: i for i, node in enumerate(graph.nodes)}
+
+    # ── Edge traces ──
+    edge_x, edge_y = [], []
+    for edge in graph.edges:
+        src = id_to_idx.get(edge["from"])
+        dst = id_to_idx.get(edge["to"])
+        if src is not None and dst is not None:
+            edge_x.extend([node_x[src], node_x[dst], None])
+            edge_y.extend([node_y[src], node_y[dst], None])
+
+    edge_trace = go.Scatter(
+        x=edge_x, y=edge_y, mode="lines",
+        line=dict(width=0.8, color="rgba(150,150,150,0.4)"),
+        hoverinfo="none",
+    )
+
+    # ── Node traces (one per health group for legend) ──
+    color_map = {"healthy": "#2ecc71", "warning": "#f39c12", "critical": "#e74c3c"}
+    label_map = {"healthy": "Healthy", "warning": "Warning", "critical": "Critical"}
+    traces = [edge_trace]
+
+    for health in ["critical", "warning", "healthy"]:
+        indices = groups.get(health, [])
+        if not indices:
+            continue
+        xs = [node_x[i] for i in indices]
+        ys = [node_y[i] for i in indices]
+        labels = [graph.nodes[i]["label"] for i in indices]
+        sizes = [max(6, min(25, graph.nodes[i].get("size", 10) / 3)) for i in indices]
+        hovers = [
+            f"<b>{graph.nodes[i]['label']}</b><br>"
+            f"Size: {graph.nodes[i].get('size', '?')} lines<br>"
+            f"Group: {graph.nodes[i].get('group', '?')}"
+            for i in indices
+        ]
+        traces.append(go.Scatter(
+            x=xs, y=ys, mode="markers+text",
+            name=f"{label_map[health]} ({len(indices)})",
+            text=labels if len(indices) <= 40 else [""] * len(indices),
+            textposition="top center",
+            textfont=dict(size=8, color="#ccc"),
+            marker=dict(
+                size=sizes,
+                color=color_map[health],
+                line=dict(width=1, color="rgba(255,255,255,0.3)"),
+                opacity=0.85,
+            ),
+            hovertext=hovers,
+            hoverinfo="text",
+        ))
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(14,17,23,0.8)",
+        showlegend=True,
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.02,
+            xanchor="center", x=0.5,
+            font=dict(size=11),
+        ),
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        margin=dict(l=0, r=0, t=40, b=0),
+        height=550,
+        hovermode="closest",
+    )
+
+    st.plotly_chart(fig, use_container_width=True, key="graph_plotly")
 
 
 # ── Auto-Rustify Pipeline tab ────────────────────────────────────────────────
@@ -1461,7 +1496,7 @@ def _render_auto_rustify_tab(results: Dict[str, Any]):
                 background:rgba(17,25,40,0.6);
                 border:1px solid rgba(124,77,255,0.3); margin-bottom:1rem;">
         <p style="margin:0 0 6px 0; font-size:0.95rem;
-                  font-family:'JetBrains Mono',monospace;">
+                  font-family:'Cascadia Code','Consolas',monospace;">
             ⚙️ <b>Auto-Rustify Pipeline</b></p>
         <p style="font-size:0.78rem; opacity:0.6; margin:0;">
             End-to-end: Scan → Score → Generate tests → Transpile to Rust →
@@ -1482,7 +1517,7 @@ def _render_auto_rustify_tab(results: Dict[str, Any]):
     <div style="padding:8px 14px; border-radius:8px;
                 background:rgba(0,212,255,0.08);
                 border:1px solid rgba(0,212,255,0.15);
-                font-family:'JetBrains Mono',monospace;
+                font-family:'Cascadia Code','Consolas',monospace;
                 font-size:0.78rem; margin:8px 0 16px 0;">
         <b>Rust target:</b> <code>{sys_profile.rust_target}</code>  ·
         <b>CPU:</b> {sys_profile.processor[:60]}  ·
@@ -1546,7 +1581,7 @@ def _render_auto_rustify_tab(results: Dict[str, Any]):
         def _on_progress(frac: float, label: str):
             progress_bar.progress(min(frac, 1.0))
             status_text.markdown(
-                f"<p style='font-family:JetBrains Mono,monospace;"
+                f"<p style='font-family:'Cascadia Code','Consolas',monospace;"
                 f" font-size:0.82rem; opacity:0.7;'>⚙️ {label}</p>",
                 unsafe_allow_html=True)
 
@@ -1563,13 +1598,13 @@ def _render_auto_rustify_tab(results: Dict[str, Any]):
         progress_bar.progress(1.0)
         if report.compile_result and report.compile_result.success:
             status_text.markdown(
-                "<p style='font-family:JetBrains Mono,monospace;"
+                "<p style='font-family:'Cascadia Code','Consolas',monospace;"
                 " font-size:0.82rem; color:#00c853;'>"
                 "✅ Pipeline complete — crate compiled successfully!</p>",
                 unsafe_allow_html=True)
         else:
             status_text.markdown(
-                "<p style='font-family:JetBrains Mono,monospace;"
+                "<p style='font-family:'Cascadia Code','Consolas',monospace;"
                 " font-size:0.82rem; color:#ff9800;'>"
                 "⚠️ Pipeline finished with issues — see details below</p>",
                 unsafe_allow_html=True)
@@ -1635,7 +1670,7 @@ def _render_pipeline_report(report: Dict[str, Any]):
                         padding:4px 10px; margin:2px 0; border-radius:6px;
                         background:rgba(255,255,255,0.02);">
                 <span style="font-size:1.1rem;">{icon}</span>
-                <span style="font-family:'JetBrains Mono',monospace;
+                <span style="font-family:'Cascadia Code','Consolas',monospace;
                              font-size:0.82rem; min-width:140px;
                              color:#00d4ff;">{name}</span>
                 <span style="font-size:0.75rem; opacity:0.6;">{detail_str}</span>
@@ -1709,7 +1744,7 @@ def main():
     with st.sidebar:
         st.markdown("""
         <div style="text-align:center; padding: 0.5rem 0 1rem 0;">
-            <p style="font-family:'JetBrains Mono',monospace;
+            <p style="font-family:'Cascadia Code','Consolas',monospace;
                       font-size:1.6rem; font-weight:700; margin:0;
                       background: linear-gradient(135deg, #00d4ff, #7c4dff);
                       -webkit-background-clip: text;
@@ -1806,25 +1841,14 @@ def main():
         st.divider()
         st.markdown("""
         <div style="text-align:center; opacity:0.3; font-size:0.65rem;
-                    font-family:'JetBrains Mono',monospace;">
+                    font-family:'Cascadia Code','Consolas',monospace;">
             AST · Ruff · Bandit · Rust<br>
             github.com/GeoHaber/X_Ray
         </div>
         """, unsafe_allow_html=True)
 
     # ── Main area ────────────────────────────────────────────────────────
-    st.markdown("""
-    <div style="margin-bottom: 1rem;">
-        <h1 style="font-family:'JetBrains Mono',monospace; font-weight:700;
-                   background: linear-gradient(135deg, #00d4ff, #7c4dff);
-                   -webkit-background-clip: text;
-                   -webkit-text-fill-color: transparent;
-                   margin:0;">🔬 X-Ray</h1>
-        <p style="opacity:0.5; font-size:0.85rem; margin:0;">
-            AI-Powered Code Quality Scanner —
-            AST Smells · Ruff Lint · Bandit Security · Rust Advisor</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # (Sidebar already has the branding — keep the main area minimal)
 
     # Run scan on button click
     if run_scan:
@@ -1849,7 +1873,7 @@ def main():
         progress_bar = st.progress(0.0)
         status_text  = st.empty()
         status_text.markdown(
-            "<p style='font-family:JetBrains Mono,monospace;"
+            "<p style='font-family:'Cascadia Code','Consolas',monospace;"
             " font-size:0.82rem; opacity:0.7;'>"
             "⚡ Initialising scan…</p>",
             unsafe_allow_html=True)
@@ -1857,7 +1881,7 @@ def main():
         def _on_progress(frac: float, label: str):
             progress_bar.progress(min(frac, 1.0))
             status_text.markdown(
-                f"<p style='font-family:JetBrains Mono,monospace;"
+                f"<p style='font-family:'Cascadia Code','Consolas',monospace;"
                 f" font-size:0.82rem; opacity:0.7;'>"
                 f"⚡ {label}</p>",
                 unsafe_allow_html=True)
@@ -1868,7 +1892,7 @@ def main():
 
         progress_bar.progress(1.0)
         status_text.markdown(
-            f"<p style='font-family:JetBrains Mono,monospace;"
+            f"<p style='font-family:'Cascadia Code','Consolas',monospace;"
             f" font-size:0.82rem; color:#00c853;'>"
             f"✅ Scan complete — "
             f"{results['meta'].get('files',0)} files, "
@@ -1884,215 +1908,63 @@ def main():
 
     # ── Display results ──────────────────────────────────────────────────
     if "results" not in st.session_state:
-        # ── Intro / How It Works landing page ──
+        # ── Compact landing page ──
         st.markdown("""
-        <div style="text-align:center; padding:2.5rem 2rem 1rem 2rem;
-                    border: 1px solid rgba(0,212,255,0.15);
+        <div style="text-align:center; padding:2rem 1.5rem;
+                    border: 1px solid rgba(0,212,255,0.12);
                     border-radius:16px; margin-top:1rem;
-                    background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(124,77,255,0.05));">
-            <p style="font-size:3.5rem; margin:0;">🔬</p>
-            <p style="font-family:'JetBrains Mono',monospace;
-                      font-size:1.3rem; margin:0.5rem 0;
+                    background: linear-gradient(135deg, rgba(0,212,255,0.04), rgba(124,77,255,0.04));">
+            <p style="font-size:2.8rem; margin:0;">🔬</p>
+            <p style="font-size:1.1rem; margin:0.3rem 0;
                       background:linear-gradient(135deg,#00d4ff,#7c4dff);
                       -webkit-background-clip:text;
                       -webkit-text-fill-color:transparent;
                       font-weight:700;">X-Ray Code Quality Scanner</p>
-            <p style="opacity:0.5; font-size:0.85rem; max-width:600px; margin:0 auto;">
-                Deep-scan any Python project for smells, duplication, lint issues,
-                security vulnerabilities — and discover which functions are
-                ready for Rust porting.</p>
+            <p style="opacity:0.45; font-size:0.8rem; max-width:500px; margin:0.5rem auto 0;">
+                AST Smells · Ruff Lint · Bandit Security · Duplicate Detection · Rust Advisor</p>
         </div>
         """, unsafe_allow_html=True)
 
+        # Quick 3-step guide
         st.write("")
+        g1, g2, g3 = st.columns(3)
+        with g1:
+            st.markdown("**1. Configure** — Set path & analyzers in sidebar")
+        with g2:
+            st.markdown("**2. Scan** — Press **⚡ Run X-Ray Scan**")
+        with g3:
+            st.markdown("**3. Explore** — Browse results in interactive tabs")
 
-        # How it works — 3-column overview
-        st.markdown("### ⚡ How It Works")
-        hw1, hw2, hw3 = st.columns(3)
-        with hw1:
-            st.markdown("""
-            <div style="padding:16px; border-radius:12px;
-                        background:rgba(17,25,40,0.6);
-                        border:1px solid rgba(255,255,255,0.06); height:100%;">
-                <p style="font-size:1.8rem; margin:0; text-align:center;">1️⃣</p>
-                <p style="font-family:'JetBrains Mono',monospace;
-                          font-size:0.9rem; text-align:center;
-                          color:#00d4ff; font-weight:600;">Configure</p>
-                <p style="font-size:0.8rem; opacity:0.6; text-align:center;">
-                    Point to a project directory, pick analyzers
-                    (Smells, Lint, Security, Duplicates, Rustify),
-                    and tune thresholds in the sidebar.</p>
-            </div>
-            """, unsafe_allow_html=True)
-        with hw2:
-            st.markdown("""
-            <div style="padding:16px; border-radius:12px;
-                        background:rgba(17,25,40,0.6);
-                        border:1px solid rgba(255,255,255,0.06); height:100%;">
-                <p style="font-size:1.8rem; margin:0; text-align:center;">2️⃣</p>
-                <p style="font-family:'JetBrains Mono',monospace;
-                          font-size:0.9rem; text-align:center;
-                          color:#00d4ff; font-weight:600;">Scan</p>
-                <p style="font-size:0.8rem; opacity:0.6; text-align:center;">
-                    Click <b>⚡ Run X-Ray Scan</b>. The engine
-                    parses every .py file, runs AST analysis,
-                    Ruff lint, and Bandit security in parallel.</p>
-            </div>
-            """, unsafe_allow_html=True)
-        with hw3:
-            st.markdown("""
-            <div style="padding:16px; border-radius:12px;
-                        background:rgba(17,25,40,0.6);
-                        border:1px solid rgba(255,255,255,0.06); height:100%;">
-                <p style="font-size:1.8rem; margin:0; text-align:center;">3️⃣</p>
-                <p style="font-family:'JetBrains Mono',monospace;
-                          font-size:0.9rem; text-align:center;
-                          color:#00d4ff; font-weight:600;">Explore</p>
-                <p style="font-size:0.8rem; opacity:0.6; text-align:center;">
-                    Browse results in interactive tabs — click any
-                    file or function to see the actual source code,
-                    Rust previews, and merge suggestions.</p>
-            </div>
-            """, unsafe_allow_html=True)
-
+        # Grade scale
         st.write("")
-
-        # Analyzer cards
-        st.markdown("### 🧰 Analyzers")
-        a1, a2 = st.columns(2)
-        with a1:
-            st.markdown("""
-            <div style="padding:14px 16px; border-radius:12px;
-                        background:rgba(17,25,40,0.6);
-                        border:1px solid rgba(255,255,255,0.06);
-                        margin-bottom:12px;">
-                <p style="margin:0 0 4px 0; font-size:0.95rem;">🔍 <b>Code Smells</b></p>
-                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
-                    AST-based detection of long functions, deep nesting,
-                    god classes, too many parameters, dead code, and
-                    15+ other anti-patterns. Each issue is graded
-                    Critical / Warning / Info.</p>
-            </div>
-            <div style="padding:14px 16px; border-radius:12px;
-                        background:rgba(17,25,40,0.6);
-                        border:1px solid rgba(255,255,255,0.06);
-                        margin-bottom:12px;">
-                <p style="margin:0 0 4px 0; font-size:0.95rem;">🧹 <b>Lint (Ruff)</b></p>
-                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
-                    Fast Python linter covering 800+ rules
-                    (pyflakes, pycodestyle, isort, …). Auto-fixable
-                    issues can be patched in one click.</p>
-            </div>
-            <div style="padding:14px 16px; border-radius:12px;
-                        background:rgba(17,25,40,0.6);
-                        border:1px solid rgba(255,255,255,0.06);">
-                <p style="margin:0 0 4px 0; font-size:0.95rem;">🔒 <b>Security (Bandit)</b></p>
-                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
-                    Scans for common security issues — hardcoded
-                    passwords, SQL injection, unsafe deserialization,
-                    subprocess shells, and more.</p>
-            </div>
-            """, unsafe_allow_html=True)
-        with a2:
-            st.markdown("""
-            <div style="padding:14px 16px; border-radius:12px;
-                        background:rgba(17,25,40,0.6);
-                        border:1px solid rgba(255,255,255,0.06);
-                        margin-bottom:12px;">
-                <p style="margin:0 0 4px 0; font-size:0.95rem;">📋 <b>Duplicates</b></p>
-                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
-                    Finds exact, near, structural, and semantic
-                    clones across the codebase. Shows side-by-side
-                    diffs and generates a unified merge suggestion.</p>
-            </div>
-            <div style="padding:14px 16px; border-radius:12px;
-                        background:rgba(17,25,40,0.6);
-                        border:1px solid rgba(255,255,255,0.06);
-                        margin-bottom:12px;">
-                <p style="margin:0 0 4px 0; font-size:0.95rem;">🦀 <b>Rustify</b></p>
-                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
-                    Scores every function for Rust-porting fitness.
-                    Pure, high-complexity hotspots rank highest.
-                    Generates a side-by-side Python → Rust sketch
-                    using PyO3 bindings.</p>
-            </div>
-            <div style="padding:14px 16px; border-radius:12px;
-                        background:rgba(17,25,40,0.6);
-                        border:1px solid rgba(255,255,255,0.06);">
-                <p style="margin:0 0 4px 0; font-size:0.95rem;">📊 <b>Heatmap & Complexity</b></p>
-                <p style="font-size:0.78rem; opacity:0.6; margin:0;">
-                    Visualises which files concentrate the most issues
-                    and shows cyclomatic-complexity & size distributions
-                    across all functions.</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.write("")
-
-        # Grading explanation
-        st.markdown("### 🏅 Grading")
-        st.markdown("""
-        <div style="padding:16px; border-radius:12px;
-                    background:rgba(17,25,40,0.6);
-                    border:1px solid rgba(255,255,255,0.06);">
-            <p style="font-size:0.82rem; opacity:0.7; margin:0 0 8px 0;">
-                X-Ray calculates a <b>0–100 quality score</b> by starting at 100
-                and subtracting penalties for issues found by each analyzer.
-                The score maps to a letter grade:</p>
-            <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
-                <span style="background:#00c85322; color:#00c853;
-                             padding:4px 10px; border-radius:6px;
-                             font-family:'JetBrains Mono',monospace;
-                             font-size:0.8rem;">A+ 97  ·  A 93  ·  A- 90</span>
-                <span style="background:#64dd1722; color:#64dd17;
-                             padding:4px 10px; border-radius:6px;
-                             font-family:'JetBrains Mono',monospace;
-                             font-size:0.8rem;">B+ 87  ·  B 83  ·  B- 80</span>
-                <span style="background:#ffd60022; color:#ffd600;
-                             padding:4px 10px; border-radius:6px;
-                             font-family:'JetBrains Mono',monospace;
-                             font-size:0.8rem;">C+ 77  ·  C 73  ·  C- 70</span>
-                <span style="background:#ff6d0022; color:#ff6d00;
-                             padding:4px 10px; border-radius:6px;
-                             font-family:'JetBrains Mono',monospace;
-                             font-size:0.8rem;">D+ 67  ·  D 63  ·  D- 60</span>
-                <span style="background:#d5000022; color:#d50000;
-                             padding:4px 10px; border-radius:6px;
-                             font-family:'JetBrains Mono',monospace;
-                             font-size:0.8rem;">F &lt; 60</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.write("")
-        st.markdown("""
-        <div style="text-align:center; padding:1.5rem;
-                    border:1px dashed rgba(0,212,255,0.2);
-                    border-radius:12px; margin-top:0.5rem;">
-            <p style="font-family:'JetBrains Mono',monospace;
-                      font-size:0.95rem; opacity:0.7; margin:0;">
-                👈  Configure analyzers in the sidebar and press
-                <b style="color:#00d4ff;">⚡ Run X-Ray Scan</b></p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.caption("Quality grades: A+ (97) · A (93) · B+ (87) · B (83) · C+ (77) · C (73) · D (63) · F (<60)")
         return
 
     results = st.session_state["results"]
     grade = results.get("grade", {})
     meta = results.get("meta", {})
 
-    # Grade card
-    _render_grade_card(grade)
-    st.write("")
-
-    # Quick stats
-    _render_stats_bar(meta)
-
-    # Penalty breakdown
-    breakdown = grade.get("breakdown", {})
-    if breakdown:
-        st.write("")
-        _render_penalty_bar(breakdown)
+    # Combined grade + stats header (no duplication)
+    col_grade, col_stats = st.columns([1, 2])
+    with col_grade:
+        _render_grade_card(grade)
+    with col_stats:
+        _render_stats_bar(meta)
+        # Compact penalty summary inline
+        breakdown = grade.get("breakdown", {})
+        if breakdown:
+            labels = {"smells": "Smells", "duplicates": "Duplicates",
+                      "lint": "Lint", "security": "Security"}
+            parts = []
+            for key, detail in breakdown.items():
+                pen = detail.get("penalty", 0)
+                if pen > 0:
+                    parts.append(f"{labels.get(key, key)} <b>-{pen:.0f}</b>")
+            if parts:
+                st.markdown(
+                    f"<p style='font-size:0.78rem; opacity:0.55; margin-top:8px;'>"
+                    f"Penalties: {' · '.join(parts)}</p>",
+                    unsafe_allow_html=True)
 
     st.divider()
 
