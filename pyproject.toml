@@ -25,6 +25,22 @@ exclude = [
     "X_Ray_Rust_Full",
 ]
 
+# Ruff: lint + format (Black-compatible, PEP 8 aligned)
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# Bandit: security best practices (severity via -l, use # nosec for reviewed FPs)
+[tool.bandit]
+exclude_dirs = [".venv", "venv", "__pycache__", "node_modules", ".git", "target", "dist", "build", "_scratch"]
+skips = ["B101", "B404"]
+
 [dependency-groups]
 dev = [
     "ruff>=0.15.2",

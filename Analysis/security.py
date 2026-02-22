@@ -6,6 +6,11 @@ Wraps ``bandit`` as a subprocess, parses JSON output,
 and converts findings into X-Ray SmellIssue objects for
 unified reporting.
 
+Best practices (see [tool.bandit] in pyproject.toml):
+  - exclude_dirs: venv, __pycache__, build, etc.
+  - skips: B101 (assert in tests), B404 (import subprocess)
+  - Use # nosec on reviewed false positives; # nosec B602,B607 for specific tests
+
 Requires: bandit (pip install bandit)
 """
 
@@ -18,6 +23,11 @@ from Core.types import SmellIssue, Severity
 from Core.utils import logger
 from Analysis._analyzer_base import BaseStaticAnalyzer
 
+_DEFAULT_EXCLUDE = [
+    ".venv", "venv", ".env", "__pycache__", "node_modules",
+    ".git", "target", ".mypy_cache", ".pytest_cache", "dist",
+    "build", ".eggs", "*.egg-info", "_scratch", ".github",
+]
 
 # Bandit severity → X-Ray severity
 _SEVERITY_MAP: Dict[str, str] = {
@@ -93,45 +103,14 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
 
     def _build_command(self, root: Path, exclude: Optional[List[str]]) -> List[str]:
         """Assemble the bandit CLI command list."""
-        cmd = [self._tool_path, "-r", str(root), "-f", "json"]
-
         sev = self.severity_threshold.lower()
-        if sev == "high":
-            cmd.append("-lll")
-        elif sev == "medium":
-            cmd.append("-ll")
-        else:
-            cmd.append("-l")
+        level = "-lll" if sev == "high" else "-ll" if sev == "medium" else "-l"
+        cmd = [self._tool_path, "-r", str(root), "-f", "json", level]
 
-        # Auto-exclude common non-project directories
-        auto_exclude = [
-            ".venv",
-            "venv",
-            ".env",
-            "__pycache__",
-            "node_modules",
-            ".git",
-            "target",
-            ".mypy_cache",
-            ".pytest_cache",
-            "dist",
-            "build",
-            ".eggs",
-            "*.egg-info",
-            "_scratch",
-            ".github",
-        ]
-        all_exclude = list(auto_exclude)
-        if exclude:
-            all_exclude.extend(exclude)
-
-        exclude_paths = []
-        for pat in all_exclude:
-            full = root / pat
-            exclude_paths.append(str(full) if full.exists() else pat)
-        if exclude_paths:
-            cmd.extend(["-x", ",".join(exclude_paths)])
-
+        all_exclude = [*_DEFAULT_EXCLUDE, *(exclude or [])]
+        paths = [str(root / p) if (root / p).exists() else p for p in all_exclude]
+        if paths:
+            cmd.extend(["-x", ",".join(paths)])
         cmd.extend(self.extra_args)
         return cmd
 
@@ -152,31 +131,22 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
     def _to_smell_issue(self, item: Dict[str, Any], root: Path) -> Optional[SmellIssue]:
         """Convert a single Bandit result to SmellIssue.
 
-        Filters out B101 (assert-used) in test files and B404 (import-subprocess)
-        since these are universally considered false positives.
+        Filters B101 in test files and B404 (import-subprocess) as common FPs.
         """
         test_id = item.get("test_id", "")
         test_name = item.get("test_name", "")
         filename = item.get("filename", "")
 
-        # Skip B101 (assert-used) in test files — asserts are expected in tests
         if test_id == "B101":
-            fn_lower = filename.replace("\\", "/").lower()
-            if (
-                "/test" in fn_lower
-                or fn_lower.startswith("test")
-                or "conftest" in fn_lower
-            ):
+            fn = filename.replace("\\", "/").lower()
+            if "/test" in fn or fn.startswith("test") or "conftest" in fn:
                 return None
-
-        # Skip B404 (import-subprocess) — importing is not a vulnerability
         if test_id == "B404":
             return None
 
         sev = item.get("issue_severity", "LOW")
         conf = item.get("issue_confidence", "LOW")
         text = item.get("issue_text", "")
-        filename = item.get("filename", "")
         line = item.get("line_number", 0)
         line_range = item.get("line_range", [line])
 
@@ -209,29 +179,32 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
             confidence=conf,
         )
 
+    _FIX_SUGGESTIONS: Dict[str, str] = {
+        "B101": "Remove assert from production code or use proper validation.",
+        "B102": "Replace exec() with a safer alternative (importlib, ast.literal_eval).",
+        "B104": "Bind to specific IP instead of 0.0.0.0.",
+        "B105": "Move password to environment variable or secrets manager.",
+        "B110": "Log the exception instead of silently passing.",
+        "B113": "Add timeout= parameter to requests call.",
+        "B301": "Use json instead of pickle, or validate input source.",
+        "B303": "Use hashlib.sha256() instead of md5().",
+        "B324": "Use SHA-256 or add usedforsecurity=False.",
+        "B311": "Use secrets module instead of random for security contexts.",
+        "B501": "Enable SSL certificate verification (verify=True).",
+        "B602": "Use subprocess.run([...]) without shell=True.",
+        "B603": "Validate all input passed to subprocess calls.",
+        "B605": "Replace os.system() with subprocess.run().",
+        "B607": "Use absolute path for executable.",
+        "B608": "Use parameterized queries instead of string formatting.",
+        "B615": "Pin revision hash in hf_hub_download().",
+    }
+
     @staticmethod
     def _suggest_fix(test_id: str, text: str) -> str:
-        """Return an actionable fix suggestion for common Bandit findings."""
-        suggestions = {
-            "B101": "Remove assert from production code or use proper validation.",
-            "B102": "Replace exec() with a safer alternative (importlib, ast.literal_eval).",
-            "B104": "Bind to specific IP instead of 0.0.0.0.",
-            "B105": "Move password to environment variable or secrets manager.",
-            "B110": "Log the exception instead of silently passing.",
-            "B113": "Add timeout= parameter to requests call.",
-            "B301": "Use json instead of pickle, or validate input source.",
-            "B303": "Use hashlib.sha256() instead of md5().",
-            "B324": "Use SHA-256 or add usedforsecurity=False.",
-            "B311": "Use secrets module instead of random for security contexts.",
-            "B501": "Enable SSL certificate verification (verify=True).",
-            "B602": "Use subprocess.run([...]) without shell=True.",
-            "B603": "Validate all input passed to subprocess calls.",
-            "B605": "Replace os.system() with subprocess.run().",
-            "B607": "Use absolute path for executable.",
-            "B608": "Use parameterized queries instead of string formatting.",
-            "B615": "Pin revision hash in hf_hub_download().",
-        }
-        return suggestions.get(test_id, "Review and apply security best practice.")
+        """Return actionable fix suggestion for Bandit finding."""
+        return SecurityAnalyzer._FIX_SUGGESTIONS.get(
+            test_id, "Review and apply security best practice."
+        )
 
     def summary(self, issues: List[SmellIssue]) -> Dict[str, Any]:
         """Build summary with additional ``by_confidence`` breakdown."""

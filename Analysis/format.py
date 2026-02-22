@@ -6,73 +6,53 @@ Wraps `ruff format --check` as a subprocess, parses output,
 and converts findings into X-Ray SmellIssue objects for
 unified reporting when scanning any project.
 
+Best practices enforced (via [tool.ruff.format] in pyproject.toml):
+  - line-length 88 (Black default, PEP 8)
+  - quote-style double
+  - indent-style space (PEP 8)
+  - skip-magic-trailing-comma false (respect trailing commas)
+  - line-ending auto
+
 Requires: ruff (pip install ruff)
 """
 
 from __future__ import annotations
 
-import re
-import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import List, Optional
 
 from Core.types import SmellIssue, Severity
+from Analysis._analyzer_base import _find_tool
+
+_DEFAULT_EXCLUDE = [
+    ".venv", "venv", ".env", "__pycache__", "node_modules",
+    ".git", "target", "dist", "build", "_scratch",
+]
 
 
-def _find_ruff() -> Optional[str]:
-    """Locate ruff CLI, including in frozen PyInstaller bundles."""
-    found = shutil.which("ruff")
-    if found:
-        return found
-    if not getattr(sys, "frozen", False):
-        return None
-    meipass = Path(getattr(sys, "_MEIPASS", ""))
-    exe_dir = Path(sys.executable).parent
-    for base in (meipass, exe_dir, exe_dir / "tools"):
-        for name in ("ruff.exe", "ruff"):
-            p = base / name
-            if p.is_file():
-                return str(p)
-    return None
-
-
-def _build_format_cmd(tool: str, root: Path, exclude: list) -> List[str]:
+def _build_format_cmd(tool: str, root: Path, exclude: Optional[List[str]]) -> List[str]:
     """Build ruff format --check command with exclusions."""
-    auto_exclude = [
-        ".venv",
-        "venv",
-        ".env",
-        "__pycache__",
-        "node_modules",
-        ".git",
-        "target",
-        "dist",
-        "build",
-        "_scratch",
+    all_exclude = [*_DEFAULT_EXCLUDE, *(exclude or [])]
+    return [tool, "format", "--check", str(root)] + [
+        arg for pat in all_exclude for arg in ("--exclude", pat)
     ]
-    all_exclude = list(auto_exclude)
-    if exclude:
-        all_exclude.extend(exclude)
-    cmd = [tool, "format", "--check", str(root)]
-    for pat in all_exclude:
-        cmd.extend(["--exclude", pat])
-    return cmd
 
 
 def _parse_format_output(lines: List[str], root: Path) -> List[SmellIssue]:
     """Parse 'Would reformat: path' lines into SmellIssue list."""
-    pattern = re.compile(r"Would reformat:\s*(.+\.py)\s*$")
+    prefix = "Would reformat:"
+    root_res = root.resolve()
     issues: List[SmellIssue] = []
     for line in lines:
-        m = pattern.match(line.strip())
-        if not m:
+        s = line.strip()
+        if not s.startswith(prefix) or not s.endswith(".py"):
             continue
-        raw_path = m.group(1).strip()
+        raw_path = s[len(prefix):].strip()
         try:
-            abs_path = (root / raw_path).resolve()
-            rel_path = str(abs_path.relative_to(root.resolve())).replace("\\", "/")
+            rel_path = str((root / raw_path).resolve().relative_to(root_res)).replace(
+                "\\", "/"
+            )
         except ValueError:
             rel_path = raw_path.replace("\\", "/")
         issues.append(
@@ -83,7 +63,7 @@ def _parse_format_output(lines: List[str], root: Path) -> List[SmellIssue]:
                 category="format",
                 severity=Severity.WARNING,
                 message="File is not formatted (ruff format)",
-                suggestion="Run: ruff format " + rel_path,
+                suggestion=f"Run: ruff format {rel_path}",
                 name="",
                 metric_value=0,
                 source="ruff-format",
@@ -91,7 +71,7 @@ def _parse_format_output(lines: List[str], root: Path) -> List[SmellIssue]:
                 fixable=True,
             )
         )
-    return sorted(issues, key=lambda s: (s.file_path, s.line))
+    return sorted(issues, key=lambda s: s.file_path)
 
 
 class FormatAnalyzer:
@@ -109,7 +89,7 @@ class FormatAnalyzer:
     TOOL_TIMEOUT = 120
 
     def __init__(self):
-        self._tool_path = _find_ruff()
+        self._tool_path = _find_tool("ruff")
 
     @property
     def available(self) -> bool:
@@ -140,11 +120,12 @@ class FormatAnalyzer:
 
     def summary(self, issues: List[SmellIssue]) -> dict:
         """Build summary dict from format issues."""
+        n = len(issues)
         return {
-            "total": len(issues),
+            "total": n,
             "critical": 0,
-            "warning": len(issues),
+            "warning": n,
             "info": 0,
-            "fixable": len(issues),
+            "fixable": n,
             "source": "ruff-format",
         }
