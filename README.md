@@ -1,17 +1,14 @@
-# X-Ray — Smart AI-Powered Code Analyzer & Rustifier
+# X-Ray — AI-Powered Code Quality Scanner & Rust Accelerator
 
-**Version:** 5.0.0  
-**License:** MIT  
-**Python:** 3.10+  
-**Rust:** Optional (for acceleration)
+**Version 5.1.0** · Python 3.10+ · 882 tests · 5 languages · MIT License
 
 ---
 
 ## What Is X-Ray?
 
-X-Ray is a **two-phase code quality platform** that first *diagnoses* problems in
-any Python codebase, then helps you *cure* them — including automatically
-converting performance-critical paths to Rust.
+X-Ray is a **two-phase code quality platform** that *diagnoses* problems in any
+Python codebase, then helps you *cure* them — including automatically transpiling
+performance-critical functions to Rust.
 
 ### Phase 1 — Diagnose (Scan & Grade)
 
@@ -75,7 +72,10 @@ cd X_Ray
 # Install (optional — core works with stdlib only)
 pip install -r requirements.txt   # or: uv sync
 
-# Basic scan (smells only)
+### CLI
+
+```bash
+# Default scan (smells + lint + security)
 python x_ray_claude.py --path /your/project
 
 # Full 4-tool scan with unified grade
@@ -84,123 +84,130 @@ python x_ray_claude.py --full-scan --path /your/project
 # Save JSON report
 python x_ray_claude.py --full-scan --report results.json --path /your/project
 
-# Generate interactive graph
-python x_ray_claude.py --full-scan --graph --path /your/project
+# Rank functions for Rust porting
+python x_ray_claude.py --rustify --path /your/project
 ```
 
-### Self-Scan Example
+<details>
+<summary>All CLI flags</summary>
 
-```bash
-# X-Ray scanning itself
-python x_ray_claude.py --path . --full-scan --report self_scan.json
+| Flag | Description |
+|---|---|
+| `--path` | Directory to scan (required) |
+| `--smell` | Code smell detection only |
+| `--duplicates` | Find similar/duplicate functions |
+| `--lint` | Ruff linter only |
+| `--security` | Bandit security only |
+| `--full-scan` | Run all analyzers |
+| `--rustify` | Score & rank functions for Rust porting |
+| `--report FILE` | Save JSON report to file |
+| `--graph` | Generate interactive HTML dependency graph |
 
-# Output:
-#   Score: 90.3/100  Grade: A-
-#   Tools: X-Ray Smells, X-Ray Duplicates, Ruff Lint, Bandit Security
-```
+</details>
 
 ---
 
-## Phase 2: Rustifying Your Code
+## Analyzers
 
-X-Ray helps you accelerate hot paths with Rust. The workflow:
+### Phase 1 — Diagnose
 
-### Step 1: Identify Targets
+| Analyzer | What It Checks |
+|---|---|
+| **Code Smells** | 12+ categories — long functions, god classes, deep nesting, high cyclomatic complexity, missing docstrings, boolean blindness, too many params/returns/branches |
+| **Duplicate Finder** | 4-stage pipeline: exact hash → structural hash → token n-gram + AST histogram → semantic similarity |
+| **Ruff Lint** | Fast Python linting (unused imports, undefined names, bare-excepts, style) |
+| **Bandit Security** | Security audit (hardcoded passwords, SQL injection, unsafe eval, subprocess) |
+| **UI Compat** | AST-scans for UI framework calls (Flet, tkinter, PyQt, PySide, Kivy, wxPython, Dear PyGui), validates kwargs against live `inspect.signature()`, catches `TypeError` before runtime |
 
-Run X-Ray on your project and look for:
-- **Complex functions** (CC ≥ 10) that do heavy computation
-- **Hot-path duplicates** that appear in performance-critical loops
-- **CPU-bound code** (tokenization, hashing, similarity matrices)
+### Phase 2 — Cure (Rustify)
 
-```bash
-python x_ray_claude.py --full-scan --report analysis.json --path /your/project
-# Review the JSON for functions with severity=CRITICAL or WARNING
-```
+| Capability | Description |
+|---|---|
+| **Rust Advisor** | Scores every function for Rust-portability (purity, complexity, CPU intensity) |
+| **AST Transpiler** | 2,259-line transpiler with 19 module handlers — `os`, `json`, `re`, `pathlib`, `time`, `datetime`, `subprocess`, `hashlib`, `argparse`, `collections`, `functools`, `itertools`, `logging`, `sys`, and more |
+| **LLM Fallback** | When AST transpiler emits `todo!()` stubs, a local LLM completes them, then `rustc --check` validates |
+| **Auto-Rustify Pipeline** | End-to-end: Scan → Score → Transpile → Cargo build → Verify |
+| **Rust Core** | Optional `x_ray_core.pyd` (PyO3 + Rayon) replaces Python hot-paths with 10–50× speedup |
 
-### Step 2: Build the Rust Core Module
+---
 
-The `Core/x_ray_core/` directory contains the Rust source. Build it with
-[maturin](https://github.com/PyO3/maturin):
+## Desktop GUI
 
+The Flet GUI provides a native Material 3 experience:
+
+- **Sidebar** — directory picker, 6 analyzer toggles, scan button, progress bar with file counter & ETA
+- **9 Dashboard Tabs** — Smells · Duplicates · Lint · Security · Rustify · Heatmap · Complexity · Auto-Rustify · UI Compat
+- **Theme** — light / dark mode toggle
+- **Language** — switch between EN, RO, ES, FR, DE at runtime
+- **Onboarding** — first-run stepper that walks through features
+- **Export** — JSON and Markdown report export
+
+---
+
+## Grading Formula
+
+The unified score is `100 − penalties`:
+
+| Tool | Penalty Weights | Cap |
+|---|---|---|
+| Smells | critical × 0.25 + warning × 0.05 + info × 0.01 | 30 |
+| Duplicates | groups × 0.1 | 15 |
+| Lint | critical × 0.3 + warning × 0.05 + info × 0.005 | 25 |
+| Security | critical × 1.5 + warning × 0.3 + info × 0.005 | 30 |
+
+| Grade | Score |
+|---|---|
+| A+ | ≥ 97 |
+| A | ≥ 93 |
+| A− | ≥ 90 |
+| B+ | ≥ 87 |
+| B | ≥ 83 |
+| B− | ≥ 80 |
+| C | ≥ 70 |
+| D | ≥ 60 |
+| F | < 60 |
+
+---
+
+## Python → Rust Transpiler
+
+The transpiler (`Analysis/transpiler.py`) converts Python functions to Rust via
+proper `ast.parse` — no regex. It handles:
+
+- Type inference, `match`/`if-let`, iterators, closures
+- 19 stdlib module mappings (os, json, re, pathlib, datetime, subprocess, etc.)
+- `async def` → `async fn`, `await` → `.await`
+- Format strings, f-strings, tuple unpacking, attribute assignment
+- Escape hatch: `todo!()` for unsupported patterns (filled by LLM fallback)
+
+### Coverage (14 real projects)
+
+| Stage | Transpilable | Rate |
+|---|---|---|
+| Pre-Tier 3 | 4,322 / 14,044 | 30.8 % |
+| Post-Tier 3 + Threshold Tuning | 7,485 / 14,064 | 53.2 % |
+| Post-Round 2 Fixes | 7,694 (6,917 clean compile) | 54.7 % |
+
+### Optional Rust Core Module
+
+The `x_ray_core.pyd` native extension accelerates hot-paths:
+
+| Function | Speedup |
+|---|---|
+| `normalized_token_stream` | ~15× |
+| `ngram_fingerprints` | ~12× |
+| `code_similarity` | ~18× |
+| `normalize_code` | ~20× |
+| `batch_code_similarity` | ~50× (Rayon parallel) |
+
+Build it:
 ```bash
 cd Core/x_ray_core
 pip install maturin
-maturin develop --release    # Builds and installs x_ray_core.pyd into your venv
+maturin develop --release
 ```
 
-Or using cargo directly:
-
-```bash
-cargo build --release
-# Copy target/release/x_ray_core.dll → x_ray_core.pyd into the project root
-```
-
-### Step 3: Verify Parity
-
-Golden-file tests ensure Rust output exactly matches Python:
-
-```bash
-# Generate golden files from Python reference implementation
-python tests/rust_harness/generate_golden.py
-
-# Verify Rust matches Python
-python tests/rust_harness/verify_rust.py
-
-# Run parity test suite
-python -m pytest tests/verify_parity.py -v
-```
-
-### Step 4: Benchmark
-
-```bash
-# Compare Python vs Rust performance
-python run_benchmark.py
-
-# Typical output:
-#   Pure Python: 2.34s  →  Hybrid Rust: 0.16s  (14.6× faster)
-```
-
-### Step 5: Transparent Integration
-
-No code changes needed. X-Ray automatically detects the Rust module:
-
-```python
-# In Analysis/similarity.py — automatic Rust detection
-try:
-    import x_ray_core as _rust_core
-    _HAS_RUST = True      # Rust hot-paths used automatically
-except ImportError:
-    _HAS_RUST = False      # Falls back to pure Python
-```
-
-To force Python-only mode (useful for debugging):
-```bash
-set X_RAY_DISABLE_RUST=1   # Windows
-export X_RAY_DISABLE_RUST=1 # Linux/macOS
-```
-
----
-
-## Rustifying Your Own Project
-
-X-Ray's Rustification approach applies to any Python project:
-
-1. **Scan** — `python x_ray_claude.py --full-scan --path /your/project`
-2. **Prioritize** — Focus on functions flagged as complex + CPU-hot
-3. **Port** — Rewrite in Rust with PyO3 (`#[pyfunction]`)
-4. **Verify** — Generate golden files, run parity tests
-5. **Benchmark** — Measure actual speedup
-6. **Integrate** — `try: import rust_module` with Python fallback
-
-### What Makes a Good Rust Candidate?
-
-| ✅ Good Candidate | ❌ Poor Candidate |
-|---|---|
-| Tight loops over large data | I/O-bound code (HTTP, file reads) |
-| String/token processing | Code with many Python library dependencies |
-| Hash computation, similarity matrices | Simple glue code or config parsing |
-| Batch operations on arrays | Code that changes frequently |
-| CPU-bound with no GIL release | Small functions called rarely |
+Runs without Rust installed — all functions have pure-Python fallbacks.
 
 ---
 
@@ -209,17 +216,16 @@ X-Ray's Rustification approach applies to any Python project:
 ```bash
 pip install pytest
 
-# Full test suite (500+ tests)
-python -m pytest tests/ -v
-
-# Quick run
+# Full suite (882 tests)
 python -m pytest tests/ -q --tb=short
 
-# Rust-specific tests
-python -m pytest tests/test_rust_smoke.py tests/verify_parity.py -v
+# Specific modules
+python -m pytest tests/test_ui_compat.py -v         # 51 UI compat tests
+python -m pytest tests/test_transpiler.py -v         # Transpiler tests
+python -m pytest tests/test_analysis_smells.py -v    # Smell detector tests
 
-# Benchmark Rust vs Python
-python run_benchmark.py
+# Rust parity
+python -m pytest tests/verify_parity.py -v
 ```
 
 ---
@@ -228,53 +234,60 @@ python run_benchmark.py
 
 ```
 X_Ray/
-├── x_ray_claude.py              # Main CLI — unified scanner + grading
-├── x_ray_core.pyd               # Compiled Rust module (auto-detected)
-├── README.md                    # This file
-├── requirements.txt             # Dependencies
+├── x_ray_flet.py                # Flet desktop GUI (2,175 lines)
+├── x_ray_claude.py              # Interactive CLI (598 lines)
+├── x_ray_web.py                 # Streamlit web UI
+├── x_ray_exe.py                 # Standalone exe entry point
 │
-├── Analysis/                    # Analysis engines
+├── Analysis/                    # Analyzers (20 modules)
 │   ├── smells.py                #   Code smell detector (12+ categories)
 │   ├── duplicates.py            #   4-stage duplicate finder
 │   ├── similarity.py            #   Similarity metrics (Python + Rust paths)
 │   ├── lint.py                  #   Ruff linter integration
 │   ├── security.py              #   Bandit security scanner
-│   ├── reporting.py             #   ASCII + JSON reporting + grading
+│   ├── rust_advisor.py          #   Rust porting candidate scorer
+│   ├── transpiler.py            #   AST Python→Rust transpiler (2,259 lines)
+│   ├── llm_transpiler.py        #   LLM fallback transpiler (426 lines)
+│   ├── auto_rustify.py          #   End-to-end pipeline (1,657 lines)
+│   ├── ui_compat.py             #   UI API compatibility checker (497 lines)
+│   ├── reporting.py             #   ASCII + JSON + grading
 │   ├── library_advisor.py       #   Shared library suggestions
 │   ├── smart_graph.py           #   Interactive HTML graph
-│   ├── ast_utils.py             #   AST extraction helpers
-│   └── test_gen.py              #   Test input generator
+│   ├── semantic_fuzzer.py       #   Semantic fuzz testing
+│   └── ...
 │
-├── Core/                        # Core infrastructure
-│   ├── types.py                 #   Data types (FunctionRecord, SmellIssue, etc.)
+├── Core/                        # Infrastructure
+│   ├── types.py                 #   FunctionRecord, ClassRecord, SmellIssue, Severity
 │   ├── config.py                #   Thresholds, version, constants
-│   ├── inference.py             #   LLM helper (optional)
-│   ├── utils.py                 #   Logging, Rust environment check
+│   ├── i18n.py                  #   Internationalization (5 languages)
+│   ├── scan_phases.py           #   Shared scan phase runners
+│   ├── inference.py             #   Local LLM helper
+│   ├── llm_manager.py           #   LLM settings persistence
+│   ├── cli_args.py              #   Argument parsing
 │   └── x_ray_core/              #   Rust source (PyO3 + Rayon)
 │       ├── Cargo.toml
-│       └── src/lib.rs           #   861 lines of Rust (tokenizer, similarity, batch)
+│       └── src/lib.rs
 │
 ├── Lang/                        # Language support
 │   ├── python_ast.py            #   Python AST parser + parallel scanner
 │   └── tokenizer.py             #   Token-level similarity
 │
-├── tests/                       # 497 tests
-│   ├── test_xray_claude.py      #   End-to-end + unit tests
-│   ├── test_analysis_*.py       #   Per-module tests (smells, duplicates, lint, security)
-│   ├── test_lang_*.py           #   AST + tokenizer tests
-│   ├── test_core_*.py           #   Types + inference tests
-│   ├── verify_parity.py         #   Python ↔ Rust parity verification
-│   ├── test_rust_smoke.py       #   Rust module smoke tests
-│   └── rust_harness/            #   Rust verification infrastructure
-│       ├── generate_golden.py   #     Generate reference outputs
-│       ├── verify_rust.py       #     Verify Rust matches Python
-│       ├── benchmark.py         #     Performance comparison
-│       ├── calibrate_fixtures.py#     Fixture calibration
-│       └── fixtures/            #     Test fixture files
+├── tests/                       # 882 tests
+│   ├── test_analysis_*.py       #   Per-analyzer tests
+│   ├── test_ui_compat.py        #   UI compat tests (51)
+│   ├── test_transpiler.py       #   Transpiler tests
+│   ├── test_xray_*.py           #   End-to-end + integration
+│   ├── verify_parity.py         #   Python ↔ Rust parity
+│   ├── harness_*.py             #   Test harness infrastructure
+│   └── ...
 │
+├── scan_all_rustify.py          # Multi-project scan + transpile
+├── verify_rust_compilation.py   # Cargo-check verification harness
+├── CHANGELOG.md                 # Version history
 └── docs/
     ├── USAGE.md                 # Detailed usage guide
-    └── FUTURE_PLAN.md           # Roadmap
+    ├── FUTURE_PLAN.md           # Roadmap
+    └── how_to_download_rust.md  # Rust installation guide
 ```
 
 ---
@@ -282,60 +295,57 @@ X_Ray/
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     CLI / main()                             │
-│  --smell  --duplicates  --full-scan  --graph  --report       │
-└──────┬──────────┬──────────┬─────────────┬───────────────────┘
-       │          │          │             │
- ┌─────▼───┐ ┌───▼────┐ ┌───▼──────┐ ┌───▼──────┐
- │  Smell  │ │Duplicate│ │  Ruff    │ │ Bandit   │
- │Detector │ │ Finder  │ │ Lint     │ │ Security │
- └─────┬───┘ └───┬────┘ └───┬──────┘ └───┬──────┘
-       │          │          │             │
- ┌─────▼──────────▼──────────▼─────────────▼──────────┐
- │         scan_codebase() — AST Engine                │
- │  ThreadPoolExecutor + ast.parse per file            │
- └──────────────────────┬──────────────────────────────┘
-                        │
-              ┌─────────▼─────────────┐
-              │  similarity.py        │
-              │  Python ←→ Rust paths │
-              └─────────┬─────────────┘
-                        │
-         ┌──────────────▼──────────────┐
-         │  x_ray_core (Rust / PyO3)   │
-         │  Rayon parallel batching    │
-         │  10–50× acceleration        │
-         └─────────────────────────────┘
-                        │
-         ┌──────────────▼──────────────┐
-         │  Unified Grading (A+ → F)   │
-         │  JSON Report + Smart Graph  │
-         └─────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│           x_ray_flet.py  /  x_ray_claude.py                    │
+│              (GUI)             (CLI)                             │
+└────────┬─────────────────────────┬──────────────────────────────┘
+         │                         │
+    ┌────▼─────────────────────────▼────┐
+    │       Core/scan_phases.py         │
+    │     Phase orchestrator + ETA      │
+    └──┬───┬───┬───┬───┬───┬───────────┘
+       │   │   │   │   │   │
+    ┌──▼┐┌─▼┐┌─▼┐┌─▼┐┌─▼┐┌─▼──────────┐
+    │ S ││ D ││ L ││ B ││ R ││ UI Compat │
+    │ m ││ u ││ i ││ a ││ u ││           │
+    │ e ││ p ││ n ││ n ││ s ││ Validates │
+    │ l ││ l ││ t ││ d ││ t ││ UI kwargs │
+    │ l ││ s ││   ││ i ││ i ││ vs. live  │
+    │ s ││   ││   ││ t ││ f ││ signatures│
+    │   ││   ││   ││   ││ y ││           │
+    └───┘└───┘└───┘└───┘└───┘└───────────┘
+       │         │                │
+    ┌──▼─────────▼────────────────▼────┐
+    │       Lang/ (AST + Tokenizer)    │
+    └──────────────┬───────────────────┘
+                   │
+    ┌──────────────▼───────────────────┐
+    │  Analysis/transpiler.py          │
+    │  Python → Rust (AST-based)       │
+    │      ↓ fallback ↓               │
+    │  Analysis/llm_transpiler.py      │
+    │  LLM fills todo!() stubs         │
+    └──────────────┬───────────────────┘
+                   │
+    ┌──────────────▼───────────────────┐
+    │  x_ray_core.pyd (optional)       │
+    │  PyO3 + Rayon · 10–50× speedup   │
+    └──────────────────────────────────┘
+                   │
+    ┌──────────────▼───────────────────┐
+    │  Unified Grade (A+ → F)          │
+    │  JSON / Markdown / HTML export   │
+    └──────────────────────────────────┘
 ```
 
 ---
 
-## Grading Formula
+## Environment Variables
 
-The unified score is `100 − penalties`, where penalties come from all 4 tools:
-
-| Tool | Weights | Cap |
-|---|---|---|
-| **Smells** | critical × 0.25 + warning × 0.05 + info × 0.01 | 30 |
-| **Duplicates** | groups × 0.1 | 15 |
-| **Lint** | critical × 0.3 + warning × 0.05 + info × 0.005 | 25 |
-| **Security** | critical × 1.5 + warning × 0.3 + info × 0.005 | 30 |
-
-| Grade | Score Range |
+| Variable | Effect |
 |---|---|
-| A+ | ≥ 97 |
-| A | ≥ 93 |
-| A− | ≥ 90 |
-| B+ | ≥ 87 |
-| B | ≥ 83 |
-| ... | ... |
-| F | < 60 |
+| `X_RAY_DISABLE_RUST=1` | Force pure-Python mode (skip Rust core) |
+| `X_RAY_LLM_URL` | Override local LLM endpoint (default: `http://localhost:8080/v1`) |
 
 ---
 
@@ -343,25 +353,10 @@ The unified score is `100 − penalties`, where penalties come from all 4 tools:
 
 1. Fork the repository
 2. Create a feature branch
-3. Install dev deps: `pip install -r requirements-dev.txt`
-4. Run security audit: `pip-audit -r requirements.txt -r requirements-dev.txt`
-5. Run type check: `pyright .`
-6. Run the test suite: `python -m pytest tests/ -q --tb=short`
-7. Submit a pull request
-
-See [SECURITY.md](SECURITY.md) for dependency and code security practices.
+3. Run the test suite: `python -m pytest tests/ -q --tb=short`
+4. Ensure zero Ruff warnings: `ruff check .`
+5. Submit a pull request
 
 ---
 
-## Documentation
-
-| Doc | Description |
-|-----|--------------|
-| [docs/USAGE.md](docs/USAGE.md) | CLI options, smell categories, duplicate detection, programmatic API |
-| [CI_CD_SETUP.md](CI_CD_SETUP.md) | GitHub Actions, pre-commit, quality gates |
-| [docs/FUTURE_PLAN.md](docs/FUTURE_PLAN.md) | Roadmap and design philosophy |
-
----
-
-*Built with AST heuristics + Rust acceleration + optional AI enrichment.  
-Works on any Python codebase. Scan it, grade it, Rustify it.*
+*Scan it · Grade it · Rustify it*
