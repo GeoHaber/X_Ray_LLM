@@ -93,7 +93,11 @@ cd Core/x_ray_core && pip install maturin && maturin develop --release
 ```
 Rust is optional — pure-Python fallbacks always available.
 
----
+| Stage | Transpilable | Rate |
+|---|---|---|
+| Pre-Tier 3 | 4,322 / 14,044 | 30.8 % |
+| Post-Tier 3 + Threshold Tuning | 7,485 / 14,064 | 53.2 % |
+| Post-Round 2 Fixes | 7,694 (6,917 clean compile) | 54.7 % |
 
 ## Tests
 
