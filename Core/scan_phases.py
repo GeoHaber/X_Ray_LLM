@@ -114,6 +114,20 @@ def run_security_phase(root: Path, exclude=None):
     return None, []
 
 
+def run_ui_compat_phase(root: Path, exclude=None):
+    """Run UI API compatibility check. Returns (analyzer | None, issues)."""
+    from Analysis.ui_compat import UICompatAnalyzer
+    analyzer = UICompatAnalyzer()
+    print("\n  >> Checking UI API Compatibility (X-Ray)...")
+    raw_issues = analyzer.analyze(root, exclude=exclude)
+    smell_issues = [i.to_smell() for i in raw_issues]
+    if raw_issues:
+        analyzer.print_report(raw_issues)
+    else:
+        print("  ✅ All UI calls are compatible.")
+    return analyzer, raw_issues, smell_issues
+
+
 def run_rustify_scan(root: Path, exclude=None) -> dict:
     """Rank functions by Rust-porting suitability and print results."""
     from Analysis.rust_advisor import RustAdvisor
