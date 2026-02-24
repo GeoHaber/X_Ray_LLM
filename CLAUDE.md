@@ -89,11 +89,7 @@ When adding a new analyzer or phase: add the module under `Analysis/`, register 
 
 ## Review Checklist (Pre-Merge)
 
-- [ ] All tests pass.
-- [ ] No Ruff lint/format issues.
-- [ ] No new Bandit findings (or documented `# nosec` with reason).
-- [ ] Docs updated if behavior or CLI changed.
-- [ ] Conventional commit messages on the branch.
+See **docs/DEVELOPMENT_WORKFLOW.md** § Review Checklist (Pre-Merge) for the full list. Essentials: tests pass, Ruff (check + format), Bandit, quality gate, docs updated, conventional commits.
 
 ---
 

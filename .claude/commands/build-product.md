@@ -60,8 +60,9 @@ accessibility tests, and performance tests."
 Run the full test suite. Fix any failures by launching targeted implementer subagents.
 
 ## PHASE 7: REVIEW & SECURITY [Autonomous, Parallel]
+*For the new product being built (specs, user stories), not for X-Ray.*
 Launch TWO subagents in parallel:
-1. `reviewer` — "Review all code against all specs. Run all tests. Produce review report."
+1. `reviewer` — "Review all code against project specs and standards. Run all tests. Produce review report."
 2. `security-auditor` — "Audit all code for security vulnerabilities."
 If verdict is FIX-THEN-SHIP: fix blocking issues and re-review.
 If verdict is NEEDS-REWORK: report to user with details.

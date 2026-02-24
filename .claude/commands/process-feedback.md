@@ -17,13 +17,14 @@ Takes user feedback (pasted or from a file) and processes it into the backlog. V
 3. Use `test-engineer` subagent to add regression test
 4. Create PR directly to main (hotfix fast lane)
 
-## For feature requests marked as "do next":
+## For feature requests marked as "do next" (new-product pipeline only)
+*Not for X-Ray. Use only when building a separate product that has specs/user-stories.*
 1. Run them back through the mini-pipeline:
    - `spec-writer` to add stories to docs/user-stories.md
    - `architect` to assess impact on architecture
-   - `implementer` to build in a feature branch
+   - `backend-dev` or `frontend-dev` to build in a feature branch
    - `test-engineer` to add tests
-   - `reviewer` to review
+   - `reviewer` to review (against that product’s specs)
    - PR to develop → main
 
 ## CONSTRAINTS

@@ -6,13 +6,27 @@ This folder contains **agent definitions** and **commands** aligned with the [Fu
 
 ---
 
+## Code review (X-Ray and Python projects)
+
+For **project/code review** of X-Ray or any Python codebase, use only:
+
+| What | Purpose |
+|------|---------|
+| **reviewer** agent | Checklist: tests, Ruff, Bandit, docs, quality gate → docs/review-report.md |
+| **security-auditor** agent | Bandit, pip-audit, secure patterns → docs/security-audit.md |
+| **xray-quality** command | Pre-PR: Ruff + pytest + full-scan + quality gate (one-shot validation) |
+
+All other agents and commands are for **implementation**, **CI**, **backlog**, or the **optional new-product pipeline** (not for X-Ray code review).
+
+---
+
 ## Relevance to X-Ray
 
 | Category | Purpose |
 |----------|---------|
 | **X-Ray development** | Contributing to X-Ray: analyzers (Analysis/), Core/, Lang/, tests, Ruff, Bandit, pytest, quality gate |
 | **Python projects** | Scanning or improving any Python codebase with X-Ray; security/lint/format/review for Python |
-| **Optional: new product** | Building a *separate* product (e.g. web app) using the full pipeline; not required for X-Ray itself |
+| **Optional: new product** | Building a *separate* product (e.g. web app); not for X-Ray code review or development |
 
 ---
 
@@ -39,9 +53,9 @@ This folder contains **agent definitions** and **commands** aligned with the [Fu
 
 ---
 
-## Agents — Optional (new product pipeline)
+## Agents — Optional (new product pipeline only)
 
-Use these when building a *new product* (e.g. web app) with the full SDLC pipeline. They are **not required** for developing X-Ray (the Python scanner).
+**Not for X-Ray code review or development.** Use only when building a *new product* (e.g. web app) with the full SDLC pipeline.
 
 | Agent | Use for |
 |-------|--------|
@@ -59,7 +73,7 @@ Use these when building a *new product* (e.g. web app) with the full SDLC pipeli
 | **xray-quality** | **X-Ray** | Before every PR: Ruff check + format, pytest, full-scan, quality gate. Validates the X-Ray codebase. |
 | **maintenance-check** | **X-Ray** | Weekly or pre-release: pip-audit, Ruff, pytest, X-Ray full-scan, quality gate, backlog review. |
 | **process-feedback** | **X-Ray / any** | Triage user feedback; update docs/backlog.md or docs/FUTURE_PLAN.md; optional P0 hotfix flow. |
-| **build-product** | **Optional** | Building a *new product* from an idea (Phases 1–8). Not for day-to-day X-Ray development. |
+| **build-product** | **Optional** | Building a *new product* from an idea (Phases 1–8). Not for X-Ray code review or development. |
 
 ---
 
@@ -79,8 +93,8 @@ See root [CLAUDE.md](../CLAUDE.md) and [docs/DEVELOPMENT_WORKFLOW.md](../docs/DE
 
 | Check | Status |
 |-------|--------|
-| Primary agents (backend-dev, reviewer, security-auditor, test-engineer, devops, feedback-triage, architect) reference X-Ray and Python | ✓ |
-| Commands xray-quality and maintenance-check target X-Ray repo (Ruff, pytest, full-scan, quality gate) | ✓ |
-| Optional agents (product-strategist, spec-writer, ux-designer, frontend-dev) and build-product marked "not for X-Ray" | ✓ |
-| Stack matches project: Python 3.10+, Ruff, Bandit, pytest, Analysis/, Core/, Lang/ | ✓ |
-| CLAUDE.md.template states "not for X-Ray codebase" | ✓ |
+| **Code review** uses only reviewer, security-auditor, xray-quality (no specs/wireframes) | ✓ |
+| Primary agents reference X-Ray and Python; optional agents marked "not for X-Ray code review" | ✓ |
+| Commands xray-quality and maintenance-check target X-Ray (Ruff, pytest, full-scan, quality gate) | ✓ |
+| build-product and "For feature requests" pipeline scoped to new-product only | ✓ |
+| Stack: Python 3.10+, Ruff, Bandit, pytest, Analysis/, Core/, Lang/ | ✓ |
