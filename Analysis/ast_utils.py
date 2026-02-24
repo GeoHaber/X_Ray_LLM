@@ -74,9 +74,34 @@ def _compute_structure_hash(node: ast.AST) -> str:
     that structurally identical functions with different names produce the
     same hash.  Uses ``ast.unparse`` instead of ``ast.dump`` to avoid
     C-level stack overflow on deeply nested AST nodes.
+
+    Falls back to code_hash (plain source hash) if the AST is too deeply
+    nested and deepcopy/unparse would hang.
     """
     try:
         import copy
+        import signal
+        import threading
+
+        # Guard: skip deepcopy for excessively nested ASTs (hangs on >=50 depth)
+        def _max_depth(n, limit=50, _depth=0):
+            if _depth >= limit:
+                return limit
+            best = _depth
+            for child in ast.iter_child_nodes(n):
+                best = max(best, _max_depth(child, limit, _depth + 1))
+                if best >= limit:
+                    return limit
+            return best
+
+        if _max_depth(node) >= 50:
+            # Too deep — fall back to plain ast.unparse without normalization
+            try:
+                source = ast.unparse(node)
+                return hashlib.sha256(source.encode()).hexdigest()
+            except Exception:
+                return ""
+
         normalized = ASTNormalizer().visit(copy.deepcopy(node))
         source = ast.unparse(normalized)
         return hashlib.sha256(source.encode()).hexdigest()

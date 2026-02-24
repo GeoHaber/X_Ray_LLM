@@ -25,7 +25,7 @@ class TestIntegration(unittest.TestCase):
         hash_val = _compute_structure_hash(node)
         
         print(f"Computed Hash: {hash_val}")
-        self.assertTrue(len(hash_val) == 32, "Hash should be 32 chars (MD5)")
+        self.assertTrue(len(hash_val) == 64, "Hash should be 64 chars (SHA-256)")
         
         # Verify it matches what we expect from manually normalizing
         # Rust normalize_code('def foo():\n    """Docstring"""\n    pass') -> 'def foo():\n    \n    pass'

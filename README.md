@@ -1,6 +1,6 @@
 # X-Ray — AI-Powered Code Quality Scanner & Rust Accelerator
 
-**Version 5.1.0** · Python 3.10+ · 882 tests · 5 languages · MIT License
+**Version 5.1.2** · Python 3.10+ · 882 tests · 5 languages · MIT License
 
 ---
 
@@ -45,6 +45,30 @@ python x_ray_flet.py
 
 The app opens a native window with a sidebar to pick a directory, toggle
 analyzers on/off, and view results across 9 dashboard tabs.
+
+### Standalone EXE (share with friends)
+
+X-Ray ships as a portable `.exe` — no Python install required.
+Double-click to launch the interactive wizard:
+
+1. **Folder picker** — native Windows dialog to choose the project to scan
+2. **Scan mode menu** — 7 options from quick lint to full scan + rustify
+3. **Report prompt** — save JSON, print summary, or both
+
+Build it yourself:
+```bash
+pip install pyinstaller
+python -m PyInstaller x_ray.spec --noconfirm
+# Output: dist/x_ray/x_ray.exe (~64 MB, includes ruff, bandit, tkinter, Rust core)
+```
+
+The `.exe` includes a **hardware-locked trial system** (10 runs per machine):
+- Machine fingerprint → AES-256-GCM encrypted counter → HMAC-SHA256 integrity
+- All crypto runs in compiled Rust (`x_ray_core.pyd`) — no Python-side secrets
+- Counter stored at `%APPDATA%\x_ray\.xrl` (84 bytes, binary)
+- Each new machine gets a fresh 10 runs, no server needed
+
+CLI mode also works: `x_ray.exe --path C:\project --full-scan`
 
 ### CLI
 
@@ -102,6 +126,7 @@ python x_ray_claude.py --rustify --path /your/project
 | **LLM Fallback** | When AST transpiler emits `todo!()` stubs, a local LLM completes them, then `rustc --check` validates |
 | **Auto-Rustify Pipeline** | End-to-end: Scan → Score → Transpile → Cargo build → Verify |
 | **Rust Core** | Optional `x_ray_core.pyd` (PyO3 + Rayon) replaces Python hot-paths with 10–50× speedup |
+| **Trial License** | AES-256-GCM + HMAC-SHA256 hardware-locked trial gate, compiled in Rust |
 
 ---
 
@@ -173,6 +198,9 @@ The `x_ray_core.pyd` native extension accelerates hot-paths:
 | `code_similarity` | ~18× |
 | `normalize_code` | ~20× |
 | `batch_code_similarity` | ~50× (Rayon parallel) |
+| `prefilter_parallel` | ~30× (Rayon O(N²) pre-filter) |
+| `check_trial` | AES-256-GCM trial gate |
+| `trial_max_runs` | Returns max run count |
 
 Build it:
 ```bash
@@ -211,7 +239,7 @@ X_Ray/
 ├── x_ray_flet.py                # Flet desktop GUI (2,175 lines)
 ├── x_ray_claude.py              # Interactive CLI (598 lines)
 ├── x_ray_web.py                 # Streamlit web UI
-├── x_ray_exe.py                 # Standalone exe entry point
+├── x_ray_exe.py                 # Standalone exe (interactive wizard + trial license)
 │
 ├── Analysis/                    # Analyzers (20 modules)
 │   ├── smells.py                #   Code smell detector (12+ categories)
@@ -255,6 +283,7 @@ X_Ray/
 │   ├── harness_*.py             #   Test harness infrastructure
 │   └── ...
 │
+├── x_ray.spec                   # PyInstaller build spec (bundles ruff, bandit, Rust core, tkinter)
 ├── scan_all_rustify.py          # Multi-project scan + transpile
 ├── verify_rust_compilation.py   # Cargo-check verification harness
 ├── CHANGELOG.md                 # Version history
@@ -320,6 +349,22 @@ X_Ray/
 |---|---|
 | `X_RAY_DISABLE_RUST=1` | Force pure-Python mode (skip Rust core) |
 | `X_RAY_LLM_URL` | Override local LLM endpoint (default: `http://localhost:8080/v1`) |
+
+---
+
+## Lessons Learned
+
+> Hard-won insights from building, shipping, and debugging X-Ray across 15 projects.
+
+| Lesson | Context |
+|---|---|
+| **Rust → Python type boundaries need explicit resolution** | `prefilter_parallel` returns `(str, str, float)` key tuples, not Python objects. Always resolve keys back to domain objects at the boundary. |
+| **Hash algorithm divergence is a silent landmine** | Rust uses FxHash (64-bit), Python uses SHA-256 truncated to 32-bit for n-gram fingerprints. Never mix fingerprint sets across the two runtimes. |
+| **Double-call anti-pattern in comprehensions** | `code_similarity(a, b)` was called twice per pair (filter + value). Walrus operator `:=` eliminates the 2× cost. |
+| **PyInstaller excludes can break features** | `tkinter` was in the excludes list — removing it was necessary for the folder picker to work in the `.exe`. |
+| **Bundled tool binaries must be explicit** | Ruff was bundled but Bandit wasn't. Both must appear in `x_ray.spec`'s `binaries` list. |
+| **Trial crypto belongs in compiled code** | Python-side secrets are trivially patchable. The AES-256-GCM gate lives entirely in the Rust `.pyd` — no keys in Python. |
+| **Interactive mode is essential for .exe distribution** | Friends double-click `.exe` files; they don't open terminals. A 3-step wizard (folder → mode → report) makes the tool usable for non-developers. |
 
 ---
 

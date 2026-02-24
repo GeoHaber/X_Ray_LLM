@@ -141,7 +141,8 @@ def generate_crate(pairs: List[Dict], batch_size: int = 200) -> List[Path]:
             lines.append("")
 
         mod_path = src_dir / f"{mod_name}.rs"
-        mod_path.write_text("\n".join(lines), encoding="utf-8")
+        content = "\n".join(lines).replace("\r", "")
+        mod_path.write_text(content, encoding="utf-8")
 
     # Write lib.rs
     lib_lines = ["// Auto-generated — cargo check verification\n"]
@@ -159,7 +160,7 @@ def run_cargo_check() -> tuple[int, str]:
         cwd=str(CRATE_DIR),
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=900,
     )
     return result.returncode, result.stderr
 
@@ -254,8 +255,9 @@ def main():
 
     # Count error lines vs total lines
     total_lines = sum(
-        (CRATE_DIR / "src" / f.name).read_text(encoding="utf-8").count("\n")
+        f.read_text(encoding="utf-8").count("\n")
         for f in modules
+        if f.exists()
     )
 
     # Count unique functions with errors

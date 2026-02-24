@@ -1142,7 +1142,6 @@ def _build_auto_rustify_tab(results: Dict[str, Any],
 def _build_ui_compat_tab(results: Dict[str, Any]) -> ft.Control:
     summary = results.get("ui_compat", {})
     raw_issues = results.get("_ui_compat_raw", [])
-    smell_issues = results.get("_ui_compat_issues", [])
 
     if summary.get("error"):
         return ft.Text(f"⚠️ {summary['error']}",
@@ -1183,7 +1182,6 @@ def _build_ui_compat_tab(results: Dict[str, Any]) -> ft.Control:
 
     issue_tiles = []
     for r in raw_issues[:100]:
-        s = r.to_smell() if hasattr(r, "to_smell") else None
         icon = SEV_ICONS.get("critical", "🔴")
         ctrls = [
             ft.Text(f"{t('issue')}: '{r.bad_kwarg}' is not valid for "
@@ -1994,7 +1992,6 @@ def _build_progress_widgets():
 async def main(page: ft.Page):
     # ── Page setup ───────────────────────────────────────────────────────
     def on_error(e):
-        import traceback
         logger.error("Flet page error: %s", e.data)
 
     page.on_error = on_error

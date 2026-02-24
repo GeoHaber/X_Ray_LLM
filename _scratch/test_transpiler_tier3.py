@@ -13,7 +13,8 @@ Tests for Tier-3 transpiler expansion:
   - async/await support
   - inline import handling
 """
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from Analysis.transpiler import transpile_function_code

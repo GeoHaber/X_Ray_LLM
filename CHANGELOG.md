@@ -1,5 +1,128 @@
 # Changelog
 
+## v5.1.2 — Standalone EXE, Trial License & Duplicate Fix (2026-02-24)
+
+### Overview
+Shipped X-Ray as a **portable `.exe`** with an interactive wizard, hardware-locked
+trial license system, and fixed a crash in the Rust-accelerated duplicate detector.
+
+---
+
+### Standalone EXE Distribution
+- **Interactive wizard** for double-click usage (no terminal needed):
+  1. Native Windows folder picker (tkinter)
+  2. Scan mode menu (7 options: lint, smells, duplicates, security, full scan, etc.)
+  3. Report prompt (JSON, console summary, or both)
+- **Bundled tools**: ruff.exe, bandit.exe, x_ray_core.pyd, tkinter — all in one ~64 MB package
+- **Auto-detection**: Detects double-click vs. CLI args → routes to wizard or standard CLI
+- **Build**: `python -m PyInstaller x_ray.spec --noconfirm`
+
+### Trial License System (Rust-Based)
+Hardware-locked 10-run trial, entirely in compiled Rust:
+- **Machine fingerprint**: SHA-256 of username + computer name + CPU count + OS + home dir
+- **Encrypted counter**: AES-256-GCM with machine-derived key
+- **Integrity check**: HMAC-SHA256 with separate derived key
+- **Storage**: `%APPDATA%\x_ray\.xrl` (84 bytes binary)
+- No server required — each new machine gets a fresh 10 runs
+- All crypto in `x_ray_core.pyd` — no Python-side secrets to patch
+
+### Bug Fixes
+
+| Fix | Description |
+|---|---|
+| **Duplicate detection crash** | `prefilter_parallel` returns `(str, str, float)` key tuples but `_batch_code_similarity` expected `FunctionRecord` objects → `AttributeError: 'str' object has no attribute 'code'`. Fixed by resolving string keys back to objects via `func_map`. |
+| **Double `code_similarity` call** | Python fallback path called `code_similarity(f1.code, f2.code)` twice per pair (filter + value). Replaced with walrus operator `:=` for single evaluation. |
+| **Bandit missing from .exe** | `x_ray.spec` bundled ruff.exe but not bandit.exe → "bandit not found (skipped)" in .exe output. Added `bandit_path` to spec binaries. |
+| **tkinter excluded from .exe** | Was in PyInstaller excludes list → folder picker crashed. Removed from excludes. |
+
+### Rust↔Python Boundary Audit
+Full audit of all 12 `#[pyfunction]` boundaries:
+- 3 production-hot call sites verified: `code_similarity`, `batch_code_similarity`, `prefilter_parallel`
+- Hash algorithm divergence noted (Rust FxHash vs Python SHA-256) — safe since paths are never mixed
+- `Counter` → `FxHashMap<String, u32>` conversion verified safe (int-only values)
+- `FunctionRecord.key` @property works with PyO3's `getattr` (invokes descriptors)
+
+### Files Changed
+- `Analysis/duplicates.py` — Fixed Rust prefilter key resolution + walrus operator optimization
+- `x_ray_exe.py` — Interactive wizard (`_pick_folder`, `_interactive_menu`, `_needs_interactive`), trial license gate
+- `x_ray_claude.py` — Trial license gate (silent fallthrough in dev mode)
+- `x_ray.spec` — Added bandit.exe, removed tkinter from excludes
+- `Core/x_ray_core/src/lib.rs` — Added `check_trial`, `trial_max_runs` pyfunctions
+- `Core/x_ray_core/Cargo.toml` — Added sha2, hmac, aes-gcm, dirs dependencies
+- `README.md` — Standalone EXE docs, trial license, lessons learned
+- `CHANGELOG.md` — This entry
+
+---
+
+## v5.1.1 — Zero Syntax Errors: Cargo-Check-Verified Round 3+4 (2026-02-23)
+
+### Overview
+Eliminated **ALL syntax-class compilation errors** from transpiled Rust output.
+Starting from **548 cargo check errors**, two targeted fix rounds reduced syntax
+errors to **zero** across 7,071 clean functions (100,924 lines of Rust code from
+15 real Python projects).
+
+The remaining errors are exclusively **type/semantic** (E0308, E0425, E0599, etc.)
+— a fundamentally different category requiring type inference, which is expected
+for a syntax-focused transpiler operating on duck-typed Python.
+
+---
+
+### Round 3 — 548 → 4 syntax errors (−99.3 %)
+| Fix | Target Pattern | Errors Fixed |
+|---|---|---|
+| Negative indexing `arr[-1]` → `arr[arr.len() - N]` | `cannot be used as negative numeric literal` | ~27 |
+| Negative slice bounds `arr[:-1]`, `arr[-2:]` | Slice with negative indices | ~14 |
+| For-loop `vec![a,b,c]` → `[a,b,c]` slice pattern | `arbitrary expressions in patterns` | ~172 |
+| `println!` format literal safety | `format argument must be string literal` | ~15 |
+| `_unwrap_format_args` placeholder count verification | `argument never consumed` / mismatch | ~205 |
+| Non-literal `.format()` base fallback | Broken `format!(non_literal, args)` | ~57 |
+
+### Round 4 — 4 → 0 syntax errors (100 % clean)
+| Fix | Target Pattern | Errors Fixed |
+|---|---|---|
+| Dict `**unpacking` comment placement | `expected expression, found ','` after `/* **expr */` | 2 |
+| `.count()` as-cast parenthesization | `cast cannot be followed by a method call` | 1 |
+| Non-literal `.format()` no trailing block comment | `unterminated block comment` inside macros | 1 |
+
+### Error Landscape After Fixes
+With all syntax errors eliminated, `rustc` now proceeds to full type-checking:
+
+| Category | Count | Examples |
+|---|---|---|
+| **Syntax errors** | **0** | — |
+| Type errors (E0308, E0277, E0369) | 211 | `expected i64, found usize` |
+| Semantic errors (E0425, E0609, E0599) | 241 | `cannot find function`, `no field` |
+| Other (E0282, E0384) | 47 | Type inference, mutability |
+
+All 8 original syntax error categories verified as **FIXED**:
+`expected expression ','`, `arbitrary expressions`, `unknown character escape`,
+`negative numeric literal`, `expected comma`, `unterminated block comment`,
+`format argument must be literal`, `invalid format string`.
+
+### Coverage Update
+| Metric | Before | After |
+|---|---|---|
+| Clean pairs | 6,917 | 7,071 |
+| Total pairs | 7,694 | 7,849 |
+| Scanned projects | 14 | 15 |
+| Syntax errors | 548 | **0** |
+| Transpilable rate | 54.7 % | 55.8 % |
+
+### Tests
+All test suites pass: **81 tests** total.
+- Tier-3 module handlers: 35 tests
+- Tier-2 expansion: 13 tests
+- Round-3 fixes: 13 tests
+- Round-4 cargo-verified fixes: 20 tests
+
+### Files Changed
+- `Analysis/transpiler.py` — 9 function modifications across Rounds 3+4
+- `_scratch/test_transpiler_round4.py` — New 20-test suite (new)
+- `_scratch/test_round4_fixes.py` — Quick-check script (new)
+
+---
+
 ## v5.1.0 — Transpiler Expansion & Cargo-Verified Fixes (2026-02-21)
 
 ### Overview

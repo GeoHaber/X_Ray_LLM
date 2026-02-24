@@ -558,8 +558,11 @@ class TestStatementsMisc:
                 x = 0
         """)
         rust = transpile_function_code(code)
-        assert "// try" in rust or "try" in rust
-        assert "catch" in rust or "except" in rust.lower() or "// }" in rust
+        # Transpiler now generates Result/match pattern for try/except
+        assert ("// try" in rust or "Result" in rust or "match" in rust
+                or "try" in rust)
+        assert ("catch" in rust or "Err" in rust
+                or "except" in rust.lower() or "// }" in rust)
 
     def test_pass_becomes_comment(self):
         code = "def f():\n    pass"

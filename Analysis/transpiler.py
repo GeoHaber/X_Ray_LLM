@@ -111,12 +111,13 @@ _RUST_RESERVED = {
     "enum", "trait", "pub", "crate", "move", "mut",
     "loop", "where", "async", "await", "dyn", "abstract", "become",
     "box", "do", "final", "macro", "override", "priv", "typeof",
-    "unsized", "virtual", "yield",
+    "unsized", "virtual", "yield", "union", "static", "extern",
+    "const", "let",
 }
 
 # Words that cannot use r# prefix at all — must be renamed
 _RUST_SPECIAL_RENAME = {"self": "this", "cls": "this", "Self": "This",
-                        "super": "super_"}
+                        "super": "super_", "_": "tr_"}
 
 
 def _safe_name(name: str) -> str:
@@ -152,14 +153,37 @@ def _expr_constant(node: ast.expr) -> str:
     return "None" if v is None else repr(v)
 
 
+def _escape_for_rust(v: str, wrap_braces: bool = True) -> str:
+    """Escape a Python string value for embedding in Rust source code (character-by-character).
+    
+    If wrap_braces is True, escapes { → {{ and } → }} (for format! contexts).
+    """
+    out = []
+    for ch in v:
+        if ch == '\\':
+            out.append('\\\\')
+        elif ch == '"':
+            out.append('\\"')
+        elif ch == '\n':
+            out.append('\\n')
+        elif ch == '\r':
+            pass  # strip bare CR
+        elif ch == '\t':
+            out.append('\\t')
+        elif ch == '\0':
+            out.append('\\0')
+        elif wrap_braces and ch == '{':
+            out.append('{{')
+        elif wrap_braces and ch == '}':
+            out.append('}}')
+        else:
+            out.append(ch)
+    return ''.join(out)
+
+
 def _escape_string_literal(v: str) -> str:
     """Escape a Python string for Rust string literal."""
-    escaped = v.replace("\\", "\\\\").replace('"', '\\"')
-    escaped = escaped.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-    escaped = escaped.replace("{", "{{").replace("}", "}}")
-    escaped = re.sub(r"%[sd]", "{}", escaped)
-    escaped = re.sub(r"%-?\d*\.?\d*[sfde]", "{}", escaped)
-    return f'"{escaped}"'
+    return f'"{_escape_for_rust(v, wrap_braces=True)}"'
 
 
 def _escape_bytes_literal(v: bytes) -> str:
@@ -251,13 +275,42 @@ def _expr_attribute(node: ast.expr) -> str:
 
 
 def _expr_binop(node: ast.expr) -> str:
-    """Binary operators: +, -, *, /, **, //."""
+    """Binary operators: +, -, *, /, **, //, %."""
     left, right = _expr(node.left), _expr(node.right)
     if isinstance(node.op, ast.Pow):
         return f"{left}.pow({right} as u32)"
     if isinstance(node.op, ast.FloorDiv):
         return f"({left} / {right})"
+    # Python str % args → Rust format!()
+    if isinstance(node.op, ast.Mod):
+        if isinstance(node.left, (ast.Constant, ast.JoinedStr)):
+            if isinstance(node.left, ast.Constant) and isinstance(node.left.value, str):
+                return _format_percent_string(node.left.value, node.right)
+        # Non-string mod → regular %
     return f"({left} {_OP_MAP.get(type(node.op), '+')} {right})"
+
+
+def _format_percent_string(template: str, args_node) -> str:
+    """Convert Python 'template' % args to Rust format!()."""
+    # First, protect %% (literal percent) by replacing with a sentinel
+    rust_fmt = template.replace('%%', '\x00PERCENT\x00')
+    # Escape for Rust string
+    rust_fmt = rust_fmt.replace('\\', '\\\\').replace('"', '\\"')
+    rust_fmt = rust_fmt.replace('\n', '\\n').replace('\r', '').replace('\t', '\\t')
+    rust_fmt = rust_fmt.replace('{', '{{').replace('}', '}}')
+    # Convert %s, %d, %f, %r, etc. to {}
+    rust_fmt = re.sub(r'%-?\d*\.?\d*[sdrfeEgGboxXi]', '{}', rust_fmt)
+    # Restore literal percent
+    rust_fmt = rust_fmt.replace('\x00PERCENT\x00', '%')
+    # Build args list
+    if isinstance(args_node, ast.Tuple):
+        args_str = ', '.join(_expr(e) for e in args_node.elts)
+    else:
+        args_str = _expr(args_node)
+    placeholder_count = rust_fmt.count('{}')
+    if placeholder_count == 0:
+        return f'"{rust_fmt}".to_string()'
+    return f'format!("{rust_fmt}", {args_str})'
 
 
 def _expr_unaryop(node: ast.expr) -> str:
@@ -344,14 +397,40 @@ def _expr_compare(node: ast.expr) -> str:
 
 
 def _expr_subscript(node: ast.expr) -> str:
-    """Subscript/indexing: a[b], a[1:2]."""
+    """Subscript/indexing: a[b], a[1:2], a[-1]."""
     obj = _expr(node.value)
     sl = node.slice
     if isinstance(sl, ast.Slice):
-        lower = _expr(sl.lower) if sl.lower else "0"
-        upper = _expr(sl.upper) if sl.upper else ""
+        lower = _resolve_slice_bound(sl.lower, obj) if sl.lower else "0"
+        upper = _resolve_slice_bound(sl.upper, obj) if sl.upper else ""
         return f"&{obj}[{lower}..{upper}]" if upper else f"&{obj}[{lower}..]"
+    # Handle negative indexing: arr[-1] → arr[arr.len() - 1]
+    neg = _negative_index_value(sl)
+    if neg is not None:
+        return f"{obj}[{obj}.len() - {neg}]"
     return f"{obj}[{_expr(sl)}]"
+
+
+def _negative_index_value(node) -> int | None:
+    """Return the positive offset N if node represents -N, else None."""
+    # ast.UnaryOp(op=USub, operand=Constant(int))
+    if (isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub)
+            and isinstance(node.operand, ast.Constant)
+            and isinstance(node.operand.value, int) and node.operand.value > 0):
+        return node.operand.value
+    # ast.Constant with negative int (Python may fold -1 to Constant(-1))
+    if (isinstance(node, ast.Constant) and isinstance(node.value, int)
+            and node.value < 0):
+        return -node.value
+    return None
+
+
+def _resolve_slice_bound(node, obj: str) -> str:
+    """Resolve a slice bound, handling negative values."""
+    neg = _negative_index_value(node)
+    if neg is not None:
+        return f"{obj}.len() - {neg}"
+    return _expr(node)
 
 
 def _expr_ifexp(node: ast.expr) -> str:
@@ -382,12 +461,19 @@ def _expr_dict(node: ast.expr) -> str:
     if not node.keys:
         return "HashMap::new()"
     pairs = []
+    comments = []
     for k, v in zip(node.keys, node.values):
         if k is None:
-            pairs.append(f"/* **{_expr(v)} */")
+            # dict unpacking (**expr) can't be represented in Rust HashMap::from;
+            # emit as comment OUTSIDE the brackets to avoid dangling commas
+            comments.append(f"/* **{_expr(v)} */")
         else:
             pairs.append(f"({_expr(k)}, {_expr(v)})")
-    return f"HashMap::from([{', '.join(pairs)}])"
+    inner = ', '.join(pairs) if pairs else ""
+    prefix = ' '.join(comments) + ' ' if comments else ''
+    if not pairs:
+        return f"{prefix}HashMap::new()"
+    return f"{prefix}HashMap::from([{inner}])"
 
 
 def _expr_set(node: ast.expr) -> str:
@@ -419,14 +505,15 @@ def _expr_joinedstr(node: ast.expr) -> str:
     parts_fmt, parts_args = [], []
     for val in node.values:
         if isinstance(val, ast.Constant) and isinstance(val.value, str):
-            parts_fmt.append(val.value.replace("{", "{{").replace("}", "}}"))
+            # Escape the literal part using shared char-by-char escaper
+            parts_fmt.append(_escape_for_rust(val.value, wrap_braces=True))
         elif isinstance(val, ast.FormattedValue):
             parts_fmt.append(f"{{{_convert_fstring_spec(val.format_spec)}}}")
             parts_args.append(_expr(val.value))
         else:
             parts_fmt.append("{}")
             parts_args.append(_expr(val))
-    fmt_str = "".join(parts_fmt).replace('"', '\\"')
+    fmt_str = "".join(parts_fmt)
     if parts_args:
         return f'format!("{fmt_str}", {", ".join(parts_args)})'
     return f'"{fmt_str}".to_string()'
@@ -545,8 +632,16 @@ def _call_print(args, _kw):
         return "println!()"
     if len(args) == 1:
         a = args[0]
+        if a.startswith("format!(") and a.rstrip().endswith(")"):
+            inner = a.rstrip()[len("format!("):-1]
+            # Only unwrap if the format string is a literal
+            if inner.lstrip().startswith('"'):
+                return f"println!({inner})"
+            # Non-literal format string → wrap safely
+            return f'println!("{{}}", {a})'
         if a.startswith("format!("):
-            return f"println!({a[len('format!('):-1]})"
+            # format!() with trailing comment — don't try to unwrap
+            return f'println!("{{}}", {a})'
         # Pure string literal (no method calls chained after it)
         if a.startswith('"') and a.endswith('"'):
             return f"println!({a})"
@@ -598,8 +693,8 @@ def _call_min_max(name, args, _kw):
 _BUILTIN_SIMPLE: Dict[str, Callable] = {
     "len":        lambda a, _: f"{a[0]}.len()" if a else "0",
     "str":        lambda a, _: f"{a[0]}.to_string()" if a else '"".to_string()',
-    "int":        lambda a, _: f"{a[0]} as i64" if a else "0",
-    "float":      lambda a, _: f"{a[0]} as f64" if a else "0.0",
+    "int":        lambda a, _: f"({a[0]} as i64)" if a else "0",
+    "float":      lambda a, _: f"({a[0]} as f64)" if a else "0.0",
     "bool":       lambda a, _: f"({a[0]} != 0)" if a else "false",
     "abs":        lambda a, _: f"{a[0]}.abs()" if a else "0",
     "sum":        lambda a, _: f"{a[0]}.iter().sum::<i64>()" if a else "0",
@@ -670,19 +765,51 @@ def _call_builtin_complex(name, args, kwargs):
 
 # ── Module-specific call handlers ─────────────────────────────────────
 
+def _python_fmt_to_rust(s: str) -> str:
+    """Convert Python %-style format specifiers in a Rust string literal to {} placeholders.
+    E.g. '"msg: %s val: %d"' → '"msg: {} val: {}"'
+    Handles %% → literal % (which in Rust format strings is %% anyway, but
+    we keep it as-is since {{ }} escaping is already done).
+    """
+    if not s.startswith('"'):
+        return s
+    inner = s[1:-1]  # strip outer quotes
+    # Sentinel for %%
+    inner = inner.replace("%%", "\x00PCT\x00")
+    inner = re.sub(r"%-?\d*\.?\d*[sdfegrioxXcba]", "{}", inner)
+    inner = inner.replace("\x00PCT\x00", "%")
+    return f'"{inner}"'
+
+
 def _unwrap_format_args(args):
     """Unwrap format!(...) from macro arguments so println!/eprintln!/log::*! get a literal."""
     if len(args) == 1 and args[0].startswith("format!("):
-        return args[0][len("format!("):-1]
+        inner = args[0][len("format!("):-1]
+        # Only unwrap if inner format string starts with a literal
+        if inner.lstrip().startswith('"'):
+            return inner
+        return f'"{{}}",  {args[0]}'
     if args:
         a0 = args[0]
         # Already a string literal → use as format string
         if a0.startswith('"'):
             if len(args) == 1:
                 return a0
-            return f'{a0}, {", ".join(args[1:])}'
+            # Convert Python %s/%d format specifiers to Rust {} when used with args
+            a0 = _python_fmt_to_rust(a0)
+            # Verify placeholder count matches arg count
+            placeholder_count = a0.count('{}')
+            extra_args = args[1:]
+            if placeholder_count < len(extra_args):
+                # Add missing placeholders
+                missing = len(extra_args) - placeholder_count
+                inner = a0[1:-1]  # strip quotes
+                inner += ' {}' * missing
+                a0 = f'"{inner}"'
+            return f'{a0}, {", ".join(extra_args)}'
         # Non-literal expression → wrap in "{}"
-        return '"{}"' + f', {", ".join(args)}'
+        fmt = ' '.join('{}' for _ in args)
+        return f'"{fmt}", {", ".join(args)}'
     return '""'
 
 def _call_logger(method, args, all_args):
@@ -1132,8 +1259,17 @@ def _method_join(obj, args, all_args):
 
 def _method_format(obj, args, all_args):
     # Convert Python positional placeholders {0}, {1} to Rust {}
-    fmt = re.sub(r'\{(\d+)\}', '{}', obj)
-    return f"format!({fmt}, {all_args})"
+    if obj.startswith('"'):
+        fmt = re.sub(r'\{(\d+)\}', '{}', obj)
+        return f"format!({fmt}, {all_args})"
+    # Non-literal .format() base: can't use as format! template
+    # Fall back to runtime string replacement
+    if not all_args:
+        return f'format!("{{}}", {obj})'
+    # Non-literal with args: generate safe format with all arguments
+    # (avoid trailing block comments that break when wrapped in println!)
+    placeholders = " ".join("{}" for _ in args)
+    return f'format!("{placeholders}", {all_args})'
 
 def _method_split(obj, args, all_args):
     sep = args[0] if args else None
@@ -1186,7 +1322,7 @@ _PATH_METHOD_MAP = {
     "iterdir":   lambda o, a: f"std::fs::read_dir(&{o}).unwrap()",
     "keys":      lambda o, a: f"{o}.keys()",
     "values":    lambda o, a: f"{o}.values()",
-    "count":     lambda o, a: f"{o}.matches({a[0]}).count() as i64" if a else f"{o}.len() as i64",
+    "count":     lambda o, a: f"({o}.matches({a[0]}).count() as i64)" if a else f"({o}.len() as i64)",
 }
 
 
@@ -1256,8 +1392,10 @@ def _dispatch_method_call(node, args, kwargs):
     if path_handler is not None:
         return path_handler(obj, args)
 
-    # Default: rename method and call
+    # Default: rename method and call, escaping reserved words
     rust_method = _METHOD_RENAMES.get(method, method)
+    if rust_method in _RUST_RESERVED:
+        rust_method = f"r#{rust_method}"
     return f"{obj}.{rust_method}({all_args})"
 
 
@@ -1319,6 +1457,10 @@ def _stmt_for(stmt, pad, indent, ret_type):
         iter_expr = f"{iter_expr}.chars()"
     elif isinstance(stmt.iter, (ast.List, ast.Set, ast.Tuple)):
         iter_expr = f"{iter_expr}.iter()"
+    # Fix: vec![...] is not a valid pattern in `for` — convert to slice pattern
+    if target.startswith("vec![") and target.endswith("]"):
+        inner = target[5:-1]
+        target = f"[{inner}]"
     lines = [f"{pad}for {target} in {iter_expr} {{"]
     lines.extend(_body(stmt.body, indent + 1, ret_type=ret_type))
     lines.append(f"{pad}}}")

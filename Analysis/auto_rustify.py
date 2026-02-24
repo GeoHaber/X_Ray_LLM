@@ -1404,16 +1404,6 @@ class PipelineReport:
     errors: List[str] = field(default_factory=list)
     phases: List[Dict[str, Any]] = field(default_factory=list)
 
-
-@dataclass
-class RustifyConfig:
-    """Configuration bundle for RustifyPipeline."""
-    crate_name: str = "xray_rustified"
-    min_score: float = 5.0
-    max_candidates: int = 50
-    mode: str = "pyo3"
-    exclude_dirs: Optional[List[str]] = None
-
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
             "system": self.system.to_dict(),
@@ -1441,6 +1431,16 @@ class RustifyConfig:
                 "failed": self.verify_result.tests_failed,
             }
         return d
+
+
+@dataclass
+class RustifyConfig:
+    """Configuration bundle for RustifyPipeline."""
+    crate_name: str = "xray_rustified"
+    min_score: float = 5.0
+    max_candidates: int = 50
+    mode: str = "pyo3"
+    exclude_dirs: Optional[List[str]] = None
 
 
 class RustifyPipeline:

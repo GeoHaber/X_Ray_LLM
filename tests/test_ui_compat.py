@@ -21,11 +21,9 @@ import pytest
 from Analysis.ui_compat import (
     UICompatAnalyzer,
     UICompatIssue,
-    UICallSite,
     _edit_distance,
     _extract_aliases,
     _UICallVisitor,
-    _get_accepted_params,
     _top_params,
 )
 from Core.types import SmellIssue, Severity

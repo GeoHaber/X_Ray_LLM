@@ -16,6 +16,7 @@ external tools to be pre-installed (all bundled inside the .exe).
 
 Usage::
 
+    x_ray.exe                                        # interactive mode
     x_ray.exe --path C:\\my_project                  # full scan
     x_ray.exe --path . --smell                       # smells only
     x_ray.exe --path . --lint                        # lint only
@@ -189,6 +190,163 @@ def check_tools() -> Dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Interactive Mode — folder picker, scan menu, report prompt
+# ---------------------------------------------------------------------------
+
+def _pick_folder() -> Optional[str]:
+    """Open a Windows folder-picker dialog. Returns path or None."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        folder = filedialog.askdirectory(
+            title="X-Ray — Select project folder to scan",
+        )
+        root.destroy()
+        return folder if folder else None
+    except Exception:
+        return None
+
+
+def _interactive_menu() -> argparse.Namespace:
+    """Show a friendly interactive menu when no CLI args are given."""
+    print(f"\n{'─'*50}")
+    print("  WELCOME TO X-RAY!")
+    print(f"{'─'*50}")
+    print()
+    print("  Let's scan your code! First, pick a folder...")
+    print()
+
+    # Step 1: Folder picker
+    folder = _pick_folder()
+    if not folder:
+        # Fallback: ask in console
+        print("  No folder selected. Type the path manually:")
+        folder = input("  Path> ").strip().strip('"')
+    if not folder or not Path(folder).is_dir():
+        print(f"  ERROR: '{folder}' is not a valid directory.")
+        sys.exit(1)
+
+    print(f"  ✓ Selected: {folder}")
+    print()
+
+    # Step 2: Scan mode menu
+    print(f"{'─'*50}")
+    print("  WHAT DO YOU WANT TO SCAN?")
+    print(f"{'─'*50}")
+    print()
+    print("  [1]  Full Scan          — Smells + Lint + Security + Duplicates (recommended)")
+    print("  [2]  Quick Scan         — Smells + Lint + Security  (faster)")
+    print("  [3]  Code Smells only   — Function length, complexity, nesting")
+    print("  [4]  Lint only          — Ruff code style & errors")
+    print("  [5]  Security only      — Bandit vulnerability scan")
+    print("  [6]  Duplicates only    — Find copy-pasted code")
+    print("  [7]  Rust Advisor       — Rank functions for Rust porting")
+    print()
+
+    choice = input("  Choose [1-7] (default: 2) > ").strip()
+    if not choice:
+        choice = "2"
+
+    # Map choice to flags
+    args = argparse.Namespace(
+        path=folder,
+        smell=False,
+        duplicates=False,
+        lint=False,
+        security=False,
+        full_scan=False,
+        rustify=False,
+        report=None,
+        exclude=None,
+        hw=False,
+        verbose=False,
+    )
+
+    flag_map = {
+        "1": {"smell": True, "lint": True, "security": True, "duplicates": True, "full_scan": True},
+        "2": {"smell": True, "lint": True, "security": True},
+        "3": {"smell": True},
+        "4": {"lint": True},
+        "5": {"security": True},
+        "6": {"duplicates": True},
+        "7": {"rustify": True},
+    }
+    flags = flag_map.get(choice, flag_map["2"])
+    for k, v in flags.items():
+        setattr(args, k, v)
+
+    mode_names = {
+        "1": "Full Scan", "2": "Quick Scan", "3": "Code Smells",
+        "4": "Lint", "5": "Security", "6": "Duplicates", "7": "Rust Advisor",
+    }
+    print(f"  ✓ Mode: {mode_names.get(choice, 'Quick Scan')}")
+    print()
+
+    # Step 3: Report save option
+    print(f"{'─'*50}")
+    print("  SAVE A JSON REPORT?")
+    print(f"{'─'*50}")
+    print()
+    print("  [1]  Yes — save next to the scanned folder")
+    print("  [2]  Yes — let me choose where")
+    print("  [3]  No  — just show results on screen")
+    print()
+
+    report_choice = input("  Choose [1-3] (default: 1) > ").strip()
+    if not report_choice:
+        report_choice = "1"
+
+    if report_choice == "1":
+        project_name = Path(folder).name
+        report_path = str(Path(folder) / f"x_ray_report_{project_name}.json")
+        args.report = report_path
+        print(f"  ✓ Report: {report_path}")
+    elif report_choice == "2":
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            project_name = Path(folder).name
+            rpath = filedialog.asksaveasfilename(
+                title="Save X-Ray report as...",
+                defaultextension=".json",
+                initialfile=f"x_ray_report_{project_name}.json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            )
+            root.destroy()
+            if rpath:
+                args.report = rpath
+                print(f"  ✓ Report: {rpath}")
+            else:
+                print("  ✓ No report file selected — results on screen only")
+        except Exception:
+            print("  ✓ No report — results on screen only")
+    else:
+        print("  ✓ No report — results on screen only")
+
+    print()
+    print(f"{'─'*50}")
+    print("  Starting scan...")
+    print(f"{'─'*50}")
+    print()
+
+    return args
+
+
+def _needs_interactive() -> bool:
+    """Check if we should launch interactive mode (no meaningful CLI args)."""
+    # If running from command line with actual arguments, use CLI mode
+    # sys.argv[0] is the script/exe name
+    real_args = sys.argv[1:]
+    return len(real_args) == 0
+
+
+# ---------------------------------------------------------------------------
 # Main orchestration
 # ---------------------------------------------------------------------------
 
@@ -272,10 +430,40 @@ def _run_scan_phases(args, root: Path):
     return detector, finder, linter, lint_issues, sec_analyzer, sec_issues
 
 
+def _check_trial_license() -> bool:
+    """Enforce trial license via x_ray_core. Returns True if allowed."""
+    try:
+        import x_ray_core
+        remaining = x_ray_core.check_trial()
+        max_runs = x_ray_core.trial_max_runs()
+        used = max_runs - remaining
+        print(f"  \u26a1 Trial license: {remaining} of {max_runs} runs remaining")
+        if remaining <= 3:
+            print(f"  \u26a0  Only {remaining} runs left — contact developer for full license.")
+        print()
+        return True
+    except RuntimeError as exc:
+        print(f"  \u2716 {exc}")
+        print()
+        return False
+    except ImportError:
+        # x_ray_core not available — skip trial check (dev mode)
+        return True
+
+
 def main():
     """Main entry point for x_ray.exe."""
-    args = _parse_args()
     print(_EXE_BANNER)
+
+    # --- Trial license gate ---
+    if not _check_trial_license():
+        sys.exit(1)
+
+    # --- Interactive or CLI mode ---
+    if _needs_interactive():
+        args = _interactive_menu()
+    else:
+        args = _parse_args()
 
     hw = detect_hardware()
     print_hardware(hw)

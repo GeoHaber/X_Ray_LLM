@@ -1,6 +1,6 @@
 
 
-__version__ = "5.0.0"
+__version__ = "5.1.2"
 
 # Safe separator: always ASCII dash — renders correctly on every terminal/console
 SEP = "-"
@@ -65,6 +65,7 @@ _ALWAYS_SKIP = frozenset({
     ".tox", ".nox", ".eggs", "node_modules",
     "venv", ".venv", "env", ".env",
     "site-packages", "dist-packages",
+    "dist", "Lib",
     "_archive", "_Old", "_old", "_bin",
     "_scratch", ".github",
     "portable", "target",

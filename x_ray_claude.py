@@ -572,10 +572,34 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
         detector, finder, linter, lint_issues, sec_analyzer, sec_issues))
 
 
+def _check_trial_license() -> bool:
+    """Enforce trial license via x_ray_core. Returns True if allowed."""
+    try:
+        import x_ray_core
+        remaining = x_ray_core.check_trial()
+        max_runs = x_ray_core.trial_max_runs()
+        print(f"  \u26a1 Trial license: {remaining} of {max_runs} runs remaining")
+        if remaining <= 3:
+            print(f"  \u26a0  Only {remaining} runs left — contact developer for full license.")
+        print()
+        return True
+    except RuntimeError as exc:
+        print(f"  \u2716 {exc}")
+        print()
+        return False
+    except ImportError:
+        # x_ray_core not available — skip trial check (dev mode)
+        return True
+
+
 async def main_async():
     """Async entry point for X-Ray CLI scanner."""
     args = _parse_args()
     print(BANNER)
+
+    # --- Trial license gate ---
+    if not _check_trial_license():
+        sys.exit(1)
 
     root = Path(args.path).resolve()
     if not root.is_dir():
