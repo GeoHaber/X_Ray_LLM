@@ -1,0 +1,46 @@
+# Project: [NAME]
+
+**Use this template when starting a *new product* or repo that will use the full SDLC pipeline from .claude/agents and .claude/commands. This is not for the X-Ray codebase itself — for X-Ray see the root CLAUDE.md and the xray-quality command.**
+
+## Development Workflow
+This project uses a multi-agent SDLC pipeline (see [From Idea to Production: Full-SDLC Multi-Agent Development with Claude Code](https://www.linkedin.com/pulse/from-idea-production-full-sdlc-multi-agent-claude-code-branzan-vmjdc/)).
+- Run **build-product** to execute the full pipeline from idea to deployment
+- Run **process-feedback** to handle user feedback and iterate
+- Run **maintenance-check** for periodic health checks
+
+## Agent Pipeline
+Specialized subagents (in .claude/agents/ or ~/.claude/agents/):
+- product-strategist → Discovery & stakeholder validation
+- spec-writer → Requirements, user stories, API contracts
+- ux-designer → Wireframes, interaction flows, accessibility specs
+- architect → Technical architecture & decision records
+- devops → GitHub setup, CI/CD, deployment
+- backend-dev → Server-side implementation
+- frontend-dev → Client-side implementation
+- test-engineer → Integration, E2E, accessibility, performance tests
+- reviewer → Code review against specs
+- security-auditor → Security vulnerability audit
+- feedback-triage → Post-launch feedback processing
+
+## Branch Strategy
+- **main:** production (protected, requires PR + CI)
+- **develop:** integration (protected, requires PR + CI)
+- **feature/***: implementation branches (one per parallel track)
+- **hotfix/***: urgent bug fixes (branch from main, merge to main then develop)
+
+## Git Conventions
+- Conventional commits: feat:, fix:, test:, refactor:, chore:, docs:
+- PRs require: passing CI, no lint warnings, no type errors
+- Squash merge to develop; merge commit to main
+
+## Documentation
+All project docs live in **docs/** and are the source of truth:
+- validated-idea.md, requirements.md, user-stories.md, ux-wireframes.md
+- architecture.md, tech-decisions.md, implementation-plan.md, api-contract.md
+- review-report.md, security-audit.md, progress.md, backlog.md, maintenance-report.md
+
+## Code Standards
+- [Adjust for stack: e.g. TypeScript strict mode / Python 3.10+ type hints]
+- Tests co-located or in tests/
+- Linter + formatter (Ruff/Prettier/ESLint) on pre-commit
+- No secrets in code; use env vars

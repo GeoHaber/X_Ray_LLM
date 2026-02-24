@@ -135,11 +135,14 @@ python -m pytest tests/ -q --tb=short
 
 | Doc | Description |
 |-----|-------------|
+| [CLAUDE.md](CLAUDE.md) | Project context for AI assistants & developers |
 | [docs/USAGE.md](docs/USAGE.md) | CLI options, smell categories, programmatic API |
-| [CI_CD_SETUP.md](CI_CD_SETUP.md) | GitHub Actions, quality gates |
+| [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md) | Branch strategy, CI, code standards, review checklist |
+| [.claude/README.md](.claude/README.md) | SDLC agents & commands (from Full-SDLC Multi-Agent article) |
+| [docs/CI_CD_SETUP.md](docs/CI_CD_SETUP.md) | GitHub Actions, quality gates |
 | [SECURITY.md](SECURITY.md) | Dependency and code security |
 
-**Contributing:** Fork → run `ruff check .` and `pytest tests/ -q` → PR
+**Contributing:** See [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md). Fork → `ruff check .` && `ruff format --check .` && `pytest tests/ -q` → PR.
 
 ---
 
