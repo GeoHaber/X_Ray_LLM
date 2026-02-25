@@ -40,7 +40,7 @@ from Core.scan_phases import (
     run_lint_phase, run_security_phase, run_rustify_scan, collect_reports,
 )
 
-from Core.utils import setup_logger
+from Core.utils import setup_logger, check_trial_license as _check_trial_license
 setup_logger()  # configure logging once — no duplicate basicConfig
 
 
@@ -570,26 +570,6 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
     from Core.scan_phases import AnalysisComponents
     return collect_reports(AnalysisComponents(
         detector, finder, linter, lint_issues, sec_analyzer, sec_issues))
-
-
-def _check_trial_license() -> bool:
-    """Enforce trial license via x_ray_core. Returns True if allowed."""
-    try:
-        import x_ray_core
-        remaining = x_ray_core.check_trial()
-        max_runs = x_ray_core.trial_max_runs()
-        print(f"  \u26a1 Trial license: {remaining} of {max_runs} runs remaining")
-        if remaining <= 3:
-            print(f"  \u26a0  Only {remaining} runs left — contact developer for full license.")
-        print()
-        return True
-    except RuntimeError as exc:
-        print(f"  \u2716 {exc}")
-        print()
-        return False
-    except ImportError:
-        # x_ray_core not available — skip trial check (dev mode)
-        return True
 
 
 async def main_async():

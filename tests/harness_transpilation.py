@@ -1,11 +1,10 @@
 
 import unittest
-import tempfile
 import subprocess
-import sys
 import time
-from pathlib import Path
 import ctypes
+
+from tests.harness_common import compile_rust as _compile_rust_common
 
 # -----------------------------------------------------------------------------
 # Mock Transpiler (Placeholder until we have the real AI/Rule-based engine)
@@ -43,42 +42,12 @@ class RustTranspilationHarness(unittest.TestCase):
         Compiles Rust code to a shared library (.dll/.so) using rustc.
         Returns path to the compiled library.
         """
-        # Create temp dir
-        tmp_dir = Path(tempfile.mkdtemp())
-        src_file = tmp_dir / "generated.rs"
-        
-        # Write Rust source (wrapping in extern "C" if needed by mock)
-        # Clean up the mock syntax a bit (mock returns 'extern "C" def', rust needs 'fn')
-        clean_code = rust_code.replace("def ", "fn ")
-        
-        src_file.write_text(clean_code, encoding="utf-8")
-        
-        # Output library path
-        if sys.platform == "win32":
-            lib_name = "generated.dll"
-        else:
-            lib_name = "libgenerated.so"
-            
-        out_file = tmp_dir / lib_name
-        
-        # Invoke rustc
-        # rustc --crate-type dylib -O generated.rs -o generated.dll
-        cmd = [
-            "rustc", 
-            "--crate-type", "cdylib", 
-            "-O", 
-            str(src_file), 
-            "-o", str(out_file)
-        ]
-        
         try:
-            subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return _compile_rust_common(rust_code)
         except subprocess.CalledProcessError as e:
             self.fail(f"Rust compilation failed: {e}")
         except FileNotFoundError:
-             self.skipTest("rustc not found in PATH. Install Rust to run this test.")
-            
-        return str(out_file)
+            self.skipTest("rustc not found in PATH. Install Rust to run this test.")
 
     def load_rust_lib(self, lib_path: str):
         """Loads the compiled shared library."""

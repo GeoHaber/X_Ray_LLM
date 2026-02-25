@@ -244,6 +244,21 @@ class _UICallVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+def _extract_import_aliases(node: ast.Import, aliases: dict):
+    """Extract aliases from a plain import statement."""
+    for a in node.names:
+        aliases[a.asname or a.name] = a.name
+
+
+def _extract_from_aliases(node: ast.ImportFrom, aliases: dict):
+    """Extract aliases from a from-import statement."""
+    if not node.module or not node.names:
+        return
+    for a in node.names:
+        if a.name != "*":
+            aliases.setdefault(a.asname or a.name, a.asname or a.name)
+
+
 def _extract_aliases(tree: ast.Module) -> Dict[str, str]:
     """
     Scan top-level imports for ``import X as Y`` and ``import X``.
@@ -253,18 +268,9 @@ def _extract_aliases(tree: ast.Module) -> Dict[str, str]:
     aliases: Dict[str, str] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            for a in node.names:
-                alias = a.asname or a.name
-                aliases[alias] = a.name
+            _extract_import_aliases(node, aliases)
         elif isinstance(node, ast.ImportFrom):
-            # "from flet import controls as c" → unusual but handled
-            if node.module and node.names:
-                for a in node.names:
-                    if a.name == "*":
-                        continue
-                    alias = a.asname or a.name
-                    # We only track module-level aliases (not individual classes)
-                    # Individual class imports are not prefix-called as alias.X()
+            _extract_from_aliases(node, aliases)
     return aliases
 
 
@@ -412,29 +418,26 @@ class UICompatAnalyzer:
             issues.extend(self._validate_call(call))
         return issues
 
+    def _resolve_call_target(self, call: UICallSite):
+        """Resolve a call site to its callable target, or None if unresolvable."""
+        module_name = call.resolved_name.split(".")[0]
+        attr_chain = call.resolved_name.split(".")[1:]
+        mod = self._import_module(module_name)
+        if mod is None:
+            return None
+        return _resolve_attr(mod, attr_chain)
+
     def _validate_call(self, call: UICallSite) -> List[UICompatIssue]:
         """Check a single call's kwargs against the real signature."""
         if not call.kwargs_used:
             return []  # nothing to validate (positional-only or no args)
 
-        # Resolve the callable
-        module_name = call.resolved_name.split(".")[0]
-        attr_chain = call.resolved_name.split(".")[1:]
-
-        mod = self._import_module(module_name)
-        if mod is None:
-            return []
-
-        target = _resolve_attr(mod, attr_chain)
+        target = self._resolve_call_target(call)
         if target is None:
-            # Could be a dynamic or generated class — skip
             return []
 
-        # For classmethods/staticmethods, we validate the method itself
-        # For classes, we validate __init__
-        callable_obj = target
-        if isinstance(target, type):
-            callable_obj = target.__init__
+        # For classes, validate __init__
+        callable_obj = target.__init__ if isinstance(target, type) else target
 
         # Get accepted params (with caching)
         cache_key = call.resolved_name
@@ -445,16 +448,14 @@ class UICompatAnalyzer:
         if has_var_kw:
             return []  # accepts **kwargs → anything goes
 
-        issues: List[UICompatIssue] = []
-        for kwarg in call.kwargs_used:
-            if kwarg not in accepted:
-                issues.append(UICompatIssue(
-                    call=call,
-                    bad_kwarg=kwarg,
-                    accepted=accepted,
-                    has_var_keyword=has_var_kw,
-                ))
-        return issues
+        return [
+            UICompatIssue(
+                call=call, bad_kwarg=kwarg,
+                accepted=accepted, has_var_keyword=has_var_kw,
+            )
+            for kwarg in call.kwargs_used
+            if kwarg not in accepted
+        ]
 
     def _import_module(self, name: str) -> Optional[Any]:
         """Import a module, caching the result. Returns None on failure."""

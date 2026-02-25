@@ -63,6 +63,7 @@ from Core.scan_phases import (
     scan_codebase, run_smell_phase, run_duplicate_phase,
     run_lint_phase, run_security_phase, run_rustify_scan, collect_reports,
 )
+from Core.utils import check_trial_license as _check_trial_license
 
 # ---------------------------------------------------------------------------
 # ASCII Art banner
@@ -210,8 +211,8 @@ def _pick_folder() -> Optional[str]:
         return None
 
 
-def _interactive_menu() -> argparse.Namespace:
-    """Show a friendly interactive menu when no CLI args are given."""
+def _step_pick_folder() -> str:
+    """Interactive step 1: pick the folder to scan."""
     print(f"\n{'─'*50}")
     print("  WELCOME TO X-RAY!")
     print(f"{'─'*50}")
@@ -219,10 +220,8 @@ def _interactive_menu() -> argparse.Namespace:
     print("  Let's scan your code! First, pick a folder...")
     print()
 
-    # Step 1: Folder picker
     folder = _pick_folder()
     if not folder:
-        # Fallback: ask in console
         print("  No folder selected. Type the path manually:")
         folder = input("  Path> ").strip().strip('"')
     if not folder or not Path(folder).is_dir():
@@ -231,8 +230,27 @@ def _interactive_menu() -> argparse.Namespace:
 
     print(f"  ✓ Selected: {folder}")
     print()
+    return folder
 
-    # Step 2: Scan mode menu
+
+_SCAN_FLAG_MAP = {
+    "1": {"smell": True, "lint": True, "security": True, "duplicates": True, "full_scan": True},
+    "2": {"smell": True, "lint": True, "security": True},
+    "3": {"smell": True},
+    "4": {"lint": True},
+    "5": {"security": True},
+    "6": {"duplicates": True},
+    "7": {"rustify": True},
+}
+
+_SCAN_MODE_NAMES = {
+    "1": "Full Scan", "2": "Quick Scan", "3": "Code Smells",
+    "4": "Lint", "5": "Security", "6": "Duplicates", "7": "Rust Advisor",
+}
+
+
+def _step_choose_mode(args: argparse.Namespace) -> str:
+    """Interactive step 2: choose scan mode."""
     print(f"{'─'*50}")
     print("  WHAT DO YOU WANT TO SCAN?")
     print(f"{'─'*50}")
@@ -246,46 +264,17 @@ def _interactive_menu() -> argparse.Namespace:
     print("  [7]  Rust Advisor       — Rank functions for Rust porting")
     print()
 
-    choice = input("  Choose [1-7] (default: 2) > ").strip()
-    if not choice:
-        choice = "2"
-
-    # Map choice to flags
-    args = argparse.Namespace(
-        path=folder,
-        smell=False,
-        duplicates=False,
-        lint=False,
-        security=False,
-        full_scan=False,
-        rustify=False,
-        report=None,
-        exclude=None,
-        hw=False,
-        verbose=False,
-    )
-
-    flag_map = {
-        "1": {"smell": True, "lint": True, "security": True, "duplicates": True, "full_scan": True},
-        "2": {"smell": True, "lint": True, "security": True},
-        "3": {"smell": True},
-        "4": {"lint": True},
-        "5": {"security": True},
-        "6": {"duplicates": True},
-        "7": {"rustify": True},
-    }
-    flags = flag_map.get(choice, flag_map["2"])
-    for k, v in flags.items():
+    choice = input("  Choose [1-7] (default: 2) > ").strip() or "2"
+    for k, v in _SCAN_FLAG_MAP.get(choice, _SCAN_FLAG_MAP["2"]).items():
         setattr(args, k, v)
 
-    mode_names = {
-        "1": "Full Scan", "2": "Quick Scan", "3": "Code Smells",
-        "4": "Lint", "5": "Security", "6": "Duplicates", "7": "Rust Advisor",
-    }
-    print(f"  ✓ Mode: {mode_names.get(choice, 'Quick Scan')}")
+    print(f"  ✓ Mode: {_SCAN_MODE_NAMES.get(choice, 'Quick Scan')}")
     print()
+    return choice
 
-    # Step 3: Report save option
+
+def _step_report_option(args: argparse.Namespace) -> None:
+    """Interactive step 3: choose report save option."""
     print(f"{'─'*50}")
     print("  SAVE A JSON REPORT?")
     print(f"{'─'*50}")
@@ -295,37 +284,14 @@ def _interactive_menu() -> argparse.Namespace:
     print("  [3]  No  — just show results on screen")
     print()
 
-    report_choice = input("  Choose [1-3] (default: 1) > ").strip()
-    if not report_choice:
-        report_choice = "1"
+    report_choice = input("  Choose [1-3] (default: 1) > ").strip() or "1"
 
     if report_choice == "1":
-        project_name = Path(folder).name
-        report_path = str(Path(folder) / f"x_ray_report_{project_name}.json")
-        args.report = report_path
-        print(f"  ✓ Report: {report_path}")
+        project_name = Path(args.path).name
+        args.report = str(Path(args.path) / f"x_ray_report_{project_name}.json")
+        print(f"  ✓ Report: {args.report}")
     elif report_choice == "2":
-        try:
-            import tkinter as tk
-            from tkinter import filedialog
-            root = tk.Tk()
-            root.withdraw()
-            root.attributes("-topmost", True)
-            project_name = Path(folder).name
-            rpath = filedialog.asksaveasfilename(
-                title="Save X-Ray report as...",
-                defaultextension=".json",
-                initialfile=f"x_ray_report_{project_name}.json",
-                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            )
-            root.destroy()
-            if rpath:
-                args.report = rpath
-                print(f"  ✓ Report: {rpath}")
-            else:
-                print("  ✓ No report file selected — results on screen only")
-        except Exception:
-            print("  ✓ No report — results on screen only")
+        args.report = _save_report_dialog(args.path)
     else:
         print("  ✓ No report — results on screen only")
 
@@ -335,6 +301,43 @@ def _interactive_menu() -> argparse.Namespace:
     print(f"{'─'*50}")
     print()
 
+
+def _save_report_dialog(folder: str) -> Optional[str]:
+    """Show a save-as dialog for the report file."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        rpath = filedialog.asksaveasfilename(
+            title="Save X-Ray report as...",
+            defaultextension=".json",
+            initialfile=f"x_ray_report_{Path(folder).name}.json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+        )
+        root.destroy()
+        if rpath:
+            print(f"  ✓ Report: {rpath}")
+            return rpath
+    except Exception:
+        pass
+    print("  ✓ No report — results on screen only")
+    return None
+
+
+def _interactive_menu() -> argparse.Namespace:
+    """Show a friendly interactive menu when no CLI args are given."""
+    folder = _step_pick_folder()
+
+    args = argparse.Namespace(
+        path=folder, smell=False, duplicates=False, lint=False,
+        security=False, full_scan=False, rustify=False,
+        report=None, exclude=None, hw=False, verbose=False,
+    )
+
+    _step_choose_mode(args)
+    _step_report_option(args)
     return args
 
 
@@ -428,27 +431,6 @@ def _run_scan_phases(args, root: Path):
         sec_analyzer, sec_issues = None, []
 
     return detector, finder, linter, lint_issues, sec_analyzer, sec_issues
-
-
-def _check_trial_license() -> bool:
-    """Enforce trial license via x_ray_core. Returns True if allowed."""
-    try:
-        import x_ray_core
-        remaining = x_ray_core.check_trial()
-        max_runs = x_ray_core.trial_max_runs()
-        used = max_runs - remaining
-        print(f"  \u26a1 Trial license: {remaining} of {max_runs} runs remaining")
-        if remaining <= 3:
-            print(f"  \u26a0  Only {remaining} runs left — contact developer for full license.")
-        print()
-        return True
-    except RuntimeError as exc:
-        print(f"  \u2716 {exc}")
-        print()
-        return False
-    except ImportError:
-        # x_ray_core not available — skip trial check (dev mode)
-        return True
 
 
 def main():

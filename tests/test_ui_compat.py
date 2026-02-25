@@ -182,8 +182,8 @@ class TestUICallVisitor:
 # Integration — real Flet validation
 # ---------------------------------------------------------------------------
 
-class TestFletCompat:
-    """Test against the real installed Flet module."""
+class TestFletCompatValid:
+    """Test valid Flet API calls for basic widgets."""
 
     @pytest.fixture(autouse=True)
     def _skip_no_flet(self):
@@ -227,6 +227,38 @@ class TestFletCompat:
         """)
         assert len(issues) == 0
 
+    def test_valid_dropdown(self, tmp_path):
+        issues = _analyze_code(tmp_path, """
+            import flet as ft
+            d = ft.Dropdown(value="a", options=[])
+        """)
+        assert len(issues) == 0
+
+    def test_valid_checkbox(self, tmp_path):
+        issues = _analyze_code(tmp_path, """
+            import flet as ft
+            c = ft.Checkbox(label="opt", value=True,
+                            fill_color="blue", check_color="white")
+        """)
+        assert len(issues) == 0
+
+    def test_valid_alertdialog(self, tmp_path):
+        issues = _analyze_code(tmp_path, """
+            import flet as ft
+            d = ft.AlertDialog(
+                modal=True, title=ft.Text("T"),
+                content=ft.Text("C"), actions=[])
+        """)
+        assert len(issues) == 0
+
+
+class TestFletCompatValidAdvanced:
+    """Test valid Flet API calls for tabs, layout, and style utilities."""
+
+    @pytest.fixture(autouse=True)
+    def _skip_no_flet(self):
+        pytest.importorskip("flet")
+
     def test_valid_tab_label_only(self, tmp_path):
         issues = _analyze_code(tmp_path, """
             import flet as ft
@@ -258,30 +290,6 @@ class TestFletCompat:
         """)
         assert len(issues) == 0
 
-    def test_valid_dropdown(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
-            import flet as ft
-            d = ft.Dropdown(value="a", options=[])
-        """)
-        assert len(issues) == 0
-
-    def test_valid_checkbox(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
-            import flet as ft
-            c = ft.Checkbox(label="opt", value=True,
-                            fill_color="blue", check_color="white")
-        """)
-        assert len(issues) == 0
-
-    def test_valid_alertdialog(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
-            import flet as ft
-            d = ft.AlertDialog(
-                modal=True, title=ft.Text("T"),
-                content=ft.Text("C"), actions=[])
-        """)
-        assert len(issues) == 0
-
     def test_valid_expansion_tile(self, tmp_path):
         issues = _analyze_code(tmp_path, """
             import flet as ft
@@ -291,17 +299,6 @@ class TestFletCompat:
                 expanded=False)
         """)
         assert len(issues) == 0
-
-    def test_expansion_tile_initially_expanded_invalid(self, tmp_path):
-        """initially_expanded was renamed to expanded in newer Flet."""
-        issues = _analyze_code(tmp_path, """
-            import flet as ft
-            e = ft.ExpansionTile(
-                title=ft.Text("T"),
-                initially_expanded=False)
-        """)
-        assert len(issues) == 1
-        assert issues[0].bad_kwarg == "initially_expanded"
 
     def test_valid_navigation_drawer(self, tmp_path):
         issues = _analyze_code(tmp_path, """
@@ -334,6 +331,25 @@ class TestFletCompat:
         assert len(issues) == 0
 
     # ── INVALID calls — must be caught ────────────────────────────────
+
+
+class TestFletCompatInvalid:
+    """Test invalid Flet API calls and edge cases."""
+
+    @pytest.fixture(autouse=True)
+    def _skip_no_flet(self):
+        pytest.importorskip("flet")
+
+    def test_expansion_tile_initially_expanded_invalid(self, tmp_path):
+        """initially_expanded was renamed to expanded in newer Flet."""
+        issues = _analyze_code(tmp_path, """
+            import flet as ft
+            e = ft.ExpansionTile(
+                title=ft.Text("T"),
+                initially_expanded=False)
+        """)
+        assert len(issues) == 1
+        assert issues[0].bad_kwarg == "initially_expanded"
 
     def test_tab_content_invalid(self, tmp_path):
         """ft.Tab does NOT accept content= in new Flet."""

@@ -183,6 +183,18 @@ def parse_errors(stderr: str) -> List[Dict[str, str]]:
     return errors
 
 
+def _find_owning_function(src_file: Path, err_line: int) -> str:
+    """Look backwards from *err_line* to find the // [N] comment."""
+    if not src_file.exists():
+        return "unknown"
+    src_lines = src_file.read_text(encoding="utf-8").splitlines()
+    for i in range(min(err_line - 1, len(src_lines) - 1), -1, -1):
+        m = re.match(r'// \[(\d+)\] (.+?) from (.+)', src_lines[i])
+        if m:
+            return f"{m.group(2)} ({m.group(3)})"
+    return "unknown"
+
+
 def map_errors_to_functions(errors: List[Dict], pairs: List[Dict],
                             batch_size: int = 200) -> Dict[str, Any]:
     """Map compiler errors back to the original Python functions."""
@@ -190,36 +202,65 @@ def map_errors_to_functions(errors: List[Dict], pairs: List[Dict],
     error_code_counts: Counter = Counter()
 
     for err in errors:
-        # Determine which batch file
         file_match = re.match(r'src/batch_(\d+)\.rs', err["file"])
         if not file_match:
             continue
 
-        # Find which function in that batch (by line number)
-        err_line = err["line"]
-
-        # Find the nearest comment marker above the error line
-        src_file = CRATE_DIR / err["file"]
-        if src_file.exists():
-            src_lines = src_file.read_text(encoding="utf-8").splitlines()
-            func_name = "unknown"
-            for i in range(min(err_line - 1, len(src_lines) - 1), -1, -1):
-                m = re.match(r'// \[(\d+)\] (.+?) from (.+)', src_lines[i])
-                if m:
-                    func_name = f"{m.group(2)} ({m.group(3)})"
-                    break
-
-            err_msg = err["message"]
-            short_msg = err_msg[:80]
-            error_code_counts[err["code"]] += 1
-            error_to_functions.setdefault(short_msg, []).append(func_name)
+        func_name = _find_owning_function(
+            CRATE_DIR / err["file"], err["line"])
+        error_code_counts[err["code"]] += 1
+        short_msg = err["message"][:80]
+        error_to_functions.setdefault(short_msg, []).append(func_name)
 
     return {
         "error_code_counts": dict(error_code_counts.most_common()),
-        "error_messages": {k: v[:3] for k, v in  # show max 3 examples per error type
-                          sorted(error_to_functions.items(), key=lambda x: -len(x[1]))[:30]},
+        "error_messages": {k: v[:3] for k, v in
+                          sorted(error_to_functions.items(),
+                                 key=lambda x: -len(x[1]))[:30]},
         "total_unique_errors": len(error_to_functions),
     }
+
+
+def _print_compile_results(pairs, errors, modules, analysis):
+    """Print the compilation results summary."""
+    total_lines = sum(
+        f.read_text(encoding="utf-8").count("\n")
+        for f in modules if f.exists())
+    error_locs = len(set((e["file"], e["line"]) for e in errors))
+
+    print(f"\n  {'='*60}")
+    print("  COMPILATION RESULTS")
+    print(f"  {'='*60}")
+    print(f"  Total functions:  {len(pairs)}")
+    print(f"  Total errors:     {len(errors)}")
+    print(f"  Total Rust lines: {total_lines:,}")
+    print(f"  Error locations:  {error_locs}")
+
+    print("\n  Error code breakdown:")
+    for code, count in analysis["error_code_counts"].items():
+        print(f"    {code:15s}: {count:5d}")
+
+    print(f"\n  Top error patterns ({analysis['total_unique_errors']} unique):")
+    for msg, funcs in list(analysis["error_messages"].items())[:15]:
+        print(f"\n    [{len(funcs)} functions] {msg}")
+        for fn in funcs[:2]:
+            print(f"      e.g. {fn}")
+    return total_lines, error_locs
+
+
+def _save_compile_report(pairs, errors, total_lines, error_locs, analysis):
+    """Write compile report JSON + print cargo summary."""
+    report = {
+        "total_functions": len(pairs), "total_errors": len(errors),
+        "total_lines": total_lines, "error_locations": error_locs,
+        "error_code_counts": analysis["error_code_counts"],
+        "error_messages": dict(analysis["error_messages"]),
+        "raw_errors": errors[:200],
+    }
+    report_path = XRAY_ROOT / "_training_ground" / "compile_report.json"
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2, ensure_ascii=False)
+    print(f"\n  Full report: {report_path}")
 
 
 def main():
@@ -227,17 +268,15 @@ def main():
     print("  Rust Compilation Verification")
     print("=" * 66)
 
-    # Load pairs
     print("\n  Loading transpiled pairs...")
     pairs = load_pairs()
-    print(f"  Loaded {len(pairs)} clean pairs from {len(set(p['project'] for p in pairs))} projects")
+    print(f"  Loaded {len(pairs)} clean pairs from "
+          f"{len(set(p['project'] for p in pairs))} projects")
 
-    # Generate crate
     print("\n  Generating Cargo crate...")
     modules = generate_crate(pairs)
     print(f"  Generated {len(modules)} modules in {CRATE_DIR}")
 
-    # First attempt: cargo check
     print("\n  Running cargo check (this may take a minute on first run)...")
     t0 = time.time()
     exit_code, stderr = run_cargo_check()
@@ -246,64 +285,17 @@ def main():
 
     if exit_code == 0:
         print(f"\n  ALL {len(pairs)} FUNCTIONS COMPILE CLEANLY!")
-        print("  The transpiler is producing valid Rust.")
         return
 
-    # Parse errors
     errors = parse_errors(stderr)
     print(f"\n  Found {len(errors)} compilation errors")
-
-    # Count error lines vs total lines
-    total_lines = sum(
-        f.read_text(encoding="utf-8").count("\n")
-        for f in modules
-        if f.exists()
-    )
-
-    # Count unique functions with errors
-    error_files_lines = set((e["file"], e["line"]) for e in errors)
-
-    # Map back to functions
     analysis = map_errors_to_functions(errors, pairs)
+    total_lines, error_locs = _print_compile_results(
+        pairs, errors, modules, analysis)
+    _save_compile_report(pairs, errors, total_lines, error_locs, analysis)
 
-    print(f"\n  {'='*60}")
-    print("  COMPILATION RESULTS")
-    print(f"  {'='*60}")
-    print(f"  Total functions:  {len(pairs)}")
-    print(f"  Total errors:     {len(errors)}")
-    print(f"  Total Rust lines: {total_lines:,}")
-    print(f"  Error locations:  {len(error_files_lines)}")
-
-    # Error code breakdown
-    print("\n  Error code breakdown:")
-    for code, count in analysis["error_code_counts"].items():
-        print(f"    {code:15s}: {count:5d}")
-
-    # Top error messages with examples
-    print(f"\n  Top error patterns ({analysis['total_unique_errors']} unique):")
-    for msg, funcs in list(analysis["error_messages"].items())[:15]:
-        print(f"\n    [{len(funcs)} functions] {msg}")
-        for fn in funcs[:2]:
-            print(f"      e.g. {fn}")
-
-    # Save full report
-    report = {
-        "total_functions": len(pairs),
-        "total_errors": len(errors),
-        "total_lines": total_lines,
-        "error_locations": len(error_files_lines),
-        "error_code_counts": analysis["error_code_counts"],
-        "error_messages": {k: v for k, v in analysis["error_messages"].items()},
-        "raw_errors": errors[:200],  # cap at 200
-    }
-    report_path = XRAY_ROOT / "_training_ground" / "compile_report.json"
-    with open(report_path, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2, ensure_ascii=False)
-    print(f"\n  Full report: {report_path}")
-
-    # Print the raw stderr tail for context
-    stderr_lines = stderr.strip().splitlines()
-    summary_lines = [line for line in stderr_lines if "error" in line.lower() and "generated" in line.lower()]
+    summary_lines = [ln for ln in stderr.strip().splitlines()
+                     if "error" in ln.lower() and "generated" in ln.lower()]
     if summary_lines:
         print(f"\n  Cargo summary: {summary_lines[-1].strip()}")
 

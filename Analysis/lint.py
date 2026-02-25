@@ -55,20 +55,12 @@ class LintAnalyzer(BaseStaticAnalyzer):
     def _build_command(self, root: Path,
                        exclude: Optional[List[str]]) -> List[str]:
         """Assemble the ruff CLI command list."""
+        from Analysis._analyzer_base import _merged_excludes
         cmd = [
             self._tool_path, "check", str(root),
             "--output-format=json", "--no-fix",
         ]
-        auto_exclude = [
-            ".venv", "venv", ".env", "__pycache__", "node_modules",
-            ".git", "target", ".mypy_cache", ".pytest_cache",
-            "dist", "build", ".eggs", "*.egg-info",
-            "_scratch", ".github",
-        ]
-        all_exclude = list(auto_exclude)
-        if exclude:
-            all_exclude.extend(exclude)
-        for pat in all_exclude:
+        for pat in _merged_excludes(exclude):
             cmd.extend(["--exclude", pat])
         cmd.extend(self.extra_args)
         return cmd

@@ -907,16 +907,6 @@ strip = true
 '''
 
 
-def _get_llm_engine():
-    """Lazily initialise the LLM transpiler engine (singleton).
-
-    Delegates to the canonical ``get_cached_llm_transpiler()`` in
-    ``Analysis.llm_transpiler`` to avoid duplicating the caching logic.
-    """
-    from Analysis.llm_transpiler import get_cached_llm_transpiler
-    return get_cached_llm_transpiler()
-
-
 def _transpile_with_fallback(func: FunctionRecord, *,
                              pyfunction: bool = True) -> str:
     """AST transpile → if result has todo!(), try LLM fallback."""
@@ -924,7 +914,8 @@ def _transpile_with_fallback(func: FunctionRecord, *,
 
     if "todo!()" not in rust_code:
         return rust_code
-    llm = _get_llm_engine()
+    from Analysis.llm_transpiler import get_cached_llm_transpiler
+    llm = get_cached_llm_transpiler()
     if llm is None:
         return rust_code
     llm_result = llm.transpile(

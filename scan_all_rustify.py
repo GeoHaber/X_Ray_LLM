@@ -19,6 +19,7 @@ import re as _re
 import sys
 import time
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Any
 from collections import Counter
@@ -54,19 +55,56 @@ TRANS_DIR    = TRAINING_DIR / "transpiled"
 
 # ── Blocker Diagnosis ─────────────────────────────────────────────────
 
-def diagnose_blockers(name: str, code: str) -> Dict[str, Any]:
-    """Return a detailed diagnosis of WHY a function can't be transpiled.
+def _classify_markers(markers_hit):
+    """Classify hit markers into category + suggestion."""
+    fw = [m for m in markers_hit if m in _FRAMEWORK_MARKERS]
+    ut = [m for m in markers_hit if m in _UNTRANSLATABLE]
+    pm = [m for m in markers_hit if m in _PY_MODULE_MARKERS]
+    if fw:
+        return "framework_api", f"Uses GUI/web framework: {', '.join(fw)}"
+    if ut:
+        return "untranslatable_construct", f"Uses Python-only constructs: {', '.join(ut)}"
+    if pm:
+        return "python_module", f"Needs Rust crate equivalents for: {', '.join(pm)}"
+    return "code_blocker_mixed", f"Multiple blockers: {', '.join(markers_hit[:5])}"
 
-    Returns dict with:
-      - reason: short category
-      - markers_hit: list of specific markers found in code
-      - pattern_issues: list of pattern problems
-      - suggestion: what would need to change to unblock it
-    """
+
+_STRING_RE = _re.compile(r'["\'].*?["\']')
+_EXT_CALL_RE = _re.compile(r'\b\w+\.\w+\(')
+
+
+def _string_ratio(code: str) -> str:
+    total = sum(len(m.group()) for m in _STRING_RE.finditer(code))
+    return "{}% string literals".format(round(100 * total / len(code)))
+
+
+def _ext_call_msg(code: str) -> str:
+    return "{} external method calls (limit 20)".format(len(_EXT_CALL_RE.findall(code)))
+
+
+_PATTERN_CHECKS = [
+    ("mostly_strings",
+     lambda code: (len(code) > 50 and
+                   sum(len(m.group()) for m in _STRING_RE.finditer(code))
+                   / len(code) > 0.7),
+     _string_ratio,
+     "Function is mostly string data, not logic"),
+    ("too_long",
+     lambda code: code.count("\n") > 500,
+     lambda code: "{} lines (limit 500)".format(code.count("\n")),
+     "Split into smaller functions"),
+    ("too_many_external_calls",
+     lambda code: len(_EXT_CALL_RE.findall(code)) > 20,
+     _ext_call_msg,
+     "Heavy external API usage — needs crate mappings"),
+]
+
+
+def diagnose_blockers(name: str, code: str) -> Dict[str, Any]:
+    """Return a detailed diagnosis of WHY a function can't be transpiled."""
     result: Dict[str, Any] = {"reason": "", "markers_hit": [],
                                "pattern_issues": [], "suggestion": ""}
 
-    # 1. Name blocker
     if _has_name_blocker(name):
         if name.startswith("test_"):
             result["reason"] = "test_function"
@@ -76,56 +114,20 @@ def diagnose_blockers(name: str, code: str) -> Dict[str, Any]:
             result["suggestion"] = f"Dunder method {name} — needs class transpilation"
         return result
 
-    # 2. Code blockers — find WHICH markers hit
     markers_hit = [m for m in _ALL_BLOCKERS if m in code]
     if markers_hit:
-        # Classify the markers
-        fw = [m for m in markers_hit if m in _FRAMEWORK_MARKERS]
-        ut = [m for m in markers_hit if m in _UNTRANSLATABLE]
-        pm = [m for m in markers_hit if m in _PY_MODULE_MARKERS]
-
         result["markers_hit"] = markers_hit
-        if fw:
-            result["reason"] = "framework_api"
-            result["suggestion"] = f"Uses GUI/web framework: {', '.join(fw)}"
-        elif ut:
-            result["reason"] = "untranslatable_construct"
-            result["suggestion"] = f"Uses Python-only constructs: {', '.join(ut)}"
-        elif pm:
-            result["reason"] = "python_module"
-            result["suggestion"] = f"Needs Rust crate equivalents for: {', '.join(pm)}"
-        else:
-            result["reason"] = "code_blocker_mixed"
-            result["suggestion"] = f"Multiple blockers: {', '.join(markers_hit[:5])}"
+        result["reason"], result["suggestion"] = _classify_markers(markers_hit)
         return result
 
-    # 3. Pattern blockers
     if code:
-        str_chars = sum(len(m.group()) for m in _re.finditer(r'["\'].*?["\']', code))
-        mostly_strings = len(code) > 50 and str_chars / len(code) > 0.7
-        too_long = code.count("\n") > 500
-        too_many_external = len(_re.findall(r'\b\w+\.\w+\(', code)) > 20
+        for reason, check, issue_fn, suggestion in _PATTERN_CHECKS:
+            if check(code):
+                result["reason"] = reason
+                result["pattern_issues"].append(issue_fn(code))
+                result["suggestion"] = suggestion
+                return result
 
-        if mostly_strings:
-            result["reason"] = "mostly_strings"
-            pct = round(100 * str_chars / len(code))
-            result["pattern_issues"].append(f"{pct}% string literals")
-            result["suggestion"] = "Function is mostly string data, not logic"
-        elif too_long:
-            result["reason"] = "too_long"
-            lines = code.count("\n")
-            result["pattern_issues"].append(f"{lines} lines (limit 500)")
-            result["suggestion"] = "Split into smaller functions"
-        elif too_many_external:
-            ext_count = len(_re.findall(r'\b\w+\.\w+\(', code))
-            result["reason"] = "too_many_external_calls"
-            result["pattern_issues"].append(f"{ext_count} external method calls (limit 20)")
-            result["suggestion"] = "Heavy external API usage — needs crate mappings"
-
-        if result["reason"]:
-            return result
-
-    # 4. Too many unresolvable calls
     if code:
         unresolvable = len(_re.findall(r'\b[a-z_]\w+\(', code))
         result["reason"] = "too_many_unresolvable_calls"
@@ -134,7 +136,6 @@ def diagnose_blockers(name: str, code: str) -> Dict[str, Any]:
     else:
         result["reason"] = "empty_code"
         result["suggestion"] = "No source code available"
-
     return result
 
 
@@ -144,6 +145,18 @@ def _is_third_party(path: str) -> bool:
     """Check if path contains a third-party directory."""
     parts = path.replace("\\", "/").split("/")
     return any(p in THIRD_PARTY for p in parts)
+
+
+def _scan_subprojects(entry: Path) -> List[Path]:
+    """Scan a "Projects" folder for individual sub-projects with .py files."""
+    subs = []
+    for sp in sorted(entry.iterdir()):
+        if not sp.is_dir() or sp.name in THIRD_PARTY or sp.name.startswith("."):
+            continue
+        sp_py = [f for f in sp.rglob("*.py") if not _is_third_party(str(f))]
+        if sp_py:
+            subs.append(sp)
+    return subs
 
 
 def discover_projects(base: Path) -> List[Path]:
@@ -159,21 +172,13 @@ def discover_projects(base: Path) -> List[Path]:
         if entry.name in THIRD_PARTY:
             continue
 
-        # Count .py files (excluding third-party)
         py_files = [f for f in entry.rglob("*.py")
                     if not _is_third_party(str(f))]
         if not py_files:
             continue
 
-        # For "Projects" folder, scan each sub-project individually
         if entry.name == "Projects":
-            for sp in sorted(entry.iterdir()):
-                if not sp.is_dir() or sp.name in THIRD_PARTY or sp.name.startswith("."):
-                    continue
-                sp_py = [f for f in sp.rglob("*.py")
-                         if not _is_third_party(str(f))]
-                if sp_py:
-                    projects.append(sp)
+            projects.extend(_scan_subprojects(entry))
         else:
             projects.append(entry)
 
@@ -181,6 +186,66 @@ def discover_projects(base: Path) -> List[Path]:
 
 
 # ── Project Scanner ───────────────────────────────────────────────────
+
+def _try_transpile(func, code, project_name):
+    """Attempt transpilation; return a result dict."""
+    base = {"name": getattr(func, "name", ""),
+            "file": str(getattr(func, "file", "")),
+            "project": project_name,
+            "python_code": code,
+            "python_lines": code.count("\n") + 1}
+    try:
+        rust = transpile_function_code(code)
+        todo_count = rust.count("todo!()")
+        return {**base, "rust_code": rust,
+                "rust_lines": rust.count("\n") + 1,
+                "todo_count": todo_count, "clean": todo_count == 0}
+    except Exception as ex:
+        return {**base, "rust_code": f"// TRANSPILE ERROR: {ex}",
+                "rust_lines": 0, "todo_count": 0,
+                "clean": False, "error": str(ex)}
+
+
+@dataclass
+class _ClassifyCtx:
+    """Mutable context for _classify_function accumulators."""
+    project_name: str
+    blocker_counts: Counter
+    marker_freq: Counter
+    blocked_out: List[Dict[str, Any]]
+    transpiled_out: List[Dict[str, Any]]
+
+
+def _classify_function(func, ctx: _ClassifyCtx):
+    """Classify one function as transpilable or blocked, appending to lists."""
+    code = getattr(func, "code", "") or ""
+    name = getattr(func, "name", "") or ""
+
+    if _is_transpilable(func):
+        if code.strip() and len(code) < 5000:
+            ctx.transpiled_out.append(_try_transpile(func, code, ctx.project_name))
+        return True
+
+    diag = diagnose_blockers(name, code)
+    ctx.blocker_counts[diag["reason"]] += 1
+    for m in diag.get("markers_hit", []):
+        ctx.marker_freq[m] += 1
+    ctx.blocked_out.append({
+        "name": name, "file": str(getattr(func, "file", "")),
+        "project": ctx.project_name, "python_code": code[:3000],
+        "lines": code.count("\n") + 1 if code else 0,
+        "reason": diag["reason"], "markers_hit": diag["markers_hit"],
+        "pattern_issues": diag["pattern_issues"],
+        "suggestion": diag["suggestion"]})
+    return False
+
+
+_EMPTY_PROJECT = {
+    "total_functions": 0, "transpilable": 0, "transpilable_pct": 0.0,
+    "blocker_breakdown": {}, "blocker_marker_freq": {},
+    "top_candidates": [], "blocked_functions": [], "transpiled_functions": [],
+}
+
 
 def scan_project(project_path: Path) -> Dict[str, Any]:
     """Scan a single project, classify every function, collect training data."""
@@ -194,205 +259,109 @@ def scan_project(project_path: Path) -> Dict[str, Any]:
                 "blocked_functions": [], "transpiled_functions": []}
 
     if not functions:
-        return {
-            "name": project_path.name,
-            "path": str(project_path),
-            "total_functions": 0, "total_classes": len(classes),
-            "transpilable": 0, "transpilable_pct": 0.0,
-            "blocker_breakdown": {}, "blocker_marker_freq": {},
-            "top_candidates": [],
-            "blocked_functions": [], "transpiled_functions": [],
-            "time_s": round(time.time() - t0, 2),
-        }
+        return {"name": project_path.name, "path": str(project_path),
+                "total_classes": len(classes), **_EMPTY_PROJECT,
+                "time_s": round(time.time() - t0, 2)}
 
-    # Score with RustAdvisor
     advisor = RustAdvisor()
     candidates = advisor.score(functions)
 
-    # ── Classify every function ──────────────────────────────────────
-    transpilable_count = 0
-    blocker_counts: Dict[str, int] = Counter()
-    marker_freq: Dict[str, int] = Counter()
+    ctx = _ClassifyCtx(
+        project_name=project_path.name,
+        blocker_counts=Counter(), marker_freq=Counter(),
+        blocked_out=[], transpiled_out=[],
+    )
 
-    blocked_functions: List[Dict[str, Any]] = []
-    transpiled_functions: List[Dict[str, Any]] = []
+    transpilable = sum(_classify_function(fn, ctx) for fn in functions)
 
-    for func in functions:
-        code = getattr(func, "code", "") or ""
-        name = getattr(func, "name", "") or ""
-        file_path = getattr(func, "file", "") or ""
-
-        if _is_transpilable(func):
-            transpilable_count += 1
-            # Try actual transpilation
-            if code.strip() and len(code) < 5000:
-                try:
-                    rust = transpile_function_code(code)
-                    todo_count = rust.count("todo!()")
-                    transpiled_functions.append({
-                        "name": name,
-                        "file": str(file_path),
-                        "project": project_path.name,
-                        "python_code": code,
-                        "rust_code": rust,
-                        "python_lines": code.count("\n") + 1,
-                        "rust_lines": rust.count("\n") + 1,
-                        "todo_count": todo_count,
-                        "clean": todo_count == 0,
-                    })
-                except Exception as ex:
-                    transpiled_functions.append({
-                        "name": name,
-                        "file": str(file_path),
-                        "project": project_path.name,
-                        "python_code": code,
-                        "rust_code": f"// TRANSPILE ERROR: {ex}",
-                        "python_lines": code.count("\n") + 1,
-                        "rust_lines": 0,
-                        "todo_count": 0,
-                        "clean": False,
-                        "error": str(ex),
-                    })
-        else:
-            # Diagnose WHY it's blocked
-            diag = diagnose_blockers(name, code)
-            blocker_counts[diag["reason"]] += 1
-            for m in diag.get("markers_hit", []):
-                marker_freq[m] += 1
-
-            blocked_functions.append({
-                "name": name,
-                "file": str(file_path),
-                "project": project_path.name,
-                "python_code": code[:3000],  # cap at 3k chars
-                "lines": code.count("\n") + 1 if code else 0,
-                "reason": diag["reason"],
-                "markers_hit": diag["markers_hit"],
-                "pattern_issues": diag["pattern_issues"],
-                "suggestion": diag["suggestion"],
-            })
-
-    # Top 5 candidates by score
-    top = candidates[:5]
-    top_info = [{
-        "name": c.func.name, "score": round(c.score, 1),
-        "is_pure": c.is_pure, "complexity": c.func.complexity,
-    } for c in top]
+    top_info = [{"name": c.func.name, "score": round(c.score, 1),
+                 "is_pure": c.is_pure, "complexity": c.func.complexity}
+                for c in candidates[:5]]
 
     total = len(functions)
     return {
-        "name": project_path.name,
-        "path": str(project_path),
-        "total_functions": total,
-        "total_classes": len(classes),
-        "transpilable": transpilable_count,
-        "transpilable_pct": round(100 * transpilable_count / total, 1),
-        "blocker_breakdown": dict(blocker_counts.most_common()),
-        "blocker_marker_freq": dict(marker_freq.most_common(20)),
+        "name": project_path.name, "path": str(project_path),
+        "total_functions": total, "total_classes": len(classes),
+        "transpilable": transpilable,
+        "transpilable_pct": round(100 * transpilable / total, 1),
+        "blocker_breakdown": dict(ctx.blocker_counts.most_common()),
+        "blocker_marker_freq": dict(ctx.marker_freq.most_common(20)),
         "top_candidates": top_info,
-        "blocked_functions": blocked_functions,
-        "transpiled_functions": transpiled_functions,
+        "blocked_functions": ctx.blocked_out,
+        "transpiled_functions": ctx.transpiled_out,
         "time_s": round(time.time() - t0, 2),
     }
 
 
 # ── Training Ground Output ───────────────────────────────────────────
 
-def save_training_ground(all_results: List[Dict[str, Any]]) -> Dict[str, int]:
-    """Save blocked functions as training data and transpiled pairs as validation.
+def _write_jsonl(path: Path, items):
+    """Write a list of dicts as JSONL to *path*."""
+    with open(path, "w", encoding="utf-8") as f:
+        for item in items:
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
-    Structure:
-      _training_ground/
-        blocked/
-          by_reason/
-            framework_api.jsonl      — one JSON per line, each is a blocked function
-            python_module.jsonl
-            untranslatable_construct.jsonl
-            ...
-          by_marker/
-            import_.jsonl            — functions blocked by "import "
-            logging_.jsonl           — functions blocked by "logging."
-            ...
-          all_blocked.jsonl          — every blocked function in one file
-        transpiled/
-          pairs.jsonl                — {python_code, rust_code, name, ...}
-          summary.json               — stats
-    """
+
+def _group_and_write(items, key_fn, out_dir, sanitize_fn):
+    """Group *items* by key, write each group as JSONL, return counts."""
+    groups: Dict[str, List[Dict]] = {}
+    for item in items:
+        for key in key_fn(item):
+            groups.setdefault(key, []).append(item)
+    counts = {}
+    for key in sorted(groups, key=lambda k: -len(groups[k])):
+        safe = sanitize_fn(key)
+        _write_jsonl(out_dir / f"{safe}.jsonl", groups[key])
+        counts[key] = len(groups[key])
+    return counts
+
+
+def _safe_reason(reason):
+    return reason.replace(" ", "_").replace("/", "_")
+
+
+def _safe_marker(marker):
+    s = (marker.strip().replace(".", "_").replace("(", "")
+         .replace(")", "").replace(" ", "_").replace("*", "star")
+         .replace("{", "brace").replace("}", ""))
+    return s or "empty"
+
+
+def save_training_ground(all_results: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Save blocked functions as training data and transpiled pairs."""
     BLOCKED_DIR.mkdir(parents=True, exist_ok=True)
     (BLOCKED_DIR / "by_reason").mkdir(exist_ok=True)
     (BLOCKED_DIR / "by_marker").mkdir(exist_ok=True)
     TRANS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Collect all blocked and transpiled across all projects
     all_blocked: List[Dict] = []
     all_transpiled: List[Dict] = []
     for r in all_results:
         all_blocked.extend(r.get("blocked_functions", []))
         all_transpiled.extend(r.get("transpiled_functions", []))
 
+    _write_jsonl(BLOCKED_DIR / "all_blocked.jsonl", all_blocked)
+
+    reason_counts = _group_and_write(
+        all_blocked, lambda it: [it.get("reason", "unknown")],
+        BLOCKED_DIR / "by_reason", _safe_reason)
+    marker_counts = _group_and_write(
+        all_blocked, lambda it: it.get("markers_hit", []),
+        BLOCKED_DIR / "by_marker", _safe_marker)
+
+    _write_jsonl(TRANS_DIR / "pairs.jsonl", all_transpiled)
+    clean_count = sum(1 for it in all_transpiled if it.get("clean"))
+
     stats = {
         "total_blocked": len(all_blocked),
         "total_transpiled": len(all_transpiled),
+        "by_reason": reason_counts,
+        "by_marker": marker_counts,
+        "transpiled_clean": clean_count,
+        "transpiled_with_todos": len(all_transpiled) - clean_count,
     }
-
-    # ── Write all_blocked.jsonl ──────────────────────────────────────
-    with open(BLOCKED_DIR / "all_blocked.jsonl", "w", encoding="utf-8") as f:
-        for item in all_blocked:
-            f.write(json.dumps(item, ensure_ascii=False) + "\n")
-
-    # ── Group by reason ──────────────────────────────────────────────
-    by_reason: Dict[str, List[Dict]] = {}
-    for item in all_blocked:
-        reason = item.get("reason", "unknown")
-        by_reason.setdefault(reason, []).append(item)
-
-    reason_counts = {}
-    for reason, items in sorted(by_reason.items()):
-        safe_name = reason.replace(" ", "_").replace("/", "_")
-        path = BLOCKED_DIR / "by_reason" / f"{safe_name}.jsonl"
-        with open(path, "w", encoding="utf-8") as f:
-            for item in items:
-                f.write(json.dumps(item, ensure_ascii=False) + "\n")
-        reason_counts[reason] = len(items)
-
-    stats["by_reason"] = reason_counts
-
-    # ── Group by marker ──────────────────────────────────────────────
-    by_marker: Dict[str, List[Dict]] = {}
-    for item in all_blocked:
-        for marker in item.get("markers_hit", []):
-            by_marker.setdefault(marker, []).append(item)
-
-    marker_counts = {}
-    for marker, items in sorted(by_marker.items(), key=lambda x: -len(x[1])):
-        safe_name = (marker.strip().replace(".", "_").replace("(", "")
-                     .replace(")", "").replace(" ", "_").replace("*", "star")
-                     .replace("{", "brace").replace("}", ""))
-        if not safe_name:
-            safe_name = "empty"
-        path = BLOCKED_DIR / "by_marker" / f"{safe_name}.jsonl"
-        with open(path, "w", encoding="utf-8") as f:
-            for item in items:
-                f.write(json.dumps(item, ensure_ascii=False) + "\n")
-        marker_counts[marker] = len(items)
-
-    stats["by_marker"] = marker_counts
-
-    # ── Write transpiled pairs ───────────────────────────────────────
-    clean_count = 0
-    with open(TRANS_DIR / "pairs.jsonl", "w", encoding="utf-8") as f:
-        for item in all_transpiled:
-            f.write(json.dumps(item, ensure_ascii=False) + "\n")
-            if item.get("clean"):
-                clean_count += 1
-
-    stats["transpiled_clean"] = clean_count
-    stats["transpiled_with_todos"] = len(all_transpiled) - clean_count
-
-    # ── Write summary ────────────────────────────────────────────────
     with open(TRAINING_DIR / "summary.json", "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2, ensure_ascii=False)
-
     return stats
 
 
@@ -447,48 +416,30 @@ def print_project_result(result: Dict[str, Any]) -> None:
             print(f"    [{pure}] {c['name']:30s} score={c['score']:6.1f}  cx={c['complexity']}")
 
 
-def main():
-    print("=" * 66)
-    print("  X-RAY Rust Transpiler -- Full Audit (ALL projects)")
-    print(f"  Base: {BASE_DIR}")
-    print(f"  Training output: {TRAINING_DIR}")
-    print("=" * 66)
-
-    # Discover projects
-    print("\n  Discovering projects (including old/archive code)...")
-    projects = discover_projects(BASE_DIR)
-    print(f"  Found {len(projects)} scannable projects:")
-    for p in projects:
-        rel = p.relative_to(BASE_DIR)
-        print(f"    - {rel}")
-
-    all_results = []
+def _aggregate_totals(all_results):
+    """Sum per-project results into grand totals + global counters."""
     totals = {"functions": 0, "transpilable": 0, "classes": 0,
               "blocked": 0, "transpiled_clean": 0}
-    t_start = time.time()
+    global_reasons: Counter = Counter()
+    global_markers: Counter = Counter()
+    for r in all_results:
+        if "error" in r:
+            continue
+        totals["functions"] += r["total_functions"]
+        totals["transpilable"] += r["transpilable"]
+        totals["classes"] += r.get("total_classes", 0)
+        totals["blocked"] += len(r.get("blocked_functions", []))
+        for reason, cnt in r.get("blocker_breakdown", {}).items():
+            global_reasons[reason] += cnt
+        for marker, cnt in r.get("blocker_marker_freq", {}).items():
+            global_markers[marker] += cnt
+    return totals, global_reasons, global_markers
 
-    for i, proj in enumerate(projects, 1):
-        print(f"\n  [{i}/{len(projects)}] Scanning {proj.name}...")
-        result = scan_project(proj)
-        all_results.append(result)
-        print_project_result(result)
 
-        if "error" not in result:
-            totals["functions"] += result["total_functions"]
-            totals["transpilable"] += result["transpilable"]
-            totals["classes"] += result.get("total_classes", 0)
-            totals["blocked"] += len(result.get("blocked_functions", []))
-
-    # ── Save training ground ─────────────────────────────────────────
-    print(f"\n  Saving training ground to {TRAINING_DIR}...")
-    tg_stats = save_training_ground(all_results)
-    totals["transpiled_clean"] = tg_stats.get("transpiled_clean", 0)
-
-    # ── Grand total ──────────────────────────────────────────────────
-    elapsed = time.time() - t_start
+def _print_grand_total(projects, totals, elapsed, global_reasons, global_markers):
+    """Print the grand-total summary block."""
     grand_pct = (round(100 * totals["transpilable"] / totals["functions"], 1)
                  if totals["functions"] else 0)
-
     print(f"\n{'='*66}")
     print("  GRAND TOTAL ACROSS ALL PROJECTS")
     print(f"{'='*66}")
@@ -501,56 +452,98 @@ def main():
     print(f"  Total time:           {elapsed:.1f}s")
     print(f"{'='*66}")
 
-    # Blocker reason summary across ALL projects
-    global_reasons: Counter = Counter()
-    global_markers: Counter = Counter()
-    for r in all_results:
-        for reason, cnt in r.get("blocker_breakdown", {}).items():
-            global_reasons[reason] += cnt
-        for marker, cnt in r.get("blocker_marker_freq", {}).items():
-            global_markers[marker] += cnt
-
     if global_reasons:
         print("\n  GLOBAL BLOCKER REASONS:")
         for reason, cnt in global_reasons.most_common():
             print(f"    {reason:35s}: {cnt:5d}")
-
     if global_markers:
         print("\n  GLOBAL TOP 15 BLOCKING MARKERS (training priorities):")
         for marker, cnt in global_markers.most_common(15):
             print(f"    {repr(marker):25s}: {cnt:5d} functions")
+    return grand_pct
 
-    # ── Training ground summary ──────────────────────────────────────
-    print("\n  TRAINING GROUND SAVED:")
-    print(f"    {BLOCKED_DIR / 'all_blocked.jsonl'}")
-    print(f"      -> {tg_stats['total_blocked']:,} blocked functions with full diagnosis")
-    print(f"    {BLOCKED_DIR / 'by_reason/'}")
-    for reason, cnt in sorted(tg_stats.get("by_reason", {}).items(), key=lambda x: -x[1]):
-        print(f"      {reason}.jsonl ({cnt:,} functions)")
-    print(f"    {TRANS_DIR / 'pairs.jsonl'}")
-    print(f"      -> {tg_stats['total_transpiled']:,} Python->Rust pairs")
-    print(f"      -> {tg_stats.get('transpiled_clean', 0):,} clean (no todo!())")
 
-    # Save JSON report (without the bulky code — that's in the training ground)
-    report_path = XRAY_ROOT / "rustify_all_projects.json"
+@dataclass
+class _ReportCtx:
+    """Bundle of data for _save_report."""
+    all_results: list
+    totals: dict
+    grand_pct: float
+    global_reasons: Counter
+    global_markers: Counter
+    elapsed: float
+
+
+def _save_report(ctx: _ReportCtx):
+    """Write the slim JSON report (no bulky code)."""
     slim_results = []
-    for r in all_results:
+    for r in ctx.all_results:
         slim = {k: v for k, v in r.items()
                 if k not in ("blocked_functions", "transpiled_functions")}
         slim["blocked_count"] = len(r.get("blocked_functions", []))
         slim["transpiled_count"] = len(r.get("transpiled_functions", []))
         slim_results.append(slim)
 
+    report_path = XRAY_ROOT / "rustify_all_projects.json"
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump({
-            "projects": slim_results,
-            "totals": totals, "grand_pct": grand_pct,
-            "global_blocker_reasons": dict(global_reasons.most_common()),
-            "global_blocker_markers": dict(global_markers.most_common(30)),
+            "projects": slim_results, "totals": ctx.totals,
+            "grand_pct": ctx.grand_pct,
+            "global_blocker_reasons": dict(ctx.global_reasons.most_common()),
+            "global_blocker_markers": dict(ctx.global_markers.most_common(30)),
             "training_ground": str(TRAINING_DIR),
-            "elapsed_s": round(elapsed, 2),
+            "elapsed_s": round(ctx.elapsed, 2),
         }, f, indent=2, ensure_ascii=False)
     print(f"\n  Report: {report_path}")
+
+
+def main():
+    print("=" * 66)
+    print("  X-RAY Rust Transpiler -- Full Audit (ALL projects)")
+    print(f"  Base: {BASE_DIR}")
+    print(f"  Training output: {TRAINING_DIR}")
+    print("=" * 66)
+
+    print("\n  Discovering projects (including old/archive code)...")
+    projects = discover_projects(BASE_DIR)
+    print(f"  Found {len(projects)} scannable projects:")
+    for p in projects:
+        print(f"    - {p.relative_to(BASE_DIR)}")
+
+    all_results = []
+    t_start = time.time()
+
+    for i, proj in enumerate(projects, 1):
+        print(f"\n  [{i}/{len(projects)}] Scanning {proj.name}...")
+        result = scan_project(proj)
+        all_results.append(result)
+        print_project_result(result)
+
+    print(f"\n  Saving training ground to {TRAINING_DIR}...")
+    tg_stats = save_training_ground(all_results)
+
+    totals, global_reasons, global_markers = _aggregate_totals(all_results)
+    totals["transpiled_clean"] = tg_stats.get("transpiled_clean", 0)
+    elapsed = time.time() - t_start
+
+    grand_pct = _print_grand_total(projects, totals, elapsed,
+                                   global_reasons, global_markers)
+
+    print("\n  TRAINING GROUND SAVED:")
+    print(f"    {BLOCKED_DIR / 'all_blocked.jsonl'}")
+    print(f"      -> {tg_stats['total_blocked']:,} blocked functions")
+    for reason, cnt in sorted(tg_stats.get("by_reason", {}).items(),
+                              key=lambda x: -x[1]):
+        print(f"      {reason}.jsonl ({cnt:,} functions)")
+    print(f"    {TRANS_DIR / 'pairs.jsonl'}")
+    print(f"      -> {tg_stats['total_transpiled']:,} Python->Rust pairs")
+    print(f"      -> {tg_stats.get('transpiled_clean', 0):,} clean (no todo!())")
+
+    _save_report(_ReportCtx(
+        all_results=all_results, totals=totals, grand_pct=grand_pct,
+        global_reasons=global_reasons, global_markers=global_markers,
+        elapsed=elapsed,
+    ))
 
 
 if __name__ == "__main__":

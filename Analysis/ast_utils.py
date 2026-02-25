@@ -67,6 +67,23 @@ class ASTNormalizer(ast.NodeTransformer):
         return node
 
 
+def _ast_max_depth(node, limit=50, _depth=0):
+    """Compute max nesting depth of an AST node, capped at *limit*."""
+    if _depth >= limit:
+        return limit
+    best = _depth
+    for child in ast.iter_child_nodes(node):
+        best = max(best, _ast_max_depth(child, limit, _depth + 1))
+        if best >= limit:
+            return limit
+    return best
+
+
+def _hash_source(source: str) -> str:
+    """SHA-256 hash a source string, returning '' on failure."""
+    return hashlib.sha256(source.encode()).hexdigest() if source else ""
+
+
 def _compute_structure_hash(node: ast.AST) -> str:
     """Compute hash of normalized AST source for structural fingerprinting.
 
@@ -80,31 +97,13 @@ def _compute_structure_hash(node: ast.AST) -> str:
     """
     try:
         import copy
-        import signal
-        import threading
 
-        # Guard: skip deepcopy for excessively nested ASTs (hangs on >=50 depth)
-        def _max_depth(n, limit=50, _depth=0):
-            if _depth >= limit:
-                return limit
-            best = _depth
-            for child in ast.iter_child_nodes(n):
-                best = max(best, _max_depth(child, limit, _depth + 1))
-                if best >= limit:
-                    return limit
-            return best
-
-        if _max_depth(node) >= 50:
+        if _ast_max_depth(node) >= 50:
             # Too deep — fall back to plain ast.unparse without normalization
-            try:
-                source = ast.unparse(node)
-                return hashlib.sha256(source.encode()).hexdigest()
-            except Exception:
-                return ""
+            return _hash_source(ast.unparse(node))
 
         normalized = ASTNormalizer().visit(copy.deepcopy(node))
-        source = ast.unparse(normalized)
-        return hashlib.sha256(source.encode()).hexdigest()
+        return _hash_source(ast.unparse(normalized))
     except Exception:
         return ""
 

@@ -38,3 +38,15 @@ _verify_crate/
 _training_ground/
 scan_output*.txt
 verify_output*.txt
+
+# Temporary output / log files
+*_output*.txt
+full_report.txt
+lint_report.txt
+x_ray_crash.log
+xray_scan_output.txt
+
+# Scratch directory outputs (keep .py test files but ignore outputs)
+_scratch/*.txt
+_scratch/*.html
+_scratch/*.log

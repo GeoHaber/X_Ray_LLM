@@ -37,7 +37,7 @@ import re
 import sys
 import textwrap
 from pathlib import Path
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Tuple
 
 logger = logging.getLogger("X_RAY_Claude")
 
@@ -153,32 +153,22 @@ def _expr_constant(node: ast.expr) -> str:
     return "None" if v is None else repr(v)
 
 
+# Character escape table for Rust string literals
+_RUST_ESCAPE_MAP: Dict[str, str] = {
+    '\\': '\\\\', '"': '\\"', '\n': '\\n',
+    '\r': '', '\t': '\\t', '\0': '\\0',
+}
+_RUST_BRACE_MAP: Dict[str, str] = {'{': '{{', '}': '}}'}
+
+
 def _escape_for_rust(v: str, wrap_braces: bool = True) -> str:
-    """Escape a Python string value for embedding in Rust source code (character-by-character).
-    
-    If wrap_braces is True, escapes { → {{ and } → }} (for format! contexts).
+    """Escape a Python string value for embedding in Rust source code.
+
+    Uses table-driven lookup instead of per-character branching.
+    If *wrap_braces* is True, also escapes ``{`` → ``{{`` and ``}`` → ``}}``.
     """
-    out = []
-    for ch in v:
-        if ch == '\\':
-            out.append('\\\\')
-        elif ch == '"':
-            out.append('\\"')
-        elif ch == '\n':
-            out.append('\\n')
-        elif ch == '\r':
-            pass  # strip bare CR
-        elif ch == '\t':
-            out.append('\\t')
-        elif ch == '\0':
-            out.append('\\0')
-        elif wrap_braces and ch == '{':
-            out.append('{{')
-        elif wrap_braces and ch == '}':
-            out.append('}}')
-        else:
-            out.append(ch)
-    return ''.join(out)
+    table = {**_RUST_ESCAPE_MAP, **(_RUST_BRACE_MAP if wrap_braces else {})}
+    return ''.join(table.get(ch, ch) for ch in v if ch != '\r' or '\r' not in _RUST_ESCAPE_MAP)
 
 
 def _escape_string_literal(v: str) -> str:
@@ -249,24 +239,34 @@ _MODULE_CONSTANTS: Dict[str, Dict[str, str]] = {
 }
 
 
-def _expr_attribute(node: ast.expr) -> str:
-    """Attribute access: obj.attr with Python→Rust renames and module constants."""
-    obj = _expr(node.value)
-    # Check for known module constants: math.pi, sys.maxsize, etc.
+def _try_module_constant(node: ast.expr) -> str:
+    """Check if node is a known module constant (math.pi, sys.maxsize, etc.)."""
     if isinstance(node.value, ast.Name):
         mod_consts = _MODULE_CONSTANTS.get(node.value.id)
         if mod_consts:
             rust_val = mod_consts.get(node.attr)
             if rust_val:
                 return rust_val
-    # If obj is a comment/todo fallback, wrap entire chain as comment+todo
+    return ""
+
+
+def _is_comment_expr(obj: str) -> bool:
+    """Check if obj is a comment/todo fallback expression."""
     stripped = obj.strip()
-    if (stripped.startswith("/*") and stripped.endswith("*/")) or \
-       (stripped.startswith("/*") and stripped.endswith("todo!()")):
-        try:
-            return f"/* {ast.unparse(node)} */ todo!()"
-        except Exception:
-            return f"/* {node.attr} */ todo!()"
+    return (stripped.startswith("/*") and
+            (stripped.endswith("*/") or stripped.endswith("todo!()")))
+
+
+def _expr_attribute(node: ast.expr) -> str:
+    """Attribute access: obj.attr with Python→Rust renames and module constants."""
+    obj = _expr(node.value)
+    # Check for known module constants: math.pi, sys.maxsize, etc.
+    result = _try_module_constant(node)
+    if result:
+        return result
+    # If obj is a comment/todo fallback, wrap entire chain as comment+todo
+    if _is_comment_expr(obj):
+        return _todo_comment(node)
     # Rename or escape the attribute name
     attr = _ATTR_RENAMES.get(node.attr, node.attr)
     if attr in _RUST_RESERVED:
@@ -593,6 +593,14 @@ _EXPR_DISPATCH: Dict[type, Callable] = {
 }
 
 
+def _todo_comment(node) -> str:
+    """Produce a /* ... */ todo!() comment for an unhandled node."""
+    try:
+        return f"/* {ast.unparse(node)} */ todo!()"
+    except Exception:
+        return "/* ??? */ todo!()"
+
+
 def _expr(node: ast.expr) -> str:
     """Recursively convert a Python AST expression to a Rust expression string."""
     if node is None:
@@ -605,10 +613,7 @@ def _expr(node: ast.expr) -> str:
         if stripped.startswith("/*") and stripped.endswith("*/"):
             return f"{stripped} todo!()"
         return result
-    try:
-        return f"/* {ast.unparse(node)} */ todo!()"
-    except Exception:
-        return "/* ??? */ todo!()"
+    return _todo_comment(node)
 
 
 def _ensure_expr(value: str) -> str:
@@ -626,27 +631,34 @@ def _ensure_expr(value: str) -> str:
 #  Call Handlers  (builtin functions + method calls → Rust)
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _try_unwrap_format(expr: str):
+    """Try unwrapping format!(...) into its inner literal. Returns inner or None."""
+    if not expr.startswith("format!("):
+        return None
+    if not expr.rstrip().endswith(")"):
+        return None
+    inner = expr.rstrip()[len("format!("):-1]
+    if inner.lstrip().startswith('"'):
+        return inner
+    return None
+
+
+def _format_println_arg(a: str) -> str:
+    """Format a single argument for println!()."""
+    inner = _try_unwrap_format(a)
+    if inner is not None:
+        return f"println!({inner})"
+    if a.startswith('"') and a.endswith('"'):
+        return f"println!({a})"
+    return f'println!("{{}}", {a})'
+
+
 def _call_print(args, _kw):
     """print(...) → println!(...)."""
     if not args:
         return "println!()"
     if len(args) == 1:
-        a = args[0]
-        if a.startswith("format!(") and a.rstrip().endswith(")"):
-            inner = a.rstrip()[len("format!("):-1]
-            # Only unwrap if the format string is a literal
-            if inner.lstrip().startswith('"'):
-                return f"println!({inner})"
-            # Non-literal format string → wrap safely
-            return f'println!("{{}}", {a})'
-        if a.startswith("format!("):
-            # format!() with trailing comment — don't try to unwrap
-            return f'println!("{{}}", {a})'
-        # Pure string literal (no method calls chained after it)
-        if a.startswith('"') and a.endswith('"'):
-            return f"println!({a})"
-        # Non-literal expression as sole arg → wrap in "{}"
-        return f'println!("{{}}", {a})'
+        return _format_println_arg(args[0])
     fmt = " ".join("{}" for _ in args)
     return f'println!("{fmt}", {", ".join(args)})'
 
@@ -781,36 +793,43 @@ def _python_fmt_to_rust(s: str) -> str:
     return f'"{inner}"'
 
 
+def _unwrap_single_format(expr: str) -> str:
+    """Unwrap a single format!(...) argument into its inner content."""
+    inner = expr[len("format!("):-1]
+    if inner.lstrip().startswith('"'):
+        return inner
+    return f'"{{}}",  {expr}'
+
+
+def _ensure_placeholders(fmt_str: str, extra_args) -> str:
+    """Ensure fmt_str has enough {} placeholders for extra_args."""
+    fmt_str = _python_fmt_to_rust(fmt_str)
+    placeholder_count = fmt_str.count('{}')
+    if placeholder_count < len(extra_args):
+        missing = len(extra_args) - placeholder_count
+        inner = fmt_str[1:-1] + ' {}' * missing
+        fmt_str = f'"{inner}"'
+    return fmt_str
+
+
+def _format_literal_args(fmt_str: str, extra_args) -> str:
+    """Format a string-literal first arg with optional extra arguments."""
+    if not extra_args:
+        return fmt_str
+    return f'{_ensure_placeholders(fmt_str, extra_args)}, {", ".join(extra_args)}'
+
+
 def _unwrap_format_args(args):
     """Unwrap format!(...) from macro arguments so println!/eprintln!/log::*! get a literal."""
+    if not args:
+        return '""'
     if len(args) == 1 and args[0].startswith("format!("):
-        inner = args[0][len("format!("):-1]
-        # Only unwrap if inner format string starts with a literal
-        if inner.lstrip().startswith('"'):
-            return inner
-        return f'"{{}}",  {args[0]}'
-    if args:
-        a0 = args[0]
-        # Already a string literal → use as format string
-        if a0.startswith('"'):
-            if len(args) == 1:
-                return a0
-            # Convert Python %s/%d format specifiers to Rust {} when used with args
-            a0 = _python_fmt_to_rust(a0)
-            # Verify placeholder count matches arg count
-            placeholder_count = a0.count('{}')
-            extra_args = args[1:]
-            if placeholder_count < len(extra_args):
-                # Add missing placeholders
-                missing = len(extra_args) - placeholder_count
-                inner = a0[1:-1]  # strip quotes
-                inner += ' {}' * missing
-                a0 = f'"{inner}"'
-            return f'{a0}, {", ".join(extra_args)}'
-        # Non-literal expression → wrap in "{}"
-        fmt = ' '.join('{}' for _ in args)
-        return f'"{fmt}", {", ".join(args)}'
-    return '""'
+        return _unwrap_single_format(args[0])
+    a0 = args[0]
+    if a0.startswith('"'):
+        return _format_literal_args(a0, args[1:])
+    fmt = ' '.join('{}' for _ in args)
+    return f'"{fmt}", {", ".join(args)}'
 
 def _call_logger(method, args, all_args):
     """logger.xxx() → eprintln!()."""
@@ -840,65 +859,70 @@ def _call_shutil(method, args, all_args):
     return f"/* shutil.{method}({all_args}) */"
 
 
+_SYS_DISPATCH = {
+    "getrecursionlimit": lambda _a: "1000i64",
+    "exit":  lambda a: f"std::process::exit({a[0]} as i32)" if a else "std::process::exit(0)",
+    "argv":  lambda _a: "std::env::args().collect::<Vec<String>>()",
+    "getsizeof": lambda a: f"std::mem::size_of_val(&{a[0]}) as i64" if a else None,
+    "getdefaultencoding": lambda _a: '"utf-8".to_string()',
+    "getfilesystemencoding": lambda _a: '"utf-8".to_string()',
+    "version":    lambda _a: '"Rust".to_string()',
+    "executable": lambda _a: "std::env::current_exe().unwrap().to_string_lossy().to_string()",
+    "modules":    lambda _a: "std::collections::HashMap::<String, String>::new()",
+}
+
+
 def _call_sys_method(method, args, all_args):
     """sys.xxx() → Rust equivalents."""
-    if method == "getrecursionlimit":
-        return "1000i64"
-    if method == "exit":
-        return f"std::process::exit({args[0]} as i32)" if args else "std::process::exit(0)"
-    if method == "argv":
-        return "std::env::args().collect::<Vec<String>>()"
-    if method == "getsizeof" and args:
-        return f"std::mem::size_of_val(&{args[0]}) as i64"
-    if method == "getdefaultencoding":
-        return '"utf-8".to_string()'
-    if method == "getfilesystemencoding":
-        return '"utf-8".to_string()'
-    if method == "version":
-        return '"Rust".to_string()'
-    if method == "executable":
-        return "std::env::current_exe().unwrap().to_string_lossy().to_string()"
-    if method == "modules":
-        return "std::collections::HashMap::<String, String>::new()"
+    handler = _SYS_DISPATCH.get(method)
+    if handler:
+        result = handler(args)
+        if result is not None:
+            return result
     return f"/* sys.{method}({all_args}) */"
+
+
+_RE_DISPATCH = {
+    "compile":   lambda a: f"Regex::new({a[0]}).unwrap()" if a else None,
+    "search":    lambda a: f"Regex::new({a[0]}).unwrap().find(&{a[1]})" if len(a) >= 2 else None,
+    "match":     lambda a: f"Regex::new(&format!(\"^{{}}\", {a[0]})).unwrap().find(&{a[1]})" if len(a) >= 2 else None,
+    "fullmatch": lambda a: f"Regex::new(&format!(\"^{{}}$\", {a[0]})).unwrap().is_match(&{a[1]})" if len(a) >= 2 else None,
+    "sub":       lambda a: f"Regex::new({a[0]}).unwrap().replace_all(&{a[2]}, {a[1]}).to_string()" if len(a) >= 3 else None,
+    "subn":      lambda a: f"Regex::new({a[0]}).unwrap().replace_all(&{a[2]}, {a[1]}).to_string()" if len(a) >= 3 else None,
+    "findall":   lambda a: (f"Regex::new({a[0]}).unwrap().find_iter(&{a[1]})"
+                            f".map(|m| m.as_str().to_string()).collect::<Vec<String>>()") if len(a) >= 2 else None,
+    "finditer":  lambda a: f"Regex::new({a[0]}).unwrap().find_iter(&{a[1]})" if len(a) >= 2 else None,
+    "split":     lambda a: (f"Regex::new({a[0]}).unwrap().split(&{a[1]})"
+                            f".map(|s| s.to_string()).collect::<Vec<String>>()") if len(a) >= 2 else None,
+    "escape":    lambda a: f"regex::escape(&{a[0]})" if a else None,
+}
 
 
 def _call_re(method, args, all_args):
     """re.xxx() → Rust regex crate equivalents."""
-    if method == "compile" and args:
-        return f"Regex::new({args[0]}).unwrap()"
-    if method == "search" and len(args) >= 2:
-        return f"Regex::new({args[0]}).unwrap().find(&{args[1]})"
-    if method == "match" and len(args) >= 2:
-        # re.match anchors to start → use is_match with ^ prefix
-        return f"Regex::new(&format!(\"^{{}}\", {args[0]})).unwrap().find(&{args[1]})"
-    if method == "fullmatch" and len(args) >= 2:
-        return f"Regex::new(&format!(\"^{{}}$\", {args[0]})).unwrap().is_match(&{args[1]})"
-    if method in ("sub", "subn") and len(args) >= 3:
-        return f"Regex::new({args[0]}).unwrap().replace_all(&{args[2]}, {args[1]}).to_string()"
-    if method == "findall" and len(args) >= 2:
-        return (f"Regex::new({args[0]}).unwrap().find_iter(&{args[1]})"
-                f".map(|m| m.as_str().to_string()).collect::<Vec<String>>()")
-    if method == "finditer" and len(args) >= 2:
-        return f"Regex::new({args[0]}).unwrap().find_iter(&{args[1]})"
-    if method == "split" and len(args) >= 2:
-        return (f"Regex::new({args[0]}).unwrap().split(&{args[1]})"
-                f".map(|s| s.to_string()).collect::<Vec<String>>()")
-    if method == "escape" and args:
-        return f"regex::escape(&{args[0]})"
+    handler = _RE_DISPATCH.get(method)
+    if handler:
+        result = handler(args)
+        if result is not None:
+            return result
     return f"/* re.{method}({all_args}) */"
+
+
+_JSON_DISPATCH = {
+    "dumps": lambda a, _aa: f"serde_json::to_string(&{a[0]}).unwrap_or_default()" if a else None,
+    "loads": lambda a, _aa: f"serde_json::from_str::<serde_json::Value>(&{a[0]}).unwrap()" if a else None,
+    "dump":  lambda a, _aa: f"serde_json::to_writer(&{a[1]}, &{a[0]}).unwrap()" if len(a) >= 2 else None,
+    "load":  lambda a, _aa: f"serde_json::from_reader::<_, serde_json::Value>(&{a[0]}).unwrap()" if a else None,
+}
 
 
 def _call_json(method, args, all_args):
     """json.xxx() → Rust serde_json equivalents."""
-    if method == "dumps" and args:
-        return f"serde_json::to_string(&{args[0]}).unwrap_or_default()"
-    if method == "loads" and args:
-        return f"serde_json::from_str::<serde_json::Value>(&{args[0]}).unwrap()"
-    if method == "dump" and len(args) >= 2:
-        return f"serde_json::to_writer(&{args[1]}, &{args[0]}).unwrap()"
-    if method == "load" and args:
-        return f"serde_json::from_reader::<_, serde_json::Value>(&{args[0]}).unwrap()"
+    handler = _JSON_DISPATCH.get(method)
+    if handler is not None:
+        result = handler(args, all_args)
+        if result is not None:
+            return result
     return f"/* json.{method}({all_args}) */"
 
 
@@ -973,75 +997,79 @@ def _call_math(method, args, all_args):
     return f"/* math.{method}({all_args}) */"
 
 
+_OS_DISPATCH = {
+    "getcwd":   lambda _a: "std::env::current_dir().unwrap().to_string_lossy().to_string()",
+    "getenv":   lambda a: f"std::env::var({a[0]}).unwrap_or_default()" if a else None,
+    "environ":  lambda a: f"std::env::var({a[0]}).unwrap_or_default()" if a else None,
+    "listdir":  lambda a: (f"std::fs::read_dir({a[0]}).unwrap()"
+                           f".filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().to_string()))"
+                           f".collect::<Vec<String>>()") if a else None,
+    "makedirs": lambda a: f"std::fs::create_dir_all({a[0]}).ok()" if a else None,
+    "remove":   lambda a: f"std::fs::remove_file({a[0]}).ok()" if a else None,
+    "rename":   lambda a: f"std::fs::rename({a[0]}, {a[1]}).ok()" if len(a) >= 2 else None,
+}
+
+
 def _call_os(method, args, all_args):
     """os.xxx() → Rust std equivalents."""
-    if method == "getcwd":
-        return "std::env::current_dir().unwrap().to_string_lossy().to_string()"
-    if method in ("getenv", "environ") and args:
-        return f"std::env::var({args[0]}).unwrap_or_default()"
-    if method == "listdir" and args:
-        return (f"std::fs::read_dir({args[0]}).unwrap()"
-                f".filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().to_string()))"
-                f".collect::<Vec<String>>()")
-    if method == "makedirs" and args:
-        return f"std::fs::create_dir_all({args[0]}).ok()"
-    if method == "remove" and args:
-        return f"std::fs::remove_file({args[0]}).ok()"
-    if method == "rename" and len(args) >= 2:
-        return f"std::fs::rename({args[0]}, {args[1]}).ok()"
+    handler = _OS_DISPATCH.get(method)
+    if handler:
+        result = handler(args)
+        if result is not None:
+            return result
     return f"/* os.{method}({all_args}) */"
+
+
+_TIME_DISPATCH = {
+    "time":         lambda _a: ("std::time::SystemTime::now()"
+                               ".duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64()"),
+    "sleep":        lambda a: f"std::thread::sleep(std::time::Duration::from_secs_f64({a[0]} as f64))" if a else None,
+    "perf_counter": lambda _a: "std::time::Instant::now().elapsed().as_secs_f64()",
+    "monotonic":    lambda _a: "std::time::Instant::now().elapsed().as_secs_f64()",
+    "strftime":     lambda a: f"chrono::Local::now().format({a[0]}).to_string()" if a else None,
+    "gmtime":       lambda _a: "chrono::Utc::now()",
+    "localtime":    lambda _a: "chrono::Local::now()",
+    "mktime":       lambda a: "/* time.mktime */ 0i64" if a else None,
+    "process_time": lambda _a: "std::time::Instant::now().elapsed().as_secs_f64()",
+    "thread_time":  lambda _a: "std::time::Instant::now().elapsed().as_secs_f64()",
+}
 
 
 def _call_time(method, args, all_args):
     """time.xxx() → Rust std::time / chrono equivalents."""
-    if method == "time":
-        return ("std::time::SystemTime::now()"
-                ".duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64()")
-    if method == "sleep" and args:
-        return f"std::thread::sleep(std::time::Duration::from_secs_f64({args[0]} as f64))"
-    if method == "perf_counter":
-        return "std::time::Instant::now().elapsed().as_secs_f64()"
-    if method == "monotonic":
-        return "std::time::Instant::now().elapsed().as_secs_f64()"
-    if method == "strftime" and args:
-        return f'chrono::Local::now().format({args[0]}).to_string()'
-    if method == "gmtime":
-        return "chrono::Utc::now()"
-    if method == "localtime":
-        return "chrono::Local::now()"
-    if method == "mktime" and args:
-        return f"/* time.mktime({all_args}) */ 0i64"
-    if method in ("process_time", "thread_time"):
-        return "std::time::Instant::now().elapsed().as_secs_f64()"
+    handler = _TIME_DISPATCH.get(method)
+    if handler:
+        result = handler(args)
+        if result is not None:
+            return result
     return f"/* time.{method}({all_args}) */"
+
+
+_DATETIME_DISPATCH = {
+    "now":           lambda _a: "chrono::Local::now()",
+    "utcnow":        lambda _a: "chrono::Utc::now()",
+    "today":         lambda _a: "chrono::Local::now().date_naive()",
+    "fromtimestamp": lambda a: (f"chrono::DateTime::from_timestamp({a[0]} as i64, 0)"
+                               f".unwrap_or_default()") if a else None,
+    "strftime":      lambda a: f"self.format({a[0]}).to_string()" if a else None,
+    "strptime":      lambda a: (f"chrono::NaiveDateTime::parse_from_str({a[0]}, {a[1]})"
+                               f".unwrap()") if len(a) >= 2 else None,
+    "isoformat":     lambda _a: "self.to_rfc3339()",
+    "timestamp":     lambda _a: "self.timestamp()",
+    "date":          lambda _a: "self.date_naive()",
+    "combine":       lambda a: f"chrono::NaiveDateTime::new({a[0]}, {a[1]})" if len(a) >= 2 else None,
+}
 
 
 def _call_datetime(method, args, all_args):
     """datetime.xxx() → Rust chrono crate equivalents."""
-    if method == "now":
-        return "chrono::Local::now()"
-    if method == "utcnow":
-        return "chrono::Utc::now()"
-    if method == "today":
-        return "chrono::Local::now().date_naive()"
-    if method == "fromtimestamp" and args:
-        return (f"chrono::DateTime::from_timestamp({args[0]} as i64, 0)"
-                f".unwrap_or_default()")
-    if method == "strftime" and args:
-        return f'self.format({args[0]}).to_string()'
-    if method == "strptime" and len(args) >= 2:
-        return (f"chrono::NaiveDateTime::parse_from_str({args[0]}, {args[1]})"
-                f".unwrap()")
-    if method == "isoformat":
-        return "self.to_rfc3339()"
-    if method == "timestamp":
-        return "self.timestamp()"
-    if method == "date":
-        return "self.date_naive()"
     if method == "replace":
         return f"/* datetime.replace({all_args}) */ self.clone()"
-    if method == "combine" and len(args) >= 2:
-        return f"chrono::NaiveDateTime::new({args[0]}, {args[1]})"
+    handler = _DATETIME_DISPATCH.get(method)
+    if handler:
+        result = handler(args)
+        if result is not None:
+            return result
     return f"/* datetime.{method}({all_args}) */"
 
 
@@ -1051,173 +1079,190 @@ def _call_timedelta(method, args, all_args):
     return f"/* timedelta.{method}({all_args}) */"
 
 
+def _subprocess_cmd(args, suffix):
+    """Build a std::process::Command chain."""
+    base = f"std::process::Command::new({args[0]})"
+    if len(args) > 1:
+        base += f".args(&[{', '.join(args[1:])}])"
+    return base + suffix
+
+
+_SUBPROCESS_DISPATCH = {
+    "run":          lambda a: _subprocess_cmd(a, ".status().ok()") if a else None,
+    "check_output": lambda a: _subprocess_cmd(
+        a, ".output().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default()"
+    ) if a else None,
+    "check_call":   lambda a: _subprocess_cmd(a, ".status().unwrap()") if a else None,
+    "call":         lambda a: _subprocess_cmd(
+        a, ".status().map(|s| s.code().unwrap_or(-1)).unwrap_or(-1)"
+    ) if a else None,
+    "Popen":        lambda a: _subprocess_cmd(a, ".spawn().ok()") if a else None,
+    "PIPE":         lambda _a: "std::process::Stdio::piped()",
+    "DEVNULL":      lambda _a: "std::process::Stdio::null()",
+}
+
+
 def _call_subprocess(method, args, all_args):
     """subprocess.xxx() → Rust std::process::Command equivalents."""
-    if method == "run" and args:
-        return (f"std::process::Command::new({args[0]})"
-                + (f".args(&[{', '.join(args[1:])}])" if len(args) > 1 else "")
-                + ".status().ok()")
-    if method == "check_output" and args:
-        return (f"std::process::Command::new({args[0]})"
-                + (f".args(&[{', '.join(args[1:])}])" if len(args) > 1 else "")
-                + ".output().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default()")
-    if method == "check_call" and args:
-        return (f"std::process::Command::new({args[0]})"
-                + (f".args(&[{', '.join(args[1:])}])" if len(args) > 1 else "")
-                + ".status().unwrap()")
-    if method == "call" and args:
-        return (f"std::process::Command::new({args[0]})"
-                + (f".args(&[{', '.join(args[1:])}])" if len(args) > 1 else "")
-                + ".status().map(|s| s.code().unwrap_or(-1)).unwrap_or(-1)")
-    if method == "Popen" and args:
-        return (f"std::process::Command::new({args[0]})"
-                + (f".args(&[{', '.join(args[1:])}])" if len(args) > 1 else "")
-                + ".spawn().ok()")
-    if method == "PIPE":
-        return "std::process::Stdio::piped()"
-    if method == "DEVNULL":
-        return "std::process::Stdio::null()"
+    handler = _SUBPROCESS_DISPATCH.get(method)
+    if handler:
+        result = handler(args)
+        if result is not None:
+            return result
     return f"/* subprocess.{method}({all_args}) */"
+
+
+_HASH_MAP = {
+    "sha256": "Sha256", "sha1": "Sha1", "sha512": "Sha512",
+    "sha384": "Sha384", "md5": "Md5",
+    "blake2b": "Blake2b512", "blake2s": "Blake2s256",
+}
+
+_HASHLIB_SPECIAL = {
+    "new":       lambda a, aa: f"/* hashlib.new({aa}) */ Vec::new()" if a else None,
+    "hexdigest": lambda _a, _aa: 'format!("{:x}", self.finalize())',
+    "digest":    lambda _a, _aa: 'format!("{:x}", self.finalize())',
+    "update":    lambda a, _aa: f"self.update({a[0]})" if a else None,
+}
 
 
 def _call_hashlib(method, args, all_args):
     """hashlib.xxx() → Rust sha2/md5 crate equivalents."""
-    _HASH_MAP = {
-        "sha256": "Sha256",
-        "sha1":   "Sha1",
-        "sha512": "Sha512",
-        "sha384": "Sha384",
-        "md5":    "Md5",
-        "blake2b": "Blake2b512",
-        "blake2s": "Blake2s256",
-    }
     rust_type = _HASH_MAP.get(method)
     if rust_type:
-        if args:
-            return f"{rust_type}::digest({args[0]})"
-        return f"{rust_type}::new()"
-    if method == "new" and args:
-        return f"/* hashlib.new({all_args}) */ Vec::new()"
-    if method in ("hexdigest", "digest"):
-        return "format!(\"{:x}\", self.finalize())"
-    if method == "update" and args:
-        return f"self.update({args[0]})"
+        return f"{rust_type}::digest({args[0]})" if args else f"{rust_type}::new()"
+    handler = _HASHLIB_SPECIAL.get(method)
+    if handler is not None:
+        result = handler(args, all_args)
+        if result is not None:
+            return result
     return f"/* hashlib.{method}({all_args}) */"
+
+
+_ARGPARSE_DISPATCH = {
+    "ArgumentParser":   lambda a, _aa: f'clap::Command::new("app").about({a[0] if a else chr(34)+chr(34)})',
+    "add_argument":     lambda a, _aa: (f".arg(clap::Arg::new({a[0]}).required(true))") if a else None,
+    "parse_args":       lambda _a, _aa: ".get_matches()",
+    "parse_known_args": lambda _a, _aa: ".try_get_matches()",
+}
 
 
 def _call_argparse(method, args, all_args):
     """argparse.xxx() → Rust clap crate equivalents."""
-    if method == "ArgumentParser":
-        desc = args[0] if args else '""'
-        return f"clap::Command::new(\"app\").about({desc})"
-    if method == "add_argument" and args:
-        return (f".arg(clap::Arg::new({args[0]})"
-                + ".required(true))")
-    if method == "parse_args":
-        return ".get_matches()"
-    if method == "parse_known_args":
-        return ".try_get_matches()"
+    handler = _ARGPARSE_DISPATCH.get(method)
+    if handler is not None:
+        result = handler(args, all_args)
+        if result is not None:
+            return result
     return f"/* argparse.{method}({all_args}) */"
+
+
+_COLLECTIONS_DISPATCH = {
+    "Counter":     lambda a: (f"{a[0]}.iter().fold(std::collections::HashMap::new(), "
+                              f"|mut map, item| {{ *map.entry(item).or_insert(0) += 1; map }})"
+                              if a else "std::collections::HashMap::<String, usize>::new()"),
+    "defaultdict": lambda _a: "std::collections::HashMap::new()",
+    "deque":       lambda a: f"std::collections::VecDeque::from({a[0]})" if a else "std::collections::VecDeque::new()",
+    "OrderedDict": lambda _a: "std::collections::BTreeMap::new()",
+    "namedtuple":  lambda _a: None,  # fallback to comment
+    "ChainMap":    lambda _a: None,  # fallback to comment
+}
 
 
 def _call_collections(method, args, all_args):
     """collections.xxx() → Rust std equivalents."""
-    if method == "Counter" and args:
-        return (f"{args[0]}.iter().fold(std::collections::HashMap::new(), "
-                f"|mut map, item| {{ *map.entry(item).or_insert(0) += 1; map }})")
-    if method == "Counter":
-        return "std::collections::HashMap::<String, usize>::new()"
-    if method == "defaultdict":
-        return "std::collections::HashMap::new()"
-    if method == "deque":
-        if args:
-            return f"std::collections::VecDeque::from({args[0]})"
-        return "std::collections::VecDeque::new()"
-    if method == "OrderedDict":
-        return "std::collections::BTreeMap::new()"
-    if method == "namedtuple":
-        return f"/* collections.namedtuple({all_args}) */"
-    if method == "ChainMap":
-        return f"/* collections.ChainMap({all_args}) */ std::collections::HashMap::new()"
+    handler = _COLLECTIONS_DISPATCH.get(method)
+    if handler:
+        result = handler(args)
+        if result is not None:
+            return result
     return f"/* collections.{method}({all_args}) */"
+
+
+_FUNCTOOLS_DISPATCH = {
+    "reduce":         lambda a, _aa: (f"{a[1]}.iter().fold(Default::default(), {a[0]})"
+                                       if len(a) >= 2 else None),
+    "partial":        lambda a, _aa: (f"/* functools.partial */ move |args| {a[0]}"
+                                      f"({', '.join(a[1:]) if len(a) > 1 else ''}, args)"
+                                      if a else None),
+    "lru_cache":      lambda _a, _aa: "/* #[cached] */",
+    "wraps":          lambda a, _aa: f"/* functools.wraps({a[0]}) */" if a else None,
+    "total_ordering": lambda _a, _aa: "/* #[derive(Ord, PartialOrd)] */",
+}
 
 
 def _call_functools(method, args, all_args):
     """functools.xxx() → Rust equivalents."""
-    if method == "reduce" and len(args) >= 2:
-        return f"{args[1]}.iter().fold(Default::default(), {args[0]})"
-    if method == "partial" and args:
-        extra = ", ".join(args[1:]) if len(args) > 1 else ""
-        return f"/* functools.partial */ move |args| {args[0]}({extra}, args)"
-    if method == "lru_cache":
-        return "/* #[cached] */"
-    if method == "wraps" and args:
-        return f"/* functools.wraps({args[0]}) */"
-    if method == "total_ordering":
-        return "/* #[derive(Ord, PartialOrd)] */"
+    handler = _FUNCTOOLS_DISPATCH.get(method)
+    if handler is not None:
+        result = handler(args, all_args)
+        if result is not None:
+            return result
     return f"/* functools.{method}({all_args}) */"
+
+
+def _itertools_chain(args):
+    """itertools.chain() → Rust .chain() calls."""
+    if not args:
+        return None
+    result = args[0]
+    for a in args[1:]:
+        result = f"{result}.chain({a})"
+    return result
+
+
+_ITERTOOLS_DISPATCH = {
+    "chain":        lambda a: _itertools_chain(a),
+    "product":      lambda a: (f"itertools::iproduct!({', '.join(f'{x}.iter()' for x in a)})"
+                              f".collect::<Vec<_>>()") if len(a) >= 2 else None,
+    "permutations": lambda a: (f"{a[0]}.iter().permutations("
+                              f"{a[1] if len(a) > 1 else f'{a[0]}.len()'}).collect::<Vec<_>>()") if a else None,
+    "combinations": lambda a: f"{a[0]}.iter().combinations({a[1]}).collect::<Vec<_>>()" if len(a) >= 2 else None,
+    "zip_longest":  lambda a: f"itertools::izip!({', '.join(a)})" if a else None,
+    "izip":         lambda a: f"itertools::izip!({', '.join(a)})" if a else None,
+    "groupby":      lambda a: f"{a[0]}.iter().group_by(|item| /* key */)" if a else None,
+    "count":        lambda a: f"({a[0] if a else '0'}..)",
+    "repeat":       lambda a: f"std::iter::repeat({a[0]})" if a else None,
+    "cycle":        lambda a: f"{a[0]}.iter().cycle()" if a else None,
+    "starmap":      lambda a: f"{a[1]}.iter().map(|item| {a[0]}(item))" if len(a) >= 2 else None,
+    "islice":       lambda a: f"{a[0]}.iter().skip(0).take({a[1]})" if len(a) >= 2 else None,
+    "accumulate":   lambda a: (f"/* itertools.accumulate */ {a[0]}.iter().scan(0, |acc, x| "
+                              f"{{ *acc += x; Some(*acc) }}).collect::<Vec<_>>()") if a else None,
+}
 
 
 def _call_itertools(method, args, all_args):
     """itertools.xxx() → Rust itertools crate equivalents."""
-    if method == "chain" and args:
-        result = args[0]
-        for a in args[1:]:
-            result = f"{result}.chain({a})"
-        return result
-    if method == "product" and len(args) >= 2:
-        return (f"itertools::iproduct!({', '.join(f'{a}.iter()' for a in args)})"
-                f".collect::<Vec<_>>()")
-    if method == "permutations" and args:
-        r = args[1] if len(args) > 1 else f"{args[0]}.len()"
-        return f"{args[0]}.iter().permutations({r}).collect::<Vec<_>>()"
-    if method == "combinations" and len(args) >= 2:
-        return f"{args[0]}.iter().combinations({args[1]}).collect::<Vec<_>>()"
-    if method in ("zip_longest", "izip"):
-        return f"itertools::izip!({', '.join(args)})"
-    if method == "groupby" and args:
-        return f"{args[0]}.iter().group_by(|item| /* key */)"
-    if method == "count":
-        start = args[0] if args else "0"
-        return f"({start}..)"
-    if method == "repeat" and args:
-        return f"std::iter::repeat({args[0]})"
-    if method == "cycle" and args:
-        return f"{args[0]}.iter().cycle()"
-    if method == "starmap" and len(args) >= 2:
-        return f"{args[1]}.iter().map(|item| {args[0]}(item))"
-    if method == "islice" and len(args) >= 2:
-        return f"{args[0]}.iter().skip(0).take({args[1]})"
-    if method == "accumulate" and args:
-        return f"/* itertools.accumulate */ {args[0]}.iter().scan(0, |acc, x| {{ *acc += x; Some(*acc) }}).collect::<Vec<_>>()"
+    handler = _ITERTOOLS_DISPATCH.get(method)
+    if handler:
+        result = handler(args)
+        if result is not None:
+            return result
     return f"/* itertools.{method}({all_args}) */"
+
+
+_LOG_LEVEL_MAP = {
+    "debug": "log::debug!", "info": "log::info!",
+    "warning": "log::warn!", "warn": "log::warn!",
+    "error": "log::error!", "critical": "log::error!",
+    "exception": "log::error!",
+}
+
+_LOG_COMMENT_METHODS = {
+    "getLogger", "basicConfig", "setLevel",
+    "addHandler", "FileHandler", "StreamHandler", "Formatter",
+}
 
 
 def _call_logging(method, args, all_args):
     """logging.xxx() → Rust log crate macros."""
-    _LOG_LEVEL_MAP = {
-        "debug": "log::debug!", "info": "log::info!",
-        "warning": "log::warn!", "warn": "log::warn!",
-        "error": "log::error!", "critical": "log::error!",
-        "exception": "log::error!",
-    }
     macro = _LOG_LEVEL_MAP.get(method)
     if macro:
         return f'{macro}({_unwrap_format_args(args)})' if args else f"{macro}()"
-    if method == "getLogger":
-        return f"/* logging.getLogger({all_args}) */"
     if method == "basicConfig":
         return "env_logger::init()"
-    if method == "setLevel":
-        return f"/* logging.setLevel({all_args}) */"
-    if method == "addHandler":
-        return f"/* logging.addHandler({all_args}) */"
-    if method == "FileHandler" and args:
-        return f"/* logging.FileHandler({all_args}) */"
-    if method == "StreamHandler":
-        return f"/* logging.StreamHandler({all_args}) */"
-    if method == "Formatter" and args:
-        return f"/* logging.Formatter({all_args}) */"
+    if method in _LOG_COMMENT_METHODS:
+        return f"/* logging.{method}({all_args}) */"
     return f"/* logging.{method}({all_args}) */"
 
 
@@ -1361,26 +1406,34 @@ def _dispatch_named_call(name, args, kwargs):
     return f"{_safe_name(name)}({', '.join(args)})"
 
 
+_CHAIN_MODULE_DISPATCH = {
+    "os.path": _call_os_path,
+}
+
+
+def _try_module_dispatch(node, method, args, all_args):
+    """Try dispatching via module or chained-module handlers."""
+    if isinstance(node.func.value, ast.Name):
+        handler = _MODULE_CALL_DISPATCH.get(node.func.value.id)
+        if handler is not None:
+            return handler(method, args, all_args)
+    if isinstance(node.func.value, ast.Attribute) and isinstance(node.func.value.value, ast.Name):
+        chain = f"{node.func.value.value.id}.{node.func.value.attr}"
+        handler = _CHAIN_MODULE_DISPATCH.get(chain)
+        if handler is not None:
+            return handler(method, args, all_args)
+    return None
+
+
 def _dispatch_method_call(node, args, kwargs):
     """Dispatch a method call (obj.method) to the appropriate handler."""
     obj = _expr(node.func.value)
     method = node.func.attr
     all_args = ", ".join(args)
 
-    # Module-specific handlers (logger, platform, shutil, sys, re, json, math, os)
-    if isinstance(node.func.value, ast.Name):
-        mod_handler = _MODULE_CALL_DISPATCH.get(node.func.value.id)
-        if mod_handler is not None:
-            return mod_handler(method, args, all_args)
-
-    # Chained module handlers: os.path.xxx(), collections.OrderedDict(), etc.
-    if isinstance(node.func.value, ast.Attribute) and isinstance(node.func.value.value, ast.Name):
-        chain = f"{node.func.value.value.id}.{node.func.value.attr}"
-        if chain == "os.path":
-            return _call_os_path(method, args, all_args)
-
-    # math constants accessed as attributes (math.pi, math.e) — not calls
-    # Handled via _expr_attribute, but math.func() is handled above
+    mod_result = _try_module_dispatch(node, method, args, all_args)
+    if mod_result is not None:
+        return mod_result
 
     # Special method handlers (join, format, split, get, pop, etc.)
     result = _call_method_special(obj, method, args, all_args)
@@ -1475,29 +1528,28 @@ def _stmt_while(stmt, pad, indent, ret_type):
     return lines
 
 
+def _stmt_assign_tuple(tgt, value: str, pad: str) -> List[str]:
+    """Handle tuple-target assignment: (a, b) = value."""
+    has_complex = any(isinstance(e, (ast.Attribute, ast.Subscript)) for e in tgt.elts)
+    if has_complex:
+        lines = [f"{pad}let _destructured = {value};"]
+        for i, e in enumerate(tgt.elts):
+            lines.append(f"{pad}{_expr(e)} = _destructured.{i};")
+        return lines
+    parts = ", ".join(
+        _expr(e) if _expr(e) == "_" else f"mut {_expr(e)}"
+        for e in tgt.elts
+    )
+    return [f"{pad}let ({parts}) = {value};"]
+
+
 def _stmt_assign(stmt, pad, _indent, _ret_type):
     """Handle assignment statements."""
     tgt = stmt.targets[0]
-    value = _expr(stmt.value)
-    # Ensure comment-only RHS gets a placeholder expression
-    value = _ensure_expr(value)
+    value = _ensure_expr(_expr(stmt.value))
     if isinstance(tgt, ast.Tuple):
-        # Check if any element is an attribute or subscript (not a simple name)
-        has_complex = any(isinstance(e, (ast.Attribute, ast.Subscript)) for e in tgt.elts)
-        if has_complex:
-            # Emit individual assignments: let _tmp = value; tgt0 = _tmp.0; ...
-            lines = [f"{pad}let _destructured = {value};"]
-            for i, e in enumerate(tgt.elts):
-                lines.append(f"{pad}{_expr(e)} = _destructured.{i};")
-            return lines
-        parts = ", ".join(
-            _expr(e) if _expr(e) == "_" else f"mut {_expr(e)}"
-            for e in tgt.elts
-        )
-        return [f"{pad}let ({parts}) = {value};"]
-    if isinstance(tgt, ast.Subscript):
-        return [f"{pad}{_expr(tgt)} = {value};"]
-    if isinstance(tgt, ast.Attribute):
+        return _stmt_assign_tuple(tgt, value, pad)
+    if isinstance(tgt, (ast.Subscript, ast.Attribute)):
         return [f"{pad}{_expr(tgt)} = {value};"]
     return [f"{pad}let mut {_expr(tgt)} = {value};"]
 
@@ -1622,52 +1674,51 @@ def _stmt_import(stmt, pad, _indent, _ret_type):
 # ── Match/case handler (Python 3.10+) ────────────────────────────────
 
 
+def _match_singleton(pattern):
+    """Translate MatchSingleton (True/False/None) to Rust."""
+    if pattern.value is True:
+        return "true"
+    if pattern.value is False:
+        return "false"
+    return "None"
+
+
+def _match_as(pattern):
+    """Translate MatchAs to Rust pattern binding."""
+    if pattern.pattern is None:
+        return _safe_name(pattern.name) if pattern.name else "_"
+    inner = _match_pattern(pattern.pattern)
+    if pattern.name:
+        return f"{inner} @ {_safe_name(pattern.name)}"
+    return inner
+
+
+def _match_class(pattern):
+    """Translate MatchClass to Rust constructor pattern."""
+    cls = _expr(pattern.cls)
+    parts = [_match_pattern(p) for p in pattern.patterns]
+    for kw, pat in zip(pattern.kwd_attrs, pattern.kwd_patterns):
+        parts.append(f"{kw}: {_match_pattern(pat)}")
+    return f"{cls}({', '.join(parts)})"
+
+
+_MATCH_PATTERN_DISPATCH = {
+    ast.MatchValue:     lambda p: _expr(p.value),
+    ast.MatchSingleton: _match_singleton,
+    ast.MatchSequence:  lambda p: f"[{', '.join(_match_pattern(pp) for pp in p.patterns)}]",
+    ast.MatchMapping:   lambda p: f"/* {{{', '.join(f'{_expr(k)}: {_match_pattern(v)}' for k, v in zip(p.keys, p.patterns))}}} */",
+    ast.MatchStar:      lambda p: f"{p.name} @ .." if p.name else "..",
+    ast.MatchAs:        _match_as,
+    ast.MatchOr:        lambda p: " | ".join(_match_pattern(pp) for pp in p.patterns),
+    ast.MatchClass:     _match_class,
+}
+
+
 def _match_pattern(pattern) -> str:
     """Translate a Python match pattern to a Rust match arm pattern."""
-    # ast.MatchValue — literal value
-    if isinstance(pattern, ast.MatchValue):
-        return _expr(pattern.value)
-    # ast.MatchSingleton — True/False/None
-    if isinstance(pattern, ast.MatchSingleton):
-        if pattern.value is True:
-            return "true"
-        if pattern.value is False:
-            return "false"
-        return "None"
-    # ast.MatchSequence — [a, b, c]
-    if isinstance(pattern, ast.MatchSequence):
-        elts = ", ".join(_match_pattern(p) for p in pattern.patterns)
-        return f"[{elts}]"
-    # ast.MatchMapping — {k: v, ...}
-    if isinstance(pattern, ast.MatchMapping):
-        pairs = [f"{_expr(k)}: {_match_pattern(v)}"
-                 for k, v in zip(pattern.keys, pattern.patterns)]
-        return f"/* {{{', '.join(pairs)}}} */"
-    # ast.MatchStar — *rest
-    if isinstance(pattern, ast.MatchStar):
-        if pattern.name:
-            return f"{pattern.name} @ .."
-        return ".."
-    # ast.MatchAs — pattern as name, or just name, or _
-    if isinstance(pattern, ast.MatchAs):
-        if pattern.pattern is None:
-            # Bare name or wildcard _
-            return _safe_name(pattern.name) if pattern.name else "_"
-        inner = _match_pattern(pattern.pattern)
-        if pattern.name:
-            return f"{inner} @ {_safe_name(pattern.name)}"
-        return inner
-    # ast.MatchOr — pattern1 | pattern2
-    if isinstance(pattern, ast.MatchOr):
-        return " | ".join(_match_pattern(p) for p in pattern.patterns)
-    # ast.MatchClass — ClassName(a, b, key=c)
-    if isinstance(pattern, ast.MatchClass):
-        cls = _expr(pattern.cls)
-        parts = [_match_pattern(p) for p in pattern.patterns]
-        for kw, pat in zip(pattern.kwd_attrs, pattern.kwd_patterns):
-            parts.append(f"{kw}: {_match_pattern(pat)}")
-        return f"{cls}({', '.join(parts)})"
-    # Fallback
+    handler = _MATCH_PATTERN_DISPATCH.get(type(pattern))
+    if handler:
+        return handler(pattern)
     try:
         return f"/* {ast.unparse(pattern)} */"
     except Exception:
@@ -1773,48 +1824,84 @@ def _stmt_nested_function(stmt, pad: str, indent: int, ret_type: str) -> List[st
     return lines
 
 
-def _stmt_nested_class(stmt, pad: str, indent: int, _ret_type: str) -> List[str]:
-    """Translate nested class def → Rust struct + impl block.
+def _infer_field_type(value_node: ast.expr) -> str:
+    """Infer a Rust type from a Python assignment value node."""
+    if isinstance(value_node, ast.Constant):
+        _CONST_FIELD_TYPES = {bool: "bool", int: "i64", float: "f64", str: "String"}
+        return _CONST_FIELD_TYPES.get(type(value_node.value), "String")
+    if isinstance(value_node, ast.List):
+        return "Vec<String>"
+    if isinstance(value_node, ast.Dict):
+        return "HashMap<String, String>"
+    return "String"
 
-    Translates data-oriented classes to structs. Methods become impl methods.
-    """
-    class_name = stmt.name
+
+def _extract_init_fields(init_func) -> Dict[str, str]:
+    """Extract self.x = ... assignments from __init__ as {name: rust_type}."""
+    fields: Dict[str, str] = {}
+    for sub in ast.walk(init_func):
+        if not isinstance(sub, ast.Assign) or not sub.targets:
+            continue
+        tgt = sub.targets[0]
+        if not isinstance(tgt, ast.Attribute):
+            continue
+        if not isinstance(tgt.value, ast.Name) or tgt.value.id != "self":
+            continue
+        fields[tgt.attr] = _infer_field_type(sub.value)
+    return fields
+
+
+def _extract_class_fields(body: List) -> Tuple[Dict[str, str], List]:
+    """Extract fields and methods from a class body for Rust struct generation."""
     fields: Dict[str, str] = {}
     methods: List[ast.FunctionDef] = []
 
-    for item in stmt.body:
+    for item in body:
         if isinstance(item, ast.FunctionDef):
             if item.name == "__init__":
-                # Extract fields from __init__ self.x = ... assignments
-                for sub in ast.walk(item):
-                    if (isinstance(sub, ast.Assign) and sub.targets
-                            and isinstance(sub.targets[0], ast.Attribute)
-                            and isinstance(sub.targets[0].value, ast.Name)
-                            and sub.targets[0].value.id == "self"):
-                        fname = sub.targets[0].attr
-                        # Try to infer type from annotation or assignment
-                        ftype = "String"
-                        if isinstance(sub.value, ast.Constant):
-                            if isinstance(sub.value.value, int):
-                                ftype = "i64"
-                            elif isinstance(sub.value.value, float):
-                                ftype = "f64"
-                            elif isinstance(sub.value.value, bool):
-                                ftype = "bool"
-                            elif isinstance(sub.value.value, str):
-                                ftype = "String"
-                        elif isinstance(sub.value, ast.List):
-                            ftype = "Vec<String>"
-                        elif isinstance(sub.value, ast.Dict):
-                            ftype = "HashMap<String, String>"
-                        fields[fname] = ftype
+                fields.update(_extract_init_fields(item))
             else:
                 methods.append(item)
         elif isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-            # Class-level annotated field: x: int = 5
-            fname = item.target.id
             ftype = py_type_to_rust(ast.unparse(item.annotation)) if item.annotation else "String"
-            fields[fname] = ftype
+            fields[item.target.id] = ftype
+
+    return fields, methods
+
+
+def _emit_ctor(class_name: str, fields: dict, pad: str) -> List[str]:
+    """Emit a Rust constructor for a struct."""
+    ctor_params = ", ".join(f"{fn}: {ft}" for fn, ft in fields.items())
+    lines = [f"{pad}    fn new({ctor_params}) -> Self {{"]
+    lines.append(f"{pad}        {class_name} {{")
+    for fn in fields:
+        lines.append(f"{pad}            {fn},")
+    lines.append(f"{pad}        }}")
+    lines.append(f"{pad}    }}")
+    return lines
+
+
+def _emit_method(meth, pad: str, indent: int) -> List[str]:
+    """Emit a single Rust impl method from a Python method AST node."""
+    mparams = ["&self"]
+    for arg in meth.args.args:
+        if arg.arg == "self":
+            continue
+        atype = (py_type_to_rust(ast.unparse(arg.annotation))
+                 if arg.annotation else "String")
+        mparams.append(f"{_safe_name(arg.arg)}: {atype}")
+    mrtype = (py_type_to_rust(ast.unparse(meth.returns))
+              if meth.returns else "()")
+    lines = [f"{pad}    fn {_safe_name(meth.name)}({', '.join(mparams)}) -> {mrtype} {{"]
+    lines.extend(_body(meth.body, indent + 2, ret_type=mrtype))
+    lines.append(f"{pad}    }}")
+    return lines
+
+
+def _stmt_nested_class(stmt, pad: str, indent: int, _ret_type: str) -> List[str]:
+    """Translate nested class def → Rust struct + impl block."""
+    class_name = stmt.name
+    fields, methods = _extract_class_fields(stmt.body)
 
     lines = [f"{pad}struct {class_name} {{"]
     for fname, ftype in fields.items():
@@ -1824,30 +1911,10 @@ def _stmt_nested_class(stmt, pad: str, indent: int, _ret_type: str) -> List[str]
 
     if methods or fields:
         lines.append(f"{pad}impl {class_name} {{")
-        # Constructor from fields
         if fields:
-            ctor_params = ", ".join(f"{fn}: {ft}" for fn, ft in fields.items())
-            lines.append(f"{pad}    fn new({ctor_params}) -> Self {{")
-            lines.append(f"{pad}        {class_name} {{")
-            for fn in fields:
-                lines.append(f"{pad}            {fn},")
-            lines.append(f"{pad}        }}")
-            lines.append(f"{pad}    }}")
-
-        # Other methods
+            lines.extend(_emit_ctor(class_name, fields, pad))
         for meth in methods:
-            mparams = ["&self"]
-            for arg in meth.args.args:
-                if arg.arg == "self":
-                    continue
-                atype = (py_type_to_rust(ast.unparse(arg.annotation))
-                         if arg.annotation else "String")
-                mparams.append(f"{_safe_name(arg.arg)}: {atype}")
-            mrtype = (py_type_to_rust(ast.unparse(meth.returns))
-                      if meth.returns else "()")
-            lines.append(f"{pad}    fn {_safe_name(meth.name)}({', '.join(mparams)}) -> {mrtype} {{")
-            lines.extend(_body(meth.body, indent + 2, ret_type=mrtype))
-            lines.append(f"{pad}    }}")
+            lines.extend(_emit_method(meth, pad, indent))
         lines.append(f"{pad}}}")
 
     return lines
@@ -2195,7 +2262,9 @@ def transpile_batch_json(json_input: str) -> str:
     """
     candidates = json.loads(json_input)
     parts = _batch_preamble()
-    llm_engine, llm_available = _init_llm_engine()
+    from Analysis.llm_transpiler import get_cached_llm_transpiler
+    llm_engine = get_cached_llm_transpiler()
+    llm_available = llm_engine is not None
     name_counts: Dict[str, int] = {}
 
     for cand in candidates:
@@ -2221,16 +2290,6 @@ def _batch_preamble():
         "use std::collections::{HashMap, HashSet};",
         "",
     ]
-
-
-def _init_llm_engine():
-    """Lazily initialise the LLM fallback engine.
-
-    Delegates to ``get_cached_llm_transpiler()`` for singleton caching.
-    """
-    from Analysis.llm_transpiler import get_cached_llm_transpiler
-    engine = get_cached_llm_transpiler()
-    return engine, engine is not None
 
 
 def _transpile_candidate(cand, name_counts, llm_engine, llm_available):
