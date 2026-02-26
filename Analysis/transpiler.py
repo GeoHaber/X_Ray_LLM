@@ -397,7 +397,10 @@ def _expr_compare(node: ast.expr) -> str:
 
 
 def _expr_subscript(node: ast.expr) -> str:
-    """Subscript/indexing: a[b], a[1:2], a[-1]."""
+    """Subscript/indexing: a[b], a[1:2], a[-1].
+    
+    Phase 3: Auto-clone HashMap/Vec values to avoid borrow checker errors.
+    """
     obj = _expr(node.value)
     sl = node.slice
     if isinstance(sl, ast.Slice):
@@ -408,7 +411,14 @@ def _expr_subscript(node: ast.expr) -> str:
     neg = _negative_index_value(sl)
     if neg is not None:
         return f"{obj}[{obj}.len() - {neg}]"
-    return f"{obj}[{_expr(sl)}]"
+    # Phase 3: For HashMap access via dict[key], clone the result to avoid
+    # borrow checker issues when the value is used across multiple statements
+    idx_expr = _expr(sl)
+    result = f"{obj}[{idx_expr}]"
+    # Heuristic: if obj looks like a HashMap (common var names), add .clone()
+    if any(hint in obj.lower() for hint in ("map", "dict", "config", "options", "settings")):
+        result = f"{result}.clone()"
+    return result
 
 
 def _negative_index_value(node) -> int | None:
@@ -1291,11 +1301,30 @@ _MODULE_CALL_DISPATCH = {
 
 # ── Method-on-object handlers ────────────────────────────────────────
 
+# Phase 2: Comprehensive stdlib method mapping for Python -> Rust translations
+# Maps Python method names to their Rust equivalents across different types
 _METHOD_RENAMES = {
+    # String methods
     "append": "push", "strip": "trim", "lstrip": "trim_start",
-    "rstrip": "trim_end", "lower": "to_lowercase",
-    "upper": "to_uppercase", "startswith": "starts_with",
-    "endswith": "ends_with", "items": "iter",
+    "rstrip": "trim_end", "lower": "to_lowercase", "capitalize": "to_uppercase",
+    "upper": "to_uppercase", "startswith": "starts_with", "title": "to_uppercase",
+    "endswith": "ends_with", "items": "iter", "isdigit": "chars",
+    "isalpha": "chars", "isalnum": "chars", "isspace": "chars",
+    "find": "find", "rfind": "rfind", "index": "find", "rindex": "rfind",
+    "count": "matches", "replace": "replace", "expandtabs": "replace",
+    "splitlines": "lines", "partition": "split", "rpartition": "rsplit",
+    "swapcase": "chars", "casefold": "to_lowercase", "center": "pad_center",
+    "ljust": "pad_start", "rjust": "pad_end",
+    
+    # List/Vec methods
+    "extend": "extend", "pop": "pop", "remove": "remove", "clear": "clear",
+    "insert": "insert", "reverse": "reverse", "sort": "sort", "copy": "clone",
+    # Dict/HashMap methods  
+    "get": "get", "keys": "keys", "values": "values", "update": "extend",
+    "pop": "remove", "popitem": "remove", "clear": "clear", "setdefault": "entry",
+    
+    # Type conversion helpers (context-dependent but useful defaults)
+    "isempty": "is_empty", "len": "len",
 }
 
 
@@ -1327,9 +1356,12 @@ def _method_rsplit(obj, args, all_args):
     return f"{obj}.rsplit({sep}){collect}" if sep else f"{obj}.rsplit_whitespace(){collect}"
 
 def _method_get(obj, args, all_args):
+    """Phase 3: dict.get() with auto-clone for borrowed values."""
     if len(args) >= 2:
+        # dict.get(key, default) → dict.get(&key).cloned().unwrap_or(default)
         return f"{obj}.get(&{args[0]}).cloned().unwrap_or({args[1]})"
-    return f"{obj}.get(&{args[0]})"
+    # dict.get(key) → dict.get(&key).cloned()
+    return f"{obj}.get(&{args[0]}).cloned()"
 
 def _method_pop(obj, args, all_args):
     return f"{obj}.remove(&{args[0]})" if args else f"{obj}.pop()"
