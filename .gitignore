@@ -50,3 +50,30 @@ xray_scan_output.txt
 _scratch/*.txt
 _scratch/*.html
 _scratch/*.log
+_scratch/*.py
+
+# DLLs copied next to the Rust executable (regeneratable)
+*.dll
+
+# Rust executable build artifacts at project root
+x_ray_rustified.exe
+*.exe
+
+# Debug / scan output text files at project root
+xray_*.txt
+xray_*.json
+*_result.txt
+*_results.txt
+crits_result.txt
+failures.txt
+pytest_*.txt
+rustify_build_err.txt
+
+# One-off analysis / helper scripts at project root (not part of package)
+find_crits.py
+_check_grade.py
+_read_report.py
+run_nexus_on_transpiler.py
+
+# Bandit reports
+bandit_report*.json
