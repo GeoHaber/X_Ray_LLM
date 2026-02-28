@@ -397,7 +397,8 @@ def hybrid_transpile(python_code: str, *,
 
     Always returns valid, compilable Rust.
     """
-    from Analysis.transpiler import transpile_function_code, _sanitize_generated
+    from Analysis.transpiler import transpile_function_code
+    from Analysis.transpiler_legacy import _sanitize_generated
 
     # Step 1: AST transpiler (fast)
     ast_result = transpile_function_code(

@@ -410,7 +410,7 @@ class TestBatchJsonHybridWiring:
 
     def test_batch_json_header_says_hybrid(self):
         """The generated source header should mention Hybrid."""
-        from Analysis.transpiler import transpile_batch_json
+        from Analysis.transpiler_legacy import transpile_batch_json
         import json
         candidates = [
             {"name": "add", "code": "def add(a: int, b: int) -> int:\n    return a + b",
@@ -421,7 +421,7 @@ class TestBatchJsonHybridWiring:
 
     def test_batch_json_simple_fn_no_todo(self):
         """Simple functions should transpile without todo!() even without LLM."""
-        from Analysis.transpiler import transpile_batch_json
+        from Analysis.transpiler_legacy import transpile_batch_json
         import json
         candidates = [
             {"name": "double", "code": "def double(x: int) -> int:\n    return x * 2",

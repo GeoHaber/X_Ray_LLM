@@ -32,14 +32,18 @@ import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+import sys
+
+# Ensure this script can import from Core/ etc.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from Core.types import FunctionRecord
 from Analysis.rust_advisor import RustAdvisor, RustCandidate
 from Analysis.ast_utils import extract_functions_from_file, collect_py_files
 from Analysis.test_gen import TestGenerator
-from Analysis.transpiler import py_type_to_rust as _transpiler_py_type_to_rust
-
+from Analysis.transpiler import transpile_function_code
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1.  CPU / OS Detection
@@ -215,7 +219,7 @@ def _code_has_blockers(code: str) -> bool:
 
 def _has_name_blocker(name: str) -> bool:
     """Return True if the function name indicates it should be skipped."""
-    if name.startswith("test_"):
+    if name.startswith("test_") or name == "main":
         return True
     # Allow __init__ for class transpilation; block other dunders
     if name.startswith("__") and name.endswith("__") and name != "__init__":
@@ -254,9 +258,17 @@ def _is_transpilable(func) -> bool:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def py_type_to_rust(py_type: str) -> str:
-    """Convert a Python type annotation string to Rust type (PyO3 default)."""
-    return _transpiler_py_type_to_rust(py_type, default="PyObject")
+def py_type_to_rust(py_type: str, py_default: str = "PyObject") -> str:
+    """Convert a Python type annotation string to Rust type."""
+    py_t = py_type.strip()
+    if py_t == "int": return "i64"
+    if py_t == "float": return "f64"
+    if py_t == "bool": return "bool"
+    if py_t == "str": return "String"
+    if py_t == "list" or py_t.startswith("List"): return "Vec<String>"
+    if py_t == "dict" or py_t.startswith("Dict"): return "HashMap<String, String>"
+    if py_t == "None": return "()"
+    return py_default
 
 
 def _rust_op(op) -> str:
@@ -1131,7 +1143,8 @@ def _run_cargo_build(project_dir: Path, target: str, env: dict,
         cmd.extend(["--target", target])
     return subprocess.run(
         cmd, cwd=str(project_dir),
-        capture_output=True, text=True, timeout=timeout, env=env,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=timeout, env=env,
     )
 
 
@@ -1238,7 +1251,7 @@ def compile_with_repair(project_dir: Path,
                         system: SystemProfile,
                         *,
                         mode: str = "pyo3",
-                        max_retries: int = 3) -> CompileResult:
+                        max_retries: int = 20) -> CompileResult:
     """Compile the crate, auto-fixing broken functions on failure.
 
     If compilation fails, identifies which functions have errors,
@@ -1342,6 +1355,8 @@ def verify_build(project_dir: Path, *,
             cwd=str(project_dir),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=120,
         )
 
@@ -1586,7 +1601,9 @@ class RustifyPipeline:
             self._report(1.0, "Pipeline complete")
 
         except Exception as exc:
-            report.errors.append(f"Pipeline error: {exc}")
+            import traceback
+            trace_str = traceback.format_exc()
+            report.errors.append(f"Pipeline error: {exc}\n{trace_str}")
 
         return report
 

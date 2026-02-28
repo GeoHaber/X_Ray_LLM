@@ -29,7 +29,7 @@ import pytest
 #  Python implementations (imported from source)
 # ═══════════════════════════════════════════════════════════════════════════
 
-from Analysis.transpiler import _infer_type_from_name
+from Analysis.transpiler_legacy import _infer_type_from_name
 
 
 _MODULE_KEYWORDS = [
