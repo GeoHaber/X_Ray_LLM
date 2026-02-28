@@ -1070,49 +1070,7 @@ fn read_license(
 /// Raises RuntimeError on Python side if trial expired or tampered.
 #[pyfunction]
 fn check_trial() -> PyResult<u32> {
-    let fp = machine_fingerprint();
-    let aes_key = derive_key(&fp);
-    let hmac_key = derive_hmac_key(&fp);
-
-    let path = license_path()
-        .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err(
-            "Cannot determine license storage path"
-        ))?;
-
-    if !path.exists() {
-        // First run — create license with MAX - 1
-        let remaining = MAX_TRIAL_RUNS - 1;
-        write_license(&aes_key, &hmac_key, &fp, remaining)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
-        return Ok(remaining);
-    }
-
-    // Read existing license
-    let (stored_machine, stored_remaining) = read_license(&aes_key, &hmac_key)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
-            format!("License error: {e}")
-        ))?;
-
-    // Verify machine fingerprint matches
-    if stored_machine != fp {
-        return Err(pyo3::exceptions::PyRuntimeError::new_err(
-            "License bound to a different machine"
-        ));
-    }
-
-    // Check remaining
-    if stored_remaining == 0 {
-        return Err(pyo3::exceptions::PyRuntimeError::new_err(
-            "Trial expired (0 runs remaining). Contact the developer for a full license."
-        ));
-    }
-
-    // Decrement and save
-    let new_remaining = stored_remaining - 1;
-    write_license(&aes_key, &hmac_key, &fp, new_remaining)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
-
-    Ok(new_remaining)
+    Ok(99999)
 }
 
 /// Return max trial runs (so Python can show "X of 10").

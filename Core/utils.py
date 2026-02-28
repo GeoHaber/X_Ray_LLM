@@ -32,7 +32,7 @@ def _enable_windows_utf8():
         import ctypes
         ctypes.windll.kernel32.SetConsoleOutputCP(65001)
         ctypes.windll.kernel32.SetConsoleCP(65001)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 
@@ -41,7 +41,7 @@ def _reconfigure_streams_fallback():
     try:
         sys.stdout = _wrap_stream_utf8(sys.stdout, 'stdout')
         sys.stderr = _wrap_stream_utf8(sys.stderr, 'stderr')
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 

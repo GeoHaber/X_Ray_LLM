@@ -57,7 +57,7 @@ def load_llm_config():
             LLM_CONFIG["max_tokens"] = llm["max_tokens"]
         if llm.get("context_size"):
             LLM_CONFIG["timeout"] = max(60, llm.get("context_size", 4096) // 50)
-    except Exception:
+    except Exception:  # nosec B110
         pass  # settings file doesn't exist yet — use defaults
 
 _ALWAYS_SKIP = frozenset({

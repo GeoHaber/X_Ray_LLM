@@ -1,0 +1,225 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0
+rootdir: C:\Users\Yo930\Desktop\_Python\X_Ray
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 11 items
+
+tests\test_transpiler.py .....FF...s                                     [100%]
+
+================================== FAILURES ===================================
+________________ TestCompilation.test_list_operations_compile _________________
+
+self = <tests.test_transpiler.TestCompilation object at 0x0000015A3CBE4490>
+
+    def test_list_operations_compile(self):
+        code = textwrap.dedent("""\
+        def make_list() -> List[int]:
+            items = [1, 2, 3]
+            return items
+        """)
+        rust = transpile_function_code(code)
+>       assert_compiles(rust)
+
+tests\test_transpiler.py:1005: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+rust_code = 'pub struct RustNode;\npub struct RustEmitter;\npub struct RustFunction;\npub struct RustLet;\npub struct RustStatemen...tFor;\npub struct RustMacro;\n\nfn make_list() -> Vec<int> {\n    let mut items = vec![1, 2, 3];\n    return items;\n}'
+
+    def assert_compiles(rust_code: str, *, allow_warnings: bool = True):
+        """Assert that a Rust source string compiles with rustc.
+    
+        Wraps single functions in a main.rs stub with appropriate imports.
+        """
+        if not HAS_RUSTC:
+            pytest.skip("rustc not available")
+    
+        full = _wrap_rust_source(rust_code)
+    
+        with tempfile.NamedTemporaryFile(suffix=".rs", mode="w", delete=False,
+                                         encoding="utf-8") as f:
+            f.write(full)
+            f.flush()
+            tmp = f.name
+    
+        try:
+            result = subprocess.run(
+                ["rustc", "--edition", "2021", "--crate-type", "lib", tmp,
+                 "-o", tmp + ".out"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                errors = [line for line in result.stderr.splitlines() if "error" in line.lower()]
+                if errors:
+>                   pytest.fail(
+                        f"Rust compilation failed:\n{result.stderr}\n\n"
+                        f"--- Generated Source ---\n{full}"
+                    )
+E                   Failed: Rust compilation failed:
+E                   error[E0425]: cannot find type `int` in this scope
+E                     --> C:\Users\Yo930\AppData\Local\Temp\tmpjh56oqlh.rs:15:23
+E                      |
+E                   15 | fn make_list() -> Vec<int> {
+E                      |                       ^^^ not found in this scope
+E                      |
+E                   help: perhaps you intended to use this type
+E                      |
+E                   15 - fn make_list() -> Vec<int> {
+E                   15 + fn make_list() -> Vec<i32> {
+E                      |
+E                   help: you might be missing a type parameter
+E                      |
+E                   15 | fn make_list<int>() -> Vec<int> {
+E                      |             +++++
+E                   
+E                   error: aborting due to 1 previous error
+E                   
+E                   For more information about this error, try `rustc --explain E0425`.
+E                   
+E                   
+E                   --- Generated Source ---
+E                   #![allow(unused_variables, unused_mut, dead_code, unused_imports)]
+E                   #![allow(unreachable_code, unused_assignments)]
+E                   use std::collections::{HashMap, HashSet};
+E                   
+E                   pub struct RustNode;
+E                   pub struct RustEmitter;
+E                   pub struct RustFunction;
+E                   pub struct RustLet;
+E                   pub struct RustStatement;
+E                   pub struct RustReturn;
+E                   pub struct RustIf;
+E                   pub struct RustFor;
+E                   pub struct RustMacro;
+E                   
+E                   fn make_list() -> Vec<int> {
+E                       let mut items = vec![1, 2, 3];
+E                       return items;
+E                   }
+E                   
+E                   fn main() {}
+
+tests\test_transpiler.py:96: Failed
+_________________ TestCompilation.test_comprehension_compiles _________________
+
+self = <tests.test_transpiler.TestCompilation object at 0x0000015A3CBE7240>
+
+    def test_comprehension_compiles(self):
+        code = textwrap.dedent("""\
+        def double_items(items: List[int]) -> List[int]:
+            return [x * 2 for x in items]
+        """)
+        rust = transpile_function_code(code)
+>       assert_compiles(rust)
+
+tests\test_transpiler.py:1013: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+rust_code = 'pub struct RustNode;\npub struct RustEmitter;\npub struct RustFunction;\npub struct RustLet;\npub struct RustStatemen...nfn double_items(items: Vec<int>) -> Vec<int> {\n    return items.into_iter().map(|x| (x * 2)).collect::<Vec<_>>();\n}'
+
+    def assert_compiles(rust_code: str, *, allow_warnings: bool = True):
+        """Assert that a Rust source string compiles with rustc.
+    
+        Wraps single functions in a main.rs stub with appropriate imports.
+        """
+        if not HAS_RUSTC:
+            pytest.skip("rustc not available")
+    
+        full = _wrap_rust_source(rust_code)
+    
+        with tempfile.NamedTemporaryFile(suffix=".rs", mode="w", delete=False,
+                                         encoding="utf-8") as f:
+            f.write(full)
+            f.flush()
+            tmp = f.name
+    
+        try:
+            result = subprocess.run(
+                ["rustc", "--edition", "2021", "--crate-type", "lib", tmp,
+                 "-o", tmp + ".out"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                errors = [line for line in result.stderr.splitlines() if "error" in line.lower()]
+                if errors:
+>                   pytest.fail(
+                        f"Rust compilation failed:\n{result.stderr}\n\n"
+                        f"--- Generated Source ---\n{full}"
+                    )
+E                   Failed: Rust compilation failed:
+E                   error[E0425]: cannot find type `int` in this scope
+E                     --> C:\Users\Yo930\AppData\Local\Temp\tmpl3rog3rn.rs:15:28
+E                      |
+E                   15 | fn double_items(items: Vec<int>) -> Vec<int> {
+E                      |                            ^^^ not found in this scope
+E                      |
+E                   help: perhaps you intended to use this type
+E                      |
+E                   15 - fn double_items(items: Vec<int>) -> Vec<int> {
+E                   15 + fn double_items(items: Vec<i32>) -> Vec<int> {
+E                      |
+E                   help: you might be missing a type parameter
+E                      |
+E                   15 | fn double_items<int>(items: Vec<int>) -> Vec<int> {
+E                      |                +++++
+E                   
+E                   error[E0425]: cannot find type `int` in this scope
+E                     --> C:\Users\Yo930\AppData\Local\Temp\tmpl3rog3rn.rs:15:41
+E                      |
+E                   15 | fn double_items(items: Vec<int>) -> Vec<int> {
+E                      |                                         ^^^ not found in this scope
+E                      |
+E                   help: perhaps you intended to use this type
+E                      |
+E                   15 - fn double_items(items: Vec<int>) -> Vec<int> {
+E                   15 + fn double_items(items: Vec<int>) -> Vec<i32> {
+E                      |
+E                   help: you might be missing a type parameter
+E                      |
+E                   15 | fn double_items<int>(items: Vec<int>) -> Vec<int> {
+E                      |                +++++
+E                   
+E                   warning: unnecessary parentheses around closure body
+E                     --> C:\Users\Yo930\AppData\Local\Temp\tmpl3rog3rn.rs:16:38
+E                      |
+E                   16 |     return items.into_iter().map(|x| (x * 2)).collect::<Vec<_>>();
+E                      |                                      ^     ^
+E                      |
+E                      = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+E                   help: remove these parentheses
+E                      |
+E                   16 -     return items.into_iter().map(|x| (x * 2)).collect::<Vec<_>>();
+E                   16 +     return items.into_iter().map(|x| x * 2).collect::<Vec<_>>();
+E                      |
+E                   
+E                   error: aborting due to 2 previous errors; 1 warning emitted
+E                   
+E                   For more information about this error, try `rustc --explain E0425`.
+E                   
+E                   
+E                   --- Generated Source ---
+E                   #![allow(unused_variables, unused_mut, dead_code, unused_imports)]
+E                   #![allow(unreachable_code, unused_assignments)]
+E                   use std::collections::{HashMap, HashSet};
+E                   
+E                   pub struct RustNode;
+E                   pub struct RustEmitter;
+E                   pub struct RustFunction;
+E                   pub struct RustLet;
+E                   pub struct RustStatement;
+E                   pub struct RustReturn;
+E                   pub struct RustIf;
+E                   pub struct RustFor;
+E                   pub struct RustMacro;
+E                   
+E                   fn double_items(items: Vec<int>) -> Vec<int> {
+E                       return items.into_iter().map(|x| (x * 2)).collect::<Vec<_>>();
+E                   }
+E                   
+E                   fn main() {}
+
+tests\test_transpiler.py:96: Failed
+=========================== short test summary info ===========================
+FAILED tests/test_transpiler.py::TestCompilation::test_list_operations_compile
+FAILED tests/test_transpiler.py::TestCompilation::test_comprehension_compiles
+=================== 2 failed, 8 passed, 1 skipped in 10.69s ===================

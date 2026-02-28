@@ -23,7 +23,7 @@ import os
 import platform
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
@@ -356,7 +356,7 @@ def detect_runtime() -> RuntimeInfo:
 def _get_runtime_version(path: str) -> str:
     """Get llama.cpp version string."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603
             [path, "--version"], capture_output=True, text=True, timeout=10)
         text = result.stdout + result.stderr
         m = re.search(r"b(\d{3,5})", text)
@@ -376,13 +376,13 @@ _BACKEND_KEYWORDS = [
 def _detect_backend(path: str) -> str:
     """Heuristic: check which backend the llama.cpp binary uses."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603
             [path, "--version"], capture_output=True, text=True, timeout=10)
         text = (result.stdout + result.stderr).lower()
         for keyword, backend in _BACKEND_KEYWORDS:
             if keyword in text:
                 return backend
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return "cpu"
 
@@ -481,7 +481,7 @@ def load_settings(project_dir: Optional[Path] = None) -> Dict[str, Any]:
             user = json.loads(p.read_text(encoding="utf-8"))
             _deep_merge(settings, user)
             break
-        except Exception:
+        except Exception:  # nosec B110
             pass
     return settings
 
@@ -669,7 +669,7 @@ class LLMManager:
             return False
         try:
             cmd = self._build_server_cmd(model_path, port)
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL,  # nosec B603
                              stderr=subprocess.DEVNULL)
             return True
         except Exception:

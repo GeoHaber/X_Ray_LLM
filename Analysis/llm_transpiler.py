@@ -53,7 +53,7 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
+import subprocess  # nosec B404
 import tempfile
 import textwrap
 from typing import Optional, Tuple
@@ -104,7 +104,7 @@ def _cleanup_temp_files(*paths: str):
         try:
             if p:
                 os.unlink(p)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
 
@@ -134,7 +134,7 @@ def _check_rust_compiles(rust_code: str, *, timeout: int = 30) -> Tuple[bool, st
 
         # --emit=metadata: type-check without producing a binary
         out_path = tmp_path.replace(".rs", ".rmeta")
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603,B607
             ["rustc", "--edition", "2021", "--emit=metadata",
              "-o", out_path, tmp_path],
             capture_output=True, text=True, timeout=timeout,

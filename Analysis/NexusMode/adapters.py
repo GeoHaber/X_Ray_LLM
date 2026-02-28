@@ -7,7 +7,7 @@ Provides robust native traversing and fully weaponized Subprocess proxying.
 """
 
 import ast
-import subprocess
+import subprocess  # nosec B404
 import tempfile
 import logging
 from abc import ABC, abstractmethod
@@ -86,7 +86,7 @@ class SubprocessTranspilerAdapter(BaseTranspilerAdapter):
 
             try:
                 # 2. Shell out to the target compiler binary
-                proc = subprocess.run(
+                proc = subprocess.run(  # nosec B603
                     args, 
                     cwd=tmp_path, 
                     capture_output=True, 

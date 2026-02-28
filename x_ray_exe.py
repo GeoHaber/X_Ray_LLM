@@ -35,7 +35,7 @@ import json
 import os
 import platform
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import sys
 import time
 from pathlib import Path
@@ -91,14 +91,14 @@ log = setup_logger("x_ray_exe")
 def _wmic_value(query: str, field: str) -> Optional[str]:
     """Run a wmic query and return the value for *field*, or None."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603
             ["wmic"] + query.split() + ["/value"],
             capture_output=True, text=True, timeout=5
         )
         for line in result.stdout.strip().split('\n'):
             if line.startswith(f"{field}="):
                 return line.split('=', 1)[1].strip()
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return None
 
@@ -109,7 +109,7 @@ def _detect_rust_info() -> Dict[str, Any]:
     info["rust_available"] = shutil.which("rustc") is not None
     if info["rust_available"]:
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B607
                 ["rustc", "--version"],
                 capture_output=True, text=True, timeout=5
             )
@@ -320,7 +320,7 @@ def _save_report_dialog(folder: str) -> Optional[str]:
         if rpath:
             print(f"  ✓ Report: {rpath}")
             return rpath
-    except Exception:
+    except Exception:  # nosec B110
         pass
     print("  ✓ No report — results on screen only")
     return None

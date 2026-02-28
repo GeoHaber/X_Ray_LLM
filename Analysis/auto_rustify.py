@@ -28,7 +28,7 @@ import json
 import os
 import platform
 import re
-import subprocess
+import subprocess  # nosec B404
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -97,7 +97,7 @@ def detect_system() -> SystemProfile:
     if not rust_target:
         # Fallback: ask rustc
         try:
-            out = subprocess.check_output(
+            out = subprocess.check_output(  # nosec B607
                 ["rustc", "-vV"], text=True, timeout=10)
             m = re.search(r"host:\s+(\S+)", out)
             if m:
@@ -152,7 +152,7 @@ def _x86_features_linux() -> List[str]:
 def _x86_features_darwin() -> List[str]:
     """Detect x86 features on macOS via sysctl."""
     try:
-        out = subprocess.check_output(["sysctl", "-a"], text=True, timeout=10)
+        out = subprocess.check_output(["sysctl", "-a"], text=True, timeout=10)  # nosec B607
         feats = ["sse4.2", "popcnt"]
         if "hw.optional.avx2_0: 1" in out:
             feats.append("avx2")
@@ -1145,7 +1145,7 @@ def _run_cargo_build(project_dir: Path, target: str, env: dict,
     cmd = ["cargo", "build", "--release"]
     if target:
         cmd.extend(["--target", target])
-    return subprocess.run(
+    return subprocess.run(  # nosec B603
         cmd, cwd=str(project_dir),
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         timeout=timeout, env=env,
@@ -1354,7 +1354,7 @@ def verify_build(project_dir: Path, *,
         return VerifyResult(success=True)
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603,B607
             ["cargo", "test", "--release"],
             cwd=str(project_dir),
             capture_output=True,

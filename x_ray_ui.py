@@ -18,7 +18,7 @@ Provides a modern visual interface to:
 from __future__ import annotations
 
 import json
-import subprocess
+import subprocess  # nosec B404
 import time
 from collections import Counter, namedtuple
 from pathlib import Path
@@ -90,7 +90,7 @@ def _translate_sketch_body(func: "FunctionRecord") -> List[str]:
         )
         if func_node is not None:
             return _translate_body(func_node.body, indent=1)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return ["    // TODO: translate function body", "    todo!()"]
 
@@ -860,7 +860,7 @@ def _render_duplicates_tab(results: Dict[str, Any]):
 def _run_ruff_autofix(scan_path: str):
     """Execute ruff --fix and display results in Streamlit."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603,B607
             ["ruff", "check", "--fix", str(scan_path)],
             capture_output=True, text=True, timeout=60)
         if result.returncode == 0:

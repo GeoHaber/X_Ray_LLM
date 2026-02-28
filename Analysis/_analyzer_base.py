@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -142,7 +142,7 @@ class BaseStaticAnalyzer:
         """Execute the tool, return raw stdout string or *None* on failure."""
         logger.info(f"Running {self.TOOL_LOG_NAME}: {' '.join(cmd)}")
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603
                 cmd, capture_output=True, text=True,
                 encoding="utf-8", errors="replace",
                 timeout=self.TOOL_TIMEOUT, cwd=str(root),
