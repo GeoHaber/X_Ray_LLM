@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from Core.types import FunctionRecord
+from Core.ui_bridge import get_bridge
 
 try:
     from Analysis.tracer import TraceProfile
@@ -380,26 +381,27 @@ class RustAdvisor:
     def print_candidates(candidates: List[RustCandidate],
                          top_n: int = 20) -> None:
         """Print a ranked table of Rust candidates."""
-        print(f"\n{'='*72}")
-        print("  RUST CANDIDATE RANKING")
-        print(f"{'='*72}")
-        print(f"  {'#':>3}  {'Score':>6}  {'Pure':>4}  {'CC':>3}  "
-              f"{'Lines':>5}  {'Calls':>6}  Function")
-        print(f"  {'─'*3}  {'─'*6}  {'─'*4}  {'─'*3}  "
-              f"{'─'*5}  {'─'*6}  {'─'*40}")
+        bridge = get_bridge()
+        bridge.log(f"\n{'='*72}")
+        bridge.log("  RUST CANDIDATE RANKING")
+        bridge.log(f"{'='*72}")
+        bridge.log(f"  {'#':>3}  {'Score':>6}  {'Pure':>4}  {'CC':>3}  "
+                   f"{'Lines':>5}  {'Calls':>6}  Function")
+        bridge.log(f"  {'\u2500'*3}  {'\u2500'*6}  {'\u2500'*4}  {'\u2500'*3}  "
+                   f"{'\u2500'*5}  {'\u2500'*6}  {'\u2500'*40}")
 
         for i, c in enumerate(candidates[:top_n], 1):
             pure_icon = "Yes" if c.is_pure else " - "
             calls = str(c.call_count) if c.call_count else "  -"
             loc = f"{c.func.file_path}:{c.func.line_start}"
-            print(f"  {i:>3}  {c.score:>6.1f}  {pure_icon:>4}  "
-                  f"{c.func.complexity:>3}  {c.func.size_lines:>5}  "
-                  f"{calls:>6}  {c.func.name}")
-            print(f"  {'':>3}  {'':>6}  {'':>4}  {'':>3}  "
-                  f"{'':>5}  {'':>6}  {loc}  ({c.reason})")
+            bridge.log(f"  {i:>3}  {c.score:>6.1f}  {pure_icon:>4}  "
+                       f"{c.func.complexity:>3}  {c.func.size_lines:>5}  "
+                       f"{calls:>6}  {c.func.name}")
+            bridge.log(f"  {'':>3}  {'':>6}  {'':>4}  {'':>3}  "
+                       f"{'':>5}  {'':>6}  {loc}  ({c.reason})")
 
         total_pure = sum(1 for c in candidates if c.is_pure)
-        print(f"\n  {len(candidates)} functions scored, "
-              f"{total_pure} pure, "
-              f"top score: {candidates[0].score:.1f}" if candidates else "")
-        print(f"{'='*72}\n")
+        bridge.log(f"\n  {len(candidates)} functions scored, "
+                   f"{total_pure} pure, "
+                   f"top score: {candidates[0].score:.1f}" if candidates else "")
+        bridge.log(f"{'='*72}\n")

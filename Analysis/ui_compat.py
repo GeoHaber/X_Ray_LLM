@@ -35,6 +35,7 @@ from typing import (
 
 from Core.types import SmellIssue, Severity
 from Core.utils import logger
+from Core.ui_bridge import get_bridge
 
 
 # ---------------------------------------------------------------------------
@@ -368,23 +369,24 @@ class UICompatAnalyzer:
         }
 
     def print_report(self, issues: List[UICompatIssue]) -> None:
-        """Pretty-print findings to stdout."""
+        """Pretty-print findings via the active UI bridge."""
+        bridge = get_bridge()
         sep = "=" * 70
-        print(f"\n{sep}")
-        print("UI API COMPATIBILITY REPORT (X-Ray)")
-        print(f"{sep}")
+        bridge.log(f"\n{sep}")
+        bridge.log("UI API COMPATIBILITY REPORT (X-Ray)")
+        bridge.log(f"{sep}")
         if not issues:
-            print("  ✅ All UI constructor calls are compatible!")
+            bridge.log("  \u2705 All UI constructor calls are compatible!")
             return
-        print(f"  Found {len(issues)} incompatible UI call(s):\n")
+        bridge.log(f"  Found {len(issues)} incompatible UI call(s):\n")
         for i, issue in enumerate(issues, 1):
             c = issue.call
-            print(f"  {i}. {c.resolved_name}() — line {c.line} in {c.file_path}")
-            print(f"     ❌ Bad kwarg: '{issue.bad_kwarg}'")
+            bridge.log(f"  {i}. {c.resolved_name}() \u2014 line {c.line} in {c.file_path}")
+            bridge.log(f"     \u274c Bad kwarg: '{issue.bad_kwarg}'")
             if issue.suggestion:
-                print(f"     💡 {issue.suggestion}")
-            print()
-        print(sep)
+                bridge.log(f"     \U0001f4a1 {issue.suggestion}")
+            bridge.log("")
+        bridge.log(sep)
 
     # -- internals ---------------------------------------------------------
 

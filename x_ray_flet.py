@@ -44,6 +44,7 @@ if str(ROOT) not in sys.path:
 from Core.types import FunctionRecord  # noqa: E402
 from Core.config import __version__, SMELL_THRESHOLDS  # noqa: E402
 from Core.i18n import t, set_locale, get_locale, LOCALES  # noqa: E402
+from Core.ui_bridge import UIBridge, set_bridge, get_bridge  # noqa: E402
 from Analysis.ast_utils import extract_functions_from_file, collect_py_files  # noqa: E402
 from Analysis.smells import CodeSmellDetector  # noqa: E402
 from Analysis.duplicates import DuplicateFinder  # noqa: E402
@@ -67,6 +68,81 @@ try:
     HAS_AUTO_RUSTIFY = True
 except ImportError:
     HAS_AUTO_RUSTIFY = False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  FLET-SPECIFIC UI BRIDGE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class FletBridge:
+    """
+    UI bridge for the Flet desktop app.
+
+    Satisfies the UIBridge Protocol and is registered via
+    ``set_bridge(FletBridge(page, log_list, progress_cb))``
+    before any scan is kicked off.
+
+    Parameters
+    ----------
+    page : ft.Page
+        The active Flet page (needed for page.update()).
+    log_list : ft.ListView | None
+        If provided, log lines are appended here as ft.Text controls.
+        Pass None to suppress in-UI log lines.
+    progress_cb : callable | None
+        Existing progress callback signature:
+        ``progress_cb(frac, label, files_done, total_files, eta_secs)``
+        Called on each progress() call so the animated progress bar
+        stays in sync.
+    """
+
+    def __init__(self, page: ft.Page,
+                 log_list: "ft.ListView | None" = None,
+                 progress_cb=None) -> None:
+        self._page = page
+        self._log_list = log_list
+        self._progress_cb = progress_cb
+        self._last_label = ""
+
+    # -- UIBridge Protocol methods ------------------------------------------
+
+    def log(self, msg: str) -> None:
+        """Append a log line to the in-app log panel (if one was given)."""
+        if self._log_list is not None:
+            try:
+                self._log_list.controls.append(
+                    ft.Text(msg, size=SZ_SM, font_family=MONO_FONT,
+                            color=TH.dim, selectable=True)
+                )
+                self._page.update()
+            except Exception:  # nosec
+                pass
+
+    def status(self, label: str) -> None:
+        """Update current phase label; also emitted as a log line."""
+        self._last_label = label
+        self.log(f"\n  >> {label}")
+        if self._progress_cb:
+            try:
+                self._progress_cb(get_bridge()._last_frac  # type: ignore[attr-defined]
+                                  if hasattr(get_bridge(), "_last_frac") else 0.0,
+                                  label, 0, 0, -1)
+            except Exception:
+                pass
+
+    def progress(self, done: int, total: int, label: str = "") -> None:
+        """Forward progress to the Flet animated progress bar callback."""
+        if not self._progress_cb:
+            return
+        try:
+            frac = (done / max(total, 1)) if total > 0 else 0.0
+            frac = max(0.0, min(1.0, frac))
+            # Store for status() to reference
+            self._last_frac = frac  # type: ignore[attr-defined]
+            self._progress_cb(frac, label or self._last_label, done, total, -1)
+        except Exception:
+            pass
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -375,57 +451,77 @@ def _collect_code_map(functions):
 
 def _run_scan(root: Path, modes: Dict[str, bool],
               exclude: List[str], thresholds: Dict[str, int],
-              progress_cb=None) -> Dict[str, Any]:
+              progress_cb=None,
+              page: "ft.Page | None" = None,
+              log_list: "ft.ListView | None" = None) -> Dict[str, Any]:
     """Run the full scan pipeline.
-    progress_cb(frac, label, files_done, total_files, eta_secs)"""
-    results: Dict[str, Any] = {"meta": {}}
-    t0 = time.time()
 
-    need_ast = modes.get("smells") or modes.get("duplicates") or modes.get("rustify")
-    functions, classes, errors, file_count = [], [], [], 0
+    progress_cb(frac, label, files_done, total_files, eta_secs)
 
-    if need_ast:
-        parse_cb = _make_parse_progress_cb(progress_cb, time.time())
-        functions, classes, errors, file_count = _scan_codebase(
-            root, exclude, progress_cb=parse_cb)
+    When ``page`` is provided, a :class:`FletBridge` is registered
+    before the scan so all library log/status calls are routed to the
+    Flet UI instead of stdout.
+    """
+    from Core.ui_bridge import PrintBridge
 
-    results["meta"].update(files=file_count, functions=len(functions),
-                           classes=len(classes), errors=len(errors),
-                           error_list=errors[:20])
+    # Register the Flet bridge so all scan/analysis modules route output to UI
+    if page is not None:
+        set_bridge(FletBridge(page, log_list=log_list, progress_cb=progress_cb))
 
-    if need_ast:
-        results["_code_map"] = _collect_code_map(functions)
-        results["_functions"] = functions
+    try:
+        results: Dict[str, Any] = {"meta": {}}
+        t0 = time.time()
 
-    step, total_steps = 0, sum(1 for v in modes.values() if v)
+        need_ast = modes.get("smells") or modes.get("duplicates") or modes.get("rustify")
+        functions, classes, errors, file_count = [], [], [], 0
 
-    _phases = [
-        ("smells", "Detecting code smells…",
-         lambda: _phase_smells(functions, classes, thresholds, results)),
-        ("duplicates", "Finding duplicates…",
-         lambda: _phase_duplicates(functions, results)),
-        ("lint", "Running Ruff lint…",
-         lambda: _phase_lint(root, exclude, results)),
-        ("security", "Running Bandit security…",
-         lambda: _phase_security(root, exclude, results)),
-        ("rustify", "Scoring Rust candidates…",
-         lambda: _phase_rustify(functions, results)),
-        ("ui_compat", "Checking UI API compatibility…",
-         lambda: _phase_ui_compat(root, exclude, results)),
-    ]
-    for mode_key, label, runner in _phases:
-        if not modes.get(mode_key):
-            continue
-        step += 1
+        if need_ast:
+            parse_cb = _make_parse_progress_cb(progress_cb, time.time())
+            functions, classes, errors, file_count = _scan_codebase(
+                root, exclude, progress_cb=parse_cb)
+
+        results["meta"].update(files=file_count, functions=len(functions),
+                               classes=len(classes), errors=len(errors),
+                               error_list=errors[:20])
+
+        if need_ast:
+            results["_code_map"] = _collect_code_map(functions)
+            results["_functions"] = functions
+
+        step, total_steps = 0, sum(1 for v in modes.values() if v)
+
+        _phases = [
+            ("smells", "Detecting code smells…",
+             lambda: _phase_smells(functions, classes, thresholds, results)),
+            ("duplicates", "Finding duplicates…",
+             lambda: _phase_duplicates(functions, results)),
+            ("lint", "Running Ruff lint…",
+             lambda: _phase_lint(root, exclude, results)),
+            ("security", "Running Bandit security…",
+             lambda: _phase_security(root, exclude, results)),
+            ("rustify", "Scoring Rust candidates…",
+             lambda: _phase_rustify(functions, results)),
+            ("ui_compat", "Checking UI API compatibility…",
+             lambda: _phase_ui_compat(root, exclude, results)),
+        ]
+        for mode_key, label, runner in _phases:
+            if not modes.get(mode_key):
+                continue
+            step += 1
+            if progress_cb:
+                progress_cb(0.4 + (step / max(total_steps, 1)) * 0.55, label, 0, 0, -1)
+            runner()
+
+        results["grade"] = compute_grade(results)
+        results["meta"]["duration"] = round(time.time() - t0, 2)
         if progress_cb:
-            progress_cb(0.4 + (step / max(total_steps, 1)) * 0.55, label, 0, 0, -1)
-        runner()
-
-    results["grade"] = compute_grade(results)
-    results["meta"]["duration"] = round(time.time() - t0, 2)
-    if progress_cb:
-        progress_cb(1.0, "Done!", 0, 0, 0)
-    return results
+            progress_cb(1.0, "Done!", 0, 0, 0)
+        return results
+    finally:
+        # Always restore the default bridge after the scan completes
+        # so subsequent non-scan operations aren't affected
+        if page is not None:
+            set_bridge(PrintBridge())
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
