@@ -671,187 +671,216 @@ class IRBuilder(ast.NodeVisitor):
     }
 
     def parse_body(self, stmts: List[ast.stmt]) -> List[RustNode]:
-        nodes = []
+        """Translate a list of Python AST statements into Rust IR nodes.
+
+        Dispatches each statement type to a focused _stmt_* handler.
+        Unknown statements fall back to a todo!() macro.
+        """
+        nodes: List[RustNode] = []
         for stmt in stmts:
-            if isinstance(stmt, ast.Assign):
-                # Simple assignments
-                if stmt.targets and isinstance(stmt.targets[0], ast.Name):
-                    name = safe_name(stmt.targets[0].id)
-                    val = self._parse_expr(stmt.value)
-                    nodes.append(RustLet(name=name, value=val))
-                elif stmt.targets and isinstance(stmt.targets[0], ast.Tuple):
-                    names = []
-                    for elt in stmt.targets[0].elts:
-                        if isinstance(elt, ast.Starred):
-                            names.append(f"mut {safe_name(elt.value.id)}")
-                        elif isinstance(elt, ast.Name):
-                            names.append(f"mut {safe_name(elt.id)}")
-                        else:
-                            names.append("_")
-                    name = f"({', '.join(names)})"
-                    val = self._parse_expr(stmt.value)
-                    nodes.append(RustLet(name=name, value=val))
-                elif stmt.targets and isinstance(stmt.targets[0], ast.Attribute):
-                    # self.attr = val
-                    target = self._parse_expr(stmt.targets[0])
-                    val = self._parse_expr(stmt.value)
-                    nodes.append(RustStatement(expr=RustExpr(f"{target} = {val}")))
+            handler = self._STMT_DISPATCH.get(type(stmt))
+            if handler:
+                result = handler(self, stmt)
+                if result is None:
+                    continue  # e.g. docstrings that are skipped
+                if isinstance(result, list):
+                    nodes.extend(result)
                 else:
-                    code_unparsed = ast.unparse(stmt).replace('"', '\\"')
-                    nodes.append(RustMacro("todo", [f'"{code_unparsed}"']))
-            elif isinstance(stmt, ast.AnnAssign):
-                if isinstance(stmt.target, ast.Name):
-                    name = safe_name(stmt.target.id)
-                    val = self._parse_expr(stmt.value) if stmt.value else 'todo!("uninitialized")'
-                    nodes.append(RustLet(name=name, value=val))
-                else:
-                    code_unparsed = ast.unparse(stmt).replace('"', '\\"')
-                    nodes.append(RustMacro("todo", [f'"{code_unparsed}"']))
-            elif isinstance(stmt, ast.Return):
-                val = self._parse_expr(stmt.value) if stmt.value else None
-                nodes.append(RustReturn(value=val))
-            elif isinstance(stmt, ast.Raise):
-                if stmt.exc:
-                    nodes.append(RustStatement(expr=RustExpr(f'panic!("{{:?}}", {self._parse_expr(stmt.exc)})')))
-                else:
-                    nodes.append(RustStatement(expr=RustExpr('panic!()')))
-            elif isinstance(stmt, ast.Pass):
-                nodes.append(RustStatement(expr=RustExpr('// pass')))
-            elif isinstance(stmt, ast.Break):
-                nodes.append(RustStatement(expr=RustExpr('break')))
-            elif isinstance(stmt, ast.Continue):
-                nodes.append(RustStatement(expr=RustExpr('continue')))
-            elif isinstance(stmt, ast.Expr):
-                # Ignore docstrings and bare constants to prevent cargo syntax errors at module level
-                if isinstance(stmt.value, ast.Constant):
-                    continue
-                nodes.append(RustStatement(expr=RustExpr(self._parse_expr(stmt.value))))
-            elif isinstance(stmt, ast.If):
-                cond = self._parse_expr(stmt.test)
-                body = self.parse_body(stmt.body)
-                orelse = self.parse_body(stmt.orelse)
-                nodes.append(RustIf(cond, body, orelse))
-            elif isinstance(stmt, ast.For):
-                target = self._parse_expr(stmt.target)
-                if isinstance(stmt.iter, ast.Tuple):
-                    items = [self._parse_expr(e) for e in stmt.iter.elts]
-                    iter_str = f"[{', '.join(items)}]"
-                else:
-                    iter_str = self._parse_expr(stmt.iter)
-                body = self.parse_body(stmt.body)
-                nodes.append(RustFor(target, iter_str, body))
-            elif isinstance(stmt, ast.Import):
-                # Inline import → comment
-                names = ", ".join(alias.name for alias in stmt.names)
-                nodes.append(RustStatement(expr=RustExpr(f"// import {names}")))
-            elif isinstance(stmt, ast.ImportFrom):
-                # Inline from-import → comment
-                module = stmt.module or ""
-                names = ", ".join(alias.name for alias in stmt.names)
-                nodes.append(RustStatement(expr=RustExpr(f"// from {module} import {names}")))
-            elif isinstance(stmt, ast.While):
-                cond = self._parse_expr(stmt.test)
-                body = self.parse_body(stmt.body)
-                nodes.append(RustBlock(header=f"while {cond} {{", body=body))
-            elif isinstance(stmt, ast.AugAssign):
-                # x += 1 -> x += 1;
-                target = self._parse_expr(stmt.target)
-                val = self._parse_expr(stmt.value)
-                op = "+"
-                if isinstance(stmt.op, ast.Sub): op = "-"
-                elif isinstance(stmt.op, ast.Mult): op = "*"
-                elif isinstance(stmt.op, ast.Div): op = "/"
-                elif isinstance(stmt.op, ast.Mod): op = "%"
-                elif isinstance(stmt.op, ast.BitAnd): op = "&"
-                elif isinstance(stmt.op, ast.BitOr): op = "|"
-                elif isinstance(stmt.op, ast.BitXor): op = "^"
-                elif isinstance(stmt.op, ast.LShift): op = "<<"
-                elif isinstance(stmt.op, ast.RShift): op = ">>"
-                nodes.append(RustStatement(expr=RustExpr(f"{target} {op}= {val}")))
-            elif isinstance(stmt, ast.Try):
-                # try/except -> match ... { Ok(val) => ..., Err(e) => ... }
-                try_body = self.parse_body(stmt.body)
-                # try/except -> match on closure returning Result
-                # Wrap try body in a match Ok/Err pattern
-                ok_body = try_body
-                err_handlers = []
-                for handler in stmt.handlers:
-                    err_name = handler.name or "_e"
-                    err_body = self.parse_body(handler.body)
-                    err_handlers.append((err_name, err_body))
-                
-                # Emit as: match (|| -> Result<_, Box<dyn std::error::Error>> { ... })() { Ok(val) => val, Err(e) => ... }
-                # Simplified: just emit the try body, then catch as if-let pattern
-                nodes.append(RustStatement(expr=RustExpr("match (|| -> Result<_, Box<dyn std::error::Error>> {")))
-                nodes.extend(ok_body)
-                nodes.append(RustStatement(expr=RustExpr("})() {")))
-                nodes.append(RustStatement(expr=RustExpr("    Ok(val) => val,")))
-                for err_name, err_body in err_handlers:
-                    nodes.append(RustStatement(expr=RustExpr(f"    Err({err_name}) => {{")))
-                    nodes.extend(err_body)
-                    nodes.append(RustStatement(expr=RustExpr("    }")))
-                nodes.append(RustStatement(expr=RustExpr("}")))
-                if stmt.finalbody:
-                    # finally block always runs after
-                    nodes.extend(self.parse_body(stmt.finalbody))
-            elif isinstance(stmt, ast.With):
-                # with open(x) as f -> let f = ...
-                for item in stmt.items:
-                    ctx = self._parse_expr(item.context_expr)
-                    if item.optional_vars and isinstance(item.optional_vars, ast.Name):
-                        name = safe_name(item.optional_vars.id)
-                        nodes.append(RustLet(name=name, value=ctx))
-                    else:
-                        nodes.append(RustStatement(expr=RustExpr(f"let _guard = {ctx}")))
-                nodes.extend(self.parse_body(stmt.body))
-            elif isinstance(stmt, ast.Assert):
-                test_str = self._parse_expr(stmt.test)
-                if stmt.msg:
-                    msg = self._parse_expr(stmt.msg)
-                    nodes.append(RustStatement(expr=RustExpr(f'assert!({test_str}, "{{}}", {msg})')))
-                else:
-                    nodes.append(RustStatement(expr=RustExpr(f'assert!({test_str})')))
-            elif isinstance(stmt, ast.Delete):
-                for target in stmt.targets:
-                    if isinstance(target, ast.Subscript):
-                        val = self._parse_expr(target.value)
-                        key = self._parse_expr(target.slice)
-                        nodes.append(RustStatement(expr=RustExpr(f"{val}.remove({key})")))
-                    else:
-                        expr = self._parse_expr(target)
-                        nodes.append(RustStatement(expr=RustExpr(f"drop({expr})")))
-            elif isinstance(stmt, ast.Global):
-                for name in stmt.names:
-                    nodes.append(RustStatement(expr=RustExpr(f"// global {name}")))
-            elif isinstance(stmt, ast.Nonlocal):
-                for name in stmt.names:
-                    nodes.append(RustStatement(expr=RustExpr(f"// nonlocal {name}")))
-            elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                # Nested function definition -> closure
-                nested_fn = self.build_function(stmt, "nested")
-                nested_params = []
-                for p in nested_fn.params:
-                    parts = p.split(": ")
-                    if len(parts) == 2:
-                        nested_params.append(f"{parts[0]}: {parts[1]}")
-                    else:
-                        nested_params.append(p)
-                params_str = ", ".join(nested_params)
-                header = f"let {safe_name(stmt.name)} = |{params_str}| -> {nested_fn.return_type} {{"
-                nodes.append(RustBlock(header=header, body=nested_fn.body))
-            elif isinstance(stmt, ast.Match):
-                # match/case
-                subject = self._parse_expr(stmt.subject)
-                match_body = []
-                for case in stmt.cases:
-                    pattern = ast.unparse(case.pattern)
-                    case_body = self.parse_body(case.body)
-                    match_body.append(RustBlock(header=f"{pattern} => {{", body=case_body, footer="}"))
-                nodes.append(RustBlock(header=f"match {subject} {{", body=match_body))
+                    nodes.append(result)
             else:
                 code_str = ast.unparse(stmt).replace('"', '\\"')
                 nodes.append(RustMacro("todo", [f'"Unmapped Statement: {{}}"', f'"{code_str}"']))
         return nodes
+
+    # ── statement handlers ───────────────────────────────────────────────────
+
+    def _stmt_assign(self, stmt: ast.Assign) -> "RustNode | None":
+        if not stmt.targets:
+            return None
+        target = stmt.targets[0]
+        val = self._parse_expr(stmt.value)
+        if isinstance(target, ast.Name):
+            return RustLet(name=safe_name(target.id), value=val)
+        if isinstance(target, ast.Tuple):
+            parts = []
+            for elt in target.elts:
+                if isinstance(elt, ast.Starred):
+                    parts.append(f"mut {safe_name(elt.value.id)}")
+                elif isinstance(elt, ast.Name):
+                    parts.append(f"mut {safe_name(elt.id)}")
+                else:
+                    parts.append("_")
+            return RustLet(name=f"({', '.join(parts)})", value=val)
+        if isinstance(target, ast.Attribute):
+            return RustStatement(expr=RustExpr(f"{self._parse_expr(target)} = {val}"))
+        code_str = ast.unparse(stmt).replace('"', '\\"')
+        return RustMacro("todo", [f'"{code_str}"'])
+
+    def _stmt_annassign(self, stmt: ast.AnnAssign) -> "RustNode":
+        if isinstance(stmt.target, ast.Name):
+            val = self._parse_expr(stmt.value) if stmt.value else 'todo!("uninitialized")'
+            return RustLet(name=safe_name(stmt.target.id), value=val)
+        code_str = ast.unparse(stmt).replace('"', '\\"')
+        return RustMacro("todo", [f'"{code_str}"'])
+
+    def _stmt_augassign(self, stmt: ast.AugAssign) -> RustNode:
+        _AUGOP = {
+            ast.Add: "+",  ast.Sub: "-",  ast.Mult: "*", ast.Div: "/",
+            ast.Mod: "%",  ast.BitAnd: "&", ast.BitOr: "|", ast.BitXor: "^",
+            ast.LShift: "<<", ast.RShift: ">>",
+        }
+        target = self._parse_expr(stmt.target)
+        val    = self._parse_expr(stmt.value)
+        op     = _AUGOP.get(type(stmt.op), "+")
+        return RustStatement(expr=RustExpr(f"{target} {op}= {val}"))
+
+    def _stmt_return(self, stmt: ast.Return) -> RustNode:
+        val = self._parse_expr(stmt.value) if stmt.value else None
+        return RustReturn(value=val)
+
+    def _stmt_raise(self, stmt: ast.Raise) -> RustNode:
+        if stmt.exc:
+            return RustStatement(expr=RustExpr(f'panic!("{{:?}}", {self._parse_expr(stmt.exc)})'))
+        return RustStatement(expr=RustExpr('panic!()'))
+
+    def _stmt_expr(self, stmt: ast.Expr) -> "RustNode | None":
+        if isinstance(stmt.value, ast.Constant):
+            return None  # skip docstrings / bare constants
+        return RustStatement(expr=RustExpr(self._parse_expr(stmt.value)))
+
+    def _stmt_if(self, stmt: ast.If) -> RustNode:
+        return RustIf(
+            cond=self._parse_expr(stmt.test),
+            body=self.parse_body(stmt.body),
+            orelse=self.parse_body(stmt.orelse),
+        )
+
+    def _stmt_for(self, stmt: ast.For) -> RustNode:
+        target = self._parse_expr(stmt.target)
+        if isinstance(stmt.iter, ast.Tuple):
+            items    = [self._parse_expr(e) for e in stmt.iter.elts]
+            iter_str = f"[{', '.join(items)}]"
+        else:
+            iter_str = self._parse_expr(stmt.iter)
+        return RustFor(target, iter_str, self.parse_body(stmt.body))
+
+    def _stmt_while(self, stmt: ast.While) -> RustNode:
+        return RustBlock(
+            header=f"while {self._parse_expr(stmt.test)} {{",
+            body=self.parse_body(stmt.body),
+        )
+
+    def _stmt_try(self, stmt: ast.Try) -> "list[RustNode]":
+        ok_body = self.parse_body(stmt.body)
+        handlers = [(h.name or "_e", self.parse_body(h.body)) for h in stmt.handlers]
+        nodes: list[RustNode] = []
+        nodes.append(RustStatement(expr=RustExpr("match (|| -> Result<_, Box<dyn std::error::Error>> {")))
+        nodes.extend(ok_body)
+        nodes.append(RustStatement(expr=RustExpr("})() {")))
+        nodes.append(RustStatement(expr=RustExpr("    Ok(val) => val,")))
+        for err_name, err_body in handlers:
+            nodes.append(RustStatement(expr=RustExpr(f"    Err({err_name}) => {{")))
+            nodes.extend(err_body)
+            nodes.append(RustStatement(expr=RustExpr("    }")))
+        nodes.append(RustStatement(expr=RustExpr("}")))
+        if stmt.finalbody:
+            nodes.extend(self.parse_body(stmt.finalbody))
+        return nodes
+
+    def _stmt_with(self, stmt: ast.With) -> "list[RustNode]":
+        nodes: list[RustNode] = []
+        for item in stmt.items:
+            ctx = self._parse_expr(item.context_expr)
+            if item.optional_vars and isinstance(item.optional_vars, ast.Name):
+                nodes.append(RustLet(name=safe_name(item.optional_vars.id), value=ctx))
+            else:
+                nodes.append(RustStatement(expr=RustExpr(f"let _guard = {ctx}")))
+        nodes.extend(self.parse_body(stmt.body))
+        return nodes
+
+    def _stmt_assert(self, stmt: ast.Assert) -> RustNode:
+        test_str = self._parse_expr(stmt.test)
+        if stmt.msg:
+            return RustStatement(expr=RustExpr(
+                f'assert!({test_str}, "{{}}", {self._parse_expr(stmt.msg)})'))
+        return RustStatement(expr=RustExpr(f'assert!({test_str})'))
+
+    def _stmt_delete(self, stmt: ast.Delete) -> "list[RustNode]":
+        nodes: list[RustNode] = []
+        for target in stmt.targets:
+            if isinstance(target, ast.Subscript):
+                val = self._parse_expr(target.value)
+                key = self._parse_expr(target.slice)
+                nodes.append(RustStatement(expr=RustExpr(f"{val}.remove({key})")))
+            else:
+                nodes.append(RustStatement(expr=RustExpr(f"drop({self._parse_expr(target)})")))
+        return nodes
+
+    def _stmt_import(self, stmt: ast.Import) -> RustNode:
+        names = ", ".join(a.name for a in stmt.names)
+        return RustStatement(expr=RustExpr(f"// import {names}"))
+
+    def _stmt_importfrom(self, stmt: ast.ImportFrom) -> RustNode:
+        module = stmt.module or ""
+        names  = ", ".join(a.name for a in stmt.names)
+        return RustStatement(expr=RustExpr(f"// from {module} import {names}"))
+
+    def _stmt_global(self, stmt: ast.Global) -> "list[RustNode]":
+        return [RustStatement(expr=RustExpr(f"// global {n}")) for n in stmt.names]
+
+    def _stmt_nonlocal(self, stmt: ast.Nonlocal) -> "list[RustNode]":
+        return [RustStatement(expr=RustExpr(f"// nonlocal {n}")) for n in stmt.names]
+
+    def _stmt_funcdef(self, stmt: "ast.FunctionDef | ast.AsyncFunctionDef") -> RustNode:
+        nested_fn = self.build_function(stmt, "nested")
+        nested_params = []
+        for p in nested_fn.params:
+            parts = p.split(": ")
+            nested_params.append(f"{parts[0]}: {parts[1]}" if len(parts) == 2 else p)
+        params_str = ", ".join(nested_params)
+        header = f"let {safe_name(stmt.name)} = |{params_str}| -> {nested_fn.return_type} {{"
+        return RustBlock(header=header, body=nested_fn.body)
+
+    def _stmt_match(self, stmt: ast.Match) -> RustNode:
+        subject    = self._parse_expr(stmt.subject)
+        match_body = []
+        for case in stmt.cases:
+            pattern   = ast.unparse(case.pattern)
+            case_body = self.parse_body(case.body)
+            match_body.append(RustBlock(header=f"{pattern} => {{", body=case_body, footer="}"))
+        return RustBlock(header=f"match {subject} {{", body=match_body)
+
+    def _stmt_pass(self, _)     -> RustNode: return RustStatement(expr=RustExpr('// pass'))
+    def _stmt_break(self, _)    -> RustNode: return RustStatement(expr=RustExpr('break'))
+    def _stmt_continue(self, _) -> RustNode: return RustStatement(expr=RustExpr('continue'))
+
+    # ── statement dispatch table ─────────────────────────────────────────────
+
+    _STMT_DISPATCH: Dict[type, Any] = {
+        ast.Assign:            _stmt_assign,
+        ast.AnnAssign:         _stmt_annassign,
+        ast.AugAssign:         _stmt_augassign,
+        ast.Return:            _stmt_return,
+        ast.Raise:             _stmt_raise,
+        ast.Expr:              _stmt_expr,
+        ast.If:                _stmt_if,
+        ast.For:               _stmt_for,
+        ast.While:             _stmt_while,
+        ast.Try:               _stmt_try,
+        ast.With:              _stmt_with,
+        ast.Assert:            _stmt_assert,
+        ast.Delete:            _stmt_delete,
+        ast.Import:            _stmt_import,
+        ast.ImportFrom:        _stmt_importfrom,
+        ast.Global:            _stmt_global,
+        ast.Nonlocal:          _stmt_nonlocal,
+        ast.FunctionDef:       _stmt_funcdef,
+        ast.AsyncFunctionDef:  _stmt_funcdef,
+        ast.Match:             _stmt_match,
+        ast.Pass:              _stmt_pass,
+        ast.Break:             _stmt_break,
+        ast.Continue:          _stmt_continue,
+    }
 
     def _wrap_returns_in_some(self, nodes: List[RustNode]):
         """Recursively wrap return values in Some() for Option<T> return types."""
