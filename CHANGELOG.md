@@ -1,5 +1,71 @@
 # Changelog
 
+## v5.3.0 — UIBridge: Swappable UI Output Layer (2026-02-28)
+
+### Overview
+Introduced `Core/ui_bridge.py` — a thin Protocol-based abstraction that
+decouples all status, progress, and log output from business logic.
+Scan/analysis modules no longer call `print()` directly; they call
+`get_bridge().log()` / `.status()` / `.progress()`, so the active UI
+framework can be swapped at startup without touching any scan code.
+
+### New File: `Core/ui_bridge.py`
+
+| Class | Purpose |
+|---|---|
+| `UIBridge` | `typing.Protocol` — `log(msg)`, `status(label)`, `progress(done, total, label)` |
+| `PrintBridge` | Default — wraps `print()`. CLI output is **unchanged**. |
+| `NullBridge` | Silent. Use in tests to stop library noise. |
+| `TqdmBridge` | tqdm progress bars; gracefully falls back if tqdm not installed. |
+| `get_bridge()` / `set_bridge(b)` | Module-level global accessor. |
+
+### Modules Wired
+
+| File | Change |
+|---|---|
+| `Core/scan_phases.py` | All phase runners (`scan_codebase`, `run_smell_phase`, `run_lint_phase`, etc.) use `get_bridge()` |
+| `Analysis/reporting.py` | All `print_*` functions (`print_smells`, `print_lint_report`, `print_unified_grade`, etc.) use `get_bridge()` |
+| `Analysis/rust_advisor.py` | `print_candidates()` uses `get_bridge()` |
+| `Analysis/ui_compat.py` | `print_report()` uses `get_bridge()` |
+
+### Flet Integration (`x_ray_flet.py`)
+- Added `FletBridge` class: `log()` appends `ft.Text` items to an in-app log panel; `progress()` forwards to the existing animated progress bar callback
+- `_run_scan()` accepts optional `page=` and `log_list=` params; registers `FletBridge` before the scan, restores `PrintBridge` in `finally` block
+
+### Plugging In a New Framework
+Any UI needs only ~5 methods:
+```python
+from Core.ui_bridge import set_bridge
+
+class StreamlitBridge:
+    def log(self, msg):     st.write(msg)
+    def status(self, lbl):  st.info(f">> {lbl}")
+    def progress(self, done, total, label=""): st.progress(done / max(total, 1))
+
+set_bridge(StreamlitBridge())  # all scans now go to Streamlit
+```
+
+### Tests
+- **New** `tests/test_ui_bridge.py` — 23 tests:
+  - Protocol conformance for all 3 built-in bridges + custom implementations
+  - `PrintBridge` stdout routing (via `capsys`)
+  - `NullBridge` complete silence
+  - `set_bridge` / `get_bridge` swappability
+  - `TqdmBridge` graceful fallback when tqdm absent
+  - `CollectorBridge` demo — custom bridge capturing messages for assertions
+- **Full suite**: 649 passed, 8 skipped, 0 failed (zero regressions)
+
+### Files Changed
+- `Core/ui_bridge.py` — New file
+- `Core/scan_phases.py` — All phase runner `print()` calls replaced
+- `Analysis/reporting.py` — All report `print()` calls replaced
+- `Analysis/rust_advisor.py` — `print_candidates()` wired
+- `Analysis/ui_compat.py` — `print_report()` wired
+- `x_ray_flet.py` — `FletBridge` class + `_run_scan()` bridge registration
+- `tests/test_ui_bridge.py` — New test file (23 tests)
+
+---
+
 ## v5.2.0 — Phase 2: Stdlib Method Mapping (2026-02-26, WIP)
 
 ### Overview

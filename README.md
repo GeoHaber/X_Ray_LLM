@@ -1,6 +1,6 @@
 # X-Ray — AI-Powered Code Quality Scanner & Rust Accelerator
 
-**Version 5.1.2** · Python 3.10+ · 882 tests · 5 languages · MIT License
+**Version 5.3.0** · Python 3.10+ · 905 tests · 5 languages · MIT License
 
 ---
 
@@ -23,7 +23,8 @@ a full **AST-based Python → Rust transpiler** verified against 14 real project
 | 5 Languages | English · Română · Español · Français · Deutsch |
 | Rust Transpiler | AST-based, 19 module handlers, 54.7 % coverage across 14 projects |
 | LLM Fallback | Local LLM fills `todo!()` stubs, validates with `rustc --check` |
-| 882 Tests | Smoke, unit, integration, parity, fuzz, transpilation |
+| **UIBridge** | Swappable output layer — Flet, tqdm, Streamlit, NiceGUI, tests all use one bridge |
+| 905 Tests | Smoke, unit, integration, parity, fuzz, transpilation, bridge |
 | Zero Core Deps | Core analyzers use only Python stdlib |
 
 ---
@@ -218,11 +219,12 @@ Runs without Rust installed — all functions have pure-Python fallbacks.
 ```bash
 pip install pytest
 
-# Full suite (882 tests)
+# Full suite (905 tests)
 python -m pytest tests/ -q --tb=short
 
 # Specific modules
 python -m pytest tests/test_ui_compat.py -v         # 51 UI compat tests
+python -m pytest tests/test_ui_bridge.py -v          # 23 UIBridge tests
 python -m pytest tests/test_transpiler.py -v         # Transpiler tests
 python -m pytest tests/test_analysis_smells.py -v    # Smell detector tests
 
@@ -263,6 +265,7 @@ X_Ray/
 │   ├── config.py                #   Thresholds, version, constants
 │   ├── i18n.py                  #   Internationalization (5 languages)
 │   ├── scan_phases.py           #   Shared scan phase runners
+│   ├── ui_bridge.py             #   UIBridge Protocol + PrintBridge/NullBridge/TqdmBridge
 │   ├── inference.py             #   Local LLM helper
 │   ├── llm_manager.py           #   LLM settings persistence
 │   ├── cli_args.py              #   Argument parsing
@@ -274,8 +277,9 @@ X_Ray/
 │   ├── python_ast.py            #   Python AST parser + parallel scanner
 │   └── tokenizer.py             #   Token-level similarity
 │
-├── tests/                       # 882 tests
+├── tests/                       # 905 tests
 │   ├── test_analysis_*.py       #   Per-analyzer tests
+│   ├── test_ui_bridge.py        #   UIBridge swappability tests (23)
 │   ├── test_ui_compat.py        #   UI compat tests (51)
 │   ├── test_transpiler.py       #   Transpiler tests
 │   ├── test_xray_*.py           #   End-to-end + integration
@@ -298,15 +302,22 @@ X_Ray/
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│           x_ray_flet.py  /  x_ray_claude.py                    │
-│              (GUI)             (CLI)                             │
-└────────┬─────────────────────────┬──────────────────────────────┘
-         │                         │
-    ┌────▼─────────────────────────▼────┐
-    │       Core/scan_phases.py         │
-    │     Phase orchestrator + ETA      │
-    └──┬───┬───┬───┬───┬───┬───────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│    x_ray_flet.py  /  x_ray_claude.py  /  x_ray_exe.py               │
+│       (Flet GUI)          (CLI)             (Standalone)             │
+└────────┬──────────────────────┬───────────────────────────────────── ┘
+         │                      │
+    ┌────▼──────────────────────▼───────────────────────────────────┐
+    │               Core/ui_bridge.py                               │
+    │  UIBridge Protocol — log() / status() / progress()            │
+    │  ├── PrintBridge (default CLI)  ├── NullBridge (tests)        │
+    │  ├── TqdmBridge (tqdm bars)     └── FletBridge / custom       │
+    └───────────────────────────────────────────────────────────────┘
+         │  set_bridge() ↑   get_bridge() ↓
+    ┌────▼──────────────────────────────────┐
+    │         Core/scan_phases.py           │
+    │    Phase orchestrator + ETA           │
+    └──┬───┬───┬───┬───┬───┬───────────────┘
        │   │   │   │   │   │
     ┌──▼┐┌─▼┐┌─▼┐┌─▼┐┌─▼┐┌─▼──────────┐
     │ S ││ D ││ L ││ B ││ R ││ UI Compat │
