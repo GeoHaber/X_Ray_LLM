@@ -233,447 +233,442 @@ class IRBuilder(ast.NodeVisitor):
     def __init__(self, emitter: RustEmitter):
         self.emitter = emitter
         
-    def _parse_expr(self, node: ast.expr) -> str:
-        """Parse an AST expression into a dynamic Rust string representing it."""
-        if isinstance(node, ast.Name):
-            return safe_name(node.id)
-        elif isinstance(node, ast.Constant):
-            if isinstance(node.value, str):
-                # Escape inner quotes and backslashes for raw strings
-                val = node.value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
-                return f'"{val}".to_string()'
-            elif isinstance(node.value, bool):
-                return "true" if node.value else "false"
-            elif node.value is None:
-                return "None"
-            else:
-                return str(node.value)
-        elif isinstance(node, ast.BinOp):
-            left = self._parse_expr(node.left)
-            right = self._parse_expr(node.right)
-            # Simplistic mapping of ops
-            op = "+"
-            if isinstance(node.op, ast.Sub): op = "-"
-            elif isinstance(node.op, ast.Mult): op = "*"
-            elif isinstance(node.op, ast.Div): op = "/"
-            return f"({left} {op} {right})"
-        elif isinstance(node, ast.BoolOp):
-            op = " && " if isinstance(node.op, ast.And) else " || "
-            return op.join(self._parse_expr(v) for v in node.values)
-        elif isinstance(node, ast.Compare):
-            left = self._parse_expr(node.left)
-            if len(node.ops) == 1:
-                op_node = node.ops[0]
-                right_node = node.comparators[0]
-                if isinstance(op_node, (ast.In, ast.NotIn)) and isinstance(right_node, ast.Tuple):
-                    items = [self._parse_expr(e) for e in right_node.elts]
-                    right = f"[{', '.join(items)}]"
-                else:
-                    right = self._parse_expr(right_node)
-                if isinstance(op_node, ast.Eq): return f"({left} == {right})"
-                elif isinstance(op_node, ast.NotEq): return f"({left} != {right})"
-                elif isinstance(op_node, ast.Lt): return f"({left} < {right})"
-                elif isinstance(op_node, ast.LtE): return f"({left} <= {right})"
-                elif isinstance(op_node, ast.Gt): return f"({left} > {right})"
-                elif isinstance(op_node, ast.GtE): return f"({left} >= {right})"
-                elif isinstance(op_node, ast.In): return f"{right}.contains(&{left})"
-                elif isinstance(op_node, ast.NotIn): return f"!{right}.contains(&{left})"
-                elif isinstance(op_node, ast.Is):
-                    if right == "None": return f"{left}.is_none()"
-                    return f"({left} == {right})"
-                elif isinstance(op_node, ast.IsNot):
-                    if right == "None": return f"{left}.is_some()"
-                    return f"({left} != {right})"
-            # Fallback for complex comparisons
-            return f"({left} /* TODO: complex compare */)"
-        elif isinstance(node, ast.UnaryOp):
-            operand = self._parse_expr(node.operand)
-            if isinstance(node.op, ast.Not): return f"!{operand}"
-            elif isinstance(node.op, ast.USub): return f"-{operand}"
-            elif isinstance(node.op, ast.UAdd): return f"+{operand}"
-            elif isinstance(node.op, ast.Invert): return f"!{operand}"
-            return f"/* TODO: unary */ {operand}"
-        elif isinstance(node, ast.JoinedStr):
-            # Convert f-strings into format!("...", args)
-            format_str = ""
-            args = []
-            for v in node.values:
-                if isinstance(v, ast.Constant) and isinstance(v.value, str):
-                    format_str += v.value.replace('\\', '\\\\').replace('"', '\\"').replace("{", "{{").replace("}", "}}")
-                elif isinstance(v, ast.FormattedValue):
-                    format_str += "{}"
-                    args.append(self._parse_expr(v.value))
-            args_str = ", ".join(args)
-            if args:
-                return f'format!("{format_str}", {args_str})'
-            return f'"{format_str}".to_string()'
-        elif isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Attribute):
-                val = self._parse_expr(node.func.value)
-                attr = safe_name(node.func.attr)
-                args = [self._parse_expr(a) for a in node.args]
-                
-                if attr == "append":
-                    return f"{val}.push({args[0]})"
-                elif attr == "extend":
-                    return f"{val}.extend({args[0]})"
-                elif attr == "join":
-                    return f"{args[0]}.join(&{val})"
-                elif attr == "splitlines":
-                    return f"{val}.lines()"
-                elif attr == "strip":
-                    return f"{val}.trim()"
-                elif attr == "lower":
-                    return f"{val}.to_lowercase()"
-                elif attr == "upper":
-                    return f"{val}.to_uppercase()"
-                elif attr == "startswith":
-                    return f"{val}.starts_with({args[0]})"
-                elif attr == "endswith":
-                    return f"{val}.ends_with({args[0]})"
-                elif attr == "split":
-                    return f"{val}.split({args[0]}).map(|s| s.to_string()).collect::<Vec<_>>()"
-                elif attr == "replace":
-                    return f"{val}.replace({args[0]}, {args[1]})"
-                elif attr == "get":
-                    default = args[1] if len(args) > 1 else "None"
-                    return f"{val}.get({args[0]}).cloned().unwrap_or({default})"
-                elif attr == "count":
-                    return f"{val}.matches({args[0]}).count()"
-                elif attr == "join" and val == "os.path":
-                    return f"std::path::Path::new(&{args[0]}).join({args[1]}).to_str().unwrap().to_string()"
-                # ── logging module → log crate ──
-                elif attr == "info" and val in ("logger", "logging"):
-                    if args: return f"log::info!(\"{{}}\" , {args[0]})"
-                    return "log::info!()"
-                elif attr == "error" and val in ("logger", "logging"):
-                    if args: return f"log::error!(\"{{}}\" , {args[0]})"
-                    return "log::error!()"
-                elif attr == "warning" and val in ("logger", "logging"):
-                    if args: return f"log::warn!(\"{{}}\" , {args[0]})"
-                    return "log::warn!()"
-                elif attr == "debug" and val in ("logger", "logging"):
-                    if args: return f"log::debug!(\"{{}}\" , {args[0]})"
-                    return "log::debug!()"
-                elif attr == "critical" and val in ("logger", "logging"):
-                    if args: return f"log::error!(\"{{}}\" , {args[0]})"
-                    return "log::error!()"
-                elif attr == "basicConfig" and val == "logging":
-                    return "env_logger::init()"
-                # ── time module ──
-                elif attr == "time" and val == "time":
-                    return "SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64()"
-                elif attr == "sleep" and val == "time":
-                    return f"std::thread::sleep(Duration::from_secs_f64({args[0]}))"
-                elif attr == "perf_counter" and val == "time":
-                    return "Instant::now().elapsed().as_secs_f64()"
-                # ── datetime module ──
-                elif attr == "now" and val == "datetime":
-                    return "chrono::Local::now()"
-                elif attr == "utcnow" and val == "datetime":
-                    return "chrono::Utc::now()"
-                elif attr == "strptime" and val == "datetime":
-                    return f"NaiveDateTime::parse_from_str({', '.join(args)})"
-                elif attr == "fromtimestamp" and val == "datetime":
-                    return f"chrono::NaiveDateTime::from_timestamp({args[0]}, 0)"
-                # ── subprocess module ──
-                elif attr == "run" and val == "subprocess":
-                    return f"std::process::Command::new({args[0]}).status()"
-                elif attr == "check_output" and val == "subprocess":
-                    return f"Command::new({args[0]}).output().expect(\"cmd failed\").stdout"
-                elif attr == "Popen" and val == "subprocess":
-                    return f"Command::new({args[0]}).spawn()"
-                # ── hashlib module ──
-                elif attr == "sha256" and val == "hashlib":
-                    return f"Sha256::digest({args[0]})"
-                elif attr == "md5" and val == "hashlib":
-                    return f"Md5::digest({args[0]})"
-                # ── collections module ──
-                elif attr == "Counter" and val == "collections":
-                    self.emitter.require_import("std::collections::HashMap")
-                    return f"{args[0]}.into_iter().fold(HashMap::new(), |mut acc, x| {{ *acc.entry(x).or_insert(0) += 1; acc }})"
-                elif attr == "deque" and val == "collections":
-                    return "VecDeque::new()"
-                elif attr == "defaultdict" and val == "collections":
-                    self.emitter.require_import("std::collections::HashMap")
-                    return "HashMap::new()"
-                # ── argparse module ──
-                elif attr == "ArgumentParser" and val == "argparse":
-                    return f"clap::Command::new({args[0]})"
-                # ── functools module ──
-                elif attr == "reduce" and val == "functools":
-                    return f"{args[1]}.into_iter().fold(Default::default(), {args[0]})"
-                # ── itertools module ──
-                elif attr == "product" and val == "itertools":
-                    return f"iproduct!({', '.join(args)})"
-                # ── sys module (call-based) ──
-                elif attr == "exit" and val == "sys":
-                    return f"std::process::exit({args[0]})"
-                elif attr == "getsizeof" and val == "sys":
-                    return f"std::mem::size_of_val(&{args[0]})"
-                elif attr == "getrecursionlimit" and val == "sys":
-                    return "1000"
-                elif attr == "rmtree" and val == "shutil":
-                    return f"std::fs::remove_dir_all({args[0]}).ok()"
-                elif attr == "copy" and val == "shutil":
-                    return f"std::fs::copy({args[0]}, {args[1]}).ok()"
-                elif attr == "which" and val == "shutil":
-                    return f"Some({args[0]}.to_string())"
-                elif attr == "machine" and val == "platform":
-                    return "\"x86_64\".to_string()"
-                # ── os module ──
-                elif attr == "getcwd" and val == "os":
-                    return "std::env::current_dir().unwrap().to_str().unwrap().to_string()"
-                    
-                return f"{val}.{attr}({', '.join(args)})"
+    def _parse_expr(self, node: "ast.expr") -> str:
+        """Dispatch an AST expression node to its focused handler.
 
-            func_name = self._parse_expr(node.func)
-            args = [self._parse_expr(a) for a in node.args]
-            
-            if func_name == "str":
-                return f"{args[0]}.to_string()"
-            elif func_name == "int":
-                return f"({args[0]} as i64)"
-            elif func_name == "float":
-                return f"({args[0]} as f64)"
-            elif func_name == "list":
-                if len(args) == 0:
-                    return "Vec::new()"
-                elif len(args) == 1:
-                    return f"{args[0]}.into_iter().collect::<Vec<_>>()"
-            elif func_name == "dict":
-                self.emitter.require_import("std::collections::HashMap")
-                return "HashMap::new()"
-            elif func_name == "set":
-                self.emitter.require_import("std::collections::HashSet")
-                if len(args) == 0:
-                    return "HashSet::new()"
-                else:
-                    return f"{args[0]}.into_iter().collect::<HashSet<_>>()"
-            elif func_name == "len":
-                return f"{args[0]}.len()"
-            elif func_name == "print":
-                placeholders = ", ".join(["\"{}\""] * len(args))
-                return f'println!("{placeholders}", {", ".join(args)})'
-            elif func_name == "range":
-                if len(args) == 1:
-                    return f"(0..{args[0]})"
-                elif len(args) == 2:
-                    return f"({args[0]}..{args[1]})"
-                elif len(args) == 3:
-                    return f"({args[0]}..{args[1]}).step_by({args[2]} as usize)"
-            elif func_name == "abs":
-                return f"{args[0]}.abs()"
-            elif func_name == "round":
-                return f"{args[0]}.round()"
-            elif func_name == "min":
-                return f"{args[0]}.min({args[1]})"
-            elif func_name == "max":
-                return f"{args[0]}.max({args[1]})"
-            elif func_name == "sum":
-                return f"{args[0]}.into_iter().sum()"
-            elif func_name == "enumerate":
-                return f"{args[0]}.into_iter().enumerate()"
-            elif func_name == "zip":
-                return f"{args[0]}.into_iter().zip({args[1]}.into_iter())"
-            elif func_name == "any":
-                return f"{args[0]}.into_iter().any(|x| x)"
-            elif func_name == "all":
-                return f"{args[0]}.into_iter().all(|x| x)"
-            elif func_name == "open":
-                return f"std::fs::read_to_string({args[0]}).expect(\"Failed to read file\")"
-            elif func_name == "sorted":
-                self.emitter.emit(f"/* TODO: proper sorted({args[0]}) */")
-                if len(args) > 0:
-                    return f"{{ let mut temp = {args[0]}; temp.sort(); temp }}"
-                return "vec![]"
-            elif func_name == "isinstance":
-                if len(args) == 2:
-                    typ = args[1].replace("ast.", "")
-                    if typ == "int": return "true" # Handle test case isinstance(x, int)
-                    return f"matches!({args[0]}, RustNode::{typ}(_))"
-            elif func_name == "getattr":
-                if len(args) >= 2:
-                    default = args[2] if len(args) == 3 else "None"
-                    return f"{args[0]}.get_{args[1].replace('\"', '')}().unwrap_or({default})"
-            elif func_name == "Path":
-                if len(args) == 0:
-                    return "PathBuf::new()"
-                else:
-                    return f"PathBuf::from({args[0]})"
-                
-            return f"{func_name}({', '.join(args)})"
-        elif isinstance(node, ast.Attribute):
-            val = self._parse_expr(node.value)
-            attr = safe_name(node.attr)
-            # ── module constant attributes ──
-            if val == "sys" and attr == "argv":
-                return "std::env::args().collect::<Vec<String>>()"
-            elif val == "sys" and attr == "platform":
-                return "std::env::consts::OS.to_string()"
-            elif val == "sys" and attr == "stdout":
-                return "std::io::stdout()"
-            elif val == "subprocess" and attr == "PIPE":
-                return "Stdio::piped()"
-            elif val == "logging" and attr == "DEBUG":
-                return "log::Level::Debug"
-            elif val == "logging" and attr == "INFO":
-                return "log::Level::Info"
-            elif val == "logging" and attr == "WARNING":
-                return "log::Level::Warn"
-            elif val == "logging" and attr == "ERROR":
-                return "log::Level::Error"
-            return f"{val}.{attr}"
-        elif isinstance(node, ast.List):
-            items = [self._parse_expr(e) for e in node.elts]
-            if not items:
-                return "vec![]"
-            return f"vec![{', '.join(items)}]"
-        elif isinstance(node, ast.Set):
-            self.emitter.require_import("std::collections::HashSet")
-            items = [self._parse_expr(e) for e in node.elts]
-            return f"HashSet::from([{', '.join(items)}])"
-        elif isinstance(node, ast.Dict):
-            self.emitter.require_import("std::collections::HashMap")
-            if not node.keys:
-                return "HashMap::new()"
-            items = []
-            for k, v in zip(node.keys, node.values):
-                if k is not None:
-                    items.append(f"({self._parse_expr(k)}, {self._parse_expr(v)})")
-            return f"HashMap::from([{', '.join(items)}])"
-        elif isinstance(node, ast.IfExp):
-            cond = self._parse_expr(node.test)
-            body = self._parse_expr(node.body)
-            orelse = self._parse_expr(node.orelse)
-            return f"if {cond} {{ {body} }} else {{ {orelse} }}"
-        elif isinstance(node, ast.Lambda):
-            args = []
-            for arg in node.args.args:
-                args.append(safe_name(arg.arg))
-            args_str = ", ".join(args)
-            body = self._parse_expr(node.body)
-            return f"|{args_str}| {body}"
-        elif isinstance(node, ast.ListComp):
-            # List comprehension
-            if len(node.generators) == 1:
-                gen = node.generators[0]
-                target = self._parse_expr(gen.target)
-                if isinstance(gen.iter, ast.Tuple):
-                    items = [self._parse_expr(e) for e in gen.iter.elts]
-                    iter_obj = f"[{', '.join(items)}]"
-                else:
-                    iter_obj = self._parse_expr(gen.iter)
-                body = self._parse_expr(node.elt)
-                
-                filters = []
-                for if_clause in gen.ifs:
-                    filters.append(self._parse_expr(if_clause))
-                
-                rust_code = f"{iter_obj}.into_iter()"
-                if filters:
-                    filters_str = " && ".join(filters)
-                    rust_code += f".filter(|&{target}| {filters_str})"
-                # Map target to body if distinct, otherwise pure filter/collect is enough? 
-                # e.g [x*2 for x in items] -> .map(|x| x*2)
-                rust_code += f".map(|{target}| {body}).collect::<Vec<_>>()"
-                return rust_code
-        elif isinstance(node, ast.SetComp):
-            self.emitter.require_import("std::collections::HashSet")
-            if len(node.generators) == 1:
-                gen = node.generators[0]
-                target = self._parse_expr(gen.target)
-                if isinstance(gen.iter, ast.Tuple):
-                    items = [self._parse_expr(e) for e in gen.iter.elts]
-                    iter_obj = f"[{', '.join(items)}]"
-                else:
-                    iter_obj = self._parse_expr(gen.iter)
-                body = self._parse_expr(node.elt)
-                return f"{iter_obj}.into_iter().map(|{target}| {body}).collect::<HashSet<_>>()"
-        elif isinstance(node, ast.DictComp):
-            self.emitter.require_import("std::collections::HashMap")
-            if len(node.generators) == 1:
-                gen = node.generators[0]
-                target = self._parse_expr(gen.target)
-                if isinstance(gen.iter, ast.Tuple):
-                    items = [self._parse_expr(e) for e in gen.iter.elts]
-                    iter_obj = f"[{', '.join(items)}]"
-                else:
-                    iter_obj = self._parse_expr(gen.iter)
-                k = self._parse_expr(node.key)
-                v = self._parse_expr(node.value)
-                return f"{iter_obj}.into_iter().map(|{target}| ({k}, {v})).collect::<HashMap<_, _>>()"
-        elif isinstance(node, ast.GeneratorExp):
-            if len(node.generators) == 1:
-                gen = node.generators[0]
-                target = self._parse_expr(gen.target)
-                if isinstance(gen.iter, ast.Tuple):
-                    items = [self._parse_expr(e) for e in gen.iter.elts]
-                    iter_obj = f"[{', '.join(items)}]"
-                else:
-                    iter_obj = self._parse_expr(gen.iter)
-                body = self._parse_expr(node.elt)
-                # Just return an iterator mapping
-                return f"{iter_obj}.into_iter().map(|{target}| {body})"
+        Adding support for a new node type is a one-liner in _EXPR_DISPATCH.
+        """
+        if isinstance(node, ast.Call):
+            return (self._expr_call_attr(node)
+                    if isinstance(node.func, ast.Attribute)
+                    else self._expr_call_builtin(node))
 
-        elif isinstance(node, ast.Await):
-            # async/await: await expr → expr.await
-            return f"{self._parse_expr(node.value)}.await"
-        elif isinstance(node, ast.Subscript):
-            # Indexing: arr[idx]
-            val = self._parse_expr(node.value)
-            idx_node = node.slice
-            # Handle slicing: s[:3], s[1:], s[1:3], s[::2]
-            if isinstance(idx_node, ast.Slice):
-                lower = self._parse_expr(idx_node.lower) if idx_node.lower else None
-                upper = self._parse_expr(idx_node.upper) if idx_node.upper else None
-                step = self._parse_expr(idx_node.step) if idx_node.step else None
-                if step:
-                    lo = lower or "0"
-                    hi = upper or f"{val}.len()"
-                    return f"({lo}..{hi}).step_by({step} as usize).map(|i| {val}[i].clone()).collect::<Vec<_>>()"
-                if lower and upper:
-                    return f"{val}[{lower}..{upper}]"
-                elif upper:
-                    return f"{val}[..{upper}]"
-                elif lower:
-                    return f"{val}[{lower}..]"
-                return f"{val}[..]"
-            idx = self._parse_expr(idx_node)
-            # Cast to usize for non-literal integer indices
-            needs_cast = False
-            if isinstance(idx_node, ast.BinOp):
-                needs_cast = True
-            elif isinstance(idx_node, ast.Call):
-                needs_cast = True
-            elif isinstance(idx_node, ast.Name):
-                needs_cast = False  # could be usize already
-            # Literal int constants don't need cast
-            if isinstance(idx_node, ast.Constant) and isinstance(idx_node.value, int):
-                needs_cast = False
-            if needs_cast:
-                return f"{val}[({idx}) as usize]"
-            return f"{val}[{idx}]"
-        elif isinstance(node, ast.Tuple):
-            items = [self._parse_expr(e) for e in node.elts]
-            return f"({', '.join(items)})"
-        elif isinstance(node, ast.NamedExpr):
-            # Walrus operator: (x := expr) -> { let x = expr; x }
-            name = safe_name(node.target.id)
-            val = self._parse_expr(node.value)
-            return f"{{ let {name} = {val}; {name} }}"
-        elif isinstance(node, ast.Starred):
-            return self._parse_expr(node.value)
-        elif isinstance(node, ast.Yield):
-            if node.value:
-                return f"/* yield */ {self._parse_expr(node.value)}"
-            return "/* yield */"
-        elif isinstance(node, ast.YieldFrom):
-            return f"/* yield from */ {self._parse_expr(node.value)}"
-        
-        # Fallback for complex expressions
+        handler = self._EXPR_DISPATCH.get(type(node))
+        if handler:
+            return handler(self, node)
+
         code_str = ast.unparse(node).replace('"', '\\"')
         return f'todo!("Unmapped Python Expression: {{}}", "{code_str}")'
+
+    # ── literal primitives ──────────────────────────────────────────────────
+
+    def _expr_name_const(self, node) -> str:
+        if isinstance(node, ast.Name):
+            return safe_name(node.id)
+        v = node.value
+        if isinstance(v, str):
+            esc = v.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+            return f'"{esc}".to_string()'
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        if v is None:
+            return "None"
+        return str(v)
+
+    # ── operators ───────────────────────────────────────────────────────────
+
+    _BINOP_MAP: Dict[type, str] = {
+        ast.Add: "+",  ast.Sub: "-",  ast.Mult: "*",  ast.Div: "/",
+        ast.Mod: "%",  ast.FloorDiv: "/",
+        ast.BitAnd: "&", ast.BitOr: "|", ast.BitXor: "^",
+        ast.LShift: "<<", ast.RShift: ">>",
+    }
+
+    def _expr_binop(self, node: ast.BinOp) -> str:
+        left  = self._parse_expr(node.left)
+        right = self._parse_expr(node.right)
+        if isinstance(node.op, ast.Pow):
+            return f"{left}.powf({right} as f64)"
+        op = self._BINOP_MAP.get(type(node.op), "+")
+        return f"({left} {op} {right})"
+
+    def _expr_boolop(self, node: ast.BoolOp) -> str:
+        op = " && " if isinstance(node.op, ast.And) else " || "
+        return op.join(self._parse_expr(v) for v in node.values)
+
+    def _expr_unaryop(self, node: ast.UnaryOp) -> str:
+        operand = self._parse_expr(node.operand)
+        if isinstance(node.op, (ast.Not, ast.Invert)): return f"!{operand}"
+        if isinstance(node.op, ast.USub):              return f"-{operand}"
+        if isinstance(node.op, ast.UAdd):              return f"+{operand}"
+        return f"/* TODO: unary */ {operand}"
+
+    # ── comparisons ─────────────────────────────────────────────────────────
+
+    _CMP_MAP: Dict[type, str] = {
+        ast.Eq: "==", ast.NotEq: "!=",
+        ast.Lt: "<",  ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=",
+    }
+
+    def _expr_compare(self, node: ast.Compare) -> str:
+        left = self._parse_expr(node.left)
+        if len(node.ops) != 1:
+            return f"({left} /* TODO: complex compare */)"
+        op_node   = node.ops[0]
+        right_raw = node.comparators[0]
+        if isinstance(op_node, (ast.In, ast.NotIn)) and isinstance(right_raw, ast.Tuple):
+            items = [self._parse_expr(e) for e in right_raw.elts]
+            right = f"[{', '.join(items)}]"
+        else:
+            right = self._parse_expr(right_raw)
+        if op_sym := self._CMP_MAP.get(type(op_node)):
+            return f"({left} {op_sym} {right})"
+        if isinstance(op_node, ast.In):    return f"{right}.contains(&{left})"
+        if isinstance(op_node, ast.NotIn): return f"!{right}.contains(&{left})"
+        if isinstance(op_node, ast.Is):
+            return f"{left}.is_none()" if right == "None" else f"({left} == {right})"
+        if isinstance(op_node, ast.IsNot):
+            return f"{left}.is_some()" if right == "None" else f"({left} != {right})"
+        return f"({left} /* TODO: compare */)"
+
+    # ── f-strings ───────────────────────────────────────────────────────────
+
+    def _expr_fstring(self, node: ast.JoinedStr) -> str:
+        fmt, args = "", []
+        for part in node.values:
+            if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                fmt += (part.value
+                        .replace('\\', '\\\\').replace('"', '\\"')
+                        .replace("{", "{{").replace("}", "}}"))
+            elif isinstance(part, ast.FormattedValue):
+                fmt += "{}"
+                args.append(self._parse_expr(part.value))
+        args_str = ", ".join(args)
+        return f'format!("{fmt}", {args_str})' if args else f'"{fmt}".to_string()'
+
+    # ── attribute method calls ───────────────────────────────────────────────
+
+    _ATTR_MAP: Dict[tuple, str] = {
+        # str / list methods
+        ("append",       None): "{val}.push({arg0})",
+        ("extend",       None): "{val}.extend({arg0})",
+        ("join",         None): "{arg0}.join(&{val})",
+        ("splitlines",   None): "{val}.lines()",
+        ("strip",        None): "{val}.trim()",
+        ("lstrip",       None): "{val}.trim_start()",
+        ("rstrip",       None): "{val}.trim_end()",
+        ("lower",        None): "{val}.to_lowercase()",
+        ("upper",        None): "{val}.to_uppercase()",
+        ("startswith",   None): "{val}.starts_with({arg0})",
+        ("endswith",     None): "{val}.ends_with({arg0})",
+        ("split",        None): "{val}.split({arg0}).map(|s| s.to_string()).collect::<Vec<_>>()",
+        ("replace",      None): "{val}.replace({arg0}, {arg1})",
+        ("count",        None): "{val}.matches({arg0}).count()",
+        ("format",       None): "format!({val}, {args})",
+        # logging
+        ("info",     "logger"):  'log::info!("{{}}", {arg0})',
+        ("error",    "logger"):  'log::error!("{{}}", {arg0})',
+        ("warning",  "logger"):  'log::warn!("{{}}", {arg0})',
+        ("debug",    "logger"):  'log::debug!("{{}}", {arg0})',
+        ("critical", "logger"):  'log::error!("{{}}", {arg0})',
+        ("info",     "logging"): 'log::info!("{{}}", {arg0})',
+        ("error",    "logging"): 'log::error!("{{}}", {arg0})',
+        ("warning",  "logging"): 'log::warn!("{{}}", {arg0})',
+        ("debug",    "logging"): 'log::debug!("{{}}", {arg0})',
+        ("basicConfig", "logging"): "env_logger::init()",
+        # time
+        ("time",         "time"): "SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64()",
+        ("sleep",        "time"): "std::thread::sleep(Duration::from_secs_f64({arg0}))",
+        ("perf_counter", "time"): "Instant::now().elapsed().as_secs_f64()",
+        # datetime
+        ("now",          "datetime"): "chrono::Local::now()",
+        ("utcnow",       "datetime"): "chrono::Utc::now()",
+        ("strptime",     "datetime"): "NaiveDateTime::parse_from_str({args})",
+        ("fromtimestamp","datetime"): "chrono::NaiveDateTime::from_timestamp({arg0}, 0)",
+        # subprocess
+        ("run",          "subprocess"): "std::process::Command::new({arg0}).status()",
+        ("check_output", "subprocess"): 'Command::new({arg0}).output().expect("cmd failed").stdout',
+        ("Popen",        "subprocess"): "Command::new({arg0}).spawn()",
+        # hashlib
+        ("sha256", "hashlib"): "Sha256::digest({arg0})",
+        ("md5",    "hashlib"): "Md5::digest({arg0})",
+        # collections
+        ("deque",       "collections"): "VecDeque::new()",
+        ("defaultdict", "collections"): "HashMap::new()",
+        # argparse / functools / itertools
+        ("ArgumentParser", "argparse"):  "clap::Command::new({arg0})",
+        ("reduce",         "functools"): "{arg1}.into_iter().fold(Default::default(), {arg0})",
+        ("product",        "itertools"): "iproduct!({args})",
+        # sys
+        ("exit",               "sys"): "std::process::exit({arg0})",
+        ("getsizeof",          "sys"): "std::mem::size_of_val(&{arg0})",
+        ("getrecursionlimit",  "sys"): "1000",
+        # shutil
+        ("rmtree", "shutil"): "std::fs::remove_dir_all({arg0}).ok()",
+        ("copy",   "shutil"): "std::fs::copy({arg0}, {arg1}).ok()",
+        ("which",  "shutil"): "Some({arg0}.to_string())",
+        # os / platform
+        ("machine", "platform"): '"x86_64".to_string()',
+        ("getcwd",  "os"):       "std::env::current_dir().unwrap().to_str().unwrap().to_string()",
+    }
+
+    def _expr_call_attr(self, node: ast.Call) -> str:
+        val  = self._parse_expr(node.func.value)
+        attr = safe_name(node.func.attr)
+        args = [self._parse_expr(a) for a in node.args]
+        arg0 = args[0] if args else ""
+        arg1 = args[1] if len(args) > 1 else ""
+
+        # Special: dict.get needs runtime default logic
+        if attr == "get":
+            default = args[1] if len(args) > 1 else "None"
+            return f"{val}.get({arg0}).cloned().unwrap_or({default})"
+
+        # Special: Counter/deque/defaultdict need import side-effect
+        if attr == "Counter" and val == "collections":
+            self.emitter.require_import("std::collections::HashMap")
+            return (f"{arg0}.into_iter().fold(HashMap::new(), "
+                    f"|mut acc, x| {{ *acc.entry(x).or_insert(0) += 1; acc }})")
+        if attr in ("deque", "defaultdict") and val == "collections":
+            self.emitter.require_import("std::collections::HashMap")
+
+        # os.path.join (nested attribute receiver)
+        if attr == "join" and val == "os.path":
+            return (f"std::path::Path::new(&{arg0}).join({arg1})"
+                    f".to_str().unwrap().to_string()")
+
+        # Lookup: prefer specific receiver, then wildcard
+        tmpl = self._ATTR_MAP.get((attr, val)) or self._ATTR_MAP.get((attr, None))
+        if tmpl:
+            return tmpl.format(val=val, arg0=arg0, arg1=arg1,
+                               args=", ".join(args))
+
+        return f"{val}.{attr}({', '.join(args)})"
+
+    # ── builtin function calls ───────────────────────────────────────────────
+
+    _BUILTIN_MAP: Dict[str, str] = {
+        "str":       "{arg0}.to_string()",
+        "int":       "({arg0} as i64)",
+        "float":     "({arg0} as f64)",
+        "bool":      "({arg0} != 0)",
+        "abs":       "{arg0}.abs()",
+        "round":     "{arg0}.round()",
+        "len":       "{arg0}.len()",
+        "sum":       "{arg0}.into_iter().sum()",
+        "any":       "{arg0}.into_iter().any(|x| x)",
+        "all":       "{arg0}.into_iter().all(|x| x)",
+        "enumerate": "{arg0}.into_iter().enumerate()",
+        "open":      'std::fs::read_to_string({arg0}).expect("Failed to read file")',
+    }
+
+    def _expr_call_builtin(self, node: ast.Call) -> str:
+        func_name = self._parse_expr(node.func)
+        args      = [self._parse_expr(a) for a in node.args]
+        arg0      = args[0] if args else ""
+        arg1      = args[1] if len(args) > 1 else ""
+
+        if tmpl := self._BUILTIN_MAP.get(func_name):
+            return tmpl.format(arg0=arg0, arg1=arg1, args=", ".join(args))
+
+        if func_name == "min": return f"{arg0}.min({arg1})"
+        if func_name == "max": return f"{arg0}.max({arg1})"
+        if func_name == "zip": return f"{arg0}.into_iter().zip({arg1}.into_iter())"
+
+        if func_name == "print":
+            placeholders = ", ".join(['"{}"'] * len(args))
+            return f'println!("{placeholders}", {", ".join(args)})'
+
+        if func_name == "range":
+            if len(args) == 1: return f"(0..{arg0})"
+            if len(args) == 2: return f"({arg0}..{arg1})"
+            return f"({arg0}..{arg1}).step_by({args[2]} as usize)"
+
+        if func_name == "sorted":
+            self.emitter.emit(f"/* TODO: proper sorted({arg0}) */")
+            return f"{{ let mut temp = {arg0}; temp.sort(); temp }}" if arg0 else "vec![]"
+
+        if func_name == "list":
+            return "Vec::new()" if not args else f"{arg0}.into_iter().collect::<Vec<_>>()"
+        if func_name == "dict":
+            self.emitter.require_import("std::collections::HashMap")
+            return "HashMap::new()"
+        if func_name == "set":
+            self.emitter.require_import("std::collections::HashSet")
+            return "HashSet::new()" if not args else f"{arg0}.into_iter().collect::<HashSet<_>>()"
+
+        if func_name == "isinstance" and len(args) == 2:
+            typ = args[1].replace("ast.", "")
+            return "true" if typ == "int" else f"matches!({arg0}, RustNode::{typ}(_))"
+
+        if func_name == "getattr":
+            default = args[2] if len(args) == 3 else "None"
+            return f"{arg0}.get_{arg1.replace(chr(34), '')}().unwrap_or({default})"
+
+        if func_name == "Path":
+            return "PathBuf::new()" if not args else f"PathBuf::from({arg0})"
+
+        return f"{func_name}({', '.join(args)})"
+
+    # ── attribute constants (sys.argv, logging.INFO, …) ─────────────────────
+
+    _ATTR_CONST: Dict[tuple, str] = {
+        ("sys",        "argv"):     "std::env::args().collect::<Vec<String>>()",
+        ("sys",        "platform"): "std::env::consts::OS.to_string()",
+        ("sys",        "stdout"):   "std::io::stdout()",
+        ("subprocess", "PIPE"):     "Stdio::piped()",
+        ("logging",    "DEBUG"):    "log::Level::Debug",
+        ("logging",    "INFO"):     "log::Level::Info",
+        ("logging",    "WARNING"):  "log::Level::Warn",
+        ("logging",    "ERROR"):    "log::Level::Error",
+    }
+
+    def _expr_attribute(self, node: ast.Attribute) -> str:
+        val  = self._parse_expr(node.value)
+        attr = safe_name(node.attr)
+        return self._ATTR_CONST.get((val, attr), f"{val}.{attr}")
+
+    # ── collection literals ──────────────────────────────────────────────────
+
+    def _expr_list(self, node: ast.List) -> str:
+        items = [self._parse_expr(e) for e in node.elts]
+        return f"vec![{', '.join(items)}]" if items else "vec![]"
+
+    def _expr_set(self, node: ast.Set) -> str:
+        self.emitter.require_import("std::collections::HashSet")
+        items = [self._parse_expr(e) for e in node.elts]
+        return f"HashSet::from([{', '.join(items)}])"
+
+    def _expr_dict(self, node: ast.Dict) -> str:
+        self.emitter.require_import("std::collections::HashMap")
+        if not node.keys:
+            return "HashMap::new()"
+        pairs = [f"({self._parse_expr(k)}, {self._parse_expr(v)})"
+                 for k, v in zip(node.keys, node.values) if k is not None]
+        return f"HashMap::from([{', '.join(pairs)}])"
+
+    def _expr_tuple(self, node: ast.Tuple) -> str:
+        return f"({', '.join(self._parse_expr(e) for e in node.elts)})"
+
+    # ── comprehensions ───────────────────────────────────────────────────────
+
+    def _comprehension_iter(self, gen: ast.comprehension) -> "tuple[str, str]":
+        """Return (target_str, iter_str) for a single generator."""
+        target = self._parse_expr(gen.target)
+        if isinstance(gen.iter, ast.Tuple):
+            items = [self._parse_expr(e) for e in gen.iter.elts]
+            return target, f"[{', '.join(items)}]"
+        return target, self._parse_expr(gen.iter)
+
+    def _expr_listcomp(self, node: ast.ListComp) -> str:
+        if not node.generators:
+            return "vec![]"
+        gen = node.generators[0]
+        target, iter_obj = self._comprehension_iter(gen)
+        body  = self._parse_expr(node.elt)
+        chain = f"{iter_obj}.into_iter()"
+        if gen.ifs:
+            cond = " && ".join(self._parse_expr(c) for c in gen.ifs)
+            chain += f".filter(|&{target}| {cond})"
+        return f"{chain}.map(|{target}| {body}).collect::<Vec<_>>()"
+
+    def _expr_setcomp(self, node: ast.SetComp) -> str:
+        self.emitter.require_import("std::collections::HashSet")
+        if not node.generators:
+            return "HashSet::new()"
+        target, iter_obj = self._comprehension_iter(node.generators[0])
+        body = self._parse_expr(node.elt)
+        return f"{iter_obj}.into_iter().map(|{target}| {body}).collect::<HashSet<_>>()"
+
+    def _expr_dictcomp(self, node: ast.DictComp) -> str:
+        self.emitter.require_import("std::collections::HashMap")
+        if not node.generators:
+            return "HashMap::new()"
+        target, iter_obj = self._comprehension_iter(node.generators[0])
+        k = self._parse_expr(node.key)
+        v = self._parse_expr(node.value)
+        return f"{iter_obj}.into_iter().map(|{target}| ({k}, {v})).collect::<HashMap<_, _>>()"
+
+    def _expr_generatorexp(self, node: ast.GeneratorExp) -> str:
+        if not node.generators:
+            return "std::iter::empty()"
+        target, iter_obj = self._comprehension_iter(node.generators[0])
+        body = self._parse_expr(node.elt)
+        return f"{iter_obj}.into_iter().map(|{target}| {body})"
+
+    # ── subscript / slice ────────────────────────────────────────────────────
+
+    def _expr_subscript(self, node: ast.Subscript) -> str:
+        val      = self._parse_expr(node.value)
+        idx_node = node.slice
+        if isinstance(idx_node, ast.Slice):
+            return self._expr_slice(val, idx_node)
+        idx = self._parse_expr(idx_node)
+        if isinstance(idx_node, (ast.BinOp, ast.Call)):
+            return f"{val}[({idx}) as usize]"
+        return f"{val}[{idx}]"
+
+    def _expr_slice(self, val: str, s: ast.Slice) -> str:
+        lower = self._parse_expr(s.lower) if s.lower else None
+        upper = self._parse_expr(s.upper) if s.upper else None
+        step  = self._parse_expr(s.step)  if s.step  else None
+        if step:
+            lo = lower or "0"
+            hi = upper or f"{val}.len()"
+            return (f"({lo}..{hi}).step_by({step} as usize)"
+                    f".map(|i| {val}[i].clone()).collect::<Vec<_>>()")
+        if lower and upper: return f"{val}[{lower}..{upper}]"
+        if upper:           return f"{val}[..{upper}]"
+        if lower:           return f"{val}[{lower}..]"
+        return f"{val}[..]"
+
+    # ── structural / misc ────────────────────────────────────────────────────
+
+    def _expr_ifexp(self, node: ast.IfExp) -> str:
+        cond, body, orelse = (self._parse_expr(n)
+                              for n in (node.test, node.body, node.orelse))
+        return f"if {cond} {{ {body} }} else {{ {orelse} }}"
+
+    def _expr_lambda(self, node: ast.Lambda) -> str:
+        args = [safe_name(a.arg) for a in node.args.args]
+        return f"|{', '.join(args)}| {self._parse_expr(node.body)}"
+
+    def _expr_namedexpr(self, node: ast.NamedExpr) -> str:
+        name = safe_name(node.target.id)
+        val  = self._parse_expr(node.value)
+        return f"{{ let {name} = {val}; {name} }}"
+
+    def _expr_await(self, node: ast.Await) -> str:
+        return f"{self._parse_expr(node.value)}.await"
+
+    def _expr_yield(self, node: ast.Yield) -> str:
+        return f"/* yield */ {self._parse_expr(node.value)}" if node.value else "/* yield */"
+
+    def _expr_yieldfrom(self, node: ast.YieldFrom) -> str:
+        return f"/* yield from */ {self._parse_expr(node.value)}"
+
+    def _expr_starred(self, node: ast.Starred) -> str:
+        return self._parse_expr(node.value)
+
+    # ── dispatch table ───────────────────────────────────────────────────────
+    # Maps AST node type → handler. To support a new node type: one line here.
+
+    _EXPR_DISPATCH: Dict[type, Any] = {
+        ast.Name:         _expr_name_const,
+        ast.Constant:     _expr_name_const,
+        ast.BinOp:        _expr_binop,
+        ast.BoolOp:       _expr_boolop,
+        ast.UnaryOp:      _expr_unaryop,
+        ast.Compare:      _expr_compare,
+        ast.JoinedStr:    _expr_fstring,
+        ast.Attribute:    _expr_attribute,
+        ast.List:         _expr_list,
+        ast.Set:          _expr_set,
+        ast.Dict:         _expr_dict,
+        ast.Tuple:        _expr_tuple,
+        ast.ListComp:     _expr_listcomp,
+        ast.SetComp:      _expr_setcomp,
+        ast.DictComp:     _expr_dictcomp,
+        ast.GeneratorExp: _expr_generatorexp,
+        ast.Subscript:    _expr_subscript,
+        ast.IfExp:        _expr_ifexp,
+        ast.Lambda:       _expr_lambda,
+        ast.NamedExpr:    _expr_namedexpr,
+        ast.Await:        _expr_await,
+        ast.Yield:        _expr_yield,
+        ast.YieldFrom:    _expr_yieldfrom,
+        ast.Starred:      _expr_starred,
+    }
 
     def parse_body(self, stmts: List[ast.stmt]) -> List[RustNode]:
         nodes = []
