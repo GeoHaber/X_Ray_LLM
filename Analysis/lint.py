@@ -112,6 +112,32 @@ class LintAnalyzer(BaseStaticAnalyzer):
             fixable=fixable,
         )
 
+    # -- auto-fix ----------------------------------------------------------
+
+    def fix(self, root: Path, exclude: Optional[List[str]] = None) -> int:
+        """Run ``ruff check --fix`` and return the number of issues auto-fixed.
+
+        Returns 0 if ruff is not available or the command fails.
+        """
+        if not self.available:
+            return 0
+        import subprocess
+        from Analysis._analyzer_base import _merged_excludes
+        cmd = [self._tool_path, "check", "--fix", str(root)]
+        for pat in _merged_excludes(exclude):
+            cmd.extend(["--exclude", pat])
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True,
+                timeout=self.TOOL_TIMEOUT,
+            )
+            # ruff prints "Fixed N errors." on stderr when --fix applied changes
+            import re
+            match = re.search(r"Fixed (\d+) error", result.stderr + result.stdout)
+            return int(match.group(1)) if match else 0
+        except Exception:
+            return 0
+
     # -- static helpers (ruff-specific) ------------------------------------
 
     _PREFIX_SEVERITY = {"F": Severity.WARNING, "E": Severity.INFO, "W": Severity.INFO}

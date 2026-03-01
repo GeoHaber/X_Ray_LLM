@@ -1,6 +1,6 @@
 
 
-__version__ = "5.1.2"
+__version__ = "6.0.0"
 
 # Safe separator: always ASCII dash — renders correctly on every terminal/console
 SEP = "-"
@@ -26,6 +26,8 @@ SMELL_THRESHOLDS = {
     "missing_docstring_size": 15,  # only flag if function > N lines
     "too_many_returns": 5,      # return statements
     "too_many_branches": 8,     # if/elif branches
+    # ── new in v6.0.0 ────────────────────────────────────────────────────
+    "magic_number_min_count": 2,   # flag if ≥ N distinct magic numbers in a function
 }
 
 # LLM Settings (Centralized — overridden by xray_settings.json if present)

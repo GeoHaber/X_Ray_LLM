@@ -1,6 +1,6 @@
 
 from pathlib import Path
-from typing import List, Dict, Any, NamedTuple
+from typing import List, Dict, Any, NamedTuple, Optional
 from Core.types import FunctionRecord, ClassRecord, SmellIssue, DuplicateGroup, LibrarySuggestion, Severity
 from Core.config import __version__, SEP
 from Core.ui_bridge import get_bridge
@@ -241,7 +241,8 @@ def compute_grade(results: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def print_unified_grade(results: Dict[str, Any]) -> Dict[str, Any]:
+def print_unified_grade(results: Dict[str, Any],
+                        prev_results: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Calculate and print a unified code quality grade based on all scanners.
 
@@ -250,7 +251,13 @@ def print_unified_grade(results: Dict[str, Any]) -> Dict[str, Any]:
       - Deducts points for issues found by each scanner
       - Maps final score to letter grade
 
-    Returns grade_info dict with score, letter, and breakdown.
+    Parameters
+    ----------
+    prev_results :
+        Optional previous scan result dict (from ``Analysis.trend.load_prev_results``).
+        When provided, a score delta line is printed below the grade.
+
+    Returns grade_info dict with score, letter, breakdown, and optional delta.
     """
     bridge = get_bridge()
     bridge.log(f"\n{'='*64}")
@@ -261,6 +268,19 @@ def print_unified_grade(results: Dict[str, Any]) -> Dict[str, Any]:
 
     bridge.log(f"\n  Tools used: {', '.join(grade_info['tools_run'])}")
     bridge.log(f"\n  Score: {grade_info['score']}/100  Grade: {grade_info['letter']}")
+
+    # Trend delta (v6.0.0)
+    if prev_results:
+        try:
+            from Analysis.trend import compare_scans, format_grade_delta
+            delta = compare_scans(prev_results, results)
+            delta_line = format_grade_delta(delta)
+            if delta_line:
+                bridge.log(f"  {delta_line}")
+            grade_info["delta"] = delta
+        except Exception:
+            pass
+
     bridge.log("")
     _print_breakdown(grade_info["breakdown"])
     bridge.log(f"\n{'='*64}\n")

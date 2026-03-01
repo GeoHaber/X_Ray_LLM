@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-X_RAY_Claude.py — Smart AI-Powered Code Analyzer (X-Ray 5.0)
+X_RAY_Claude.py — Smart AI-Powered Code Analyzer (X-Ray 6.0)
 =============================================================
 
 Unified code quality scanner combining:
@@ -18,7 +18,8 @@ Usage::
     python X_RAY_Claude.py --full-scan                  # everything (all 4 analyzers)
     python X_RAY_Claude.py --report scan_results.json   # save JSON report
     python X_RAY_Claude.py --rustify                    # rank functions for Rust porting
-    python X_RAY_Claude.py --rustify --report rust.json  # save candidate report
+    python X_RAY_Claude.py --lint --fix                 # lint + auto-apply Ruff fixes
+    python X_RAY_Claude.py --compare prev.json          # show delta vs previous scan
 """
 
 from __future__ import annotations
@@ -456,10 +457,17 @@ def _run_duplicate_phase(args, functions):
 
 
 def _run_lint_phase(args, root):
-    """Run Ruff lint analysis if requested."""
+    """Run Ruff lint analysis (and optionally auto-fix) if requested."""
     if not args.lint:
         return None, []
-    return run_lint_phase(root, exclude=args.exclude)
+    linter, issues = run_lint_phase(root, exclude=args.exclude)
+    if getattr(args, "fix", False) and linter is not None:
+        n_fixed = linter.fix(root, exclude=args.exclude)
+        if n_fixed:
+            print(f"  ✔ Ruff auto-fix applied {n_fixed} issue(s)")
+        else:
+            print("  ℹ No auto-fixable Ruff issues found")
+    return linter, issues
 
 
 def _run_security_phase(args, root):
@@ -586,7 +594,26 @@ async def main_async():
         print(f"Error: {root} is not a directory.")
         sys.exit(1)
 
+    # Load previous scan for trend comparison (--compare)
+    prev_results = None
+    compare_path = getattr(args, "compare", None)
+    if compare_path:
+        from Analysis.trend import load_prev_results
+        prev_results = load_prev_results(compare_path)
+        if prev_results is None:
+            print(f"  [!] --compare: could not read '{compare_path}' — trend disabled")
+
     results = await _run_full_scan(root, args)
+
+    # Print trend delta if available (injected into print_unified_grade via results key)
+    if prev_results and "grade" in results:
+        from Analysis.reporting import print_unified_grade as _pug
+        from Analysis.trend import compare_scans, format_grade_delta
+        delta = compare_scans(prev_results, results)
+        delta_line = format_grade_delta(delta)
+        if delta_line:
+            print(f"  {delta_line}")
+        results.setdefault("grade", {}).update({"delta": delta})
 
     # Save Report
     if args.report:

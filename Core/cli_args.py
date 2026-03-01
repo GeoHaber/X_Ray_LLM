@@ -26,6 +26,14 @@ def add_common_scan_args(parser: argparse.ArgumentParser) -> None:
                         help="Rank functions by Rust-porting suitability")
     parser.add_argument("--report", help="Save JSON report to file")
     parser.add_argument("--exclude", nargs="*", help="Exclude directories")
+    parser.add_argument(
+        "--fix", action="store_true",
+        help="Auto-fix Ruff lint issues after analysis (implies --lint)",
+    )
+    parser.add_argument(
+        "--compare", metavar="PREV_REPORT",
+        help="Path to a previous JSON report; prints score delta after scan",
+    )
 
 
 def normalize_scan_args(args: argparse.Namespace,

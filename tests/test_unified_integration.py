@@ -265,9 +265,13 @@ class TestReportingNoCrash:
 
 class TestVersion:
 
-    def test_version_is_5(self):
+    def test_version_is_valid_semver(self):
+        """Version must be a valid semantic version with major >= 5."""
         from Core.config import __version__
-        assert __version__.startswith("5.")
+        parts = __version__.split(".")
+        assert len(parts) >= 2, f"Expected semver format, got: {__version__}"
+        major = int(parts[0])
+        assert major >= 5, f"Major version should be >= 5, got {major}"
 
     def test_banner_contains_unified(self):
         from Core.config import BANNER

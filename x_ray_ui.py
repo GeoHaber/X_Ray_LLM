@@ -57,217 +57,23 @@ import textwrap  # noqa: E402
 # ── Python → Rust transpiler helpers imported from Analysis.auto_rustify ────
 
 
-def _parse_sketch_params(func: "FunctionRecord") -> List[str]:
-    """Parse Python parameters into Rust parameter strings."""
-    try:
-        tree = ast.parse(func.code)
-        func_node = next(
-            (n for n in ast.walk(tree)
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
-            None,
-        )
-        if func_node is None:
-            raise ValueError("No function node")
-        params = []
-        for arg in func_node.args.args:
-            if arg.arg == "self":
-                continue
-            rust_type = _py_type_to_rust(ast.unparse(arg.annotation)) if arg.annotation else "PyObject"
-            params.append(f"{arg.arg}: {rust_type}")
-        return params
-    except Exception:
-        return [f"{p}: PyObject" for p in func.parameters if p != "self"]
 
-
-def _translate_sketch_body(func: "FunctionRecord") -> List[str]:
-    """Translate function body to Rust sketch lines."""
-    try:
-        tree = ast.parse(func.code)
-        func_node = next(
-            (n for n in ast.walk(tree)
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
-            None,
-        )
-        if func_node is not None:
-            return _translate_body(func_node.body, indent=1)
-    except Exception:  # nosec B110
-        pass
-    return ["    // TODO: translate function body", "    todo!()"]
-
-
-def _generate_rust_sketch(func: "FunctionRecord") -> str:
-    """Generate a Rust function sketch from a Python FunctionRecord."""
-    ret_rust = _py_type_to_rust(func.return_type or "")
-    if not ret_rust.startswith("PyResult"):
-        ret_rust = f"PyResult<{ret_rust}>"
-
-    params_str = ", ".join(_parse_sketch_params(func))
-    body_lines = _translate_sketch_body(func)
-
-    lines = [
-        "use pyo3::prelude::*;",
-        "",
-        "#[pyfunction]",
-        f"fn {func.name}({params_str}) -> {ret_rust} {{",
-        *body_lines,
-        "}",
-    ]
-    return "\n".join(lines)
-
-
-# ── Duplicate merge / unify helper ───────────────────────────────────────────
-
-def _extract_params_from_code(code: str):
-    """Parse code and extract parameter list from the first function."""
-    try:
-        tree = ast.parse(textwrap.dedent(code))
-    except Exception:
-        return None
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            return [
-                f"{a.arg}{': ' + ast.unparse(a.annotation) if a.annotation else ''}"
-                for a in node.args.args]
-    return None
-
-
-def _extract_func_codes(funcs_data: List[Dict[str, Any]],
-                        code_map: Dict[str, str]):
-    """Extract source code, names, and parameter sets from function data."""
-    codes, names, params_sets = [], [], []
-    for f in funcs_data:
-        loc = f"{f.get('file', '?')}:{f.get('line', '?')}"
-        code = code_map.get(loc, code_map.get(f.get('key', ''), ''))
-        if not code:
-            continue
-        codes.append(code)
-        names.append(f.get('name', 'unknown'))
-        params = _extract_params_from_code(code)
-        if params is not None:
-            params_sets.append(params)
-    return codes, names, params_sets
-
-
-def _unified_func_name(names: List[str]) -> str:
-    """Derive a unified name from a common prefix of *names*."""
-    prefix = names[0]
-    for n in names[1:]:
-        while not n.startswith(prefix) and prefix:
-            prefix = prefix[:-1]
-    return prefix.rstrip("_") if len(prefix) >= 3 else names[0]
-
-
-def _merge_param_lists(params_sets: List[List[str]]) -> List[str]:
-    """Union of all parameter sets, preserving order."""
-    merged: List[str] = []
-    seen: set = set()
-    for pset in params_sets:
-        for p in pset:
-            name = p.split(":")[0].strip()
-            if name not in seen:
-                seen.add(name)
-                merged.append(p)
-    return merged
-
-
-def _get_first_docstring(code: str):
-    """Get docstring from the first function/async function in code."""
-    try:
-        tree = ast.parse(textwrap.dedent(code))
-    except Exception:
-        return None
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            return ast.get_docstring(node)
-    return None
-
-
-def _collect_docstrings(codes: List[str]) -> List[str]:
-    """Gather unique docstrings from every code variant."""
-    parts: List[str] = []
-    for c in codes:
-        ds = _get_first_docstring(c)
-        if ds and ds not in parts:
-            parts.append(ds)
-    return parts
-
-
-def _build_unified_header(funcs_data: List[Dict[str, Any]],
-                          names: List[str]) -> List[str]:
-    """Build the comment header for a unified function."""
-    lines = [
-        "# ══════════════════════════════════════════════════════",
-        f"# UNIFIED from: {', '.join(names)}",
-        "# Original locations:",
-    ]
-    for f in funcs_data:
-        lines.append(f"#   - {f.get('file', '?')}:{f.get('line', '?')}")
-    lines.extend(["# ══════════════════════════════════════════════════════", ""])
-    return lines
-
-
-def _build_unified_docstring(names: List[str],
-                             doc_parts: List[str]) -> List[str]:
-    """Build the docstring block for a unified function."""
-    if not doc_parts:
-        return [f'    """Unified from {len(names)} duplicate functions."""']
-    lines = ['    """', f"    Unified from {len(names)} duplicates.", ""]
-    for dp in doc_parts:
-        lines.extend(f"    {dl}" for dl in dp.strip().split("\n"))
-    lines.append('    """')
-    return lines
-
-
-def _unparse_func_node(node, unified_name: str, all_params: List[str],
-                       names: List[str], doc_parts: List[str]) -> List[str]:
-    """Unparse a function AST node into unified source lines."""
-    lines = []
-    for d in node.decorator_list:
-        lines.append(f"@{ast.unparse(d)}")
-    kw = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
-    ret = f" -> {ast.unparse(node.returns)}" if node.returns else ""
-    lines.append(f"{kw} {unified_name}({', '.join(all_params)}){ret}:")
-    lines.extend(_build_unified_docstring(names, doc_parts))
-    body = node.body
-    if (body and isinstance(body[0], ast.Expr)
-            and isinstance(body[0].value, (ast.Constant, ast.Str))):
-        body = body[1:]
-    for b_node in body:
-        lines.extend(f"    {bl}" for bl in ast.unparse(b_node).split("\n"))
-    return lines
-
-
-def _generate_unified_function(funcs_data: List[Dict[str, Any]],
-                               code_map: Dict[str, str]) -> str:
-    """Generate a unified function from a group of duplicates."""
-    codes, names, params_sets = _extract_func_codes(funcs_data, code_map)
-    if not codes:
-        return "# No source code available for merging"
-
-    base_idx = max(range(len(codes)), key=lambda i: len(codes[i]))
-    base_code, base_name = codes[base_idx], names[base_idx]
-    unified_name = _unified_func_name(names)
-    all_params = _merge_param_lists(params_sets)
-    doc_parts = _collect_docstrings(codes)
-
-    lines = _build_unified_header(funcs_data, names)
-
-    try:
-        tree = ast.parse(textwrap.dedent(base_code))
-        func_node = next(
-            (n for n in ast.walk(tree)
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
-            None,
-        )
-        if func_node is None:
-            raise ValueError("No function node")
-        lines.extend(_unparse_func_node(
-            func_node, unified_name, all_params, names, doc_parts))
-    except Exception:
-        lines.append(base_code.replace(base_name, unified_name, 1))
-
-    return "\n".join(lines)
-
+# ── Shared scan-phase logic (extracted to avoid duplication with x_ray_flet.py) ──
+from Core.scan_context import (  # noqa: E402
+    _parse_sketch_params, _translate_sketch_body, _generate_rust_sketch,
+    _extract_params_from_code, _extract_func_codes, _unified_func_name,
+    _merge_param_lists, _get_first_docstring, _collect_docstrings,
+    _build_unified_header, _build_unified_docstring, _unparse_func_node,
+    _generate_unified_function,
+    scan_codebase as _scan_codebase, ScanContext,
+    run_phase_smells as _run_phase_smells,
+    run_phase_duplicates as _run_phase_duplicates,
+    run_phase_lint as _run_phase_lint,
+    run_phase_security as _run_phase_security,
+    run_phase_rustify as _run_phase_rustify,
+    PHASE_RUNNERS as _PHASE_RUNNERS,
+    run_scan as _run_scan,
+)
 
 # ── Modern CSS injection ────────────────────────────────────────────────────
 

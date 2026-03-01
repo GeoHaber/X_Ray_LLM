@@ -1,5 +1,119 @@
 # Changelog
 
+## v6.0.0 — Performance, New Smells, Auto-Fix & Trend Tracking (2026-03-01)
+
+### Overview
+Major feature release focused on **scan performance**, **three new smell detectors**,
+**Ruff auto-fix mode**, and **scan-to-scan trend reporting**.
+
+---
+
+### 1 · Performance: Incremental File Cache
+
+#### New File: `Analysis/scan_cache.py`
+
+| Class | Purpose |
+|---|---|
+| `ScanCache` | JSON-backed cache; cache hit skips AST re-parse |
+| `get_cache()` / `reset_cache()` | Process-wide singleton helpers |
+
+- **Hit logic**: `mtime + size` match → instant hit.  Fallback: SHA-256 content hash.
+- **Storage**: `~/.cache/xray/scan_cache.json` (overridable via `XRAY_CACHE_DIR` env var).
+- **Expected speedup**: ~60–80 % on second+ scans of unchanged codebases.
+- Wired into `Analysis/ast_utils.py → extract_functions_from_file()`.
+- Cache flushed to disk at end of every `run_scan()` call in `Core/scan_context.py`.
+
+---
+
+### 2 · Performance: Parallel Lint + Security Phases
+
+#### Modified: `Core/scan_context.py → run_scan()`
+
+Lint (Ruff) and Security (Bandit) are subprocess-bound and previously ran
+serially after AST parsing.  They now start in a `ThreadPoolExecutor`
+**concurrently with** AST-based phases (smells, duplicates, rustify).
+
+**Expected speedup**: ~30–50 % wall-clock reduction on full scans.
+
+---
+
+### 3 · New Smell Detectors
+
+#### Modified: `Analysis/smells.py`
+
+| Detector | Category | Severity | Trigger |
+|---|---|---|---|
+| `_check_magic_numbers` | `magic-number` | INFO | ≥ 2 numeric literals ≠ 0/1/-1/2/100 |
+| `_check_mutable_default_arg` | `mutable-default-arg` | WARNING | `def f(x=[])` / `def f(x={})` / `def f(x={1,2})` |
+| `_check_dead_code` | `dead-code` | WARNING | Unreachable stmts after `return`/`raise`/`break`/`continue` |
+
+#### Modified: `Core/config.py`
+- Added threshold key: `"magic_number_min_count": 2`
+- Version bumped: `5.1.2` → `6.0.0`
+
+---
+
+### 4 · Auto-Fix Mode (`--fix`)
+
+#### Modified: `Analysis/lint.py`
+- Added `LintAnalyzer.fix(root, exclude)` — calls `ruff check --fix`, returns count of auto-applied fixes.
+
+#### Modified: `Core/cli_args.py`
+- New flag `--fix`: implies `--lint`, calls `linter.fix()` after analysis, prints `✔ N issue(s) auto-fixed`.
+
+#### Modified: `x_ray_claude.py`
+- `_run_lint_phase()` wired to call `linter.fix()` when `--fix` is set.
+
+---
+
+### 5 · Trend Tracking (`--compare`)
+
+#### New File: `Analysis/trend.py`
+
+| Function | Purpose |
+|---|---|
+| `compare_scans(prev, curr)` | Returns per-category delta dicts |
+| `format_grade_delta(delta)` | Returns `"▲ +3.5 pts vs previous scan (B→B+"` |
+| `load_prev_results(path)` | Safely loads a previous JSON report |
+
+#### Modified: `Analysis/reporting.py`
+- `print_unified_grade()` accepts optional `prev_results` kwarg; prints delta line.
+
+#### Modified: `Core/cli_args.py`
+- New flag `--compare <PREV_REPORT>`: loads previous JSON and shows score delta.
+
+#### Modified: `x_ray_claude.py`
+- `main_async()` loads `--compare` file, computes and prints delta after scan.
+
+---
+
+### Tests
+
+| File | Tests | What it covers |
+|---|---|---|
+| `tests/test_smells_new.py` | 20 | magic-number, mutable-default-arg, dead-code detectors |
+| `tests/test_scan_cache.py` | 14 | cache hit/miss, invalidation, persistence, singleton |
+| `tests/test_trend.py` | 18 | compare_scans deltas, format_grade_delta, load_prev_results |
+
+**Full suite target: 700+ tests, 0 failures.**
+
+### Files Changed
+- `Analysis/scan_cache.py` — New
+- `Analysis/trend.py` — New
+- `Analysis/smells.py` — 3 new detectors + `ast` import
+- `Analysis/ast_utils.py` — Cache wired into `extract_functions_from_file`
+- `Analysis/lint.py` — `LintAnalyzer.fix()` method
+- `Analysis/reporting.py` — `print_unified_grade(prev_results=)` kwarg + `Optional` import
+- `Core/config.py` — Version `6.0.0`, `magic_number_min_count` threshold
+- `Core/cli_args.py` — `--fix`, `--compare` flags; `normalize_scan_args` updated
+- `Core/scan_context.py` — Parallel lint/security + cache flush in `run_scan()`
+- `x_ray_claude.py` — Docstring update, `_run_lint_phase` wired, `main_async` wired
+- `tests/test_smells_new.py` — New test file (20 tests)
+- `tests/test_scan_cache.py` — New test file (14 tests)
+- `tests/test_trend.py` — New test file (18 tests)
+
+---
+
 ## v5.3.0 — UIBridge: Swappable UI Output Layer (2026-02-28)
 
 ### Overview

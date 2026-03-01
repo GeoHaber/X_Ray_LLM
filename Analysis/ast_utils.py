@@ -8,6 +8,7 @@ import os
 from Core.types import FunctionRecord, ClassRecord
 from Core.config import _ALWAYS_SKIP, _BUILTIN_NAMES
 from Core.ast_helpers import compute_nesting_depth, compute_complexity
+from Analysis.scan_cache import get_cache
 
 logger = logging.getLogger("X_RAY_AST")
 
@@ -120,9 +121,25 @@ def _walk_definitions(node: ast.AST):
             yield from _walk_definitions(child)
 
 
-def extract_functions_from_file(fpath: Path, root: Path) -> Tuple[
+def extract_functions_from_file(fpath: Path, root: Path,
+                                 use_cache: bool = True) -> Tuple[
         List[FunctionRecord], List[ClassRecord], Optional[str]]:
-    """Parse one file and extract all functions and classes."""
+    """Parse one file and extract all functions and classes.
+
+    When *use_cache* is True (default), results are looked up in the
+    module-level :class:`~Analysis.scan_cache.ScanCache` singleton and
+    stored on a cache miss, so subsequent scans of unchanged files
+    skip re-parsing entirely.
+    """
+    cache = get_cache() if use_cache else None
+
+    # ── cache lookup ────────────────────────────────────────────────────────
+    if cache is not None:
+        hit = cache.get(fpath)
+        if hit is not None:
+            return hit["functions"], hit["classes"], hit["error"]
+
+    # ── parse ────────────────────────────────────────────────────────────────
     try:
         source = fpath.read_text(encoding="utf-8", errors="ignore")
     except Exception as e:
@@ -145,6 +162,10 @@ def extract_functions_from_file(fpath: Path, root: Path) -> Tuple[
         elif isinstance(node, ast.ClassDef):
             class_record = _build_class_record(node, rel_path)
             classes.append(class_record)
+
+    # ── cache store ─────────────────────────────────────────────────────────
+    if cache is not None:
+        cache.put(fpath, {"functions": functions, "classes": classes, "error": None})
 
     return functions, classes, None
 
