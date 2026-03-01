@@ -77,3 +77,10 @@ run_nexus_on_transpiler.py
 
 # Bandit reports
 bandit_report*.json
+
+# Added by cleanup
+.ruff_cache/
+
+# Added by cleanup
+.ruff_cache/
+
