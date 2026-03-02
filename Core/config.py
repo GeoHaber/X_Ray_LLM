@@ -14,15 +14,15 @@ BANNER = f"""
 
 # Thresholds (tunable)
 SMELL_THRESHOLDS = {
-    "long_function": 60,        # lines
+    "long_function": 60,  # lines
     "very_long_function": 120,  # lines → critical
-    "deep_nesting": 4,          # levels
-    "very_deep_nesting": 6,     # levels → critical
-    "high_complexity": 10,      # cyclomatic
-    "very_high_complexity": 20, # cyclomatic → critical
-    "too_many_params": 6,       # parameters
-    "god_class": 15,            # methods
-    "large_class": 500,         # lines
+    "deep_nesting": 4,  # levels
+    "very_deep_nesting": 6,  # levels → critical
+    "high_complexity": 10,  # cyclomatic
+    "very_high_complexity": 20,  # cyclomatic → critical
+    "too_many_params": 6,  # parameters
+    "god_class": 15,  # methods
+    "large_class": 500,  # lines
     "missing_docstring_size": 15,  # only flag if function > N lines
     "too_many_returns": 5,      # return statements
     "too_many_branches": 8,     # if/elif branches
@@ -45,6 +45,7 @@ def load_llm_config():
     """Merge LLM_CONFIG with persisted settings from xray_settings.json."""
     try:
         from .llm_manager import load_settings
+
         settings = load_settings()
         llm = settings.get("llm", {})
         if llm.get("server_url"):
@@ -76,6 +77,7 @@ _ALWAYS_SKIP = frozenset({
 })
 
 import builtins as _builtins_mod  # noqa: E402
+
 _BUILTIN_NAMES = frozenset(dir(_builtins_mod))
 
 _STOP_WORDS = frozenset(

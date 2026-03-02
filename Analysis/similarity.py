@@ -1,4 +1,3 @@
-
 import re
 import hashlib
 import keyword
@@ -11,6 +10,7 @@ from typing import List
 # Optional Rust acceleration (preserved from original)
 try:
     import x_ray_core as _rust_core
+
     _HAS_RUST = True
 except ImportError:
     _rust_core = None
@@ -32,18 +32,22 @@ def _classify_name(name: str) -> str:
         return name
     if name in _BUILTIN_NAMES:
         return name
-    return 'ID'
+    return "ID"
 
 
 _TOKEN_TYPE_MAP = {
-    _tokenize_mod.NUMBER: 'NUM',
-    _tokenize_mod.STRING: 'STR',
+    _tokenize_mod.NUMBER: "NUM",
+    _tokenize_mod.STRING: "STR",
 }
 
-_PASSTHROUGH_TYPES = frozenset({
-    _tokenize_mod.OP, _tokenize_mod.NEWLINE,
-    _tokenize_mod.INDENT, _tokenize_mod.DEDENT,
-})
+_PASSTHROUGH_TYPES = frozenset(
+    {
+        _tokenize_mod.OP,
+        _tokenize_mod.NEWLINE,
+        _tokenize_mod.INDENT,
+        _tokenize_mod.DEDENT,
+    }
+)
 
 
 def _classify_token(tok) -> str | None:
@@ -76,13 +80,13 @@ def _ngram_fingerprints(tokens: List[str], n: int = 5, w: int = 4) -> frozenset:
         return frozenset()
     hashes: List[int] = []
     for i in range(len(tokens) - n + 1):
-        gram = ' '.join(tokens[i:i + n])
+        gram = " ".join(tokens[i : i + n])
         hashes.append(int(hashlib.sha256(gram.encode()).hexdigest()[:8], 16))
     if len(hashes) < w:
         return frozenset(hashes)
     fingerprints: set = set()
     for i in range(len(hashes) - w + 1):
-        fingerprints.add(min(hashes[i:i + w]))
+        fingerprints.add(min(hashes[i : i + w]))
     return frozenset(fingerprints)
 
 
@@ -188,9 +192,9 @@ def callgraph_overlap(func_a, func_b) -> float:
 def semantic_similarity(func_a, func_b) -> float:
     """Weighted composite of behavioural signals (0–1)."""
     w_name = 0.30
-    w_sig  = 0.25
+    w_sig = 0.25
     w_call = 0.30
-    w_doc  = 0.15
+    w_doc = 0.15
 
     ns = name_similarity(func_a.name, func_b.name)
     ss = signature_similarity(func_a, func_b)
@@ -202,4 +206,3 @@ def semantic_similarity(func_a, func_b) -> float:
     ds = cosine_similarity(da, db) if (da and db) else 0.0
 
     return w_name * ns + w_sig * ss + w_call * cg + w_doc * ds
-

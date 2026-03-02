@@ -60,8 +60,14 @@ else:
 from Core.config import __version__
 from Analysis._analyzer_base import _find_tool  # noqa: E402
 from Core.scan_phases import (
-    scan_codebase, run_smell_phase, run_duplicate_phase,
-    run_lint_phase, run_security_phase, run_rustify_scan, collect_reports,
+    scan_codebase,
+    run_smell_phase,
+    run_duplicate_phase,
+    run_format_phase,
+    run_lint_phase,
+    run_security_phase,
+    run_rustify_scan,
+    collect_reports,
 )
 from Core.utils import check_trial_license as _check_trial_license
 
@@ -418,6 +424,12 @@ def _run_scan_phases(args, root: Path):
 
     finder = run_duplicate_phase(functions) if args.duplicates else None
 
+    if getattr(args, "format", False):
+        fmt_analyzer, format_issues = run_format_phase(root, exclude=args.exclude)
+        all_issues.extend(format_issues)
+    else:
+        fmt_analyzer, format_issues = None, []
+
     if args.lint:
         linter, lint_issues = run_lint_phase(root, exclude=args.exclude)
         all_issues.extend(lint_issues)
@@ -430,7 +442,16 @@ def _run_scan_phases(args, root: Path):
     else:
         sec_analyzer, sec_issues = None, []
 
-    return detector, finder, linter, lint_issues, sec_analyzer, sec_issues
+    return (
+        detector,
+        finder,
+        fmt_analyzer,
+        format_issues,
+        linter,
+        lint_issues,
+        sec_analyzer,
+        sec_issues,
+    )
 
 
 def main():
@@ -466,13 +487,31 @@ def main():
 
     # Standard scan
     start_time = time.time()
-    detector, finder, linter, lint_issues, sec_analyzer, sec_issues = \
-        _run_scan_phases(args, root)
+    (
+        detector,
+        finder,
+        fmt_analyzer,
+        format_issues,
+        linter,
+        lint_issues,
+        sec_analyzer,
+        sec_issues,
+    ) = _run_scan_phases(args, root)
 
     from Core.scan_phases import AnalysisComponents
-    results = collect_reports(AnalysisComponents(
-        detector, finder, linter, lint_issues,
-        sec_analyzer, sec_issues))
+
+    results = collect_reports(
+        AnalysisComponents(
+            detector,
+            finder,
+            fmt_analyzer,
+            format_issues,
+            linter,
+            lint_issues,
+            sec_analyzer,
+            sec_issues,
+        )
+    )
     results["hardware"] = hw
 
     duration = time.time() - start_time
@@ -486,14 +525,6 @@ def main():
     print(f"\n{'='*66}")
     print("  X-Ray scan complete.")
     print(f"{'='*66}\n")
-
-
-def _is_interactive_console() -> bool:
-    """Return True when the .exe was likely double-clicked (not piped)."""
-    try:
-        return sys.stdin is not None and sys.stdin.isatty()
-    except Exception:
-        return False
 
 
 if __name__ == "__main__":

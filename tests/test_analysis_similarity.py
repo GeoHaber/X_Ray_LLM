@@ -2,6 +2,7 @@
 Tests for Analysis/similarity.py — token normalization, n-gram fingerprints,
 code similarity, name similarity, signature similarity, and semantic similarity.
 """
+
 import pytest
 from collections import Counter
 from unittest.mock import MagicMock
@@ -31,6 +32,7 @@ from tests.shared_tokenize_tests import (
 # ════════════════════════════════════════════════════════════════════
 #  tokenize()
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestTokenize:
     """Tests for tokenization utilities."""
@@ -66,8 +68,8 @@ class TestTokenize:
 #  _term_freq()
 # ════════════════════════════════════════════════════════════════════
 
-class TestTermFreq:
 
+class TestTermFreq:
     def test_basic_counts(self):
         tf = _term_freq(["a", "b", "a", "c", "a"])
         assert tf["a"] == 3
@@ -82,8 +84,8 @@ class TestTermFreq:
 #  _normalized_token_stream()
 # ════════════════════════════════════════════════════════════════════
 
-class TestNormalizedTokenStream:
 
+class TestNormalizedTokenStream:
     def test_normalizes_identifiers_to_id(self):
         tokens = _normalized_token_stream("x = 42")
         assert "ID" in tokens
@@ -113,8 +115,8 @@ class TestNormalizedTokenStream:
 #  _ngram_fingerprints()
 # ════════════════════════════════════════════════════════════════════
 
-class TestNgramFingerprints:
 
+class TestNgramFingerprints:
     def test_short_input_returns_empty(self):
         """Fewer tokens than n → empty frozenset."""
         fp = _ngram_fingerprints(["a", "b"], n=5)
@@ -137,8 +139,8 @@ class TestNgramFingerprints:
 #  _token_ngram_similarity()
 # ════════════════════════════════════════════════════════════════════
 
-class TestTokenNgramSimilarity:
 
+class TestTokenNgramSimilarity:
     def test_identical_code(self):
         code = "def process(x):\n    return x * 2\n"
         sim = _token_ngram_similarity(code, code)
@@ -159,8 +161,8 @@ class TestTokenNgramSimilarity:
 #  _ast_node_histogram()
 # ════════════════════════════════════════════════════════════════════
 
-class TestAstNodeHistogram:
 
+class TestAstNodeHistogram:
     def test_counts_node_types(self):
         hist = _ast_node_histogram("def f():\n    return 1\n")
         assert "FunctionDef" in hist
@@ -179,8 +181,8 @@ class TestAstNodeHistogram:
 #  cosine_similarity()
 # ════════════════════════════════════════════════════════════════════
 
-class TestCosineSimilarity:
 
+class TestCosineSimilarity:
     def test_identical_vectors(self):
         a = Counter({"x": 3, "y": 2})
         assert cosine_similarity(a, a) == pytest.approx(1.0)
@@ -201,8 +203,8 @@ class TestCosineSimilarity:
 #  code_similarity()
 # ════════════════════════════════════════════════════════════════════
 
-class TestCodeSimilarity:
 
+class TestCodeSimilarity:
     def test_identical_code_high(self):
         code = "def add(a, b):\n    return a + b\n"
         assert code_similarity(code, code) >= 0.9
@@ -223,8 +225,8 @@ class TestCodeSimilarity:
 #  name_similarity()
 # ════════════════════════════════════════════════════════════════════
 
-class TestNameSimilarity:
 
+class TestNameSimilarity:
     def test_identical(self):
         assert name_similarity("get_user", "get_user") == 1.0
 
@@ -245,16 +247,16 @@ class TestNameSimilarity:
 #  signature_similarity()
 # ════════════════════════════════════════════════════════════════════
 
-class TestSignatureSimilarity:
 
+class TestSignatureSimilarity:
     def _mock_func(self, name="f", params=None, ret=None, **kw):
         f = MagicMock()
         f.name = name
         f.parameters = params or []
         f.return_type = ret
-        f.is_async = kw.get('is_async', False)
-        f.calls_to = kw.get('calls_to', [])
-        f.docstring = kw.get('docstring', None)
+        f.is_async = kw.get("is_async", False)
+        f.calls_to = kw.get("calls_to", [])
+        f.docstring = kw.get("docstring", None)
         return f
 
     def test_identical_signatures(self):
@@ -279,8 +281,8 @@ class TestSignatureSimilarity:
 #  callgraph_overlap()
 # ════════════════════════════════════════════════════════════════════
 
-class TestCallgraphOverlap:
 
+class TestCallgraphOverlap:
     def _mock_func(self, calls=None):
         f = MagicMock()
         f.calls_to = calls or []
@@ -306,6 +308,7 @@ class TestCallgraphOverlap:
 #  semantic_similarity()
 # ════════════════════════════════════════════════════════════════════
 
+
 class TestSemanticSimilarity:
     """Tests for semantic similarity computation."""
 
@@ -314,24 +317,44 @@ class TestSemanticSimilarity:
         f.name = name
         f.parameters = params or []
         f.return_type = ret
-        f.is_async = kw.get('is_async', False)
-        f.calls_to = kw.get('calls_to', [])
-        f.docstring = kw.get('docstring', None)
+        f.is_async = kw.get("is_async", False)
+        f.calls_to = kw.get("calls_to", [])
+        f.docstring = kw.get("docstring", None)
         return f
 
     def test_identical_functions_high(self):
-        a = self._mock_func("process_data", ["items"], "list",
-                            calls_to=["filter", "map"], docstring="Process items.")
-        b = self._mock_func("process_data", ["items"], "list",
-                            calls_to=["filter", "map"], docstring="Process items.")
+        a = self._mock_func(
+            "process_data",
+            ["items"],
+            "list",
+            calls_to=["filter", "map"],
+            docstring="Process items.",
+        )
+        b = self._mock_func(
+            "process_data",
+            ["items"],
+            "list",
+            calls_to=["filter", "map"],
+            docstring="Process items.",
+        )
         sim = semantic_similarity(a, b)
         assert sim > 0.8
 
     def test_completely_different_low(self):
-        a = self._mock_func("render_widget", ["canvas"], "None",
-                            calls_to=["draw", "paint"], docstring="Render a widget.")
-        b = self._mock_func("parse_config", ["path"], "dict",
-                            calls_to=["open", "json_load"], docstring="Load config file.")
+        a = self._mock_func(
+            "render_widget",
+            ["canvas"],
+            "None",
+            calls_to=["draw", "paint"],
+            docstring="Render a widget.",
+        )
+        b = self._mock_func(
+            "parse_config",
+            ["path"],
+            "dict",
+            calls_to=["open", "json_load"],
+            docstring="Load config file.",
+        )
         sim = semantic_similarity(a, b)
         assert sim < 0.3
 

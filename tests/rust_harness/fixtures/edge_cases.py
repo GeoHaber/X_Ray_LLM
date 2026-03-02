@@ -9,12 +9,14 @@ Edge cases fixture — tests tricky AST / parsing scenarios:
   - empty files (handled separately)
   - single-expression functions
 """
+
 import functools
 
 
 async def fetch_data(url: str) -> dict:
     """Async function that fetches data."""
     import aiohttp
+
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
             return await resp.json()
@@ -30,6 +32,7 @@ def cached_factorial(n: int) -> int:
 
 def outer_function(data):
     """Has a nested function that should NOT be extracted."""
+
     def _inner_helper(item):
         return item * 2
 

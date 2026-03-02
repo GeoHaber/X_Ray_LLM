@@ -9,6 +9,7 @@ from collections import Counter
 
 # ── tokenize() assertions ────────────────────────────────────────────
 
+
 def assert_tokenize_empty_string(tokenize_fn):
     """tokenize('') → []."""
     assert tokenize_fn("") == []
@@ -31,6 +32,7 @@ def assert_tokenize_camel_case(tokenize_fn):
 
 
 # ── cosine_similarity() assertions ───────────────────────────────────
+
 
 def assert_cosine_partial_overlap(cosine_fn, a=None, b=None):
     """Partial-overlap counters yield 0 < similarity < 1."""

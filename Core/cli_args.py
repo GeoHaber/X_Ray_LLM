@@ -18,12 +18,20 @@ def add_common_scan_args(parser: argparse.ArgumentParser) -> None:
     """
     parser.add_argument("--path", default=".", help="Root directory to scan")
     parser.add_argument("--smell", action="store_true", help="Run code smell detection")
-    parser.add_argument("--duplicates", action="store_true", help="Run duplicate detection")
+    parser.add_argument(
+        "--duplicates", action="store_true", help="Run duplicate detection"
+    )
+    parser.add_argument("--format", action="store_true", help="Run Ruff format check")
     parser.add_argument("--lint", action="store_true", help="Run Ruff linter analysis")
-    parser.add_argument("--security", action="store_true", help="Run Bandit security scan")
+    parser.add_argument(
+        "--security", action="store_true", help="Run Bandit security scan"
+    )
     parser.add_argument("--full-scan", action="store_true", help="Run ALL analyses")
-    parser.add_argument("--rustify", action="store_true",
-                        help="Rank functions by Rust-porting suitability")
+    parser.add_argument(
+        "--rustify",
+        action="store_true",
+        help="Rank functions by Rust-porting suitability",
+    )
     parser.add_argument("--report", help="Save JSON report to file")
     parser.add_argument("--exclude", nargs="*", help="Exclude directories")
     parser.add_argument(
@@ -58,9 +66,9 @@ def add_common_scan_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def normalize_scan_args(args: argparse.Namespace,
-                        *,
-                        extra_flags: tuple[str, ...] = ()) -> argparse.Namespace:
+def normalize_scan_args(
+    args: argparse.Namespace, *, extra_flags: tuple[str, ...] = ()
+) -> argparse.Namespace:
     """Apply default-selection logic shared across entry points.
 
     * If ``--full-scan`` is set, enables smell + lint + security + duplicates.
@@ -69,11 +77,24 @@ def normalize_scan_args(args: argparse.Namespace,
 
     Returns *args* (mutated in-place) for convenience.
     """
+    specific = any(
+        getattr(args, f, False)
+        for f in (
+            "smell",
+            "duplicates",
+            "format",
+            "lint",
+            "security",
+            "rustify",
+            *extra_flags,
+        )
+    )
     specific = any(getattr(args, f, False)
                    for f in ("smell", "duplicates", "lint", "security",
                              "rustify", "web", "health", *extra_flags))
     if args.full_scan or not specific:
         args.smell = True
+        args.format = True
         args.lint = True
         args.security = True
         if args.full_scan:

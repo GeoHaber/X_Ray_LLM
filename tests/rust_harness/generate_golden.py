@@ -12,6 +12,7 @@ Usage:
 
 Golden files saved to:  tests/rust_harness/golden/<suite_name>.json
 """
+
 from __future__ import annotations
 
 import json
@@ -94,7 +95,11 @@ SUITES = [
     {
         "name": "library_candidates",
         "path": FIXTURES_DIR,
-        "include": ["lib_candidate_a.pysrc", "lib_candidate_b.pysrc", "lib_candidate_c.pysrc"],
+        "include": [
+            "lib_candidate_a.pysrc",
+            "lib_candidate_b.pysrc",
+            "lib_candidate_c.pysrc",
+        ],
         "description": "Cross-file same-name functions → library suggestions.",
     },
     # ── Suite 9: Edge cases ──────────────────────────────────────────────────
@@ -115,6 +120,7 @@ def _filter_files(files: list[Path], include: list[str]) -> list[Path]:
 def _scan_pysrc_files(root: Path):
     """Scan .pysrc fixture files (renamed from .py to avoid dup-scanner)."""
     from Analysis.ast_utils import extract_functions_from_file
+
     fns, cls, errs = [], [], []
     for f in sorted(root.glob("*.pysrc")):
         funcs, classes, err = extract_functions_from_file(f, root)
@@ -163,15 +169,17 @@ def _run_suite(suite: dict) -> dict:
     total_time = time.perf_counter() - t0
 
     report = build_json_report(
-        root, ScanData(functions, classes, smells, duplicates, lib_suggestions), total_time,
+        root,
+        ScanData(functions, classes, smells, duplicates, lib_suggestions),
+        total_time,
     )
 
     # Augment with per-suite metadata
     report["_suite"] = {
         "name": suite["name"],
         "description": suite["description"],
-        "fixture_files": include or [p.name for p in sorted(
-            [*root.glob("*.py"), *root.glob("*.pysrc")])],
+        "fixture_files": include
+        or [p.name for p in sorted([*root.glob("*.py"), *root.glob("*.pysrc")])],
     }
     # Add detailed expectations that the Rust harness must match
     report["_expectations"] = _build_expectations(suite, report)
@@ -212,14 +220,18 @@ def _build_expectations(suite: dict, report: dict) -> dict:
         "smell_total": smells["total"],
         "smell_categories": sorted(set(s["category"] for s in smells["issues"])),
         "smell_severities": _count_by_field(
-            smells["issues"], "severity", ["critical", "warning", "info"]),
-        "smell_fingerprints": sorted([
-            f"{s['file']}:{s['line']}:{s['category']}:{s['severity']}:{s['name']}"
-            for s in smells["issues"]
-        ]),
+            smells["issues"], "severity", ["critical", "warning", "info"]
+        ),
+        "smell_fingerprints": sorted(
+            [
+                f"{s['file']}:{s['line']}:{s['category']}:{s['severity']}:{s['name']}"
+                for s in smells["issues"]
+            ]
+        ),
         "dup_total_groups": dups["total_groups"],
         "dup_types": _count_by_field(
-            dups["groups"], "type", ["exact", "structural", "near", "semantic"]),
+            dups["groups"], "type", ["exact", "structural", "near", "semantic"]
+        ),
         "dup_group_keys": [
             sorted([f["key"] for f in g["functions"]])
             for g in sorted(dups["groups"], key=lambda g: g["id"])
@@ -234,8 +246,9 @@ def _build_expectations(suite: dict, report: dict) -> dict:
     return exp
 
 
-def _sort_nested_items(data: dict, section: str, items_key: str,
-                       inner_key: str = "", **opts):
+def _sort_nested_items(
+    data: dict, section: str, items_key: str, inner_key: str = "", **opts
+):
     """Sort items within a section, optionally sorting nested lists first."""
     inner_sort_key = opts.get("inner_sort_key")
     outer_sort_key = opts.get("outer_sort_key")
@@ -249,7 +262,7 @@ def _sort_nested_items(data: dict, section: str, items_key: str,
 
 def _normalize_report(report: dict) -> dict:
     """
-    Strip non-deterministic fields (timestamps, scan_time, paths with 
+    Strip non-deterministic fields (timestamps, scan_time, paths with
     drive letters) so golden files are stable across machines.
     """
     # Remove volatile fields
@@ -265,16 +278,23 @@ def _normalize_report(report: dict) -> dict:
 
     # Sort duplicate groups by id
     _sort_nested_items(
-        report, "duplicates", "groups",
-        inner_key="functions", inner_sort_key=lambda f: f.get("key", ""),
-        outer_sort_key=lambda g: g["id"])
+        report,
+        "duplicates",
+        "groups",
+        inner_key="functions",
+        inner_sort_key=lambda f: f.get("key", ""),
+        outer_sort_key=lambda g: g["id"],
+    )
 
     # Sort library suggestions
     _sort_nested_items(
-        report, "library_suggestions", "suggestions",
+        report,
+        "library_suggestions",
+        "suggestions",
         inner_key="functions",
         inner_sort_key=lambda f: (f.get("file", ""), f.get("name", "")),
-        outer_sort_key=lambda s: (s["module"], s["description"]))
+        outer_sort_key=lambda s: (s["module"], s["description"]),
+    )
 
     return report
 
@@ -312,17 +332,18 @@ def generate_all(force: bool = False):
         except Exception as e:
             print(f"  [FAIL] {name} — {e}")
             import traceback
+
             traceback.print_exc()
             results[name] = f"FAIL: {e}"
 
     # Summary
-    print(f"\n  {'='*50}")
+    print(f"\n  {'=' * 50}")
     print("  Golden Generation Summary")
-    print(f"  {'='*50}")
+    print(f"  {'=' * 50}")
     for name, status in results.items():
         icon = "✓" if status == "OK" else "✗"
         print(f"    {icon} {name}: {status}")
-    print(f"  {'='*50}")
+    print(f"  {'=' * 50}")
 
     return all(v == "OK" for v in results.values())
 

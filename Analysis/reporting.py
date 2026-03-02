@@ -1,5 +1,13 @@
-
 from pathlib import Path
+from typing import List, Dict, Any, NamedTuple
+from Core.types import (
+    FunctionRecord,
+    ClassRecord,
+    SmellIssue,
+    DuplicateGroup,
+    LibrarySuggestion,
+    Severity,
+)
 from typing import List, Dict, Any, NamedTuple, Optional
 from Core.types import FunctionRecord, ClassRecord, SmellIssue, DuplicateGroup, LibrarySuggestion, Severity
 from Core.config import __version__, SEP
@@ -8,14 +16,19 @@ from Core.ui_bridge import get_bridge
 
 class ScanData(NamedTuple):
     """Bundle of analysis results for report generation."""
+
     functions: List[FunctionRecord]
     classes: List[ClassRecord]
     smells: List[SmellIssue]
     duplicates: List[DuplicateGroup]
     suggestions: List[LibrarySuggestion]
 
+
 def print_smells(smells: List[SmellIssue], summary: Dict[str, Any]):
     """Print the ASCII smell report."""
+    print(f"\n{SEP}")
+    print("CODE SMELL REPORT (X-Ray)")
+    print(f"{SEP}")
     bridge = get_bridge()
     bridge.log(f"\n{SEP}")
     bridge.log("CODE SMELL REPORT (X-Ray)")
@@ -26,7 +39,14 @@ def print_smells(smells: List[SmellIssue], summary: Dict[str, Any]):
         return
 
     # Sort: Critical first, then by file
-    sorted_smells = sorted(smells, key=lambda s: (0 if s.severity == Severity.CRITICAL else 1, s.file_path, s.line))
+    sorted_smells = sorted(
+        smells,
+        key=lambda s: (
+            0 if s.severity == Severity.CRITICAL else 1,
+            s.file_path,
+            s.line,
+        ),
+    )
 
     for s in sorted_smells:
         icon = Severity.icon(s.severity)
@@ -42,8 +62,12 @@ def print_smells(smells: List[SmellIssue], summary: Dict[str, Any]):
 
     bridge.log(f"Summary: {summary['total']} issues ({summary['critical']} critical)")
 
+
 def print_duplicates(duplicates: List[DuplicateGroup], summary: Dict[str, Any]):
     """Print the ASCII duplicate report."""
+    print(f"\n{SEP}")
+    print("SIMILAR FUNCTIONS (X-Ray)")
+    print(f"{SEP}")
     bridge = get_bridge()
     bridge.log(f"\n{SEP}")
     bridge.log("SIMILAR FUNCTIONS (X-Ray)")
@@ -54,10 +78,33 @@ def print_duplicates(duplicates: List[DuplicateGroup], summary: Dict[str, Any]):
         return
 
     for g in duplicates:
+        print(
+            f"Group {g.group_id} ({g.similarity_type}, avg sim: {g.avg_similarity:.2f})"
+        )
         bridge.log(f"Group {g.group_id} ({g.similarity_type}, avg sim: {g.avg_similarity:.2f})")
         for f in g.functions:
             bridge.log(f"  - {f['file']}:{f['line']} ({f['name']})")
         bridge.log("")
+
+
+def print_format_report(issues: List[SmellIssue], summary: Dict[str, Any]):
+    """Print the ASCII format report (Ruff format --check results)."""
+    print(f"\n{SEP}")
+    print("FORMAT REPORT (Ruff)")
+    print(f"{SEP}")
+
+    if not issues:
+        print("All files are formatted. Clean code.")
+        return
+
+    print(f"  Total: {summary['total']} file(s) need formatting")
+    print("")
+    for s in issues[:30]:
+        print(f"    {s.file_path}")
+    if len(issues) > 30:
+        print(f"    ... and {len(issues) - 30} more")
+    print("")
+    print("  Fix: ruff format .")
 
 
 def print_lint_report(issues: List[SmellIssue], summary: Dict[str, Any]):
@@ -73,6 +120,17 @@ def print_lint_report(issues: List[SmellIssue], summary: Dict[str, Any]):
 
     # Show top issues by rule (not every single issue)
     by_rule = summary.get("by_rule", {})
+    print(
+        f"  Total: {summary['total']} issues ({summary.get('fixable', 0)} auto-fixable)"
+    )
+    print(
+        f"  Critical: {summary['critical']}  "
+        f"Warning: {summary['warning']}  "
+        f"Info: {summary.get('info', 0)}"
+    )
+    print("")
+
+    print("  Top Rules:")
     bridge.log(f"  Total: {summary['total']} issues "
                f"({summary.get('fixable', 0)} auto-fixable)")
     bridge.log(f"  Critical: {summary['critical']}  "
@@ -117,6 +175,13 @@ def print_security_report(issues: List[SmellIssue], summary: Dict[str, Any]):
         bridge.log("No security issues found! Secure code.")
         return
 
+    print(f"  Total: {summary['total']} issues")
+    print(
+        f"  Critical (HIGH): {summary['critical']}  "
+        f"Warning (MEDIUM): {summary['warning']}  "
+        f"Info (LOW): {summary.get('info', 0)}"
+    )
+    print("")
     bridge.log(f"  Total: {summary['total']} issues")
     bridge.log(f"  Critical (HIGH): {summary['critical']}  "
                f"Warning (MEDIUM): {summary['warning']}  "
@@ -133,8 +198,9 @@ def print_security_report(issues: List[SmellIssue], summary: Dict[str, Any]):
             bridge.log(f"    {count:4d}  {rule}")
 
 
-def _print_issues_by_severity(issues: List[SmellIssue], severity: str,
-                              label: str, *, limit: int = 0):
+def _print_issues_by_severity(
+    issues: List[SmellIssue], severity: str, label: str, *, limit: int = 0
+):
     """Print issues of a given severity with optional limit."""
     bridge = get_bridge()
     filtered = [i for i in issues if i.severity == severity]
@@ -155,10 +221,18 @@ def _print_issues_by_severity(issues: List[SmellIssue], severity: str,
 # ── Grade helpers (extracted to reduce complexity) ──────────────
 
 _GRADE_THRESHOLDS = [
-    (97, "A+"), (93, "A"), (90, "A-"),
-    (87, "B+"), (83, "B"), (80, "B-"),
-    (77, "C+"), (73, "C"), (70, "C-"),
-    (67, "D+"), (63, "D"), (60, "D-"),
+    (97, "A+"),
+    (93, "A"),
+    (90, "A-"),
+    (87, "B+"),
+    (83, "B"),
+    (80, "B-"),
+    (77, "C+"),
+    (73, "C"),
+    (70, "C-"),
+    (67, "D+"),
+    (63, "D"),
+    (60, "D-"),
 ]
 
 
@@ -172,6 +246,29 @@ def _score_to_letter(score: float) -> str:
 
 # Per-category penalty rules: (key, tool_label, weights, cap, extra_fields)
 _PENALTY_RULES: List[tuple] = [
+    (
+        "smells",
+        "X-Ray Smells",
+        {"critical": 0.25, "warning": 0.05, "info": 0.01},
+        30,
+        [],
+    ),
+    ("duplicates", "X-Ray Duplicates", {}, 15, []),
+    ("format", "Ruff Format", {"warning": 0.1}, 10, []),
+    (
+        "lint",
+        "Ruff Lint",
+        {"critical": 0.3, "warning": 0.05, "info": 0.005},
+        25,
+        ["fixable"],
+    ),
+    (
+        "security",
+        "Bandit Security",
+        {"critical": 1.5, "warning": 0.3, "info": 0.005},
+        30,
+        [],
+    ),
     ("smells",     "X-Ray Smells",    {"critical": 0.25,  "warning": 0.05, "info": 0.01},  30, []),
     ("duplicates", "X-Ray Duplicates", {},  15, []),
     ("lint",       "Ruff Lint",       {"critical": 0.3,   "warning": 0.05, "info": 0.005}, 25, ["fixable"]),
@@ -270,6 +367,9 @@ def print_unified_grade(results: Dict[str, Any],
 
     Returns grade_info dict with score, letter, breakdown, and optional delta.
     """
+    print(f"\n{'=' * 64}")
+    print("  UNIFIED CODE QUALITY GRADE")
+    print(f"{'=' * 64}")
     bridge = get_bridge()
     bridge.log(f"\n{'='*64}")
     bridge.log("  UNIFIED CODE QUALITY GRADE")
@@ -294,6 +394,7 @@ def print_unified_grade(results: Dict[str, Any],
 
     bridge.log("")
     _print_breakdown(grade_info["breakdown"])
+    print(f"\n{'=' * 64}\n")
     bridge.log(f"\n{'='*64}\n")
 
     return grade_info
@@ -301,6 +402,9 @@ def print_unified_grade(results: Dict[str, Any],
 
 def print_library_report(suggestions: List[LibrarySuggestion], summary: Dict[str, Any]):
     """Print library structure suggestions."""
+    print(f"\n{SEP}")
+    print("LIBRARY EXTRACTION")
+    print(f"{SEP}")
     bridge = get_bridge()
     bridge.log(f"\n{SEP}")
     bridge.log("LIBRARY EXTRACTION")
@@ -318,6 +422,8 @@ def print_library_report(suggestions: List[LibrarySuggestion], summary: Dict[str
         for f in s.functions[:3]:
             bridge.log(f"    - {f['file']}:{f['line']}")
         if len(s.functions) > 3:
+            print(f"    ... and {len(s.functions) - 3} more")
+        print("")
             bridge.log(f"    ... and {len(s.functions)-3} more")
         bridge.log("")
 
@@ -397,6 +503,7 @@ def print_health_report(report, summary: Dict[str, Any]):
             bridge.log(f"    ✔ {f}")
     bridge.log("")
 
+
 def _build_smell_summary(smells):
     """Build smell summary dict."""
     return {
@@ -405,12 +512,18 @@ def _build_smell_summary(smells):
         "warning": sum(1 for s in smells if s.severity == Severity.WARNING),
         "issues": [
             {
-                "file": s.file_path, "line": s.line, "name": s.name,
-                "category": s.category, "severity": s.severity,
-                "message": s.message, "suggestion": s.suggestion,
-                "llm_analysis": s.llm_analysis, "source": s.source,
-            } for s in smells
-        ]
+                "file": s.file_path,
+                "line": s.line,
+                "name": s.name,
+                "category": s.category,
+                "severity": s.severity,
+                "message": s.message,
+                "suggestion": s.suggestion,
+                "llm_analysis": s.llm_analysis,
+                "source": s.source,
+            }
+            for s in smells
+        ],
     }
 
 
@@ -421,11 +534,13 @@ def _build_dup_summary(duplicates):
         "total_functions_involved": sum(len(g.functions) for g in duplicates),
         "groups": [
             {
-                "id": g.group_id, "type": g.similarity_type,
+                "id": g.group_id,
+                "type": g.similarity_type,
                 "avg_sim": g.avg_similarity,
-                "functions": g.functions
-            } for g in duplicates
-        ]
+                "functions": g.functions,
+            }
+            for g in duplicates
+        ],
     }
 
 
@@ -435,15 +550,19 @@ def _build_lib_summary(suggestions):
         "total": len(suggestions),
         "suggestions": [
             {
-                "module": s.module_name, "rationale": s.rationale,
-                "api": s.unified_api, "candidates": s.functions
-            } for s in suggestions
-        ]
+                "module": s.module_name,
+                "rationale": s.rationale,
+                "api": s.unified_api,
+                "candidates": s.functions,
+            }
+            for s in suggestions
+        ],
     }
 
 
-def build_json_report(root: Path, scan_data: ScanData,
-                      scan_time: float) -> Dict[str, Any]:
+def build_json_report(
+    root: Path, scan_data: ScanData, scan_time: float
+) -> Dict[str, Any]:
     """Construct the full JSON report dictionary."""
     functions = scan_data.functions
     classes = scan_data.classes
@@ -455,13 +574,20 @@ def build_json_report(root: Path, scan_data: ScanData,
         "stats": {
             "total_functions": len(functions),
             "total_classes": len(classes),
-            "avg_complexity": sum(f.complexity for f in functions) / len(functions) if functions else 0
+            "avg_complexity": sum(f.complexity for f in functions) / len(functions)
+            if functions
+            else 0,
         },
         "smells": _build_smell_summary(scan_data.smells),
         "duplicates": _build_dup_summary(scan_data.duplicates),
         "library_suggestions": _build_lib_summary(scan_data.suggestions),
         "functions": [
-            {"name": f.name, "file": f.file_path, "complexity": f.complexity, "loc": f.size_lines}
+            {
+                "name": f.name,
+                "file": f.file_path,
+                "complexity": f.complexity,
+                "loc": f.size_lines,
+            }
             for f in functions
-        ]
+        ],
     }

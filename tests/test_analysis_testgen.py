@@ -1,6 +1,7 @@
 """
 Tests for Analysis/test_gen.py — TestReferenceGenerator.
 """
+
 import json
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -9,11 +10,14 @@ from Analysis.test_gen import TestReferenceGenerator
 
 # ── sample functions ─────────────────────────────────────────────────
 
+
 def sample_add(a: int, b: int) -> int:
     return a + b
 
+
 def sample_divide(a: float, b: float) -> float:
     return a / b
+
 
 def sample_concat(*args: str) -> str:
     return " ".join(args)
@@ -23,8 +27,8 @@ def sample_concat(*args: str) -> str:
 #  __init__
 # ════════════════════════════════════════════════════════════════════
 
-class TestInit:
 
+class TestInit:
     def test_stores_function(self):
         gen = TestReferenceGenerator(sample_add)
         assert gen.func is sample_add
@@ -40,6 +44,7 @@ class TestInit:
 # ════════════════════════════════════════════════════════════════════
 #  capture_ground_truth
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestCaptureGroundTruth:
     """Tests for ground-truth capture functionality."""
@@ -82,6 +87,7 @@ class TestCaptureGroundTruth:
     def test_kwargs_support(self):
         def kw_func(a, b=10):
             return a + b
+
         gen = TestReferenceGenerator(kw_func)
         inputs = [{"args": [5], "kwargs": {"b": 20}}]
         results = gen.capture_ground_truth(inputs)
@@ -99,8 +105,8 @@ class TestCaptureGroundTruth:
 #  save_fixture
 # ════════════════════════════════════════════════════════════════════
 
-class TestSaveFixture:
 
+class TestSaveFixture:
     def test_creates_file(self, tmp_path):
         gen = TestReferenceGenerator(sample_add)
         results = [{"input": {"args": [1, 2]}, "output": 3, "status": "success"}]
@@ -135,8 +141,8 @@ class TestSaveFixture:
 #  generate_llm_vectors
 # ════════════════════════════════════════════════════════════════════
 
-class TestGenerateLLMVectors:
 
+class TestGenerateLLMVectors:
     def test_returns_list(self):
         gen = TestReferenceGenerator(sample_add)
         gen.llm = MagicMock()

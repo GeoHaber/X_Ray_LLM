@@ -98,6 +98,7 @@ Output ONLY the Rust `fn` — no markdown, no explanation."""
 #  Rust Compiler Validation
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _cleanup_temp_files(*paths: str):
     """Remove temp files, ignoring all errors."""
     for p in paths:
@@ -134,6 +135,11 @@ def _check_rust_compiles(rust_code: str, *, timeout: int = 30) -> Tuple[bool, st
 
         # --emit=metadata: type-check without producing a binary
         out_path = tmp_path.replace(".rs", ".rmeta")
+        result = subprocess.run(
+            ["rustc", "--edition", "2021", "--emit=metadata", "-o", out_path, tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         result = subprocess.run(  # nosec B603,B607
             ["rustc", "--edition", "2021", "--emit=metadata",
              "-o", out_path, tmp_path],
@@ -196,7 +202,8 @@ def _extract_fn_block(text: str) -> str:
 
     # Collect any `use` lines that precede the fn
     prefix_lines = [
-        line for line in text[:fn_start].split("\n")
+        line
+        for line in text[:fn_start].split("\n")
         if line.strip().startswith("use ") or line.strip().startswith("//")
     ]
 
@@ -210,6 +217,7 @@ def _extract_fn_block(text: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 #  LLM Transpiler Engine
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class LLMTranspiler:
     """Transpile Python functions to Rust using a local LLM.
@@ -232,6 +240,7 @@ class LLMTranspiler:
         if self._llm is None:
             try:
                 from Core.inference import LLMHelper
+
                 self._llm = LLMHelper()
             except Exception as e:
                 logger.warning(f"LLMTranspiler: cannot init LLMHelper: {e}")
@@ -268,26 +277,35 @@ class LLMTranspiler:
             return None
         return raw
 
-    def _finalize(self, rust_fn: str, source_info: str,
-                  name_hint: str) -> str:
+    def _finalize(self, rust_fn: str, source_info: str, name_hint: str) -> str:
         """Prepend doc comment and record success."""
-        tag = f"LLM-assisted transpilation from {source_info}" if source_info else "LLM-assisted transpilation"
+        tag = (
+            f"LLM-assisted transpilation from {source_info}"
+            if source_info
+            else "LLM-assisted transpilation"
+        )
         self._stats["success"] += 1
         logger.info("LLMTranspiler: ✓ %s transpiled via LLM", name_hint or "function")
         return f"/// {tag}\n{rust_fn}"
 
     # ── Core: transpile one function ──────────────────────────────────
 
-    def transpile(self, python_code: str, *,
-                  name_hint: str = "",
-                  source_info: str = "",
-                  error_context: str = "") -> Optional[str]:
+    def transpile(
+        self,
+        python_code: str,
+        *,
+        name_hint: str = "",
+        source_info: str = "",
+        error_context: str = "",
+    ) -> Optional[str]:
         """Ask the LLM to transpile *python_code* to Rust.
 
         Returns valid Rust function code, or *None* on failure.
         """
         self._stats["attempted"] += 1
-        user_msg = _USER_TEMPLATE.format(python_code=textwrap.dedent(python_code).strip())
+        user_msg = _USER_TEMPLATE.format(
+            python_code=textwrap.dedent(python_code).strip()
+        )
         if error_context:
             user_msg += (
                 "\n\nYour previous attempt failed to compile with these errors:\n"
@@ -306,18 +324,31 @@ class LLMTranspiler:
             if not ok:
                 self._stats["compile_fail"] += 1
                 if self._max_retries > 0:
-                    logger.info("LLMTranspiler: compile failed, retrying (%s)", name_hint)
-                    return self._retry(python_code, rust_fn, errors,
-                                       name_hint=name_hint,
-                                       source_info=source_info,
-                                       retries_left=self._max_retries - 1)
+                    logger.info(
+                        "LLMTranspiler: compile failed, retrying (%s)", name_hint
+                    )
+                    return self._retry(
+                        python_code,
+                        rust_fn,
+                        errors,
+                        name_hint=name_hint,
+                        source_info=source_info,
+                        retries_left=self._max_retries - 1,
+                    )
                 return None
 
         return self._finalize(rust_fn, source_info, name_hint)
 
-    def _retry(self, python_code: str, previous_rust: str, errors: str,
-               *, name_hint: str, source_info: str,
-               retries_left: int) -> Optional[str]:
+    def _retry(
+        self,
+        python_code: str,
+        previous_rust: str,
+        errors: str,
+        *,
+        name_hint: str,
+        source_info: str,
+        retries_left: int,
+    ) -> Optional[str]:
         """Retry transpilation, feeding compiler errors back to the LLM."""
         if retries_left <= 0:
             return None
@@ -338,10 +369,18 @@ class LLMTranspiler:
         if ok:
             return self._finalize(rust_fn, source_info, name_hint)
         self._stats["compile_fail"] += 1
-        return self._retry(python_code, rust_fn, new_errors,
-                           name_hint=name_hint,
-                           source_info=source_info,
-                           retries_left=retries_left - 1) if retries_left > 1 else None
+        return (
+            self._retry(
+                python_code,
+                rust_fn,
+                new_errors,
+                name_hint=name_hint,
+                source_info=source_info,
+                retries_left=retries_left - 1,
+            )
+            if retries_left > 1
+            else None
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -374,21 +413,20 @@ def get_cached_llm_transpiler() -> Optional[LLMTranspiler]:
     return get_cached_llm_transpiler._cache
 
 
-def llm_transpile_function(python_code: str, *,
-                           name_hint: str = "",
-                           source_info: str = "") -> Optional[str]:
+def llm_transpile_function(
+    python_code: str, *, name_hint: str = "", source_info: str = ""
+) -> Optional[str]:
     """Convenience wrapper: transpile one function via the default engine.
 
     Returns the Rust code or *None* if the LLM is unavailable / fails.
     """
     engine = get_llm_transpiler()
-    return engine.transpile(python_code, name_hint=name_hint,
-                            source_info=source_info)
+    return engine.transpile(python_code, name_hint=name_hint, source_info=source_info)
 
 
-def hybrid_transpile(python_code: str, *,
-                     name_hint: str = "",
-                     source_info: str = "") -> str:
+def hybrid_transpile(
+    python_code: str, *, name_hint: str = "", source_info: str = ""
+) -> str:
     """Hybrid transpilation: AST first, LLM fallback.
 
     1. Tries the fast, deterministic AST transpiler.

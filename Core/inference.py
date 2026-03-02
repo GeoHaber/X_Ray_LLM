@@ -1,4 +1,3 @@
-
 import os
 import json
 import urllib.request
@@ -14,8 +13,15 @@ load_llm_config()
 
 class LLMHelper:
     """Helper for interacting with local LLM APIs (OpenAI compatible)."""
-    
-    def __init__(self, root: Any = None, *, base_url: Optional[str] = None, api_key: Optional[str] = None, model: Optional[str] = None):
+
+    def __init__(
+        self,
+        root: Any = None,
+        *,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+    ):
         # Load from explicit args > env vars > config defaults
         self.base_url = base_url or os.getenv("LLM_BASE_URL", LLM_CONFIG["base_url"])
         self.api_key = api_key or os.getenv("LLM_API_KEY", LLM_CONFIG["api_key"])
@@ -24,7 +30,7 @@ class LLMHelper:
     @property
     def available(self) -> bool:
         """Check if the LLM server is reachable."""
-        if getattr(self, '_force_unavailable', False):
+        if getattr(self, "_force_unavailable", False):
             return False
         return url_responds(f"{self.base_url}/models", timeout=2)
 
@@ -59,13 +65,16 @@ class LLMHelper:
                 return result
         return ""
 
-    def _attempt_request(self, url: str, data: dict,
-                         headers: dict, attempt: int) -> Optional[str]:
+    def _attempt_request(
+        self, url: str, data: dict, headers: dict, attempt: int
+    ) -> Optional[str]:
         """Execute a single LLM request attempt, returning text or *None* to retry."""
         try:
             req = urllib.request.Request(
-                url, data=json.dumps(data).encode("utf-8"),
-                headers=headers, method="POST",
+                url,
+                data=json.dumps(data).encode("utf-8"),
+                headers=headers,
+                method="POST",
             )
             with urllib.request.urlopen(req, timeout=LLM_CONFIG["timeout"]) as response:  # noqa: S310  # nosec B310
                 if response.status == 200:
@@ -90,7 +99,8 @@ class LLMHelper:
     def _backoff(attempt: int, reason: str) -> None:
         """Sleep with exponential back-off and log the retry reason."""
         import time
-        wait = 2 ** attempt
+
+        wait = 2**attempt
         logger.warning(f"{reason}, retrying in {wait}s...")
         time.sleep(wait)
 
@@ -106,17 +116,19 @@ class LLMHelper:
         """
         system_prompt = "You are a helpful assistant that outputs only valid JSON."
         full_prompt = prompt + "\n\nRespond with ONLY the JSON object/list."
-        
+
         response = self.completion(full_prompt, system_prompt)
         return self._parse_json_response(response)
 
-    async def generate_json_async(self, prompt: str, schema: Optional[Dict] = None) -> Any:
+    async def generate_json_async(
+        self, prompt: str, schema: Optional[Dict] = None
+    ) -> Any:
         """
         Async version of generate_json.
         """
         system_prompt = "You are a helpful assistant that outputs only valid JSON."
         full_prompt = prompt + "\n\nRespond with ONLY the JSON object/list."
-        
+
         response = await self.completion_async(full_prompt, system_prompt)
         return self._parse_json_response(response)
 

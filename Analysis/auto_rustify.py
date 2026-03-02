@@ -49,13 +49,15 @@ from Analysis.transpiler import transpile_function_code
 #  1.  CPU / OS Detection
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class SystemProfile:
     """Detected build-target information."""
-    os_name: str          # Windows, Linux, Darwin
-    arch: str             # x86_64, aarch64, arm, i686, ...
-    processor: str        # human-readable CPU string
-    rust_target: str      # e.g. "x86_64-pc-windows-msvc"
+
+    os_name: str  # Windows, Linux, Darwin
+    arch: str  # x86_64, aarch64, arm, i686, ...
+    processor: str  # human-readable CPU string
+    rust_target: str  # e.g. "x86_64-pc-windows-msvc"
     cpu_features: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -70,15 +72,15 @@ class SystemProfile:
 
 # Mapping: (platform.system(), platform.machine()) → Rust target triple
 _TARGET_MAP: Dict[Tuple[str, str], str] = {
-    ("Windows", "AMD64"):    "x86_64-pc-windows-msvc",
-    ("Windows", "x86"):      "i686-pc-windows-msvc",
-    ("Windows", "ARM64"):    "aarch64-pc-windows-msvc",
-    ("Linux",   "x86_64"):   "x86_64-unknown-linux-gnu",
-    ("Linux",   "i686"):     "i686-unknown-linux-gnu",
-    ("Linux",   "aarch64"):  "aarch64-unknown-linux-gnu",
-    ("Linux",   "armv7l"):   "armv7-unknown-linux-gnueabihf",
-    ("Darwin",  "x86_64"):   "x86_64-apple-darwin",
-    ("Darwin",  "arm64"):    "aarch64-apple-darwin",
+    ("Windows", "AMD64"): "x86_64-pc-windows-msvc",
+    ("Windows", "x86"): "i686-pc-windows-msvc",
+    ("Windows", "ARM64"): "aarch64-pc-windows-msvc",
+    ("Linux", "x86_64"): "x86_64-unknown-linux-gnu",
+    ("Linux", "i686"): "i686-unknown-linux-gnu",
+    ("Linux", "aarch64"): "aarch64-unknown-linux-gnu",
+    ("Linux", "armv7l"): "armv7-unknown-linux-gnueabihf",
+    ("Darwin", "x86_64"): "x86_64-apple-darwin",
+    ("Darwin", "arm64"): "aarch64-apple-darwin",
 }
 
 # CPU feature flags to pass to RUSTFLAGS for extra perf (x86 only)
@@ -97,6 +99,7 @@ def detect_system() -> SystemProfile:
     if not rust_target:
         # Fallback: ask rustc
         try:
+            out = subprocess.check_output(["rustc", "-vV"], text=True, timeout=10)
             out = subprocess.check_output(  # nosec B607
                 ["rustc", "-vV"], text=True, timeout=10)
             m = re.search(r"host:\s+(\S+)", out)
@@ -123,9 +126,10 @@ def _x86_features_windows() -> List[str]:
     """Detect x86 features on Windows via registry."""
     try:
         import winreg
+
         key = winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE,
-            r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
+            winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+        )
         ident, _ = winreg.QueryValueEx(key, "Identifier")
         feats = ["sse4.2", "popcnt"]
         m = re.search(r"Model\s+(\d+)", ident)
@@ -163,8 +167,8 @@ def _x86_features_darwin() -> List[str]:
 
 _X86_DETECT_DISPATCH = {
     "Windows": _x86_features_windows,
-    "Linux":   _x86_features_linux,
-    "Darwin":  _x86_features_darwin,
+    "Linux": _x86_features_linux,
+    "Darwin": _x86_features_darwin,
 }
 
 
@@ -176,36 +180,58 @@ def _detect_x86_features() -> List[str]:
 
 # ── Framework / GUI APIs that cannot be transpiled to Rust ──────────────
 _FRAMEWORK_MARKERS = [
-    "st.",             # Streamlit
-    "flask.",          # Flask
-    "app.route",       # Flask / FastAPI
-    "django.",         # Django
-    "tk.", "Tk(",      # Tkinter
-    "wx.", "wx.App",   # wxPython
-    "QApplication",    # PyQt / PySide
-    "gr.",             # Gradio
-    "dash.",           # Plotly Dash
-    "plt.",            # matplotlib (plot-heavy)
-    "fig.",            # matplotlib / plotly
+    "st.",  # Streamlit
+    "flask.",  # Flask
+    "app.route",  # Flask / FastAPI
+    "django.",  # Django
+    "tk.",
+    "Tk(",  # Tkinter
+    "wx.",
+    "wx.App",  # wxPython
+    "QApplication",  # PyQt / PySide
+    "gr.",  # Gradio
+    "dash.",  # Plotly Dash
+    "plt.",  # matplotlib (plot-heavy)
+    "fig.",  # matplotlib / plotly
 ]
 
 
 _UNTRANSLATABLE = (
+    " for ",
+    "lambda ",
     "yield ",
-    "importlib.", "getattr(", "setattr(", "**{", "{**",
-    # NOTE: " for " and "lambda " removed — transpiler.py handles both.
-    # NOTE: "os.path.", "pathlib.", "open(" removed — transpiler.py maps them.
-    # NOTE: "async " removed — transpiler.py emits async fn + .await.
-    # NOTE: "subprocess." removed — transpiler.py maps to std::process::Command.
+    "async ",
+    "subprocess.",
+    "importlib.",
+    "getattr(",
+    "setattr(",
+    "**{",
+    "{**",
+    "os.path.",
+    "pathlib.",
+    "open(",
 )
 
 _PY_MODULE_MARKERS = (
-    "typing.", "dataclasses.", "enum.",
-    "smtplib", "gc.", "socket.",
-    # NOTE: "json.", "re.", "shutil." removed — transpiler.py now handles them.
-    # NOTE: "sys.", "time.", "datetime", "logging.", "hashlib", "argparse",
-    #       "subprocess.", "collections.", "functools.", "itertools.",
-    #       "import " removed — transpiler.py now handles all of these.
+    "argparse",
+    "hashlib",
+    "json.",
+    "re.",
+    "sys.",
+    "collections.",
+    "functools.",
+    "itertools.",
+    "typing.",
+    "dataclasses.",
+    "enum.",
+    "smtplib",
+    "datetime",
+    "time.",
+    "gc.",
+    "shutil.",
+    "socket.",
+    "logging.",
+    "import ",
 )
 
 
@@ -230,11 +256,13 @@ def _has_name_blocker(name: str) -> bool:
 def _has_code_pattern_blocker(code: str) -> bool:
     """Return True if code patterns disqualify transpilation."""
     str_chars = sum(len(m.group()) for m in re.finditer(r'["\'].*?["\']', code))
-    mostly_strings = len(code) > 50 and str_chars / len(code) > 0.7
-    too_long = code.count("\n") > 500  # raised from 200 — data shows 99% are under 500
-    # NOTE: comprehension check removed — transpiler.py handles list/dict/set comprehensions.
-    too_many_external = len(re.findall(r'\b\w+\.\w+\(', code)) > 20  # raised from 10 — unlocks 81%
-    return mostly_strings or too_long or too_many_external
+    mostly_strings = len(code) > 50 and str_chars / len(code) > 0.5
+    too_long = code.count("\n") > 50
+    has_comprehension = bool(
+        re.search(r"\{[^}]+\bfor\b", code) or re.search(r"\[[^\]]+\bfor\b", code)
+    )
+    too_many_external = len(re.findall(r"\b\w+\.\w+\(", code)) > 10
+    return mostly_strings or too_long or has_comprehension or too_many_external
 
 
 def _is_transpilable(func) -> bool:
@@ -248,7 +276,7 @@ def _is_transpilable(func) -> bool:
     if _code_has_blockers(code) or _has_code_pattern_blocker(code):
         return False
     # Skip functions referencing too many unresolvable calls
-    unresolvable = len(re.findall(r'\b[a-z_]\w+\(', code))
+    unresolvable = len(re.findall(r"\b[a-z_]\w+\(", code))
     own = code.count(func.name + "(")
     return (unresolvable - own) <= 20  # raised from 8 — data shows 82% have ≤20 calls
 
@@ -274,9 +302,17 @@ def py_type_to_rust(py_type: str, py_default: str = "PyObject") -> str:
 def _rust_op(op) -> str:
     """AST operator → Rust symbol."""
     return {
-        ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/",
-        ast.Mod: "%", ast.Pow: ".pow", ast.BitOr: "|", ast.BitAnd: "&",
-        ast.BitXor: "^", ast.LShift: "<<", ast.RShift: ">>",
+        ast.Add: "+",
+        ast.Sub: "-",
+        ast.Mult: "*",
+        ast.Div: "/",
+        ast.Mod: "%",
+        ast.Pow: ".pow",
+        ast.BitOr: "|",
+        ast.BitAnd: "&",
+        ast.BitXor: "^",
+        ast.LShift: "<<",
+        ast.RShift: ">>",
         ast.FloorDiv: "/",
     }.get(type(op), "+")
 
@@ -292,8 +328,8 @@ def _py_string_to_rust(s: str) -> str:
     # Single-quoted -> convert to double-quoted
     if s.startswith("'") and s.endswith("'"):
         inner = s[1:-1]
-        inner = inner.replace('\\"', '"')   # unescape existing escaped dq
-        inner = inner.replace('"', '\\"')   # escape any double quotes
+        inner = inner.replace('\\"', '"')  # unescape existing escaped dq
+        inner = inner.replace('"', '\\"')  # escape any double quotes
         return f'"{inner}"'
     return s
 
@@ -307,7 +343,7 @@ def _rustify_expr(expr: str) -> str:
     expr = expr.replace("None", "None")
     expr = expr.replace(" and ", " && ").replace(" or ", " || ")
     expr = expr.replace("not ", "!")
-    expr = re.sub(r'\blen\((\w+)\)', r'\1.len()', expr)
+    expr = re.sub(r"\blen\((\w+)\)", r"\1.len()", expr)
     expr = expr.replace(".append(", ".push(")
     expr = expr.replace(".extend(", ".extend(")
     expr = expr.replace("elif", "else if")
@@ -315,8 +351,8 @@ def _rustify_expr(expr: str) -> str:
     expr = re.sub(r'f"([^"]*)"', r'format!("\1")', expr)
     expr = re.sub(r"f'([^']*)'", r'format!("\1")', expr)
     # range()
-    expr = re.sub(r'range\((\w+)\)', r'0..\1', expr)
-    expr = re.sub(r'range\((\w+),\s*(\w+)\)', r'\1..\2', expr)
+    expr = re.sub(r"range\((\w+)\)", r"0..\1", expr)
+    expr = re.sub(r"range\((\w+),\s*(\w+)\)", r"\1..\2", expr)
     # .items() → .iter()
     expr = expr.replace(".items()", ".iter()")
     expr = expr.replace(".keys()", ".keys()")
@@ -330,7 +366,9 @@ def _rustify_expr(expr: str) -> str:
     expr = expr.replace(".replace(", ".replace(")
     expr = expr.replace(".split(", ".split(")
     # isinstance → comment
-    expr = re.sub(r'isinstance\((\w+),\s*(\w+)\)', r'/* isinstance(\1, \2) */ true', expr)
+    expr = re.sub(
+        r"isinstance\((\w+),\s*(\w+)\)", r"/* isinstance(\1, \2) */ true", expr
+    )
     return expr
 
 
@@ -340,7 +378,7 @@ def _tb_return(stmt, pad, _ind, wrap_ok, ret_type):
         return [f"{pad}Ok(())" if wrap_ok else f"{pad}return;"]
     val = _rustify_expr(ast.unparse(stmt.value))
     if "String" in ret_type and re.match(r'^"[^"]*"$', val):
-        val = f'{val}.to_string()'
+        val = f"{val}.to_string()"
     return [f"{pad}Ok({val})" if wrap_ok else f"{pad}return {val};"]
 
 
@@ -370,7 +408,9 @@ def _tb_loop(stmt, pad, indent, wrap_ok, ret_type):
     """Handle ``ast.For`` and ``ast.While``."""
     kw = dict(wrap_ok=wrap_ok, ret_type=ret_type)
     if isinstance(stmt, ast.For):
-        header = f"for {ast.unparse(stmt.target)} in {_rustify_expr(ast.unparse(stmt.iter))}"
+        header = (
+            f"for {ast.unparse(stmt.target)} in {_rustify_expr(ast.unparse(stmt.iter))}"
+        )
     else:
         header = f"while {_rustify_expr(ast.unparse(stmt.test))}"
     lines = [f"{pad}{header} {{"]
@@ -381,14 +421,18 @@ def _tb_loop(stmt, pad, indent, wrap_ok, ret_type):
 
 def _tb_assign(stmt, pad, _ind, _wo, _rt):
     """Handle ``ast.Assign``."""
-    return [f"{pad}let mut {_rustify_expr(ast.unparse(stmt.targets[0]))} = "
-            f"{_rustify_expr(ast.unparse(stmt.value))};"]
+    return [
+        f"{pad}let mut {_rustify_expr(ast.unparse(stmt.targets[0]))} = "
+        f"{_rustify_expr(ast.unparse(stmt.value))};"
+    ]
 
 
 def _tb_augassign(stmt, pad, _ind, _wo, _rt):
     """Handle ``ast.AugAssign``."""
-    return [f"{pad}{_rustify_expr(ast.unparse(stmt.target))} "
-            f"{_rust_op(stmt.op)}= {_rustify_expr(ast.unparse(stmt.value))};"]
+    return [
+        f"{pad}{_rustify_expr(ast.unparse(stmt.target))} "
+        f"{_rust_op(stmt.op)}= {_rustify_expr(ast.unparse(stmt.value))};"
+    ]
 
 
 def _tb_expr(stmt, pad, _ind, _wo, _rt):
@@ -428,37 +472,39 @@ def _tb_raise(stmt, pad, _ind, wrap_ok, _rt):
     else:
         msg = _rustify_expr(ast.unparse(stmt.exc)).replace('"', '\\"')
     if wrap_ok:
-        return [f'{pad}return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("{msg}"));']
+        return [
+            f'{pad}return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("{msg}"));'
+        ]
     return [f'{pad}panic!("{msg}");']
 
 
 _TB_SIMPLE: Dict[type, str] = {
-    ast.Pass:     "// pass",
-    ast.Break:    "break;",
+    ast.Pass: "// pass",
+    ast.Break: "break;",
     ast.Continue: "continue;",
 }
 
 _TB_DISPATCH: Dict[type, Callable] = {
-    ast.Return:       _tb_return,
-    ast.If:           _tb_if,
-    ast.For:          _tb_loop,
-    ast.While:        _tb_loop,
-    ast.Assign:       _tb_assign,
-    ast.AugAssign:    _tb_augassign,
-    ast.FunctionDef:  lambda s, p, *_: [f"{p}// TODO: nested fn {s.name}()"],
+    ast.Return: _tb_return,
+    ast.If: _tb_if,
+    ast.For: _tb_loop,
+    ast.While: _tb_loop,
+    ast.Assign: _tb_assign,
+    ast.AugAssign: _tb_augassign,
+    ast.FunctionDef: lambda s, p, *_: [f"{p}// TODO: nested fn {s.name}()"],
     ast.AsyncFunctionDef: lambda s, p, *_: [f"{p}// TODO: nested fn {s.name}()"],
-    ast.ClassDef:     lambda s, p, *_: [f"{p}// TODO: nested class {s.name}"],
-    ast.Expr:         _tb_expr,
-    ast.Assert:       lambda s, p, *_: [f"{p}assert!({_rustify_expr(ast.unparse(s.test))});"],
-    ast.Try:          _tb_try,
-    ast.With:         _tb_with,
-    ast.Raise:        _tb_raise,
+    ast.ClassDef: lambda s, p, *_: [f"{p}// TODO: nested class {s.name}"],
+    ast.Expr: _tb_expr,
+    ast.Assert: lambda s, p, *_: [f"{p}assert!({_rustify_expr(ast.unparse(s.test))});"],
+    ast.Try: _tb_try,
+    ast.With: _tb_with,
+    ast.Raise: _tb_raise,
 }
 
 
-def _translate_body(stmts: list, indent: int = 1, *,
-                    wrap_ok: bool = True,
-                    ret_type: str = "") -> List[str]:
+def _translate_body(
+    stmts: list, indent: int = 1, *, wrap_ok: bool = True, ret_type: str = ""
+) -> List[str]:
     """AST → Rust body translation (best-effort).
 
     Parameters
@@ -495,9 +541,11 @@ def _translate_body(stmts: list, indent: int = 1, *,
 
 def _is_self_attribute(target) -> bool:
     """Return True if *target* is ``self.xxx``."""
-    return (isinstance(target, ast.Attribute)
-            and isinstance(target.value, ast.Name)
-            and target.value.id == "self")
+    return (
+        isinstance(target, ast.Attribute)
+        and isinstance(target.value, ast.Name)
+        and target.value.id == "self"
+    )
 
 
 def _fields_from_init(init_method) -> Dict[str, str]:
@@ -517,7 +565,11 @@ def _fields_from_annotations(class_def: ast.ClassDef) -> Dict[str, str]:
     fields: Dict[str, str] = {}
     for item in class_def.body:
         if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-            ftype = py_type_to_rust(ast.unparse(item.annotation)) if item.annotation else "PyObject"
+            ftype = (
+                py_type_to_rust(ast.unparse(item.annotation))
+                if item.annotation
+                else "PyObject"
+            )
             fields[item.target.id] = ftype
     return fields
 
@@ -534,15 +586,20 @@ def _extract_class_fields(class_def: ast.ClassDef) -> tuple:
     return fields, init_method
 
 
-def _generate_new_method(init_method, fields: Dict[str, str],
-                         class_name: str) -> List[str]:
+def _generate_new_method(
+    init_method, fields: Dict[str, str], class_name: str
+) -> List[str]:
     """Generate Rust ``new()`` from Python ``__init__``."""
     lines = ["    #[new]"]
     args = []
     for arg in init_method.args.args:
         if arg.arg == "self":
             continue
-        atype = py_type_to_rust(ast.unparse(arg.annotation)) if arg.annotation else "PyObject"
+        atype = (
+            py_type_to_rust(ast.unparse(arg.annotation))
+            if arg.annotation
+            else "PyObject"
+        )
         args.append(f"{arg.arg}: {atype}")
     lines.append(f"    fn new({', '.join(args)}) -> Self {{")
     lines.append(f"        {class_name} {{")
@@ -551,7 +608,9 @@ def _generate_new_method(init_method, fields: Dict[str, str],
         if fname in arg_names:
             lines.append(f"            {fname},")
         else:
-            lines.append(f"            {fname}: PyObject::default(), // TODO: default??")
+            lines.append(
+                f"            {fname}: PyObject::default(), // TODO: default??"
+            )
     lines.extend(["        }", "    }"])
     return lines
 
@@ -585,7 +644,11 @@ def transpile_class(class_def: ast.ClassDef, *, pyfunction: bool = True) -> str:
 
 def _resolve_return_type(func_def, pyfunction: bool) -> str:
     """Determine the Rust return type for *func_def*."""
-    ret_rust = py_type_to_rust(ast.unparse(func_def.returns)) if func_def.returns else "PyObject"
+    ret_rust = (
+        py_type_to_rust(ast.unparse(func_def.returns))
+        if func_def.returns
+        else "PyObject"
+    )
     if pyfunction and not ret_rust.startswith("PyResult"):
         return f"PyResult<{ret_rust}>"
     if not pyfunction and ret_rust == "PyObject":
@@ -599,15 +662,20 @@ def _extract_ast_params(func_def, pyfunction: bool) -> str:
     for arg in func_def.args.args:
         if arg.arg == "self":
             continue
-        ptype = py_type_to_rust(ast.unparse(arg.annotation)) if arg.annotation else "PyObject"
+        ptype = (
+            py_type_to_rust(ast.unparse(arg.annotation))
+            if arg.annotation
+            else "PyObject"
+        )
         if not pyfunction and ptype == "PyObject":
             ptype = "String"
         params.append(f"{arg.arg}: {ptype}")
     return ", ".join(params)
 
 
-def transpile_function_ast(func_def: ast.FunctionDef | ast.AsyncFunctionDef, *, 
-                          pyfunction: bool = True) -> str:
+def transpile_function_ast(
+    func_def: ast.FunctionDef | ast.AsyncFunctionDef, *, pyfunction: bool = True
+) -> str:
     """Generate Rust function from AST node."""
     lines: List[str] = []
     ret_rust = _resolve_return_type(func_def, pyfunction)
@@ -618,7 +686,9 @@ def transpile_function_ast(func_def: ast.FunctionDef | ast.AsyncFunctionDef, *,
     params_str = _extract_ast_params(func_def, pyfunction)
     lines.append(f"fn {func_def.name}({params_str}) -> {ret_rust} {{")
 
-    body_lines = _translate_body(func_def.body, indent=1, wrap_ok=pyfunction, ret_type=ret_rust)
+    body_lines = _translate_body(
+        func_def.body, indent=1, wrap_ok=pyfunction, ret_type=ret_rust
+    )
     lines.extend(body_lines)
 
     if pyfunction and body_lines and not any("Ok(" in ln for ln in body_lines[-3:]):
@@ -641,8 +711,11 @@ def _transpile_module_node(node, pyo3: bool) -> Optional[str]:
 
 def _generate_pyo3_module_init(tree) -> List[str]:
     """Generate the ``#[pymodule]`` init block."""
-    lines = ["", "#[pymodule]",
-             "fn rust_module672(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {"]
+    lines = [
+        "",
+        "#[pymodule]",
+        "fn rust_module672(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {",
+    ]
     for node in tree.body:
         if isinstance(node, ast.ClassDef):
             lines.append(f"    m.add_class::<{node.name}>()?;")
@@ -682,32 +755,39 @@ def _parse_rust_params(func: FunctionRecord, pyfunction: bool) -> str:
     try:
         tree = ast.parse(func.code)
         func_node = next(
-            (n for n in ast.walk(tree)
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
+            (
+                n
+                for n in ast.walk(tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ),
             None,
         )
         if func_node is None:
             raise ValueError("No function node found")
         return _extract_ast_params(func_node, pyfunction)
     except Exception:
-        return ", ".join(
-            f"{p}: PyObject" for p in func.parameters if p != "self")
+        return ", ".join(f"{p}: PyObject" for p in func.parameters if p != "self")
 
 
-def _transpile_function_body(func: FunctionRecord, pyfunction: bool,
-                             ret_rust: str) -> List[str]:
+def _transpile_function_body(
+    func: FunctionRecord, pyfunction: bool, ret_rust: str
+) -> List[str]:
     """Translate function body AST to Rust lines."""
     try:
         tree = ast.parse(func.code)
         func_node = next(
-            (n for n in ast.walk(tree)
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
+            (
+                n
+                for n in ast.walk(tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ),
             None,
         )
         if func_node is None:
             raise ValueError("No function node found")
         body_lines = _translate_body(
-            func_node.body, indent=1, wrap_ok=pyfunction, ret_type=ret_rust)
+            func_node.body, indent=1, wrap_ok=pyfunction, ret_type=ret_rust
+        )
         if pyfunction and body_lines and not any("Ok(" in ln for ln in body_lines[-3:]):
             body_lines.append("    Ok(())")
         return body_lines
@@ -715,8 +795,7 @@ def _transpile_function_body(func: FunctionRecord, pyfunction: bool,
         return ["    // TODO: translate function body", "    todo!()"]
 
 
-def transpile_function(func: FunctionRecord, *,
-                       pyfunction: bool = True) -> str:
+def transpile_function(func: FunctionRecord, *, pyfunction: bool = True) -> str:
     """Generate a full Rust function from a Python FunctionRecord.
 
     Parameters
@@ -756,6 +835,7 @@ def transpile_function(func: FunctionRecord, *,
 #  3.  Test Generation for Rust Candidates
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _generate_single_golden_test(fn, safe_name: str, inputs, lines: List[str]) -> None:
     """Append a single golden-capture test function to *lines*."""
     mod_path = fn.file_path.replace("\\", "/").replace("/", ".")
@@ -763,32 +843,37 @@ def _generate_single_golden_test(fn, safe_name: str, inputs, lines: List[str]) -
         mod_path = mod_path[:-3]
 
     lines.append(f"def test_golden_{safe_name}():")
-    lines.append(f'    """Golden capture for {fn.name} '
-                 f'({fn.file_path}:{fn.line_start})."""')
+    lines.append(
+        f'    """Golden capture for {fn.name} ({fn.file_path}:{fn.line_start})."""'
+    )
     lines.append("    # Import the original function")
     lines.append(f'    mod = importlib.import_module("{mod_path}")')
     lines.append(f'    func = getattr(mod, "{fn.name}", None)')
     lines.append("    if func is None:")
-    lines.append('        return  # function not importable')
+    lines.append("        return  # function not importable")
     lines.append("    results = []")
     lines.append(f"    test_inputs = {json.dumps(inputs, default=str)}")
     lines.append("    for kwargs in test_inputs:")
     lines.append("        try:")
     lines.append("            out = func(**kwargs)")
-    lines.append('            results.append({"input": kwargs, '
-                 '"output": repr(out), "error": None})')
+    lines.append(
+        '            results.append({"input": kwargs, '
+        '"output": repr(out), "error": None})'
+    )
     lines.append("        except Exception as e:")
-    lines.append('            results.append({"input": kwargs, '
-                 '"output": None, "error": str(e)})')
+    lines.append(
+        '            results.append({"input": kwargs, "output": None, "error": str(e)})'
+    )
     lines.append(f'    path = FIXTURE_DIR / "{safe_name}_golden.json"')
-    lines.append("    path.write_text(json.dumps(results, indent=2, "
-                 "default=str), encoding='utf-8')")
+    lines.append(
+        "    path.write_text(json.dumps(results, indent=2, "
+        "default=str), encoding='utf-8')"
+    )
     lines.append('    assert len(results) > 0, "No test results captured"')
     lines.append("")
 
 
-def generate_python_tests(candidates: List[RustCandidate],
-                          output_dir: Path) -> Path:
+def generate_python_tests(candidates: List[RustCandidate], output_dir: Path) -> Path:
     """Generate a pytest file that exercises each candidate function.
 
     The tests import the *original* Python functions, run them with
@@ -822,9 +907,9 @@ def generate_python_tests(candidates: List[RustCandidate],
     return test_path
 
 
-def generate_rust_verify_tests(candidates: List[RustCandidate],
-                               crate_name: str,
-                               output_dir: Path) -> Path:
+def generate_rust_verify_tests(
+    candidates: List[RustCandidate], crate_name: str, output_dir: Path
+) -> Path:
     """Generate a pytest file that tests the compiled Rust DLL against goldens."""
     output_dir.mkdir(parents=True, exist_ok=True)
     test_path = output_dir / "test_rust_verify.py"
@@ -847,8 +932,9 @@ def generate_rust_verify_tests(candidates: List[RustCandidate],
     for cand in candidates:
         fn = cand.func
         safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", fn.name)
-        lines.append(f'@pytest.mark.skipif(not HAS_RUST, '
-                     f'reason="{crate_name} not compiled")')
+        lines.append(
+            f'@pytest.mark.skipif(not HAS_RUST, reason="{crate_name} not compiled")'
+        )
         lines.append(f"def test_rust_{safe_name}():")
         lines.append(f'    """Verify Rust {fn.name} matches Python golden."""')
         lines.append(f'    golden_path = FIXTURE_DIR / "{safe_name}_golden.json"')
@@ -867,9 +953,11 @@ def generate_rust_verify_tests(candidates: List[RustCandidate],
         lines.append("            result = repr(rust_fn(**kwargs))")
         lines.append("        except Exception as e:")
         lines.append('            pytest.fail(f"Rust raised {e} for input {kwargs}")')
-        lines.append('        assert result == expected, (')
-        lines.append('            f"Mismatch: Rust={result} vs Python={expected} '
-                     'for input={kwargs}")')
+        lines.append("        assert result == expected, (")
+        lines.append(
+            '            f"Mismatch: Rust={result} vs Python={expected} '
+            'for input={kwargs}")'
+        )
         lines.append("")
 
     test_path.write_text("\n".join(lines), encoding="utf-8")
@@ -880,9 +968,10 @@ def generate_rust_verify_tests(candidates: List[RustCandidate],
 #  4.  Full Cargo Project Generator
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _build_cargo_toml(crate_name: str, *,
-                      pyo3: bool = True,
-                      binary: bool = False) -> str:
+
+def _build_cargo_toml(
+    crate_name: str, *, pyo3: bool = True, binary: bool = False
+) -> str:
     """Generate Cargo.toml content."""
     lib_section = ""
     if pyo3 and not binary:
@@ -921,6 +1010,18 @@ strip = true
 '''
 
 
+def _get_llm_engine():
+    """Lazily initialise the LLM transpiler engine (singleton).
+
+    Delegates to the canonical ``get_cached_llm_transpiler()`` in
+    ``Analysis.llm_transpiler`` to avoid duplicating the caching logic.
+    """
+    from Analysis.llm_transpiler import get_cached_llm_transpiler
+
+    return get_cached_llm_transpiler()
+
+
+def _transpile_with_fallback(func: FunctionRecord, *, pyfunction: bool = True) -> str:
 def _transpile_with_fallback(func: FunctionRecord, *,
                              pyfunction: bool = True) -> str:
     """AST transpile → if result has todo!(), try LLM fallback."""
@@ -933,7 +1034,8 @@ def _transpile_with_fallback(func: FunctionRecord, *,
     if llm is None:
         return rust_code
     llm_result = llm.transpile(
-        func.code, name_hint=func.name,
+        func.code,
+        name_hint=func.name,
         source_info=f"{func.file_path}:{func.line_start}",
     )
     if llm_result is None:
@@ -944,8 +1046,9 @@ def _transpile_with_fallback(func: FunctionRecord, *,
     return llm_result
 
 
-def _build_lib_rs(candidates: List[RustCandidate], crate_name: str, *,
-                  pyo3: bool = True) -> str:
+def _build_lib_rs(
+    candidates: List[RustCandidate], crate_name: str, *, pyo3: bool = True
+) -> str:
     """Generate lib.rs with all transpiled functions."""
     sections: List[str] = [
         f"//! {crate_name} — Auto-generated Rust crate from X-Ray",
@@ -973,7 +1076,7 @@ def _build_lib_rs(candidates: List[RustCandidate], crate_name: str, *,
         sections.append("#[pymodule]")
         sections.append(f"fn {crate_name}(m: &Bound<'_, PyModule>) -> PyResult<()> {{")
         for name in func_names:
-            sections.append(f'    m.add_function(wrap_pyfunction!({name}, m)?)?;')
+            sections.append(f"    m.add_function(wrap_pyfunction!({name}, m)?)?;")
         sections.append("    Ok(())")
         sections.append("}")
 
@@ -1001,6 +1104,25 @@ def _build_main_rs(candidates: List[RustCandidate], crate_name: str) -> str:
             continue
         seen_names.add(fn_name)
 
+        rust_code = _transpile_with_fallback(cand.func, pyfunction=False)
+        # Ensure no PyO3 types leak into binary mode
+        rust_code = rust_code.replace("PyResult<", "Result<")
+        rust_code = rust_code.replace("PyObject", "String")
+        rust_code = rust_code.replace(
+            "pyo3::exceptions::PyRuntimeError", "std::io::Error"
+        )
+        # Fix string literal assignments: let mut x = "val"; → add .to_string()
+        rust_code = re.sub(
+            r'(let\s+mut\s+\w+\s*=\s*)"([^"]*)"(\s*;)',
+            r'\1"\2".to_string()\3',
+            rust_code,
+        )
+        # Fix destructuring: let mut (a, b) = → let (a, b) =
+        rust_code = re.sub(
+            r"let\s+mut\s+\(([^)]+)\)\s*=",
+            r"let (\1) =",
+            rust_code,
+        )
         rust_code = _transpile_with_fallback(cand.func, pyfunction=True)
         sections.append(rust_code)
         sections.append("")
@@ -1051,7 +1173,7 @@ def _build_rust_tests(candidates: List[RustCandidate]) -> str:
         safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", fn.name)
         lines.append("    #[test]")
         lines.append(f"    fn test_{safe_name}_compiles() {{")
-        lines.append('        // Smoke test: function exists and is callable')
+        lines.append("        // Smoke test: function exists and is callable")
         lines.append("        // Full verification done via Python golden tests")
         lines.append("    }")
         lines.append("")
@@ -1060,11 +1182,13 @@ def _build_rust_tests(candidates: List[RustCandidate]) -> str:
     return "\n".join(lines)
 
 
-def generate_cargo_project(candidates: List[RustCandidate],
-                           output_dir: Path,
-                           crate_name: str = "xray_rustified",
-                           *,
-                           mode: str = "pyo3") -> Path:
+def generate_cargo_project(
+    candidates: List[RustCandidate],
+    output_dir: Path,
+    crate_name: str = "xray_rustified",
+    *,
+    mode: str = "pyo3",
+) -> Path:
     """Create a full Cargo project on disk.
 
     Parameters
@@ -1115,9 +1239,11 @@ def generate_cargo_project(candidates: List[RustCandidate],
 #  5.  Compiler
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class CompileResult:
     """Result of a cargo build."""
+
     success: bool
     target_triple: str
     artefact_path: str = ""
@@ -1131,20 +1257,27 @@ def _build_cargo_env(system: SystemProfile) -> tuple[dict, str]:
     """Build environment dict and RUSTFLAGS from system profile."""
     rustflags = ""
     if system.cpu_features:
-        rustflags = " ".join(f"-C target-feature=+{f}"
-                             for f in system.cpu_features)
+        rustflags = " ".join(f"-C target-feature=+{f}" for f in system.cpu_features)
     env = os.environ.copy()
     if rustflags:
         env["RUSTFLAGS"] = rustflags
     return env, rustflags
 
 
-def _run_cargo_build(project_dir: Path, target: str, env: dict,
-                     timeout: int = 300) -> subprocess.CompletedProcess:
+def _run_cargo_build(
+    project_dir: Path, target: str, env: dict, timeout: int = 300
+) -> subprocess.CompletedProcess:
     """Execute ``cargo build --release`` and return the CompletedProcess."""
     cmd = ["cargo", "build", "--release"]
     if target:
         cmd.extend(["--target", target])
+    return subprocess.run(
+        cmd,
+        cwd=str(project_dir),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env=env,
     return subprocess.run(  # nosec B603
         cmd, cwd=str(project_dir),
         capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -1152,10 +1285,9 @@ def _run_cargo_build(project_dir: Path, target: str, env: dict,
     )
 
 
-def compile_crate(project_dir: Path,
-                  system: SystemProfile,
-                  *,
-                  mode: str = "pyo3") -> CompileResult:
+def compile_crate(
+    project_dir: Path, system: SystemProfile, *, mode: str = "pyo3"
+) -> CompileResult:
     """Run ``cargo build --release`` on the generated crate.
 
     Uses the detected target triple and CPU features for optimal output.
@@ -1171,26 +1303,36 @@ def compile_crate(project_dir: Path,
         if result.returncode == 0:
             artefact = _find_artefact(project_dir, target, mode=mode)
         return CompileResult(
-            success=result.returncode == 0, target_triple=target,
-            artefact_path=artefact, stdout=result.stdout,
-            stderr=result.stderr, duration_s=duration, rustflags=rustflags)
+            success=result.returncode == 0,
+            target_triple=target,
+            artefact_path=artefact,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            duration_s=duration,
+            rustflags=rustflags,
+        )
     except subprocess.TimeoutExpired:
         return CompileResult(
-            success=False, target_triple=target,
+            success=False,
+            target_triple=target,
             stderr="Build timed out after 300 seconds",
-            duration_s=300.0, rustflags=rustflags)
+            duration_s=300.0,
+            rustflags=rustflags,
+        )
     except FileNotFoundError:
         return CompileResult(
-            success=False, target_triple=target,
+            success=False,
+            target_triple=target,
             stderr="cargo not found — install Rust from https://rustup.rs",
-            rustflags=rustflags)
+            rustflags=rustflags,
+        )
 
 
 def _parse_error_functions(stderr: str) -> List[str]:
     """Extract function names that caused compilation errors."""
     # Rust errors reference line numbers; we find which `fn xxx(` is near
     bad_lines: set = set()
-    for m in re.finditer(r'-->\s*src[\\/]\w+\.rs:(\d+)', stderr):
+    for m in re.finditer(r"-->\s*src[\\/]\w+\.rs:(\d+)", stderr):
         bad_lines.add(int(m.group(1)))
     return list(bad_lines)
 
@@ -1219,8 +1361,9 @@ def _find_fn_ranges(lines: List[str]) -> List[tuple]:
     return fn_ranges
 
 
-def _identify_failing_fns(fn_ranges: List[tuple], lines: List[str],
-                          bad_lines: List[int]) -> List[tuple]:
+def _identify_failing_fns(
+    fn_ranges: List[tuple], lines: List[str], bad_lines: List[int]
+) -> List[tuple]:
     """Return the subset of *fn_ranges* that contain error lines."""
     to_replace: List[tuple] = []
     for fn_start, fn_end in fn_ranges:
@@ -1245,12 +1388,19 @@ def _comment_out_failing_fns(src_path: Path, bad_lines: List[int]) -> int:
 
     for fn_start, fn_end in reversed(to_replace):
         sig_line = lines[fn_start]
-        lines[fn_start:fn_end + 1] = [sig_line, "    todo!()", "}"]
+        lines[fn_start : fn_end + 1] = [sig_line, "    todo!()", "}"]
 
     src_path.write_text("\n".join(lines), encoding="utf-8")
     return len(to_replace)
 
 
+def compile_with_repair(
+    project_dir: Path,
+    system: SystemProfile,
+    *,
+    mode: str = "pyo3",
+    max_retries: int = 3,
+) -> CompileResult:
 def compile_with_repair(project_dir: Path,
                         system: SystemProfile,
                         *,
@@ -1286,7 +1436,7 @@ _BINARY_SKIP_SUFFIXES = (".d", ".exp")
 
 _CDYLIB_EXTS = {
     "Windows": [".pyd", ".dll"],
-    "Darwin":  [".dylib", ".so"],
+    "Darwin": [".dylib", ".so"],
 }
 
 
@@ -1314,8 +1464,7 @@ def _find_cdylib_artefact(release_dir: Path) -> str:
     return ""
 
 
-def _find_artefact(project_dir: Path, target: str, *,
-                   mode: str = "pyo3") -> str:
+def _find_artefact(project_dir: Path, target: str, *, mode: str = "pyo3") -> str:
     """Locate the compiled artefact after a successful build."""
     release_dir = project_dir / "target"
     if target:
@@ -1334,9 +1483,11 @@ def _find_artefact(project_dir: Path, target: str, *,
 #  6.  Verification
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class VerifyResult:
     """Overall verification report."""
+
     success: bool
     tests_run: int = 0
     tests_passed: int = 0
@@ -1347,8 +1498,7 @@ class VerifyResult:
     stderr: str = ""
 
 
-def verify_build(project_dir: Path, *,
-                 run_cargo_test: bool = True) -> VerifyResult:
+def verify_build(project_dir: Path, *, run_cargo_test: bool = True) -> VerifyResult:
     """Run ``cargo test`` on the built crate to verify compilation."""
     if not run_cargo_test:
         return VerifyResult(success=True)
@@ -1399,9 +1549,11 @@ def verify_build(project_dir: Path, *,
 #  7.  Pipeline Orchestrator
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class PipelineReport:
     """Full report from an auto-rustify pipeline run."""
+
     system: SystemProfile
     scan_duration_s: float = 0.0
     candidates_total: int = 0
@@ -1413,6 +1565,17 @@ class PipelineReport:
     verify_result: Optional[VerifyResult] = None
     errors: List[str] = field(default_factory=list)
     phases: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class RustifyConfig:
+    """Configuration bundle for RustifyPipeline."""
+
+    crate_name: str = "xray_rustified"
+    min_score: float = 5.0
+    max_candidates: int = 50
+    mode: str = "pyo3"
+    exclude_dirs: Optional[List[str]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -1483,15 +1646,16 @@ class RustifyPipeline:
     ):
         cfg = config or RustifyConfig()
         # Allow keyword overrides for backward compat
-        crate_name = kwargs.get('crate_name', cfg.crate_name)
-        min_score = kwargs.get('min_score', cfg.min_score)
-        max_candidates = kwargs.get('max_candidates', cfg.max_candidates)
-        mode = kwargs.get('mode', cfg.mode)
-        exclude_dirs = kwargs.get('exclude_dirs', cfg.exclude_dirs)
+        crate_name = kwargs.get("crate_name", cfg.crate_name)
+        min_score = kwargs.get("min_score", cfg.min_score)
+        max_candidates = kwargs.get("max_candidates", cfg.max_candidates)
+        mode = kwargs.get("mode", cfg.mode)
+        exclude_dirs = kwargs.get("exclude_dirs", cfg.exclude_dirs)
 
         self.project_dir = Path(project_dir).resolve()
         self.output_dir = (
-            Path(output_dir).resolve() if output_dir
+            Path(output_dir).resolve()
+            if output_dir
             else self.project_dir / "_rustified"
         )
         self.crate_name = crate_name
@@ -1499,8 +1663,13 @@ class RustifyPipeline:
         self.max_candidates = max_candidates
         self.mode = mode
         self.exclude_dirs = exclude_dirs or [
-            "__pycache__", ".venv", "venv", "node_modules",
-            ".git", "target", "_rustified",
+            "__pycache__",
+            ".venv",
+            "venv",
+            "node_modules",
+            ".git",
+            "target",
+            "_rustified",
         ]
         self._progress_cb: Optional[Callable[[float, str], None]] = None
 
@@ -1511,51 +1680,63 @@ class RustifyPipeline:
         report.scan_duration_s = round(time.time() - t0, 2)
         report.candidates_total = len(candidates)
         selected = [c for c in candidates if c.score >= self.min_score]
-        selected = selected[:self.max_candidates]
+        selected = selected[: self.max_candidates]
         report.candidates_selected = len(selected)
         if not selected:
             report.errors.append(
                 f"No candidates above min_score={self.min_score}. "
                 f"Total scored: {len(candidates)}, "
-                f"top score: {candidates[0].score if candidates else 0}")
+                f"top score: {candidates[0].score if candidates else 0}"
+            )
             report.phases.append({"name": "score", "status": "no_candidates"})
             return None
-        report.phases.append({
-            "name": "score", "status": "ok",
-            "total": report.candidates_total,
-            "selected": report.candidates_selected,
-            "top_score": selected[0].score,
-        })
+        report.phases.append(
+            {
+                "name": "score",
+                "status": "ok",
+                "total": report.candidates_total,
+                "selected": report.candidates_selected,
+                "top_score": selected[0].score,
+            }
+        )
         return selected
 
     def _phase_generate(self, selected, report: PipelineReport):
         """Phase 3+4: generate golden tests and Cargo project."""
         test_path = generate_python_tests(selected, self.output_dir)
         report.test_gen_path = str(test_path)
-        report.phases.append({"name": "test_gen", "status": "ok",
-                              "path": str(test_path)})
+        report.phases.append(
+            {"name": "test_gen", "status": "ok", "path": str(test_path)}
+        )
         gen = generate_cargo_project
-        cargo_dir = gen(selected, self.output_dir, self.crate_name,
-                        mode="binary" if self.mode == "binary" else "pyo3")
+        cargo_dir = gen(
+            selected,
+            self.output_dir,
+            self.crate_name,
+            mode="binary" if self.mode == "binary" else "pyo3",
+        )
         report.cargo_project_path = str(cargo_dir)
-        report.phases.append({"name": "cargo_gen", "status": "ok",
-                              "path": str(cargo_dir)})
+        report.phases.append(
+            {"name": "cargo_gen", "status": "ok", "path": str(cargo_dir)}
+        )
         verify_path = generate_rust_verify_tests(
-            selected, self.crate_name, self.output_dir)
+            selected, self.crate_name, self.output_dir
+        )
         report.verify_test_path = str(verify_path)
         return cargo_dir
 
     def _phase_compile(self, cargo_dir, report: PipelineReport):
         """Phase 5: compile with auto-repair."""
-        compile_res = compile_with_repair(
-            cargo_dir, report.system, mode=self.mode)
+        compile_res = compile_with_repair(cargo_dir, report.system, mode=self.mode)
         report.compile_result = compile_res
         status = "ok" if compile_res.success else "failed"
         phase = {"name": "compile", "status": status}
         if compile_res.success:
-            phase.update(artefact=compile_res.artefact_path,
-                         duration_s=compile_res.duration_s,
-                         rustflags=compile_res.rustflags)
+            phase.update(
+                artefact=compile_res.artefact_path,
+                duration_s=compile_res.duration_s,
+                rustflags=compile_res.rustflags,
+            )
         else:
             report.errors.append(f"Compilation failed:\n{compile_res.stderr[:2000]}")
             phase["stderr"] = compile_res.stderr[:500]
@@ -1566,16 +1747,24 @@ class RustifyPipeline:
         verify_res = verify_build(cargo_dir)
         report.verify_result = verify_res
         if verify_res.success:
-            report.phases.append({"name": "verify", "status": "ok",
-                                  "passed": verify_res.tests_passed})
+            report.phases.append(
+                {"name": "verify", "status": "ok", "passed": verify_res.tests_passed}
+            )
         else:
             report.errors.append(
-                f"Verification failed: {verify_res.tests_failed} test(s)")
-            report.phases.append({"name": "verify", "status": "failed",
-                                  "failed": verify_res.tests_failed})
+                f"Verification failed: {verify_res.tests_failed} test(s)"
+            )
+            report.phases.append(
+                {
+                    "name": "verify",
+                    "status": "failed",
+                    "failed": verify_res.tests_failed,
+                }
+            )
 
-    def run(self, progress_cb: Optional[Callable[[float, str], None]] = None
-            ) -> PipelineReport:
+    def run(
+        self, progress_cb: Optional[Callable[[float, str], None]] = None
+    ) -> PipelineReport:
         """Execute the full pipeline and return a report.
 
         *progress_cb(fraction, label)* reports progress 0.0 → 1.0.
@@ -1585,8 +1774,13 @@ class RustifyPipeline:
 
         try:
             self._report(0.0, "Detecting CPU / OS")
-            report.phases.append({"name": "detect_system", "status": "ok",
-                                  "detail": report.system.to_dict()})
+            report.phases.append(
+                {
+                    "name": "detect_system",
+                    "status": "ok",
+                    "detail": report.system.to_dict(),
+                }
+            )
 
             self._report(0.05, "Scanning Python project")
             selected = self._phase_scan(report)
@@ -1620,15 +1814,17 @@ class RustifyPipeline:
     def _parse_file_functions(self, filepath: str) -> List[FunctionRecord]:
         """Parse functions from a single file, skipping large files."""
         try:
-            line_count = Path(filepath).read_text(
-                encoding="utf-8", errors="ignore").count("\n")
+            line_count = (
+                Path(filepath).read_text(encoding="utf-8", errors="ignore").count("\n")
+            )
             if line_count > 500:
                 return []
         except Exception:
             return []
         try:
             funcs, _classes, _err = extract_functions_from_file(
-                filepath, self.project_dir)
+                filepath, self.project_dir
+            )
             return funcs
         except Exception:
             return []
@@ -1639,6 +1835,7 @@ class RustifyPipeline:
         Filters out framework/GUI code that cannot be transpiled.
         """
         import sys
+
         old_limit = sys.getrecursionlimit()
         sys.setrecursionlimit(max(old_limit, 5000))
 
@@ -1650,7 +1847,8 @@ class RustifyPipeline:
             if self._progress_cb and py_files:
                 self._report(
                     0.05 + 0.15 * (i + 1) / len(py_files),
-                    f"Parsing {i+1}/{len(py_files)} files")
+                    f"Parsing {i + 1}/{len(py_files)} files",
+                )
 
         sys.setrecursionlimit(old_limit)
 

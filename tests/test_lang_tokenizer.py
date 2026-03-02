@@ -1,6 +1,7 @@
 """
 Tests for Lang/tokenizer.py — tokenize, term_freq, cosine_similarity.
 """
+
 import math
 import pytest
 from collections import Counter
@@ -16,6 +17,7 @@ from tests.shared_tokenize_tests import (
 # ════════════════════════════════════════════════════════════════════
 #  tokenize
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestTokenize:
     """Tests for tokenizer functionality."""
@@ -66,8 +68,8 @@ class TestTokenize:
 #  term_freq
 # ════════════════════════════════════════════════════════════════════
 
-class TestTermFreq:
 
+class TestTermFreq:
     def test_returns_counter(self):
         result = term_freq(["a", "b", "a"])
         assert isinstance(result, Counter)
@@ -85,6 +87,7 @@ class TestTermFreq:
 # ════════════════════════════════════════════════════════════════════
 #  cosine_similarity
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestCosineSimilarity:
     """Tests for cosine similarity computation."""

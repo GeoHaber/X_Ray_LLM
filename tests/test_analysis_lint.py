@@ -1,6 +1,7 @@
 """
 Tests for Analysis/lint.py — LintAnalyzer (Ruff integration).
 """
+
 import pytest
 import json
 import shutil
@@ -10,10 +11,14 @@ from unittest.mock import patch, MagicMock
 from Core.types import Severity
 from Analysis.lint import LintAnalyzer
 from tests.conftest_analyzers import (
-    make_mock_analyze, assert_empty_output_returns_empty,
-    assert_invalid_json_returns_empty, assert_all_issues_are_smell_issues,
-    assert_not_available_when_tool_missing, assert_returns_empty_when_not_available,
-    assert_timeout_returns_empty, assert_file_not_found_returns_empty,
+    make_mock_analyze,
+    assert_empty_output_returns_empty,
+    assert_invalid_json_returns_empty,
+    assert_all_issues_are_smell_issues,
+    assert_not_available_when_tool_missing,
+    assert_returns_empty_when_not_available,
+    assert_timeout_returns_empty,
+    assert_file_not_found_returns_empty,
 )
 
 # Shared mock-analyze callable for LintAnalyzer
@@ -23,52 +28,57 @@ _lint_mock = make_mock_analyze(LintAnalyzer, "/usr/bin/ruff")
 # ── helpers ──────────────────────────────────────────────────────────
 
 # Sample Ruff JSON output (mimics real ruff --output-format=json)
-SAMPLE_RUFF_OUTPUT = json.dumps([
-    {
-        "code": "F401",
-        "message": "`os` imported but unused",
-        "filename": "/project/test.py",
-        "location": {"row": 1, "column": 1},
-        "end_location": {"row": 1, "column": 10},
-        "fix": {"message": "Remove unused import: `os`", "applicability": "safe"},
-        "url": "https://docs.astral.sh/ruff/rules/unused-import/",
-    },
-    {
-        "code": "E722",
-        "message": "Do not use bare `except`",
-        "filename": "/project/test.py",
-        "location": {"row": 20, "column": 5},
-        "end_location": {"row": 20, "column": 12},
-        "fix": None,
-        "url": "https://docs.astral.sh/ruff/rules/bare-except/",
-    },
-    {
-        "code": "F841",
-        "message": "Local variable `x` is assigned to but never used",
-        "filename": "/project/utils.py",
-        "location": {"row": 10, "column": 5},
-        "end_location": {"row": 10, "column": 6},
-        "fix": {"message": "Remove assignment to unused variable `x`", "applicability": "unsafe"},
-        "url": "https://docs.astral.sh/ruff/rules/unused-variable/",
-    },
-    {
-        "code": "F811",
-        "message": "Redefinition of unused `func` from line 5",
-        "filename": "/project/core.py",
-        "location": {"row": 15, "column": 1},
-        "end_location": {"row": 15, "column": 10},
-        "fix": None,
-        "url": "https://docs.astral.sh/ruff/rules/redefined-while-unused/",
-    },
-])
+SAMPLE_RUFF_OUTPUT = json.dumps(
+    [
+        {
+            "code": "F401",
+            "message": "`os` imported but unused",
+            "filename": "/project/test.py",
+            "location": {"row": 1, "column": 1},
+            "end_location": {"row": 1, "column": 10},
+            "fix": {"message": "Remove unused import: `os`", "applicability": "safe"},
+            "url": "https://docs.astral.sh/ruff/rules/unused-import/",
+        },
+        {
+            "code": "E722",
+            "message": "Do not use bare `except`",
+            "filename": "/project/test.py",
+            "location": {"row": 20, "column": 5},
+            "end_location": {"row": 20, "column": 12},
+            "fix": None,
+            "url": "https://docs.astral.sh/ruff/rules/bare-except/",
+        },
+        {
+            "code": "F841",
+            "message": "Local variable `x` is assigned to but never used",
+            "filename": "/project/utils.py",
+            "location": {"row": 10, "column": 5},
+            "end_location": {"row": 10, "column": 6},
+            "fix": {
+                "message": "Remove assignment to unused variable `x`",
+                "applicability": "unsafe",
+            },
+            "url": "https://docs.astral.sh/ruff/rules/unused-variable/",
+        },
+        {
+            "code": "F811",
+            "message": "Redefinition of unused `func` from line 5",
+            "filename": "/project/core.py",
+            "location": {"row": 15, "column": 1},
+            "end_location": {"row": 15, "column": 10},
+            "fix": None,
+            "url": "https://docs.astral.sh/ruff/rules/redefined-while-unused/",
+        },
+    ]
+)
 
 
 # ════════════════════════════════════════════════════════════════════
 #  Availability
 # ════════════════════════════════════════════════════════════════════
 
-class TestLintAvailability:
 
+class TestLintAvailability:
     def test_available_when_ruff_found(self):
         with patch("shutil.which", return_value="/usr/bin/ruff"):
             analyzer = LintAnalyzer()
@@ -85,8 +95,8 @@ class TestLintAvailability:
 #  Severity Mapping
 # ════════════════════════════════════════════════════════════════════
 
-class TestLintSeverityMapping:
 
+class TestLintSeverityMapping:
     def test_f401_maps_to_warning(self):
         assert LintAnalyzer._map_severity("F401") == Severity.WARNING
 
@@ -106,7 +116,9 @@ class TestLintSeverityMapping:
         assert LintAnalyzer._map_severity("F999") == Severity.WARNING
 
     def test_unknown_e_code_maps_to_info(self):
-        assert LintAnalyzer._map_severity("E999") == Severity.CRITICAL  # E999 is syntax error
+        assert (
+            LintAnalyzer._map_severity("E999") == Severity.CRITICAL
+        )  # E999 is syntax error
 
     def test_unknown_w_code_maps_to_info(self):
         assert LintAnalyzer._map_severity("W191") == Severity.INFO
@@ -116,8 +128,8 @@ class TestLintSeverityMapping:
 #  Category Mapping
 # ════════════════════════════════════════════════════════════════════
 
-class TestLintCategoryMapping:
 
+class TestLintCategoryMapping:
     def test_f401_category(self):
         assert LintAnalyzer._rule_to_category("F401") == "unused-import"
 
@@ -131,6 +143,7 @@ class TestLintCategoryMapping:
 # ════════════════════════════════════════════════════════════════════
 #  JSON Parsing
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestLintParsing:
     """Tests for lint output parsing."""
@@ -160,8 +173,8 @@ class TestLintParsing:
     def test_fixable_flag_set_correctly(self):
         issues = self._mock_analyze(SAMPLE_RUFF_OUTPUT)
         fixable = {i.rule_code: i.fixable for i in issues}
-        assert fixable["F401"] is True   # safe fix
-        assert fixable["F841"] is True   # unsafe fix (still fixable)
+        assert fixable["F401"] is True  # safe fix
+        assert fixable["F841"] is True  # unsafe fix (still fixable)
         assert fixable["E722"] is False  # no fix
         assert fixable["F811"] is False  # no fix
 
@@ -193,6 +206,7 @@ class TestLintParsing:
 # ════════════════════════════════════════════════════════════════════
 #  Summary
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestLintSummary:
     """Tests for lint summary generation."""
@@ -234,8 +248,8 @@ class TestLintSummary:
 #  Error Handling
 # ════════════════════════════════════════════════════════════════════
 
-class TestLintErrorHandling:
 
+class TestLintErrorHandling:
     def test_timeout_returns_empty(self):
         assert_timeout_returns_empty(LintAnalyzer, "/usr/bin/ruff", "ruff")
 
@@ -246,6 +260,7 @@ class TestLintErrorHandling:
 # ════════════════════════════════════════════════════════════════════
 #  Live Integration (skip if ruff not installed)
 # ════════════════════════════════════════════════════════════════════
+
 
 class TestLintLiveIntegration:
     """These tests actually run ruff. Skipped if not installed."""
@@ -275,7 +290,9 @@ class TestLintLiveIntegration:
     def test_clean_file_no_issues(self, tmp_path):
         """Scan a clean file and verify no issues."""
         clean_file = tmp_path / "clean.py"
-        clean_file.write_text('"""Clean module."""\n\n\ndef greet(name: str) -> str:\n    """Say hello."""\n    return f"Hello, {name}"\n')
+        clean_file.write_text(
+            '"""Clean module."""\n\n\ndef greet(name: str) -> str:\n    """Say hello."""\n    return f"Hello, {name}"\n'
+        )
 
         analyzer = LintAnalyzer()
         issues = analyzer.analyze(tmp_path)

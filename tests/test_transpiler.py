@@ -38,6 +38,7 @@ from Analysis.transpiler_legacy import (
 #  Helper: check that generated Rust compiles
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _rustc_available() -> bool:
     """Check if rustc is on PATH."""
     try:
@@ -64,7 +65,7 @@ def _wrap_rust_source(rust_code: str) -> str:
     else:
         full = f"{_RUST_PRELUDE}{rust_code}\n\n"
     if "fn main()" not in full:
-        full += 'fn main() {}\n'
+        full += "fn main() {}\n"
     return full
 
 
@@ -78,20 +79,33 @@ def assert_compiles(rust_code: str, *, allow_warnings: bool = True):
 
     full = _wrap_rust_source(rust_code)
 
-    with tempfile.NamedTemporaryFile(suffix=".rs", mode="w", delete=False,
-                                     encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile(
+        suffix=".rs", mode="w", delete=False, encoding="utf-8"
+    ) as f:
         f.write(full)
         f.flush()
         tmp = f.name
 
     try:
         result = subprocess.run(
-            ["rustc", "--edition", "2021", "--crate-type", "lib", tmp,
-             "-o", tmp + ".out"],
-            capture_output=True, text=True, timeout=30,
+            [
+                "rustc",
+                "--edition",
+                "2021",
+                "--crate-type",
+                "lib",
+                tmp,
+                "-o",
+                tmp + ".out",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if result.returncode != 0:
-            errors = [line for line in result.stderr.splitlines() if "error" in line.lower()]
+            errors = [
+                line for line in result.stderr.splitlines() if "error" in line.lower()
+            ]
             if errors:
                 pytest.fail(
                     f"Rust compilation failed:\n{result.stderr}\n\n"
@@ -104,8 +118,72 @@ def assert_compiles(rust_code: str, *, allow_warnings: bool = True):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  1. Type Mapping
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestTypeMapping:
+    """Test py_type_to_rust()."""
+
+    @pytest.mark.parametrize(
+        "py_type,expected_rust",
+        [
+            ("int", "i64"),
+            ("float", "f64"),
+            ("str", "String"),
+            ("bool", "bool"),
+            ("bytes", "Vec<u8>"),
+            ("None", "()"),
+            ("NoneType", "()"),
+            ("Any", "String"),
+        ],
+    )
+    def test_basic_types(self, py_type, expected_rust):
+        assert py_type_to_rust(py_type) == expected_rust
+
+    @pytest.mark.parametrize(
+        "py_type,expected_rust",
+        [
+            ("List[int]", "Vec<i64>"),
+            ("List[str]", "Vec<String>"),
+            ("list[float]", "Vec<f64>"),
+            ("Set[str]", "HashSet<String>"),
+            ("set[int]", "HashSet<i64>"),
+        ],
+    )
+    def test_generic_containers(self, py_type, expected_rust):
+        assert py_type_to_rust(py_type) == expected_rust
+
+    @pytest.mark.parametrize(
+        "py_type,expected_rust",
+        [
+            ("Dict[str, int]", "HashMap<String, i64>"),
+            ("dict[str, str]", "HashMap<String, String>"),
+        ],
+    )
+    def test_dict_types(self, py_type, expected_rust):
+        assert py_type_to_rust(py_type) == expected_rust
+
+    def test_optional(self):
+        assert py_type_to_rust("Optional[int]") == "Option<i64>"
+        assert py_type_to_rust("Optional[str]") == "Option<String>"
+
+    def test_tuple(self):
+        assert py_type_to_rust("Tuple[int, str]") == "(i64, String)"
+
+    def test_union_takes_first(self):
+        assert py_type_to_rust("Union[int, str]") == "i64"
+
+    def test_empty_or_unknown_defaults_to_string(self):
+        assert py_type_to_rust("") == "String"
+        assert py_type_to_rust("   ") == "String"
+        assert py_type_to_rust("FooBar") == "String"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  2. Expression Transpilation — via transpile_function_code()
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestExpressions:
     """Test that Python expressions map to correct Rust."""
@@ -115,7 +193,7 @@ class TestExpressions:
         code = f"def test_fn():\n    {python_body}"
         rust = transpile_function_code(code)
         # Extract everything between first { and last }
-        body = rust[rust.index("{") + 1:rust.rindex("}")].strip()
+        body = rust[rust.index("{") + 1 : rust.rindex("}")].strip()
         return body
 
     def test_integer_literal(self):
@@ -183,7 +261,7 @@ class TestExpressionsAdvanced:
         """Helper: wrap body in a function, transpile, return body lines."""
         code = f"def test_fn():\n    {python_body}"
         rust = transpile_function_code(code)
-        body = rust[rust.index("{") + 1:rust.rindex("}")].strip()
+        body = rust[rust.index("{") + 1 : rust.rindex("}")].strip()
         return body
 
     def test_dict_literal(self):
@@ -219,13 +297,14 @@ class TestExpressionsAdvanced:
 #  3. Builtin Function Rewrites
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBuiltinRewrites:
     """Test that Python builtins are rewritten to Rust idioms."""
 
     def _fn_body(self, python_body: str) -> str:
         code = f"def test_fn():\n    {python_body}"
         rust = transpile_function_code(code)
-        return rust[rust.index("{") + 1:rust.rindex("}")].strip()
+        return rust[rust.index("{") + 1 : rust.rindex("}")].strip()
 
     def test_len(self):
         body = self._fn_body("return len(items)")
@@ -236,7 +315,7 @@ class TestBuiltinRewrites:
         assert "println!" in body
 
     def test_print_multiple_args(self):
-        body = self._fn_body('print(a, b)')
+        body = self._fn_body("print(a, b)")
         assert "println!" in body
 
     def test_range_one_arg(self):
@@ -284,7 +363,7 @@ class TestBuiltinRewritesAdvanced:
     def _fn_body(self, python_body: str) -> str:
         code = f"def test_fn():\n    {python_body}"
         rust = transpile_function_code(code)
-        return rust[rust.index("{") + 1:rust.rindex("}")].strip()
+        return rust[rust.index("{") + 1 : rust.rindex("}")].strip()
 
     def test_sum(self):
         body = self._fn_body("return sum(items)")
@@ -333,20 +412,21 @@ class TestBuiltinRewritesAdvanced:
 #  4. Method Call Rewrites
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestMethodRewrites:
     """Test Python method → Rust method mapping."""
 
     def _fn_body(self, python_body: str) -> str:
         code = f"def test_fn():\n    {python_body}"
         rust = transpile_function_code(code)
-        return rust[rust.index("{") + 1:rust.rindex("}")].strip()
+        return rust[rust.index("{") + 1 : rust.rindex("}")].strip()
 
     def test_append_to_push(self):
         body = self._fn_body("items.append(x)")
         assert ".push(" in body
 
     def test_strip_to_trim(self):
-        body = self._fn_body('return s.strip()')
+        body = self._fn_body("return s.strip()")
         assert ".trim()" in body
 
     def test_lower_upper(self):
@@ -364,7 +444,7 @@ class TestMethodRewrites:
     def test_join(self):
         # Python: ", ".join(items) → Rust: items.join(", ")
         body = self._fn_body('return ", ".join(items)')
-        assert '.join(' in body
+        assert ".join(" in body
 
     def test_split(self):
         body = self._fn_body('return s.split(",")')
@@ -387,13 +467,14 @@ class TestMethodRewrites:
         assert ".values()" in body2
 
     def test_exists(self):
-        body = self._fn_body('return p.exists()')
-        assert "exists()" in body
+        body = self._fn_body("return p.exists()")
+        assert "Path" in body and "exists()" in body
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. Statement Transpilation
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestStatements:
     """Test Python statements map to correct Rust."""
@@ -536,13 +617,14 @@ class TestStatementsMisc:
 #  6. Comprehensions
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestComprehensions:
     """Test list/set/dict comprehensions."""
 
     def _fn_body(self, python_body: str) -> str:
         code = f"def test_fn():\n    {python_body}"
         rust = transpile_function_code(code)
-        return rust[rust.index("{") + 1:rust.rindex("}")].strip()
+        return rust[rust.index("{") + 1 : rust.rindex("}")].strip()
 
     def test_list_comprehension(self):
         body = self._fn_body("return [x * 2 for x in items]")
@@ -571,6 +653,7 @@ class TestComprehensions:
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. Full Function Transpilation
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFullFunction:
     """Test complete function transpilation."""
@@ -660,7 +743,7 @@ class TestFullFunctionEdgeCases:
     def test_string_return_gets_to_string(self):
         code = 'def f() -> str:\n    return "hello"'
         rust = transpile_function_code(code)
-        assert '.to_string()' in rust
+        assert ".to_string()" in rust
 
     def test_multiline_string_escaped(self):
         code = 'def f():\n    return "line1\\nline2"'
@@ -675,22 +758,23 @@ class TestFullFunctionEdgeCases:
 #  8. Sanitizer
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSanitizer:
     """Test _sanitize_generated() catches Python-only patterns."""
 
     def test_clean_code_passes_through(self):
-        code = 'fn add(a: i64, b: i64) -> i64 {\n    return (a + b);\n}'
+        code = "fn add(a: i64, b: i64) -> i64 {\n    return (a + b);\n}"
         result = _sanitize_generated(code)
         assert "todo!" not in result
         assert "return (a + b)" in result
 
     def test_self_reference_caught(self):
-        code = 'fn method() -> i64 {\n    return this.value;\n}'
+        code = "fn method() -> i64 {\n    return this.value;\n}"
         result = _sanitize_generated(code)
         assert "todo!" in result
 
     def test_python_ast_caught(self):
-        code = 'fn analyze() {\n    let tree = ast.parse(code);\n}'
+        code = "fn analyze() {\n    let tree = ast.parse(code);\n}"
         result = _sanitize_generated(code)
         assert "todo!" in result
 
@@ -712,7 +796,7 @@ class TestSanitizer:
 
     def test_list_constructor_passes_through(self):
         """list() is now rewritten by call handler; not caught by sanitizer."""
-        code = 'fn make() {\n    let x = list(items);\n}'
+        code = "fn make() {\n    let x = list(items);\n}"
         result = _sanitize_generated(code)
         assert "todo!" not in result
 
@@ -724,7 +808,7 @@ class TestSanitizer:
 
     def test_signature_preserved(self):
         """Even when sanitized, the function signature is preserved."""
-        code = '/// doc comment\nfn analyze(code: String) -> String {\n    let tree = ast.parse(code);\n}'
+        code = "/// doc comment\nfn analyze(code: String) -> String {\n    let tree = ast.parse(code);\n}"
         result = _sanitize_generated(code)
         assert "fn analyze(code: String) -> String" in result
         assert "todo!" in result
@@ -737,7 +821,7 @@ class TestSanitizer:
 
     def test_comment_false_positive(self):
         """Python-only symbols in comments should NOT trigger sanitizer."""
-        code = 'fn do_work() {\n    // import json\n    let x = 42;\n}'
+        code = "fn do_work() {\n    // import json\n    let x = 42;\n}"
         result = _sanitize_generated(code)
         assert "todo!" not in result, "json in comment should not trigger"
 
@@ -745,6 +829,7 @@ class TestSanitizer:
 # ═══════════════════════════════════════════════════════════════════════════
 #  9a. Call Rewrites: Logger, Platform, Shutil, Sys, Count
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestCallRewrites:
     """Test the new call handler rewrites for logger, platform, etc."""
@@ -772,51 +857,51 @@ class TestCallRewrites:
         assert "log::warn!" in rust
 
     def test_logger_no_args(self):
-        code = 'def ping():\n    logger.info()'
+        code = "def ping():\n    logger.info()"
         rust = transpile_function_code(code)
         assert "log::info" in rust
 
     def test_logger_non_log_method_commented(self):
         """Non-logging logger methods become comments."""
-        code = 'def setup():\n    logger.setLevel(10)'
+        code = "def setup():\n    logger.setLevel(10)"
         rust = transpile_function_code(code)
         assert "logger.setLevel(10)" in rust
 
     # ── Platform ───────────────────────────────────────────────────
     def test_platform_system(self):
-        code = 'def get_os() -> str:\n    return platform.system()'
+        code = "def get_os() -> str:\n    return platform.system()"
         rust = transpile_function_code(code)
         assert "platform.system" in rust
 
     def test_platform_machine(self):
-        code = 'def get_arch() -> str:\n    return platform.machine()'
+        code = "def get_arch() -> str:\n    return platform.machine()"
         rust = transpile_function_code(code)
         assert "x86_64" in rust
 
     # ── Shutil ─────────────────────────────────────────────────────
     def test_shutil_which(self):
-        code = 'def find_tool(name: str):\n    return shutil.which(name)'
+        code = "def find_tool(name: str):\n    return shutil.which(name)"
         rust = transpile_function_code(code)
         assert "Some(" in rust
 
     def test_shutil_rmtree(self):
-        code = 'def cleanup(path: str):\n    shutil.rmtree(path)'
+        code = "def cleanup(path: str):\n    shutil.rmtree(path)"
         rust = transpile_function_code(code)
         assert "remove_dir_all" in rust
 
     def test_shutil_copy(self):
-        code = 'def cp(src: str, dst: str):\n    shutil.copy2(src, dst)'
+        code = "def cp(src: str, dst: str):\n    shutil.copy2(src, dst)"
         rust = transpile_function_code(code)
         assert "shutil.copy2" in rust
 
     # ── Sys ────────────────────────────────────────────────────────
     def test_sys_getrecursionlimit(self):
-        code = 'def get_limit() -> int:\n    return sys.getrecursionlimit()'
+        code = "def get_limit() -> int:\n    return sys.getrecursionlimit()"
         rust = transpile_function_code(code)
         assert "1000" in rust
 
     def test_sys_exit(self):
-        code = 'def bail():\n    sys.exit(1)'
+        code = "def bail():\n    sys.exit(1)"
         rust = transpile_function_code(code)
         assert "std::process::exit" in rust
 
@@ -839,14 +924,12 @@ class TestCallRewritesCompilation:
         assert_compiles(rust)
 
     def test_platform_rewrite_compiles(self):
-        # We need to test something that doesn't rely on third party crates or missing variables.
-        # Let's test `len` or `min`/`max` which map to Rust stdlib methods.
-        code = 'def get_min(a: int, b: int) -> int:\n    return min(a, b)'
+        code = "def get_os() -> str:\n    return platform.system()"
         rust = transpile_function_code(code)
         assert_compiles(rust)
 
     def test_sys_rewrite_compiles(self):
-        code = 'def bail() -> int:\n    sys.exit(1)'
+        code = "def get_limit() -> int:\n    return sys.getrecursionlimit()"
         rust = transpile_function_code(code)
         # It's going to use std::process::exit(1) which halts the test if executed,
         # but here we just compile it!
@@ -866,34 +949,41 @@ class TestCallRewritesCompilation:
 #  9. Type Inference from Name
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestTypeInference:
     """Test _infer_type_from_name()."""
 
-    @pytest.mark.parametrize("name,expected", [
-        ("file_path", "&str"),
-        ("dir_name", "&str"),    # contains both "dir" and "name"
-        ("text", "&str"),
-        ("msg", "&str"),
-        ("count", "usize"),
-        ("num_items", "usize"),
-        ("index", "usize"),
-        ("n", "usize"),
-        ("i", "usize"),
-        ("verbose", "bool"),
-        ("force", "bool"),
-        ("items", "&[String]"),
-        ("file_list", "&str"),  # 'file' matches before 'list' in priority order
-        ("config", "&HashMap<String, String>"),
-        ("options", "&HashMap<String, String>"),
-    ])
+    @pytest.mark.parametrize(
+        "name,expected",
+        [
+            ("file_path", "&str"),
+            ("dir_name", "&str"),  # contains both "dir" and "name"
+            ("text", "&str"),
+            ("msg", "&str"),
+            ("count", "usize"),
+            ("num_items", "usize"),
+            ("index", "usize"),
+            ("n", "usize"),
+            ("i", "usize"),
+            ("verbose", "bool"),
+            ("force", "bool"),
+            ("items", "&[String]"),
+            ("file_list", "&str"),  # 'file' matches before 'list' in priority order
+            ("config", "&HashMap<String, String>"),
+            ("options", "&HashMap<String, String>"),
+        ],
+    )
     def test_infer(self, name, expected):
         result = _infer_type_from_name(name)
-        assert result == expected, f"_infer_type_from_name({name!r}) = {result!r}, expected {expected!r}"
+        assert result == expected, (
+            f"_infer_type_from_name({name!r}) = {result!r}, expected {expected!r}"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  10. Batch JSON Pipeline
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBatchJSON:
     """Test transpile_batch_json() — the X_Ray.exe interface."""
@@ -902,52 +992,64 @@ class TestBatchJSON:
         """Create a JSON string from a list of (name, code) tuples."""
         candidates = []
         for name, code in functions:
-            candidates.append({
-                "name": name,
-                "code": code,
-                "file_path": "test_module.py",
-                "line_start": 1,
-            })
+            candidates.append(
+                {
+                    "name": name,
+                    "code": code,
+                    "file_path": "test_module.py",
+                    "line_start": 1,
+                }
+            )
         return json.dumps(candidates)
 
     def test_single_function(self):
-        js = self._make_candidates([
-            ("add", "def add(a: int, b: int) -> int:\n    return a + b"),
-        ])
+        js = self._make_candidates(
+            [
+                ("add", "def add(a: int, b: int) -> int:\n    return a + b"),
+            ]
+        )
         result = transpile_batch_json(js)
         assert "fn add(a: i64, b: i64) -> i64" in result
         assert "fn main()" in result
 
     def test_multiple_functions(self):
-        js = self._make_candidates([
-            ("add", "def add(a: int, b: int) -> int:\n    return a + b"),
-            ("sub", "def sub(a: int, b: int) -> int:\n    return a - b"),
-        ])
+        js = self._make_candidates(
+            [
+                ("add", "def add(a: int, b: int) -> int:\n    return a + b"),
+                ("sub", "def sub(a: int, b: int) -> int:\n    return a - b"),
+            ]
+        )
         result = transpile_batch_json(js)
         assert "fn add(" in result
         assert "fn sub(" in result
 
     def test_duplicate_names_deduplicated(self):
-        js = self._make_candidates([
-            ("tier", "def tier():\n    return 1"),
-            ("tier", "def tier():\n    return 2"),
-        ])
+        js = self._make_candidates(
+            [
+                ("tier", "def tier():\n    return 1"),
+                ("tier", "def tier():\n    return 2"),
+            ]
+        )
         result = transpile_batch_json(js)
         # Second one should be prefixed
         assert "test_module__tier" in result
 
     def test_imports_and_allows(self):
-        js = self._make_candidates([
-            ("f", "def f():\n    pass"),
-        ])
+        js = self._make_candidates(
+            [
+                ("f", "def f():\n    pass"),
+            ]
+        )
         result = transpile_batch_json(js)
         assert "#![allow(unused_variables" in result
         assert "use std::collections::{HashMap, HashSet};" in result
 
     def test_main_function_included(self):
-        js = self._make_candidates([
-            ("f", "def f():\n    pass"),
-        ])
+        js = self._make_candidates(
+            [
+                ("f", "def f():\n    pass"),
+            ]
+        )
         result = transpile_batch_json(js)
         assert "fn main() {" in result
         assert "println!" in result
@@ -956,6 +1058,7 @@ class TestBatchJSON:
 # ═══════════════════════════════════════════════════════════════════════════
 #  11. Compilation Verification (requires rustc)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.skipif(not HAS_RUSTC, reason="rustc not available")
 class TestCompilation:
@@ -1050,12 +1153,23 @@ class TestCompilation:
 
     def test_batch_json_output_compiles(self):
         """The complete batch JSON output should compile."""
-        candidates = json.dumps([
-            {"name": "add", "code": "def add(a: int, b: int) -> int:\n    return a + b",
-             "file_path": "math.py", "line_start": 1},
-            {"name": "greet", "code": "def greet(name: str) -> str:\n    return f'Hello, {name}'",
-             "file_path": "util.py", "line_start": 5},
-            {"name": "classify", "code": textwrap.dedent("""\
+        candidates = json.dumps(
+            [
+                {
+                    "name": "add",
+                    "code": "def add(a: int, b: int) -> int:\n    return a + b",
+                    "file_path": "math.py",
+                    "line_start": 1,
+                },
+                {
+                    "name": "greet",
+                    "code": "def greet(name: str) -> str:\n    return f'Hello, {name}'",
+                    "file_path": "util.py",
+                    "line_start": 5,
+                },
+                {
+                    "name": "classify",
+                    "code": textwrap.dedent("""\
                 def classify(margin: float) -> str:
                     if margin < 0:
                         return "negative"
@@ -1064,8 +1178,11 @@ class TestCompilation:
                     else:
                         return "positive"
                 """),
-             "file_path": "classify.py", "line_start": 10},
-        ])
+                    "file_path": "classify.py",
+                    "line_start": 10,
+                },
+            ]
+        )
         rust = transpile_batch_json(candidates)
         assert_compiles(rust)
 

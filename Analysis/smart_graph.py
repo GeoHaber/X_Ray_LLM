@@ -1,8 +1,8 @@
-
 import json
 from pathlib import Path
 from typing import List, Dict, Any
 from Core.types import FunctionRecord, SmellIssue, DuplicateGroup, Severity
+
 
 class SmartGraph:
     """Generates a visualization of the codebase health and relationships."""
@@ -11,16 +11,18 @@ class SmartGraph:
         self.nodes: List[Dict[str, Any]] = []
         self.edges: List[Dict[str, Any]] = []
 
-    def build(self, functions: List[FunctionRecord], 
-              smells: List[SmellIssue], 
-              duplicates: List[DuplicateGroup], 
-              root: Path):
+    def build(
+        self,
+        functions: List[FunctionRecord],
+        smells: List[SmellIssue],
+        duplicates: List[DuplicateGroup],
+        root: Path,
+    ):
         """Build the graph nodes and edges."""
         self.nodes = []
         self.edges = []
         smell_map = self._build_smell_map(smells)
-        self.nodes = [self._make_node(f, smell_map.get(f.key, []))
-                      for f in functions]
+        self.nodes = [self._make_node(f, smell_map.get(f.key, [])) for f in functions]
         self.edges = self._make_edges(duplicates)
 
     # -- private helpers (extracted from build) ------------------------------
@@ -40,8 +42,7 @@ class SmartGraph:
         return smell_map
 
     @staticmethod
-    def _make_node(f: FunctionRecord,
-                   f_smells: List[SmellIssue]) -> Dict[str, Any]:
+    def _make_node(f: FunctionRecord, f_smells: List[SmellIssue]) -> Dict[str, Any]:
         """Create a single graph node dict for *f*."""
         critical_count = sum(1 for s in f_smells if s.severity == Severity.CRITICAL)
         warning_count = sum(1 for s in f_smells if s.severity == Severity.WARNING)
@@ -61,8 +62,11 @@ class SmartGraph:
                 tooltip += f"{icon} {s.category}: {s.message}<br>"
 
         return {
-            "id": f.key, "label": f.name, "title": tooltip,
-            "color": color, "health": health,
+            "id": f.key,
+            "label": f.name,
+            "title": tooltip,
+            "color": color,
+            "health": health,
             "size": f.size_lines,
             "group": str(Path(f.file_path).parent),
         }
@@ -77,11 +81,14 @@ class SmartGraph:
                 continue
             for i in range(len(funcs)):
                 for j in range(i + 1, len(funcs)):
-                    edges.append({
-                        "from": funcs[i]["key"], "to": funcs[j]["key"],
-                        "value": group.avg_similarity,
-                        "title": f"{group.similarity_type} duplicate ({group.avg_similarity:.2f})",
-                    })
+                    edges.append(
+                        {
+                            "from": funcs[i]["key"],
+                            "to": funcs[j]["key"],
+                            "value": group.avg_similarity,
+                            "title": f"{group.similarity_type} duplicate ({group.avg_similarity:.2f})",
+                        }
+                    )
         return edges
 
     def write_html(self, output_path: Path):

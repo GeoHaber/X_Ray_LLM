@@ -66,6 +66,7 @@ else:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _wait_for_server(port: int, timeout: float = 30.0) -> bool:
     """Block until localhost:port accepts a TCP connection (or timeout)."""
     deadline = time.monotonic() + timeout
@@ -87,24 +88,29 @@ def _locate_ui_script() -> Path:
     print("ERROR: Cannot find x_ray_ui.py")
     sys.exit(1)
 
+
 # ---------------------------------------------------------------------------
 # Streamlit server (runs in background thread)
 # ---------------------------------------------------------------------------
 
+
 def _run_streamlit(port: int, ui_script: Path):
     """Start the Streamlit server (blocking — run in a thread).
-    
+
     Patches signal.signal to no-op since we're running in a non-main thread
     and Streamlit tries to register SIGTERM/SIGINT handlers.
     """
     import signal
+
     _orig_signal = signal.signal
+
     def _safe_signal(signum, handler):
         try:
             return _orig_signal(signum, handler)
         except ValueError:
             # "signal only works in main thread" — ignore silently
             return signal.SIG_DFL
+
     signal.signal = _safe_signal
 
     os.environ["STREAMLIT_SERVER_PORT"] = str(port)
@@ -117,6 +123,7 @@ def _run_streamlit(port: int, ui_script: Path):
     os.environ["STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION"] = "false"
 
     from streamlit import config
+
     config.set_option("server.port", port)
     config.set_option("server.headless", True)
     config.set_option("server.fileWatcherType", "none")
@@ -143,9 +150,11 @@ def _run_streamlit(port: int, ui_script: Path):
         else:
             print(f"Streamlit error: {exc}")
 
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     port = find_free_port()

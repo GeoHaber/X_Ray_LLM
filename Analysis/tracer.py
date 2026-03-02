@@ -44,6 +44,7 @@ from typing import Any, Callable, Dict, List, Optional, Set
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+
 def _type_tag(value: Any) -> str:
     """Return a concise string tag for a value's type."""
     t = type(value).__name__
@@ -63,9 +64,11 @@ def _safe_repr(value: Any, limit: int = 200) -> str:
 
 # ── data classes ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class IOSample:
     """One observed (inputs → output) sample from a traced call."""
+
     args_repr: List[str]
     kwargs_repr: Dict[str, str]
     output_repr: str
@@ -77,6 +80,7 @@ class IOSample:
 @dataclass
 class TraceProfile:
     """Runtime profile for a single traced function."""
+
     func_name: str
     module: str
     qualname: str
@@ -113,7 +117,9 @@ class TraceProfile:
             "module": self.module,
             "qualname": self.qualname,
             "param_names": self.param_names,
-            "observed_arg_types": {k: sorted(v) for k, v in self.observed_arg_types.items()},
+            "observed_arg_types": {
+                k: sorted(v) for k, v in self.observed_arg_types.items()
+            },
             "observed_return_types": sorted(self.observed_return_types),
             "exceptions_seen": sorted(self.exceptions_seen),
             "call_count": self.call_count,
@@ -165,11 +171,9 @@ class FunctionTracer:
     def wrap(self, fn: Callable) -> Callable:
         """Return a wrapped version of *fn* that records every call."""
         import inspect
+
         sig = inspect.signature(fn)
-        param_names = [
-            p.name for p in sig.parameters.values()
-            if p.name != "self"
-        ]
+        param_names = [p.name for p in sig.parameters.values() if p.name != "self"]
 
         module = getattr(fn, "__module__", "") or ""
         qualname = getattr(fn, "__qualname__", fn.__name__)
@@ -228,14 +232,16 @@ class FunctionTracer:
                 tp.observed_arg_types[k] = set(v)
             # Rebuild samples
             for s in item.get("samples", []):
-                tp.samples.append(IOSample(
-                    args_repr=s.get("args", []),
-                    kwargs_repr=s.get("kwargs", {}),
-                    output_repr=s.get("output", ""),
-                    output_type=s.get("output_type", ""),
-                    error=s.get("error"),
-                    elapsed_us=s.get("elapsed_us", 0),
-                ))
+                tp.samples.append(
+                    IOSample(
+                        args_repr=s.get("args", []),
+                        kwargs_repr=s.get("kwargs", {}),
+                        output_repr=s.get("output", ""),
+                        output_type=s.get("output_type", ""),
+                        error=s.get("error"),
+                        elapsed_us=s.get("elapsed_us", 0),
+                    )
+                )
             loaded.append(tp)
         return loaded
 
@@ -245,8 +251,14 @@ class FunctionTracer:
 
     # ── internal ─────────────────────────────────────────────────────────
 
-    def _record_call(self, profile: TraceProfile, param_names: List[str],
-                     fn: Callable, args: tuple, kwargs: dict) -> Any:
+    def _record_call(
+        self,
+        profile: TraceProfile,
+        param_names: List[str],
+        fn: Callable,
+        args: tuple,
+        kwargs: dict,
+    ) -> Any:
         """Execute *fn* and record the I/O into *profile*."""
         profile.call_count += 1
 
@@ -278,13 +290,15 @@ class FunctionTracer:
 
             # Capture sample (capped)
             if len(profile.samples) < self._max_samples:
-                profile.samples.append(IOSample(
-                    args_repr=[_safe_repr(a) for a in args],
-                    kwargs_repr={k: _safe_repr(v) for k, v in kwargs.items()},
-                    output_repr=_safe_repr(result) if error_str is None else "",
-                    output_type=_type_tag(result) if error_str is None else "",
-                    error=error_str,
-                    elapsed_us=elapsed,
-                ))
+                profile.samples.append(
+                    IOSample(
+                        args_repr=[_safe_repr(a) for a in args],
+                        kwargs_repr={k: _safe_repr(v) for k, v in kwargs.items()},
+                        output_repr=_safe_repr(result) if error_str is None else "",
+                        output_type=_type_tag(result) if error_str is None else "",
+                        error=error_str,
+                        elapsed_us=elapsed,
+                    )
+                )
 
         return result

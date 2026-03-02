@@ -20,15 +20,22 @@ from Analysis.ast_utils import extract_functions_from_file, collect_py_files
 from Analysis.smells import CodeSmellDetector
 from Analysis.duplicates import DuplicateFinder
 from Analysis.reporting import (
-    print_smells, print_duplicates, print_lint_report,
-    print_security_report, print_unified_grade,
+    print_smells,
+    print_duplicates,
+    print_format_report,
+    print_lint_report,
+    print_security_report,
+    print_unified_grade,
 )
 
 
 class AnalysisComponents(NamedTuple):
     """Bundle of analysis objects for collect_reports."""
+
     detector: _Any
     finder: _Any
+    format_analyzer: _Any
+    format_issues: _Any
     linter: _Any
     lint_issues: _Any
     sec_analyzer: _Any
@@ -41,10 +48,13 @@ class AnalysisComponents(NamedTuple):
 # Codebase scanning
 # ---------------------------------------------------------------------------
 
-def scan_codebase(root: Path, exclude: List[str] = None,
-                  include: List[str] = None,
-                  verbose: bool = False) -> Tuple[
-        List[FunctionRecord], List[ClassRecord], List[str]]:
+
+def scan_codebase(
+    root: Path,
+    exclude: List[str] = None,
+    include: List[str] = None,
+    verbose: bool = False,
+) -> Tuple[List[FunctionRecord], List[ClassRecord], List[str]]:
     """Parallel-scan the codebase, returning functions, classes, and errors."""
     py_files = collect_py_files(root, exclude, include)
     all_functions: List[FunctionRecord] = []
@@ -58,8 +68,7 @@ def scan_codebase(root: Path, exclude: List[str] = None,
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(extract_functions_from_file, f, root): f
-            for f in py_files
+            executor.submit(extract_functions_from_file, f, root): f for f in py_files
         }
         for future in concurrent.futures.as_completed(futures):
             funcs, clses, err = future.result()
@@ -79,6 +88,7 @@ def scan_codebase(root: Path, exclude: List[str] = None,
 # Individual analysis phases
 # ---------------------------------------------------------------------------
 
+
 def run_smell_phase(functions, classes):
     """Run AST smell detection. Returns (detector, smells)."""
     detector = CodeSmellDetector()
@@ -95,9 +105,22 @@ def run_duplicate_phase(functions):
     return finder
 
 
+def run_format_phase(root: Path, exclude=None):
+    """Run Ruff format check. Returns (analyzer | None, issues)."""
+    from Analysis.format import FormatAnalyzer
+
+    fmt = FormatAnalyzer()
+    if fmt.available:
+        print("\n  >> Running Format Check (Ruff)...")
+        return fmt, fmt.analyze(root, exclude=exclude)
+    print("\n  [!] Ruff not found — skipping format check.")
+    return None, []
+
+
 def run_lint_phase(root: Path, exclude=None):
     """Run Ruff lint analysis. Returns (analyzer | None, issues)."""
     from Analysis.lint import LintAnalyzer
+
     linter = LintAnalyzer()
     if linter.available:
         get_bridge().status("Running Linter (Ruff)...")
@@ -109,6 +132,7 @@ def run_lint_phase(root: Path, exclude=None):
 def run_security_phase(root: Path, exclude=None):
     """Run Bandit security analysis. Returns (analyzer | None, issues)."""
     from Analysis.security import SecurityAnalyzer
+
     sec = SecurityAnalyzer()
     if sec.available:
         get_bridge().status("Running Security Scan (Bandit)...")
@@ -204,6 +228,7 @@ def run_rustify_scan(root: Path, exclude=None) -> dict:
 # Report collection
 # ---------------------------------------------------------------------------
 
+
 def collect_reports(components: AnalysisComponents) -> dict:
     """Print all analysis reports, compute unified grade, return combined results."""
     detector, finder, linter, lint_issues, sec_analyzer, sec_issues, \
@@ -219,6 +244,11 @@ def collect_reports(components: AnalysisComponents) -> dict:
         summary = finder.summary()
         print_duplicates(finder.groups, summary)
         results["duplicates"] = summary
+
+    if fmt_analyzer and fmt_issues:
+        summary = fmt_analyzer.summary(fmt_issues)
+        print_format_report(fmt_issues, summary)
+        results["format"] = summary
 
     if linter and lint_issues:
         summary = linter.summary(lint_issues)

@@ -22,15 +22,16 @@ from Analysis.llm_transpiler import (
 #  _extract_fn_block — parsing LLM output
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestExtractFnBlock:
     """Tests for extracting Rust fn from noisy LLM output."""
 
     def test_clean_fn(self):
-        code = 'fn add(a: i64, b: i64) -> i64 {\n    a + b\n}'
+        code = "fn add(a: i64, b: i64) -> i64 {\n    a + b\n}"
         assert _extract_fn_block(code) == code
 
     def test_strip_markdown_fences(self):
-        code = '```rust\nfn add(a: i64, b: i64) -> i64 {\n    a + b\n}\n```'
+        code = "```rust\nfn add(a: i64, b: i64) -> i64 {\n    a + b\n}\n```"
         result = _extract_fn_block(code)
         assert result.startswith("fn add")
         assert "```" not in result
@@ -49,7 +50,7 @@ class TestExtractFnBlock:
         assert "This function" not in result
 
     def test_pub_fn(self):
-        code = 'pub fn double(x: i64) -> i64 {\n    x * 2\n}'
+        code = "pub fn double(x: i64) -> i64 {\n    x * 2\n}"
         result = _extract_fn_block(code)
         assert "pub fn double" in result
 
@@ -89,6 +90,7 @@ class TestExtractFnBlock:
 #  _check_rust_compiles — compiler validation
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRustCompileCheck:
     """Tests for the rustc --check validation."""
 
@@ -96,6 +98,7 @@ class TestRustCompileCheck:
     def _skip_if_no_rustc(self):
         """Skip these tests if rustc isn't installed."""
         import shutil
+
         if shutil.which("rustc") is None:
             pytest.skip("rustc not found")
 
@@ -134,6 +137,7 @@ class TestRustCompileCheck:
 # ═══════════════════════════════════════════════════════════════════════════
 #  LLMTranspiler — engine tests (mocked LLM)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class FakeLLM:
     """Mock LLM that returns predefined Rust code."""
@@ -187,7 +191,7 @@ class TestLLMTranspiler:
 
     def test_strips_markdown_fences(self):
         engine = self._make_engine(
-            ["```rust\nfn greet() -> String {\n    \"hi\".to_string()\n}\n```"],
+            ['```rust\nfn greet() -> String {\n    "hi".to_string()\n}\n```'],
             verify=False,
         )
         result = engine.transpile("def greet(): return 'hi'")
@@ -200,8 +204,9 @@ class TestLLMTranspiler:
             ["fn foo() {}"],
             verify=False,
         )
-        result = engine.transpile("def foo(): pass",
-                                  name_hint="foo", source_info="mod.py:10")
+        result = engine.transpile(
+            "def foo(): pass", name_hint="foo", source_info="mod.py:10"
+        )
         assert "mod.py:10" in result
         assert "LLM-assisted" in result
 
@@ -219,6 +224,7 @@ class TestLLMTranspiler:
     @pytest.fixture
     def _skip_if_no_rustc(self):
         import shutil
+
         if shutil.which("rustc") is None:
             pytest.skip("rustc not found")
 
@@ -237,7 +243,7 @@ class TestLLMTranspiler:
         engine = self._make_engine(
             [
                 "fn bad() -> i64 { let x: String = 42; }",  # won't compile
-                "fn bad() -> i64 { 42 }",                    # fixed
+                "fn bad() -> i64 { 42 }",  # fixed
             ],
             verify=True,
         )
@@ -265,6 +271,7 @@ class TestLLMTranspiler:
 #  hybrid_transpile — end-to-end integration
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestHybridTranspile:
     """Tests for the hybrid AST + LLM pipeline."""
 
@@ -281,13 +288,16 @@ class TestHybridTranspile:
 
     def test_complex_fn_falls_back_to_llm_if_available(self):
         """When AST produces todo!(), hybrid_transpile tries the LLM."""
-        good_rust = "fn complex_op(data: Vec<String>) -> String {\n    data.join(\", \")\n}"
+        good_rust = (
+            'fn complex_op(data: Vec<String>) -> String {\n    data.join(", ")\n}'
+        )
         fake_llm = FakeLLM(responses=[good_rust], available=True)
         engine = LLMTranspiler(verify_compilation=False)
         engine._llm = fake_llm
 
         # Patch the singleton
         import Analysis.llm_transpiler as mod
+
         old = mod._default_engine
         mod._default_engine = engine
         try:
@@ -313,6 +323,7 @@ class TestHybridTranspile:
         engine._llm = fake_llm
 
         import Analysis.llm_transpiler as mod
+
         old = mod._default_engine
         mod._default_engine = engine
         try:
@@ -335,11 +346,13 @@ class TestHybridTranspile:
 #  get_llm_transpiler / llm_transpile_function — API tests
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestAPI:
     """Tests for the convenience API."""
 
     def test_singleton_returns_same_instance(self):
         import Analysis.llm_transpiler as mod
+
         old = mod._default_engine
         mod._default_engine = None
         try:
@@ -352,6 +365,7 @@ class TestAPI:
     def test_llm_transpile_function_when_unavailable(self):
         """Should return None gracefully when no LLM server."""
         import Analysis.llm_transpiler as mod
+
         engine = LLMTranspiler(verify_compilation=False)
         engine._llm = FakeLLM(responses=[], available=False)
         old = mod._default_engine
@@ -367,17 +381,20 @@ class TestAPI:
 #  Model catalog — verify transpiler models exist
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestModelCatalog:
     """Verify transpiler-specialized models are in the catalog."""
 
     def test_transpiler_model_ids_exist(self):
         from Core.llm_manager import MODEL_CATALOG, TRANSPILER_MODEL_IDS
+
         catalog_ids = {m.id for m in MODEL_CATALOG}
         for tid in TRANSPILER_MODEL_IDS:
             assert tid in catalog_ids, f"Missing model in catalog: {tid}"
 
     def test_transpiler_models_are_code_focused(self):
         from Core.llm_manager import MODEL_CATALOG, TRANSPILER_MODEL_IDS
+
         catalog = {m.id: m for m in MODEL_CATALOG}
         for tid in TRANSPILER_MODEL_IDS:
             m = catalog[tid]
@@ -388,15 +405,23 @@ class TestModelCatalog:
 
     def test_recommend_includes_transpiler_models(self):
         from Core.llm_manager import recommend_models, HardwareProfile
+
         hw = HardwareProfile(
-            os_name="Windows", os_version="11", arch="x86_64",
-            cpu_brand="Intel i7", cpu_cores=8, ram_gb=32.0,
-            gpu_name="RTX 3090", gpu_vram_gb=24.0, avx2=True,
+            os_name="Windows",
+            os_version="11",
+            arch="x86_64",
+            cpu_brand="Intel i7",
+            cpu_cores=8,
+            ram_gb=32.0,
+            gpu_name="RTX 3090",
+            gpu_vram_gb=24.0,
+            avx2=True,
         )
         recs = recommend_models(hw)
         rec_ids = {m.id for m in recs}
         # At least one transpiler model should be recommended for high-end hw
         from Core.llm_manager import TRANSPILER_MODEL_IDS
+
         overlap = rec_ids & set(TRANSPILER_MODEL_IDS)
         assert len(overlap) >= 1, "No transpiler models recommended for high-end hw"
 
@@ -405,6 +430,7 @@ class TestModelCatalog:
 #  Transpiler batch_json — verify hybrid wiring
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBatchJsonHybridWiring:
     """Verify that transpile_batch_json uses the hybrid path."""
 
@@ -412,9 +438,14 @@ class TestBatchJsonHybridWiring:
         """The generated source header should mention Hybrid."""
         from Analysis.transpiler_legacy import transpile_batch_json
         import json
+
         candidates = [
-            {"name": "add", "code": "def add(a: int, b: int) -> int:\n    return a + b",
-             "file_path": "test.py", "line_start": 1}
+            {
+                "name": "add",
+                "code": "def add(a: int, b: int) -> int:\n    return a + b",
+                "file_path": "test.py",
+                "line_start": 1,
+            }
         ]
         result = transpile_batch_json(json.dumps(candidates))
         assert "Hybrid" in result
@@ -423,13 +454,18 @@ class TestBatchJsonHybridWiring:
         """Simple functions should transpile without todo!() even without LLM."""
         from Analysis.transpiler_legacy import transpile_batch_json
         import json
+
         candidates = [
-            {"name": "double", "code": "def double(x: int) -> int:\n    return x * 2",
-             "file_path": "test.py", "line_start": 1}
+            {
+                "name": "double",
+                "code": "def double(x: int) -> int:\n    return x * 2",
+                "file_path": "test.py",
+                "line_start": 1,
+            }
         ]
         result = transpile_batch_json(json.dumps(candidates))
         assert "fn double" in result
         # The double function itself shouldn't have todo! (it's simple)
         fn_start = result.index("fn double")
-        fn_block = result[fn_start:result.index("\n\n", fn_start)]
+        fn_block = result[fn_start : result.index("\n\n", fn_start)]
         assert "todo!" not in fn_block

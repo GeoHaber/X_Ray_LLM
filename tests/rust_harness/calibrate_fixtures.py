@@ -11,6 +11,7 @@ Usage:
     python tests/rust_harness/calibrate_fixtures.py --verbose
     python tests/rust_harness/calibrate_fixtures.py --generate-boundary
 """
+
 from __future__ import annotations
 
 import argparse
@@ -38,10 +39,10 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 # The thresholds from the detector
 NEAR_DUP_THRESHOLD = 0.70
-SEMANTIC_THRESHOLD  = 0.50
-TOKEN_PREFILTER     = 0.25
-SIZE_RATIO_MIN      = 0.35
-SEMANTIC_MIN_LINES  = 8
+SEMANTIC_THRESHOLD = 0.50
+TOKEN_PREFILTER = 0.25
+SIZE_RATIO_MIN = 0.35
+SEMANTIC_MIN_LINES = 8
 
 
 def load_all_functions() -> dict[str, list[FunctionRecord]]:
@@ -57,10 +58,26 @@ def load_all_functions() -> dict[str, list[FunctionRecord]]:
 
 def _compute_similarity_channels(f1: FunctionRecord, f2: FunctionRecord) -> dict:
     """Compute all similarity metrics between two functions."""
-    text1 = " ".join([f1.name, f1.docstring or "", " ".join(f1.parameters),
-                       f1.return_type or "", " ".join(f1.calls_to), f1.code or ""])
-    text2 = " ".join([f2.name, f2.docstring or "", " ".join(f2.parameters),
-                       f2.return_type or "", " ".join(f2.calls_to), f2.code or ""])
+    text1 = " ".join(
+        [
+            f1.name,
+            f1.docstring or "",
+            " ".join(f1.parameters),
+            f1.return_type or "",
+            " ".join(f1.calls_to),
+            f1.code or "",
+        ]
+    )
+    text2 = " ".join(
+        [
+            f2.name,
+            f2.docstring or "",
+            " ".join(f2.parameters),
+            f2.return_type or "",
+            " ".join(f2.calls_to),
+            f2.code or "",
+        ]
+    )
     tok1 = _term_freq(tokenize(text1))
     tok2 = _term_freq(tokenize(text2))
 
@@ -82,10 +99,15 @@ def score_pair_detailed(f1: FunctionRecord, f2: FunctionRecord) -> dict:
     """Run every similarity channel on a pair and return detailed scores."""
     ch = _compute_similarity_channels(f1, f2)
 
-    ratio = (min(f1.size_lines, f2.size_lines) /
-             max(f1.size_lines, f2.size_lines)) if max(f1.size_lines, f2.size_lines) > 0 else 0
+    ratio = (
+        (min(f1.size_lines, f2.size_lines) / max(f1.size_lines, f2.size_lines))
+        if max(f1.size_lines, f2.size_lines) > 0
+        else 0
+    )
     exact = f1.code_hash == f2.code_hash
-    structural = f1.structure_hash == f2.structure_hash and f1.structure_hash is not None
+    structural = (
+        f1.structure_hash == f2.structure_hash and f1.structure_hash is not None
+    )
 
     return {
         "f1": f"{f1.file_path}::{f1.name}",
@@ -103,11 +125,15 @@ def score_pair_detailed(f1: FunctionRecord, f2: FunctionRecord) -> dict:
         "docstring_sim": round(ch["ds"], 3),
         "semantic_composite": round(ch["sem"], 3),
         "detected_as": (
-            "exact" if exact else
-            "structural" if structural else
-            "near" if ch["code_sim"] >= NEAR_DUP_THRESHOLD else
-            "semantic" if ch["sem"] >= SEMANTIC_THRESHOLD else
-            "NONE"
+            "exact"
+            if exact
+            else "structural"
+            if structural
+            else "near"
+            if ch["code_sim"] >= NEAR_DUP_THRESHOLD
+            else "semantic"
+            if ch["sem"] >= SEMANTIC_THRESHOLD
+            else "NONE"
         ),
         "near_margin": round(ch["code_sim"] - NEAR_DUP_THRESHOLD, 3),
         "semantic_margin": round(ch["sem"] - SEMANTIC_THRESHOLD, 3),
@@ -115,8 +141,11 @@ def score_pair_detailed(f1: FunctionRecord, f2: FunctionRecord) -> dict:
 
 
 _MARGIN_BANDS = [
-    (-0.15, "SAFE_MISS"), (-0.05, "NEAR_MISS"), (0.0, "BOUNDARY_MISS"),
-    (0.05, "BOUNDARY_HIT"), (0.15, "NEAR_HIT"),
+    (-0.15, "SAFE_MISS"),
+    (-0.05, "NEAR_MISS"),
+    (0.0, "BOUNDARY_MISS"),
+    (0.05, "BOUNDARY_HIT"),
+    (0.15, "NEAR_HIT"),
 ]
 
 
@@ -138,14 +167,17 @@ def run_full_pipeline():
     finder = DuplicateFinder()
     groups = finder.find(all_funcs, cross_file_only=True)
 
-    print(f"\n  {'='*70}")
-    print(f"    FULL PIPELINE RESULTS ({len(all_funcs)} functions → {len(groups)} groups)")
-    print(f"  {'='*70}\n")
+    print(f"\n  {'=' * 70}")
+    print(
+        f"    FULL PIPELINE RESULTS ({len(all_funcs)} functions → {len(groups)} groups)"
+    )
+    print(f"  {'=' * 70}\n")
 
     for g in groups:
         fnames = [f"{f['name']} ({f['file']})" for f in g.functions]
-        print(f"    Group {g.group_id}: {g.similarity_type} "
-              f"(avg={g.avg_similarity:.3f})")
+        print(
+            f"    Group {g.group_id}: {g.similarity_type} (avg={g.avg_similarity:.3f})"
+        )
         for fn in fnames:
             print(f"      - {fn}")
     return groups
@@ -178,8 +210,10 @@ def _print_inventory(by_file):
         for f in funcs:
             params = ", ".join(f.parameters[:3])
             calls = ", ".join(f.calls_to[:4])
-            print(f"    {f.name}({params})  [{f.size_lines}L, "
-                  f"calls={calls or 'none'}, hash={f.code_hash[:8]}]")
+            print(
+                f"    {f.name}({params})  [{f.size_lines}L, "
+                f"calls={calls or 'none'}, hash={f.code_hash[:8]}]"
+            )
         print()
 
 
@@ -193,24 +227,30 @@ def _score_file_pair(funcs_a, funcs_b, all_scores, verbose):
             print(f"    {fa.name:25s} <-> {fb.name:25s} => {_DET_STYLE[det]}")
             if not verbose and det != "NONE":
                 continue
-            print(f"      tok_cos={scores['token_cosine']:.3f}  "
-                  f"code_sim={scores['code_similarity']:.3f}  "
-                  f"sem={scores['semantic_composite']:.3f}")
-            print(f"      name={scores['name_sim']:.3f}  "
-                  f"sig={scores['signature_sim']:.3f}  "
-                  f"callgraph={scores['callgraph_overlap']:.3f}  "
-                  f"doc={scores['docstring_sim']:.3f}")
-            print(f"      near_margin={scores['near_margin']:+.3f} "
-                  f"({classify_margin(scores['near_margin'])})  "
-                  f"sem_margin={scores['semantic_margin']:+.3f} "
-                  f"({classify_margin(scores['semantic_margin'])})")
+            print(
+                f"      tok_cos={scores['token_cosine']:.3f}  "
+                f"code_sim={scores['code_similarity']:.3f}  "
+                f"sem={scores['semantic_composite']:.3f}"
+            )
+            print(
+                f"      name={scores['name_sim']:.3f}  "
+                f"sig={scores['signature_sim']:.3f}  "
+                f"callgraph={scores['callgraph_overlap']:.3f}  "
+                f"doc={scores['docstring_sim']:.3f}"
+            )
+            print(
+                f"      near_margin={scores['near_margin']:+.3f} "
+                f"({classify_margin(scores['near_margin'])})  "
+                f"sem_margin={scores['semantic_margin']:+.3f} "
+                f"({classify_margin(scores['semantic_margin'])})"
+            )
 
 
 def _score_pairs(by_file, verbose=False):
     """Score intended cross-file pairs and return all score dicts."""
-    print(f"\n  {'='*70}")
+    print(f"\n  {'=' * 70}")
     print("    CROSS-FILE PAIR SCORING")
-    print(f"  {'='*70}\n")
+    print(f"  {'=' * 70}\n")
 
     all_scores = []
     for file_a, file_b in _INTENDED_PAIRS:
@@ -228,27 +268,37 @@ def _score_pairs(by_file, verbose=False):
 
 def _scan_false_positives(by_file):
     """Check that unintended cross-file pairs don't accidentally match."""
-    print(f"\n  {'='*70}")
+    print(f"\n  {'=' * 70}")
     print("    FALSE POSITIVE SCAN (unintended cross-file matches)")
-    print(f"  {'='*70}\n")
+    print(f"  {'=' * 70}\n")
 
     all_funcs_flat = [f for funcs in by_file.values() for f in funcs]
     fp_count = 0
     for i, fa in enumerate(all_funcs_flat):
-        for fb in all_funcs_flat[i+1:]:
+        for fb in all_funcs_flat[i + 1 :]:
             if fa.file_path == fb.file_path:
                 continue
-            fa_file = Path(fa.file_path).name if "/" not in fa.file_path else fa.file_path.split("/")[-1]
-            fb_file = Path(fb.file_path).name if "/" not in fb.file_path else fb.file_path.split("/")[-1]
+            fa_file = (
+                Path(fa.file_path).name
+                if "/" not in fa.file_path
+                else fa.file_path.split("/")[-1]
+            )
+            fb_file = (
+                Path(fb.file_path).name
+                if "/" not in fb.file_path
+                else fb.file_path.split("/")[-1]
+            )
             pair_key = tuple(sorted([fa_file, fb_file]))
 
             scores = score_pair_detailed(fa, fb)
             if scores["detected_as"] != "NONE" and pair_key not in _INTENDED_PAIR_KEYS:
                 fp_count += 1
-                print(f"    [FALSE_POS] {fa.name} ({fa_file}) <-> "
-                      f"{fb.name} ({fb_file})  => {scores['detected_as']} "
-                      f"(sem={scores['semantic_composite']:.3f}, "
-                      f"code={scores['code_similarity']:.3f})")
+                print(
+                    f"    [FALSE_POS] {fa.name} ({fa_file}) <-> "
+                    f"{fb.name} ({fb_file})  => {scores['detected_as']} "
+                    f"(sem={scores['semantic_composite']:.3f}, "
+                    f"code={scores['code_similarity']:.3f})"
+                )
 
     if fp_count == 0:
         print("    No false positives detected!")
@@ -258,9 +308,9 @@ def _scan_false_positives(by_file):
 
 def _print_margins(all_scores):
     """Print margin analysis showing distance from detection thresholds."""
-    print(f"\n  {'='*70}")
+    print(f"\n  {'=' * 70}")
     print("    MARGIN ANALYSIS (distance from threshold)")
-    print(f"  {'='*70}\n")
+    print(f"  {'=' * 70}\n")
 
     boundary_cases = []
     for s in all_scores:
@@ -268,10 +318,16 @@ def _print_margins(all_scores):
         sem_class = classify_margin(s["semantic_margin"])
         if "BOUNDARY" in near_class or "BOUNDARY" in sem_class:
             boundary_cases.append(s)
-            print(f"    BOUNDARY: {s['f1'].split('::')[1]:20s} <-> "
-                  f"{s['f2'].split('::')[1]:20s}")
-            print(f"      near: {s['code_similarity']:.3f} (margin={s['near_margin']:+.3f})")
-            print(f"      sem:  {s['semantic_composite']:.3f} (margin={s['semantic_margin']:+.3f})")
+            print(
+                f"    BOUNDARY: {s['f1'].split('::')[1]:20s} <-> "
+                f"{s['f2'].split('::')[1]:20s}"
+            )
+            print(
+                f"      near: {s['code_similarity']:.3f} (margin={s['near_margin']:+.3f})"
+            )
+            print(
+                f"      sem:  {s['semantic_composite']:.3f} (margin={s['semantic_margin']:+.3f})"
+            )
 
     if not boundary_cases:
         print("    No pairs at boundary thresholds (all clear or all missed)")
@@ -279,9 +335,9 @@ def _print_margins(all_scores):
 
 def _print_boundary_recommendations():
     """Print recommendations for boundary-case fixtures."""
-    print(f"\n  {'='*70}")
+    print(f"\n  {'=' * 70}")
     print("    BOUNDARY FIXTURE RECOMMENDATIONS")
-    print(f"  {'='*70}\n")
+    print(f"  {'=' * 70}\n")
     print("    The following fixture pairs should be added to stress-test")
     print("    the detection boundaries:\n")
     print("    1. NEAR-DUP BOUNDARY (code_sim ~0.68-0.72):")
@@ -310,13 +366,19 @@ def main():
     """Calibrate test fixtures and report duplicate detection accuracy."""
     parser = argparse.ArgumentParser(description="Calibrate fixture scores")
     parser.add_argument("--verbose", "-v", action="store_true")
-    parser.add_argument("--generate-boundary", "-g", action="store_true",
-                        help="Print recommendations for boundary fixtures")
+    parser.add_argument(
+        "--generate-boundary",
+        "-g",
+        action="store_true",
+        help="Print recommendations for boundary fixtures",
+    )
     args = parser.parse_args()
 
     by_file = load_all_functions()
-    print(f"\n  Loaded {sum(len(v) for v in by_file.values())} functions "
-          f"from {len(by_file)} fixture files.\n")
+    print(
+        f"\n  Loaded {sum(len(v) for v in by_file.values())} functions "
+        f"from {len(by_file)} fixture files.\n"
+    )
 
     _print_inventory(by_file)
     all_scores = _score_pairs(by_file, args.verbose)

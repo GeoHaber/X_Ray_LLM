@@ -2,6 +2,7 @@
 Tests for Core/utils.py — setup_logger, supports_unicode, get_os_info,
 get_cpu_info, verify_rust_environment.
 """
+
 import logging
 from Core.utils import setup_logger, get_os_info, get_cpu_info, verify_rust_environment
 
@@ -10,8 +11,8 @@ from Core.utils import setup_logger, get_os_info, get_cpu_info, verify_rust_envi
 #  setup_logger
 # ════════════════════════════════════════════════════════════════════
 
-class TestSetupLogger:
 
+class TestSetupLogger:
     def test_returns_logger_instance(self):
         log = setup_logger("test_logger")
         assert isinstance(log, logging.Logger)
@@ -29,8 +30,8 @@ class TestSetupLogger:
 #  get_os_info
 # ════════════════════════════════════════════════════════════════════
 
-class TestGetOsInfo:
 
+class TestGetOsInfo:
     def test_returns_nonempty_string(self):
         info = get_os_info()
         assert isinstance(info, str)
@@ -47,8 +48,8 @@ class TestGetOsInfo:
 #  get_cpu_info
 # ════════════════════════════════════════════════════════════════════
 
-class TestGetCpuInfo:
 
+class TestGetCpuInfo:
     def test_returns_string(self):
         info = get_cpu_info()
         assert isinstance(info, str)
@@ -63,11 +64,12 @@ class TestGetCpuInfo:
 #  verify_rust_environment
 # ════════════════════════════════════════════════════════════════════
 
-class TestVerifyRustEnvironment:
 
+class TestVerifyRustEnvironment:
     def setup_method(self):
         # Reset the module-level cache before each test
         import Core.utils as _mod
+
         _mod._verified_cache = False
 
     def test_returns_true(self):
@@ -77,6 +79,7 @@ class TestVerifyRustEnvironment:
         """Second call should hit cache (still returns True)."""
         verify_rust_environment()
         import Core.utils as _mod
+
         assert _mod._verified_cache is True
         # Call again — should be idempotent
         assert verify_rust_environment() is True

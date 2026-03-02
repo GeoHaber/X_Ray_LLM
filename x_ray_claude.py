@@ -5,22 +5,19 @@ X_RAY_Claude.py — Smart AI-Powered Code Analyzer (X-Ray 7.0)
 
 Universal code quality scanner combining:
   - AST-based structural analysis (smells, duplicates)
-  - Ruff linter integration (style, imports, hygiene)
-  - Bandit security scanner integration (vulnerabilities)
-  - JS/TS/React web smell detection (console.log, complexity, JSX)
-  - Project health & structural completeness scoring
-  - Auto-fix engine for common code smells
+  - Ruff format check (code formatting)
+  - Ruff linter (style, imports, hygiene)
+  - Bandit security scanner (vulnerabilities)
 
 Usage::
 
-    python X_RAY_Claude.py --path .                     # default: smells + lint + security
+    python X_RAY_Claude.py --path .                     # default: smells + format + lint + security
     python X_RAY_Claude.py --smell                      # code smell detection only
     python X_RAY_Claude.py --duplicates                 # find similar functions
+    python X_RAY_Claude.py --format                     # Ruff format check only
     python X_RAY_Claude.py --lint                       # Ruff linter only
     python X_RAY_Claude.py --security                   # Bandit security only
-    python X_RAY_Claude.py --web                        # JS/TS/React smell detection
-    python X_RAY_Claude.py --health                     # project health check
-    python X_RAY_Claude.py --full-scan                  # everything (all analyzers)
+    python X_RAY_Claude.py --full-scan                  # everything (all 5 analyzers)
     python X_RAY_Claude.py --report scan_results.json   # save JSON report
     python X_RAY_Claude.py --rustify                    # rank functions for Rust porting
     python X_RAY_Claude.py --lint --fix                 # lint + auto-apply Ruff fixes
@@ -44,13 +41,18 @@ from Core.ui_bridge import get_bridge
 
 from Analysis.reporting import print_unified_grade  # noqa: F401 — used by external callers
 from Core.scan_phases import (
-    scan_codebase, run_smell_phase, run_duplicate_phase,
-    run_lint_phase, run_security_phase, run_rustify_scan,
-    run_web_smell_phase, run_health_phase, run_smell_fix_phase,
+    scan_codebase,
+    run_smell_phase,
+    run_duplicate_phase,
+    run_format_phase,
+    run_lint_phase,
+    run_security_phase,
+    run_rustify_scan,
     collect_reports,
 )
 
-from Core.utils import setup_logger, check_trial_license as _check_trial_license
+from Core.utils import setup_logger
+
 setup_logger()  # configure logging once — no duplicate basicConfig
 
 
@@ -58,20 +60,22 @@ setup_logger()  # configure logging once — no duplicate basicConfig
 #  Interactive TUI — responsive, screen-adaptive, with LLM settings
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _supports_interactive() -> bool:
     """Check if stdin is a real terminal (not piped)."""
-    return hasattr(sys.stdin, 'isatty') and sys.stdin.isatty()
+    return hasattr(sys.stdin, "isatty") and sys.stdin.isatty()
 
 
 def _term_size() -> Tuple[int, int]:
     """(cols, rows) of current terminal."""
     import shutil
+
     return shutil.get_terminal_size((80, 24))
 
 
 def _clear_line():
     """Move cursor up and clear the line."""
-    print('\033[A\033[K', end='', flush=True)
+    print("\033[A\033[K", end="", flush=True)
 
 
 def _ansi(code: str, text: str) -> str:
@@ -81,25 +85,30 @@ def _ansi(code: str, text: str) -> str:
 
 # ── Platform-specific raw key reader ──
 
-_KEY_CHAR_MAP = {' ': 'space', '\r': 'enter', '\n': 'enter',
-                 '\t': 'tab', '\x1b': 'quit'}
-_KEY_ALPHA_MAP = {'q': 'quit', 'a': 'all', 'n': 'none',
-                  's': 'settings', 'h': 'help'}
-_WIN32_ESC_MAP = {'H': 'up', 'P': 'down', 'K': 'left', 'M': 'right'}
-_UNIX_ESC_MAP = {'[A': 'up', '[B': 'down', '[C': 'right', '[D': 'left'}
+_KEY_CHAR_MAP = {
+    " ": "space",
+    "\r": "enter",
+    "\n": "enter",
+    "\t": "tab",
+    "\x1b": "quit",
+}
+_KEY_ALPHA_MAP = {"q": "quit", "a": "all", "n": "none", "s": "settings", "h": "help"}
+_WIN32_ESC_MAP = {"H": "up", "P": "down", "K": "left", "M": "right"}
+_UNIX_ESC_MAP = {"[A": "up", "[B": "down", "[C": "right", "[D": "left"}
 
 
 def _resolve_char(ch: str) -> str:
     """Map a raw character to a logical key name."""
-    return _KEY_CHAR_MAP.get(ch) or _KEY_ALPHA_MAP.get(ch.lower(), 'unknown')
+    return _KEY_CHAR_MAP.get(ch) or _KEY_ALPHA_MAP.get(ch.lower(), "unknown")
 
 
 def _read_key_win32() -> str:
     """Read a single keypress on Windows."""
     import msvcrt
+
     ch = msvcrt.getwch()
-    if ch in ('\x00', '\xe0'):
-        return _WIN32_ESC_MAP.get(msvcrt.getwch(), 'unknown')
+    if ch in ("\x00", "\xe0"):
+        return _WIN32_ESC_MAP.get(msvcrt.getwch(), "unknown")
     return _resolve_char(ch)
 
 
@@ -107,13 +116,14 @@ def _read_key_unix() -> str:
     """Read a single keypress on Unix/macOS."""
     import tty
     import termios
+
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
         ch = sys.stdin.read(1)
-        if ch == '\x1b':
-            return _UNIX_ESC_MAP.get(sys.stdin.read(2), 'unknown')
+        if ch == "\x1b":
+            return _UNIX_ESC_MAP.get(sys.stdin.read(2), "unknown")
         return _resolve_char(ch)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
@@ -121,27 +131,33 @@ def _read_key_unix() -> str:
 
 def _make_key_reader():
     """Return a zero-argument callable that reads a single keypress."""
-    return _read_key_win32 if sys.platform == 'win32' else _read_key_unix
+    return _read_key_win32 if sys.platform == "win32" else _read_key_unix
 
 
 # ── Box-drawing helpers (adapt to screen width) ──
 
+
 def _box_top(w: int) -> str:
     return _ansi("1;36", "╔" + "═" * (w - 2) + "╗")
+
 
 def _box_mid(w: int) -> str:
     return _ansi("1;36", "╠" + "═" * (w - 2) + "╣")
 
+
 def _box_sep(w: int) -> str:
     return _ansi("36", "╟" + "─" * (w - 2) + "╢")
+
 
 def _box_bot(w: int) -> str:
     return _ansi("1;36", "╚" + "═" * (w - 2) + "╝")
 
+
 def _box_line(w: int, text: str, align: str = "left") -> str:
     """A line inside a box. `text` may contain ANSI — we strip for padding."""
     import re
-    visible = len(re.sub(r'\033\[[0-9;]*m', '', text))
+
+    visible = len(re.sub(r"\033\[[0-9;]*m", "", text))
     inner = w - 4  # 2 border + 2 padding
     if align == "center":
         pad_left = max(0, (inner - visible) // 2)
@@ -149,20 +165,27 @@ def _box_line(w: int, text: str, align: str = "left") -> str:
     else:
         pad_left = 0
         pad_right = max(0, inner - visible)
-    return _ansi("36", "║") + " " + " " * pad_left + text + " " * pad_right + " " + _ansi("36", "║")
+    return (
+        _ansi("36", "║")
+        + " "
+        + " " * pad_left
+        + text
+        + " " * pad_right
+        + " "
+        + _ansi("36", "║")
+    )
 
 
 # ── Scan option definitions ──
 
 _SCAN_OPTIONS = [
-    ('smell',       'Code Smells',              '🔬', True,  'AST-based structural analysis'),
-    ('duplicates',  'Duplicates',               '🔁', False, 'Find similar / copy-paste code'),
-    ('lint',        'Lint (Ruff)',              '✏️',  True,  'Style, imports, hygiene'),
-    ('security',    'Security (Bandit)',        '🛡️',  True,  'Vulnerability scanner'),
-    ('web',         'Web (JS/TS/React)',        '🌐', False, 'JS/TS/React smell detection'),
-    ('health',      'Project Health',           '🏥', False, 'Structural completeness check'),
-    ('rustify',     'Rust Score',               '🦀', False, 'Rank functions for Rust porting'),
-    ('rustify_exe', 'Rustify → EXE',           '⚙️',  False, 'Full transpile + compile pipeline'),
+    ("smell", "Code Smells", "🔬", True, "AST-based structural analysis"),
+    ("duplicates", "Duplicates", "🔁", False, "Find similar / copy-paste code"),
+    ("format", "Format (Ruff)", "📐", True, "Code formatting check"),
+    ("lint", "Lint (Ruff)", "✏️", True, "Style, imports, hygiene"),
+    ("security", "Security (Bandit)", "🛡️", True, "Vulnerability scanner"),
+    ("rustify", "Rust Score", "🦀", False, "Rank functions for Rust porting"),
+    ("rustify_exe", "Rustify → EXE", "⚙️", False, "Full transpile + compile pipeline"),
 ]
 
 
@@ -170,6 +193,7 @@ def _load_llm_info():
     """Lazy-load LLM manager, hardware info, and model recommendations."""
     try:
         from Core.llm_manager import LLMManager, recommend_models
+
         mgr = LLMManager()
         mgr.detect_all()
         return mgr, mgr.hw, recommend_models(mgr.hw)
@@ -177,16 +201,23 @@ def _load_llm_info():
         return None, None, None
 
 
-def _render_scan_page(box_w: int, wide: bool,
-                      selected: list, cursor: int) -> str:
+def _render_scan_page(box_w: int, wide: bool, selected: list, cursor: int) -> str:
     """Build the scan-option TUI panel."""
     lines = ["", "  " + _box_top(box_w)]
     title = _ansi("1;97", "X-RAY 5.0") + "  " + _ansi("36", "Interactive Scanner")
     lines.append("  " + _box_line(box_w, title, "center"))
     lines.append("  " + _box_mid(box_w))
     if wide:
-        ctrl = (_ansi("90", "↑↓") + " move  " + _ansi("90", "Space") + " toggle  "
-                + _ansi("90", "Enter") + " run  " + _ansi("90", "Tab/s") + " LLM settings")
+        ctrl = (
+            _ansi("90", "↑↓")
+            + " move  "
+            + _ansi("90", "Space")
+            + " toggle  "
+            + _ansi("90", "Enter")
+            + " run  "
+            + _ansi("90", "Tab/s")
+            + " LLM settings"
+        )
     else:
         ctrl = _ansi("90", "↑↓ Space Enter  s=settings  q=quit")
     lines.append("  " + _box_line(box_w, ctrl, "center"))
@@ -194,15 +225,31 @@ def _render_scan_page(box_w: int, wide: bool,
     for i, (key, label, icon, default, desc) in enumerate(_SCAN_OPTIONS):
         mark = _ansi("1;32", "✓") if selected[i] else _ansi("90", "·")
         arrow = _ansi("1;33", "►") + " " if i == cursor else "  "
-        text = f"{arrow}[{mark}] {icon} {label:<22} {_ansi('90', desc)}" if wide else f"{arrow}[{mark}] {label}"
+        text = (
+            f"{arrow}[{mark}] {icon} {label:<22} {_ansi('90', desc)}"
+            if wide
+            else f"{arrow}[{mark}] {label}"
+        )
         lines.append("  " + _box_line(box_w, text))
     lines.append("  " + _box_sep(box_w))
     count = sum(selected)
     summary = _ansi("1;97", f"{count}") + _ansi("90", f"/{len(_SCAN_OPTIONS)} selected")
-    shortcuts = _ansi("90", "a") + "=all  " + _ansi("90", "n") + "=none  " + _ansi("90", "q") + "=quit"
-    lines.append("  " + _box_line(box_w, f"{summary}    {shortcuts}" if wide else f"{summary}  {shortcuts}"))
+    shortcuts = (
+        _ansi("90", "a")
+        + "=all  "
+        + _ansi("90", "n")
+        + "=none  "
+        + _ansi("90", "q")
+        + "=quit"
+    )
+    lines.append(
+        "  "
+        + _box_line(
+            box_w, f"{summary}    {shortcuts}" if wide else f"{summary}  {shortcuts}"
+        )
+    )
     lines.extend(["  " + _box_bot(box_w), ""])
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
 def _render_hw_section(box_w: int, hw) -> List[str]:
@@ -230,12 +277,19 @@ def _render_runtime_section(box_w: int, mgr) -> List[str]:
     lines = ["  " + _box_line(box_w, _ansi("1;97", "llama.cpp Runtime"))]
     if rt.installed:
         status = _ansi("32", "✓ installed") + f"  {rt.version}  [{rt.backend}]"
-        srv = _ansi("32", f"running :{rt.server_port}") if rt.server_running else _ansi("90", "stopped")
+        srv = (
+            _ansi("32", f"running :{rt.server_port}")
+            if rt.server_running
+            else _ansi("90", "stopped")
+        )
         lines.append("  " + _box_line(box_w, f"  Status: {status}"))
         lines.append("  " + _box_line(box_w, f"  Server: {srv}"))
     else:
         lines.append("  " + _box_line(box_w, _ansi("33", "  ⚠ llama.cpp not found")))
-        lines.append("  " + _box_line(box_w, _ansi("90", "  Install: github.com/ggerganov/llama.cpp")))
+        lines.append(
+            "  "
+            + _box_line(box_w, _ansi("90", "  Install: github.com/ggerganov/llama.cpp"))
+        )
     return lines
 
 
@@ -243,25 +297,35 @@ def _render_model_section(box_w: int, wide: bool, models) -> List[str]:
     """Recommended model lines."""
     lines = ["  " + _box_line(box_w, _ansi("1;97", "Recommended Models"))]
     if not models:
-        lines.append("  " + _box_line(box_w, _ansi("90", "  (no models fit this hardware)")))
+        lines.append(
+            "  " + _box_line(box_w, _ansi("90", "  (no models fit this hardware)"))
+        )
         return lines
     for i, m in enumerate(models[:4], 1):
         tag = _ansi("1;33", " ★ BEST") if i == 1 else ""
-        lines.append("  " + _box_line(box_w, f"  {i}. {m.name}" + (f" ({m.params})" if wide else "") + tag))
+        lines.append(
+            "  "
+            + _box_line(
+                box_w, f"  {i}. {m.name}" + (f" ({m.params})" if wide else "") + tag
+            )
+        )
         if wide:
-            det = f"     {m.speed}  Code: {m.code_quality}  RAM: {m.ram_needed_gb:.0f}GB"
+            det = (
+                f"     {m.speed}  Code: {m.code_quality}  RAM: {m.ram_needed_gb:.0f}GB"
+            )
             lines.append("  " + _box_line(box_w, _ansi("90", det)))
     return lines
 
 
-def _render_settings_page(box_w: int, wide: bool,
-                          mgr, hw, models) -> str:
+def _render_settings_page(box_w: int, wide: bool, mgr, hw, models) -> str:
     """Build the LLM / hardware settings TUI panel."""
     lines = ["", "  " + _box_top(box_w)]
     title = _ansi("1;97", "LLM & Runtime") + "  " + _ansi("36", "Settings")
     lines.append("  " + _box_line(box_w, title, "center"))
     lines.append("  " + _box_mid(box_w))
-    ctrl = _ansi("90", "Tab/Esc") + " back to scan  " + _ansi("90", "Enter") + " confirm"
+    ctrl = (
+        _ansi("90", "Tab/Esc") + " back to scan  " + _ansi("90", "Enter") + " confirm"
+    )
     lines.append("  " + _box_line(box_w, ctrl, "center"))
     lines.append("  " + _box_sep(box_w))
     lines.extend(_render_hw_section(box_w, hw))
@@ -270,15 +334,15 @@ def _render_settings_page(box_w: int, wide: bool,
     lines.append("  " + _box_sep(box_w))
     lines.extend(_render_model_section(box_w, wide, models))
     lines.extend(["  " + _box_bot(box_w), ""])
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
 _SCAN_KEY_ACTIONS = {
-    'up':    lambda c, s: ((c - 1) % len(_SCAN_OPTIONS), s),
-    'down':  lambda c, s: ((c + 1) % len(_SCAN_OPTIONS), s),
-    'space': lambda c, s: (_toggle_at(c, s), s)[1:] and (c, s),
-    'all':   lambda c, s: (c, [True] * len(_SCAN_OPTIONS)),
-    'none':  lambda c, s: (c, [False] * len(_SCAN_OPTIONS)),
+    "up": lambda c, s: ((c - 1) % len(_SCAN_OPTIONS), s),
+    "down": lambda c, s: ((c + 1) % len(_SCAN_OPTIONS), s),
+    "space": lambda c, s: (_toggle_at(c, s), s)[1:] and (c, s),
+    "all": lambda c, s: (c, [True] * len(_SCAN_OPTIONS)),
+    "none": lambda c, s: (c, [False] * len(_SCAN_OPTIONS)),
 }
 
 
@@ -288,27 +352,27 @@ def _toggle_at(idx, selected):
 
 def _handle_scan_key(key, cursor, selected, page_ref):
     """Handle a keypress on the scan page. Returns (cursor, selected, page, done)."""
-    if key == 'enter':
-        return cursor, selected, 'scan', True
-    if key in ('tab', 'settings'):
-        return cursor, selected, 'settings', False
-    if key == 'quit':
-        print('\n  Cancelled.')
+    if key == "enter":
+        return cursor, selected, "scan", True
+    if key in ("tab", "settings"):
+        return cursor, selected, "settings", False
+    if key == "quit":
+        print("\n  Cancelled.")
         sys.exit(0)
-    if key == 'space':
+    if key == "space":
         selected[cursor] = not selected[cursor]
-        return cursor, selected, 'scan', False
+        return cursor, selected, "scan", False
     action = _SCAN_KEY_ACTIONS.get(key)
     if action:
         cursor, selected = action(cursor, selected)
-    return cursor, selected, 'scan', False
+    return cursor, selected, "scan", False
 
 
 def _handle_settings_key(key: str) -> str:
     """Handle a keypress while on the settings page. Returns new page name."""
-    if key in ('tab', 'quit', 'settings', 'enter'):
-        return 'scan'
-    return 'settings'
+    if key in ("tab", "quit", "settings", "enter"):
+        return "scan"
+    return "settings"
 
 
 def _interactive_menu() -> dict:
@@ -325,34 +389,35 @@ def _interactive_menu() -> dict:
 
     selected = [d for _, _, _, d, _ in _SCAN_OPTIONS]
     cursor = 0
-    page = 'scan'
+    page = "scan"
     mgr = hw = models = None
 
     def _draw(content: str) -> int:
-        print(content, end='', flush=True)
-        return content.count('\n') + 1
+        print(content, end="", flush=True)
+        return content.count("\n") + 1
 
     display = _render_scan_page(box_w, wide, selected, cursor)
     line_count = _draw(display)
 
     while True:
         key = read_key()
-        if page == 'scan':
-            cursor, selected, page, done = _handle_scan_key(
-                key, cursor, selected, page)
+        if page == "scan":
+            cursor, selected, page, done = _handle_scan_key(key, cursor, selected, page)
             if done:
                 break
-            if page == 'settings' and mgr is None:
+            if page == "settings" and mgr is None:
                 mgr, hw, models = _load_llm_info()
         else:
             page = _handle_settings_key(key)
-            if page == 'settings':
+            if page == "settings":
                 continue
         for _ in range(line_count):
             _clear_line()
-        display = (_render_settings_page(box_w, wide, mgr, hw, models)
-                   if page == 'settings'
-                   else _render_scan_page(box_w, wide, selected, cursor))
+        display = (
+            _render_settings_page(box_w, wide, mgr, hw, models)
+            if page == "settings"
+            else _render_scan_page(box_w, wide, selected, cursor)
+        )
         line_count = _draw(display)
 
     print()
@@ -370,6 +435,7 @@ def _handle_system_info(args):
     if not args.system_info:
         return
     from Core.llm_manager import LLMManager
+
     mgr = LLMManager()
     mgr.detect_all()
     print(mgr.format_system_profile())
@@ -383,16 +449,17 @@ def _handle_llm_settings(args):
     if not args.llm_settings:
         return
     from Core.llm_manager import LLMManager
+
     mgr = LLMManager(project_dir=Path(args.path).resolve())
     mgr.detect_all()
     print(mgr.format_system_profile())
     print(mgr.format_runtime_status())
     print(mgr.format_model_recommendations())
     status = mgr.check_and_prompt()
-    if status.get('needs_install'):
+    if status.get("needs_install"):
         print("  💡 To install llama.cpp:")
         print("     https://github.com/ggerganov/llama.cpp/releases")
-    if status.get('needs_upgrade'):
+    if status.get("needs_upgrade"):
         print(f"  💡 Newer version available: {status['latest_version']}")
     sys.exit(0)
 
@@ -407,15 +474,26 @@ def _parse_args() -> argparse.Namespace:
     )
     add_common_scan_args(parser)
     # x_ray_claude-specific flags
-    parser.add_argument("--rustify-exe", action="store_true",
-                        help="Full pipeline: scan → optimize → transpile → compile to executable")
+    parser.add_argument(
+        "--rustify-exe",
+        action="store_true",
+        help="Full pipeline: scan → optimize → transpile → compile to executable",
+    )
     parser.add_argument("--use-llm", action="store_true", help="Enable LLM enrichment")
-    parser.add_argument("--llm-settings", action="store_true",
-                        help="Show LLM settings: hardware detection, model recommendations")
-    parser.add_argument("--system-info", action="store_true",
-                        help="Print hardware profile and exit")
-    parser.add_argument("--interactive", "-i", action="store_true",
-                        help="Launch interactive TUI to select scope and options")
+    parser.add_argument(
+        "--llm-settings",
+        action="store_true",
+        help="Show LLM settings: hardware detection, model recommendations",
+    )
+    parser.add_argument(
+        "--system-info", action="store_true", help="Print hardware profile and exit"
+    )
+    parser.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        help="Launch interactive TUI to select scope and options",
+    )
     args = parser.parse_args()
 
     _handle_system_info(args)
@@ -423,8 +501,15 @@ def _parse_args() -> argparse.Namespace:
 
     if args.interactive and _supports_interactive():
         choices = _interactive_menu()
-        for k in ('smell', 'duplicates', 'lint', 'security',
-                  'web', 'health', 'rustify', 'rustify_exe'):
+        for k in (
+            "smell",
+            "duplicates",
+            "format",
+            "lint",
+            "security",
+            "rustify",
+            "rustify_exe",
+        ):
             setattr(args, k, choices.get(k, False))
         return args
 
@@ -450,7 +535,9 @@ def _scan_codebase_phase(root: Path, args: argparse.Namespace):
     start = time.time()
     functions, classes, errors = scan_codebase(root, exclude=args.exclude, verbose=True)
     duration = time.time() - start
-    print(f"  Scanned {len(functions)} functions, {len(classes)} classes in {duration:.2f}s")
+    print(
+        f"  Scanned {len(functions)} functions, {len(classes)} classes in {duration:.2f}s"
+    )
     return functions, classes, errors
 
 
@@ -466,6 +553,13 @@ def _run_duplicate_phase(args, functions):
     if not args.duplicates:
         return None
     return run_duplicate_phase(functions)
+
+
+def _run_format_phase(args, root):
+    """Run Ruff format check if requested."""
+    if not args.format:
+        return None, []
+    return run_format_phase(root, exclude=args.exclude)
 
 
 def _run_lint_phase(args, root):
@@ -543,8 +637,8 @@ def _run_rustify_exe(root: Path, args: argparse.Namespace) -> dict:
     def progress_cb(frac: float, label: str):
         bar_len = 30
         filled = int(bar_len * frac)
-        bar = '█' * filled + '░' * (bar_len - filled)
-        print(f"\r  [{bar}] {frac*100:5.1f}% {label:<40}", end='', flush=True)
+        bar = "█" * filled + "░" * (bar_len - filled)
+        print(f"\r  [{bar}] {frac * 100:5.1f}% {label:<40}", end="", flush=True)
 
     pipeline = RustifyPipeline(
         project_dir=root,
@@ -561,15 +655,17 @@ def _run_rustify_exe(root: Path, args: argparse.Namespace) -> dict:
     print(f"\n  ── Pipeline Results {'─' * 39}")
     print(f"  System:     {report.system.os_name} {report.system.arch}")
     print(f"  Target:     {report.system.rust_target}")
-    print(f"  Scanned:    {report.candidates_total} functions in {report.scan_duration_s}s")
+    print(
+        f"  Scanned:    {report.candidates_total} functions in {report.scan_duration_s}s"
+    )
     print(f"  Selected:   {report.candidates_selected} candidates (score ≥ 3.0)")
 
     for phase in report.phases:
-        status = phase.get('status', 'unknown')
-        name = phase.get('name', '')
-        icon = '✅' if status == 'ok' else '❌' if status == 'failed' else '⚠️'
+        status = phase.get("status", "unknown")
+        name = phase.get("name", "")
+        icon = "✅" if status == "ok" else "❌" if status == "failed" else "⚠️"
         print(f"  {icon} {name}: {status}")
-        if 'artefact' in phase and phase['artefact']:
+        if "artefact" in phase and phase["artefact"]:
             print(f"     → Executable: {phase['artefact']}")
 
     if report.compile_result and report.compile_result.success:
@@ -604,6 +700,9 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
     all_issues.extend(smells)
 
     finder = _run_duplicate_phase(args, functions)
+
+    fmt_analyzer, format_issues = _run_format_phase(args, root)
+    all_issues.extend(format_issues)
 
     linter, lint_issues = _run_lint_phase(args, root)
     all_issues.extend(lint_issues)
@@ -654,14 +753,25 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
             tasks.append(detector.enrich_with_llm_async(llm))
         if finder:
             from Analysis.duplicates import enrich_with_llm_async as _dup_enrich
+
             tasks.append(_dup_enrich(finder, llm, functions))
         if tasks:
             await asyncio.gather(*tasks)
 
     from Core.scan_phases import AnalysisComponents
-    return collect_reports(AnalysisComponents(
-        detector, finder, linter, lint_issues, sec_analyzer, sec_issues,
-        web_detector, health_analyzer))
+
+    return collect_reports(
+        AnalysisComponents(
+            detector,
+            finder,
+            fmt_analyzer,
+            format_issues,
+            linter,
+            lint_issues,
+            sec_analyzer,
+            sec_issues,
+        )
+    )
 
 
 async def main_async():
@@ -705,8 +815,10 @@ async def main_async():
             json.dump(results, f, indent=2)
         print(f"\n  Report saved to {args.report}")
 
+
 def main():
     asyncio.run(main_async())
+
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,3 @@
-
 import ast
 import hashlib
 import logging
@@ -23,6 +22,7 @@ class ASTNormalizer(ast.NodeTransformer):
     2. Renames all arguments to 'argN'.
     3. Renames all local variables to 'varN' (simple scope-agnostic).
     """
+
     def __init__(self):
         self.arg_map = {}
         self.var_map = {}
@@ -31,12 +31,15 @@ class ASTNormalizer(ast.NodeTransformer):
 
     def visit_FunctionDef(self, node):
         node.name = "func"
-        if (node.body and isinstance(node.body[0], ast.Expr)
-                and isinstance(node.body[0].value, ast.Constant)
-                and isinstance(node.body[0].value.value, str)):
+        if (
+            node.body
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        ):
             node.body.pop(0)
         for arg in node.args.args:
-            if arg.arg != 'self':
+            if arg.arg != "self":
                 name = f"arg{self.arg_count}"
                 self.arg_map[arg.arg] = name
                 arg.arg = name
@@ -121,6 +124,10 @@ def _walk_definitions(node: ast.AST):
             yield from _walk_definitions(child)
 
 
+def extract_functions_from_file(
+    fpath: Path, root: Path
+) -> Tuple[List[FunctionRecord], List[ClassRecord], Optional[str]]:
+    """Parse one file and extract all functions and classes."""
 def extract_functions_from_file(fpath: Path, root: Path,
                                  use_cache: bool = True) -> Tuple[
         List[FunctionRecord], List[ClassRecord], Optional[str]]:
@@ -183,6 +190,24 @@ def _extract_calls(node: ast.AST) -> List[str]:
     return list(set(calls))
 
 
+def _mutable_default_params(node: ast.AST) -> List[str]:
+    """PEP 8 / Hitchhiker's Guide: list, dict, set defaults are evaluated once."""
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return []
+    args = node.args.args
+    defaults = node.args.defaults
+    if not defaults:
+        return []
+    mutable_types = (ast.List, ast.Dict, ast.Set)
+    result = []
+    for i, default in enumerate(defaults):
+        if isinstance(default, mutable_types):
+            idx = len(args) - len(defaults) + i
+            if 0 <= idx < len(args):
+                result.append(args[idx].arg)
+    return result
+
+
 def _safe_decorators(node: ast.AST) -> List[str]:
     """Extract decorator strings, returning empty list on failure."""
     try:
@@ -191,16 +216,20 @@ def _safe_decorators(node: ast.AST) -> List[str]:
         return []
 
 
-def _build_function_record(node: ast.AST, rel_path: str, source: str,
-                          lines: List[str]) -> FunctionRecord:
+def _build_function_record(
+    node: ast.AST, rel_path: str, source: str, lines: List[str]
+) -> FunctionRecord:
     """Extract FunctionRecord from AST node (replaces 50-line inline block)."""
     start = max(node.lineno - 1, 0)
     end = node.end_lineno or start + 1
     code = "\n".join(lines[start:end])
     code_hash = hashlib.sha256(code.encode()).hexdigest()
-    
+
     params = [a.arg for a in node.args.args if a.arg != "self"]
-    ret = ast.unparse(node.returns) if node.returns and hasattr(ast, "unparse") else None
+    ret = (
+        ast.unparse(node.returns) if node.returns and hasattr(ast, "unparse") else None
+    )
+    mutable_defaults = _mutable_default_params(node)
 
     return FunctionRecord(
         name=node.name,
@@ -221,6 +250,7 @@ def _build_function_record(node: ast.AST, rel_path: str, source: str,
         return_count=sum(1 for n in ast.walk(node) if isinstance(n, ast.Return)),
         branch_count=sum(1 for n in ast.walk(node) if isinstance(n, ast.If)),
         is_async=isinstance(node, ast.AsyncFunctionDef),
+        mutable_default_params=mutable_defaults,
     )
 
 
@@ -228,10 +258,13 @@ def _build_class_record(node: ast.ClassDef, rel_path: str) -> ClassRecord:
     """Extract ClassRecord from AST node (replaces 30-line inline block)."""
     start = max(node.lineno - 1, 0)
     end = node.end_lineno or start + 1
-    
-    methods = [n.name for n in ast.walk(node)
-               if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
-    
+
+    methods = [
+        n.name
+        for n in ast.walk(node)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+
     bases = []
     for b in node.bases:
         try:
@@ -278,8 +311,9 @@ def _is_scannable_py(fn: str) -> bool:
     return fn.endswith(".py") and fn not in _ALWAYS_SKIP_FILES
 
 
-def collect_py_files(root: Path, exclude: List[str] = None,
-                     include: List[str] = None) -> List[Path]:
+def collect_py_files(
+    root: Path, exclude: List[str] = None, include: List[str] = None
+) -> List[Path]:
     """Walk root and return .py files respecting include/exclude rules."""
     exclude = exclude or []
     include = include or []
@@ -291,12 +325,12 @@ def collect_py_files(root: Path, exclude: List[str] = None,
         return results
     for dirpath, dirnames, filenames in walker:
         rel_dir = os.path.relpath(dirpath, root)
-        dirnames[:] = [d for d in dirnames
-                       if not _should_prune_dir(d, rel_dir, exclude)]
+        dirnames[:] = [
+            d for d in dirnames if not _should_prune_dir(d, rel_dir, exclude)
+        ]
         if not _matches_include_filter(rel_dir, include):
             continue
         for fn in filenames:
             if _is_scannable_py(fn):
                 results.append(Path(dirpath) / fn)
     return results
-
