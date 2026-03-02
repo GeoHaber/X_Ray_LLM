@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-X_RAY_Claude.py — Smart AI-Powered Code Analyzer (X-Ray 6.0)
+X_RAY_Claude.py — Smart AI-Powered Code Analyzer (X-Ray 7.0)
 =============================================================
 
-Unified code quality scanner combining:
+Universal code quality scanner combining:
   - AST-based structural analysis (smells, duplicates)
   - Ruff linter integration (style, imports, hygiene)
   - Bandit security scanner integration (vulnerabilities)
+  - JS/TS/React web smell detection (console.log, complexity, JSX)
+  - Project health & structural completeness scoring
+  - Auto-fix engine for common code smells
 
 Usage::
 
@@ -15,10 +18,13 @@ Usage::
     python X_RAY_Claude.py --duplicates                 # find similar functions
     python X_RAY_Claude.py --lint                       # Ruff linter only
     python X_RAY_Claude.py --security                   # Bandit security only
-    python X_RAY_Claude.py --full-scan                  # everything (all 4 analyzers)
+    python X_RAY_Claude.py --web                        # JS/TS/React smell detection
+    python X_RAY_Claude.py --health                     # project health check
+    python X_RAY_Claude.py --full-scan                  # everything (all analyzers)
     python X_RAY_Claude.py --report scan_results.json   # save JSON report
     python X_RAY_Claude.py --rustify                    # rank functions for Rust porting
     python X_RAY_Claude.py --lint --fix                 # lint + auto-apply Ruff fixes
+    python X_RAY_Claude.py --fix-smells                 # auto-repair common issues
     python X_RAY_Claude.py --compare prev.json          # show delta vs previous scan
 """
 
@@ -34,11 +40,14 @@ from typing import List, Tuple
 
 from Core.config import BANNER
 from Core.inference import LLMHelper
+from Core.ui_bridge import get_bridge
 
 from Analysis.reporting import print_unified_grade  # noqa: F401 — used by external callers
 from Core.scan_phases import (
     scan_codebase, run_smell_phase, run_duplicate_phase,
-    run_lint_phase, run_security_phase, run_rustify_scan, collect_reports,
+    run_lint_phase, run_security_phase, run_rustify_scan,
+    run_web_smell_phase, run_health_phase, run_smell_fix_phase,
+    collect_reports,
 )
 
 from Core.utils import setup_logger, check_trial_license as _check_trial_license
@@ -150,6 +159,8 @@ _SCAN_OPTIONS = [
     ('duplicates',  'Duplicates',               '🔁', False, 'Find similar / copy-paste code'),
     ('lint',        'Lint (Ruff)',              '✏️',  True,  'Style, imports, hygiene'),
     ('security',    'Security (Bandit)',        '🛡️',  True,  'Vulnerability scanner'),
+    ('web',         'Web (JS/TS/React)',        '🌐', False, 'JS/TS/React smell detection'),
+    ('health',      'Project Health',           '🏥', False, 'Structural completeness check'),
     ('rustify',     'Rust Score',               '🦀', False, 'Rank functions for Rust porting'),
     ('rustify_exe', 'Rustify → EXE',           '⚙️',  False, 'Full transpile + compile pipeline'),
 ]
@@ -412,7 +423,8 @@ def _parse_args() -> argparse.Namespace:
 
     if args.interactive and _supports_interactive():
         choices = _interactive_menu()
-        for k in ('smell', 'duplicates', 'lint', 'security', 'rustify', 'rustify_exe'):
+        for k in ('smell', 'duplicates', 'lint', 'security',
+                  'web', 'health', 'rustify', 'rustify_exe'):
             setattr(args, k, choices.get(k, False))
         return args
 
@@ -475,6 +487,41 @@ def _run_security_phase(args, root):
     if not args.security:
         return None, []
     return run_security_phase(root, exclude=args.exclude)
+
+
+def _run_web_phase(args, root):
+    """Run JS/TS/React web smell detection if requested."""
+    if not getattr(args, "web", False):
+        return None
+    detector, smells = run_web_smell_phase(root, exclude=args.exclude)
+    return detector
+
+
+def _run_health_phase(args, root):
+    """Run project health check if requested."""
+    if not getattr(args, "health", False):
+        return None
+    auto_fix = getattr(args, "fix_smells", False)
+    return run_health_phase(root, auto_fix=auto_fix)
+
+
+def _run_fix_smells_phase(args, root):
+    """Run auto-fix smell engine if requested."""
+    if not getattr(args, "fix_smells", False):
+        return None
+    result = run_smell_fix_phase(root, exclude=args.exclude)
+    bridge = get_bridge()
+    if result.fixes_applied:
+        bridge.log(f"\n  ✔ Auto-Fix Applied: {result.fixes_applied} fix(es)")
+        if result.console_logs_commented:
+            bridge.log(f"    - {result.console_logs_commented} console.log(s) commented out")
+        if result.prints_commented:
+            bridge.log(f"    - {result.prints_commented} debug print(s) commented out")
+        if result.project_files_created:
+            bridge.log(f"    - Created: {', '.join(result.project_files_created)}")
+    else:
+        bridge.log("  ℹ No auto-fixable smells found")
+    return result
 
 
 def _run_rustify(root: Path, args: argparse.Namespace) -> dict:
@@ -564,6 +611,42 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
     sec_analyzer, sec_issues = _run_security_phase(args, root)
     all_issues.extend(sec_issues)
 
+    # ── New v7.0 phases ──
+    web_detector = _run_web_phase(args, root)
+    health_analyzer = _run_health_phase(args, root)
+
+    # ── Auto-fix smells (--fix-smells) ──
+    _run_fix_smells_phase(args, root)
+
+    # ── Test generation (--gen-tests) ──
+    if getattr(args, "gen_tests", False):
+        from Core.scan_phases import run_test_gen_phase
+        # Collect JS analyses from web_detector if present
+        js_analyses = None
+        if web_detector and hasattr(web_detector, "_analyses"):
+            js_analyses = web_detector._analyses
+        health_checks = None
+        if health_analyzer and hasattr(health_analyzer, "report") and health_analyzer.report:
+            health_checks = health_analyzer.report.checks
+        test_output = Path(getattr(args, "test_output", ".")).resolve()
+        test_report = run_test_gen_phase(
+            root,
+            functions=functions,
+            classes=classes,
+            smells=all_issues,
+            js_analyses=js_analyses,
+            health_checks=health_checks,
+            output_dir=test_output,
+        )
+        bridge = get_bridge()
+        bridge.log(f"\n  {'='*60}")
+        bridge.log(f"  🧪 MONKEY TESTS GENERATED")
+        bridge.log(f"     Files: {len(test_report.files_created)}")
+        bridge.log(f"     Tests: {test_report.total_tests}")
+        bridge.log(f"     Languages: {', '.join(test_report.languages)}")
+        bridge.log(f"     Output: {test_output}")
+        bridge.log(f"  {'='*60}")
+
     # ── Async LLM Enrichment (Parallel) ──
     if llm and (detector or finder):
         tasks = []
@@ -577,7 +660,8 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
 
     from Core.scan_phases import AnalysisComponents
     return collect_reports(AnalysisComponents(
-        detector, finder, linter, lint_issues, sec_analyzer, sec_issues))
+        detector, finder, linter, lint_issues, sec_analyzer, sec_issues,
+        web_detector, health_analyzer))
 
 
 async def main_async():

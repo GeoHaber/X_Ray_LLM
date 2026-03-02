@@ -1,5 +1,157 @@
 # Changelog
 
+## v7.0.0 — Universal Scanner: JS/TS/React, Web Smells, Health Checks & Test Generator (2026-03-02)
+
+### Overview
+**Landmark release** that transforms X-Ray from a Python-only tool into a
+**universal code quality scanner** supporting **JavaScript, TypeScript, JSX,
+and TSX** alongside Python. Adds **web smell detection**, **project health
+scoring**, **auto-fix mode**, and the crown jewel: **automatic test suite
+generation** from scan data.
+
+---
+
+### 1 · JS/TS/React Analyzer
+
+#### New File: `Lang/js_ts_analyzer.py` (596 lines)
+
+| Class / Function | Purpose |
+|---|---|
+| `JSFunction` | Dataclass for JS/TS function metadata |
+| `JSImport` | Dataclass for import statement analysis |
+| `JSFileAnalysis` | Full per-file analysis result |
+| `analyze_js_file()` | Regex-based analyzer for `.js/.ts/.jsx/.tsx` files |
+| `categorize_imports()` | 142 package mappings across 15 categories |
+
+- Detects: functions, arrow functions, classes, React components, imports/exports
+- Categorizes imports: React, State Management, Router, HTTP, UI, Testing, Build, etc.
+- Used by Web Smells detector and Test Generator
+
+---
+
+### 2 · Web Smell Detector (`--web`)
+
+#### New File: `Analysis/web_smells.py` (371 lines)
+
+| Detector | What It Catches |
+|---|---|
+| `console.log` pollution | Leftover debug logging in production code |
+| `any` abuse | TypeScript `any` types defeating type safety |
+| Huge React components | Components exceeding 300 lines |
+| Missing error boundaries | React apps without error boundary components |
+| Mixed import styles | `require()` mixed with ES `import` in same file |
+| Inline styles | `style={{...}}` patterns in JSX |
+| Prop drilling | Components with 5+ props passed through |
+| Magic strings | Hardcoded strings that should be constants |
+| Nested ternaries | Complex nested `?:` chains |
+| Missing key props | `.map()` without `key=` in JSX |
+
+- Auto-enabled by `--full-scan`
+- Summarizes findings per severity: critical / warning / info
+
+---
+
+### 3 · Project Health Checker (`--health`)
+
+#### New File: `Analysis/project_health.py` (473 lines)
+
+| Check | What It Validates |
+|---|---|
+| README | Project has a README.md |
+| LICENSE | License file exists |
+| .gitignore | Git ignore file present |
+| Tests directory | `tests/` or `__tests__/` exists |
+| CI config | `.github/workflows/`, `.gitlab-ci.yml`, etc. |
+| Lock file | `package-lock.json`, `yarn.lock`, `Pipfile.lock`, etc. |
+| Type config | `tsconfig.json`, `py.typed`, `mypy.ini`, etc. |
+| Linter config | `.eslintrc*`, `ruff.toml`, `.flake8`, etc. |
+| Docs directory | `docs/` exists |
+| Changelog | `CHANGELOG.md` or `CHANGES.md` |
+
+- Reports health score (0–100) with per-check pass/fail
+- Auto-enabled by `--full-scan`
+- Health data feeds into test generator
+
+---
+
+### 4 · Smell Fixer (`--fix-smells`)
+
+#### New File: `Analysis/smell_fixer.py` (253 lines)
+
+| Fix | What It Does |
+|---|---|
+| `console.log` | Comments out `console.log/warn/error` statements |
+| Debug `print()` | Comments out bare `print()` debug calls |
+| Missing `.gitignore` | Creates standard `.gitignore` for detected project type |
+| Missing `LICENSE` | Creates MIT LICENSE file |
+| Missing `package.json` | Creates minimal `package.json` for JS/TS projects |
+
+- Dry-run by default; `--fix-smells` applies changes
+- Reports count of fixes applied per category
+
+---
+
+### 5 · Test Generator (`--gen-tests`) — The Icing on the Cake
+
+#### New File: `Analysis/test_generator.py` (864 lines)
+
+| Generator | Target | Test Categories |
+|---|---|---|
+| `PythonTestGenerator` | pytest | Import smoke · Per-module function/class tests · Smell regression · Project structure |
+| `JSTSTestGenerator` | Vitest/Jest | Import smoke · Per-file function tests · React component render · Structure |
+| `TestGeneratorEngine` | Auto-detect | Dispatches to Python or JS/TS generator based on project analysis |
+
+**How it works:**
+1. X-Ray scans the project and collects full analysis data (functions, classes, smells, imports, structure)
+2. `--gen-tests` feeds that data into the TestGeneratorEngine
+3. Engine generates a complete test suite: import smoke tests, function-level tests, smell regression tests, and project structure tests
+4. Tests are written to disk, ready to run with `pytest` or `vitest`
+
+**5 test categories generated:**
+- **Import Smoke**: Verifies every module/file can be imported without errors
+- **Function Tests**: Calls each function with safe default args, asserts no crash
+- **Class Tests**: Instantiates classes, checks attributes exist
+- **Smell Regression**: Ensures known smells don't increase over time
+- **Structure**: Validates expected directories and files exist
+
+---
+
+### 6 · CLI & Wiring Changes
+
+#### Modified: `Core/cli_args.py`
+- New flags: `--web`, `--health`, `--fix-smells`, `--gen-tests`
+- `--full-scan` auto-enables `--web` and `--health` (NOT `--gen-tests` — opt-in only)
+
+#### Modified: `Core/scan_phases.py`
+- New phase runners: `run_web_smell_phase()`, `run_health_phase()`, `run_smell_fix_phase()`, `run_test_gen_phase()`
+- `AnalysisComponents` NamedTuple extended with `web_detector` and `health_analyzer`
+
+#### Modified: `Core/config.py`
+- Version bumped: `6.0.0` → `7.0.0`
+- New thresholds for web smell detection
+
+#### Modified: `x_ray_claude.py`
+- `_run_full_scan()` extended with web → health → fix-smells → gen-tests phases
+- Test generator receives full analysis context: functions, classes, smells, web analyses, health checks
+
+#### Modified: `Analysis/reporting.py`
+- Web smell and health check results included in unified report output
+
+### Files Changed
+- `Lang/js_ts_analyzer.py` — **New** (596 lines)
+- `Analysis/web_smells.py` — **New** (371 lines)
+- `Analysis/project_health.py` — **New** (473 lines)
+- `Analysis/smell_fixer.py` — **New** (253 lines)
+- `Analysis/test_generator.py` — **New** (864 lines)
+- `Core/cli_args.py` — 4 new flags (`--web`, `--health`, `--fix-smells`, `--gen-tests`)
+- `Core/config.py` — Version `7.0.0`, web thresholds
+- `Core/scan_phases.py` — 4 new phase runners, extended `AnalysisComponents`
+- `x_ray_claude.py` — Full scan flow extended with 4 new phases
+- `Analysis/reporting.py` — Web + health results in report
+- `README.md` — Updated to v7.0.0 with all new features
+
+---
+
 ## v6.0.0 — Performance, New Smells, Auto-Fix & Trend Tracking (2026-03-01)
 
 ### Overview

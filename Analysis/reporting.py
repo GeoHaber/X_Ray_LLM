@@ -176,6 +176,8 @@ _PENALTY_RULES: List[tuple] = [
     ("duplicates", "X-Ray Duplicates", {},  15, []),
     ("lint",       "Ruff Lint",       {"critical": 0.3,   "warning": 0.05, "info": 0.005}, 25, ["fixable"]),
     ("security",   "Bandit Security", {"critical": 1.5,   "warning": 0.3,  "info": 0.005}, 30, []),
+    ("web",        "Web Smells (JS/TS)", {"critical": 0.25, "warning": 0.05, "info": 0.01}, 20, []),
+    ("health",     "Project Health",  {},  10, []),
 ]
 
 
@@ -192,6 +194,15 @@ def _calc_category_penalty(data: Dict[str, Any], key: str) -> tuple:
             total_groups = data.get("total_groups", 0)
             penalty = min(total_groups * 0.1, cap)
             return penalty, {"penalty": round(penalty, 1), "groups": total_groups}
+        if key == "health":
+            # Health penalty: invert the health score (100 - health_score)
+            # scaled down to cap
+            health_score = data.get("health_score", 100)
+            checks_failed = data.get("checks_total", 0) - data.get("checks_passed", 0)
+            penalty = min(checks_failed * 1.0, cap)
+            return penalty, {"penalty": round(penalty, 1),
+                             "health_score": health_score,
+                             "checks_failed": checks_failed}
         counts = {k: data.get(k, 0) for k in weights}
         penalty = sum(counts[k] * w for k, w in weights.items())
         penalty = min(penalty, cap)
@@ -309,6 +320,82 @@ def print_library_report(suggestions: List[LibrarySuggestion], summary: Dict[str
         if len(s.functions) > 3:
             bridge.log(f"    ... and {len(s.functions)-3} more")
         bridge.log("")
+
+
+def print_web_report(issues: List[SmellIssue], summary: Dict[str, Any]):
+    """Print the ASCII web smell report (JS/TS/React results)."""
+    bridge = get_bridge()
+    bridge.log(f"\n{SEP}")
+    bridge.log("WEB SMELL REPORT (JS/TS/React)")
+    bridge.log(f"{SEP}")
+
+    if not issues:
+        bridge.log("No web smells found! Clean code.")
+        return
+
+    bridge.log(f"  Files scanned: {summary.get('files_scanned', 0)}")
+    bridge.log(f"  Functions found: {summary.get('total_functions', 0)}")
+    bridge.log(f"  React components: {summary.get('react_components', 0)}")
+    bridge.log(f"  Console.log calls: {summary.get('console_logs_total', 0)}")
+    bridge.log(f"  Total issues: {summary['total']} "
+               f"({summary['critical']} critical, "
+               f"{summary['warning']} warning, "
+               f"{summary.get('info', 0)} info)")
+    bridge.log("")
+
+    # Package categories
+    pkg_cats = summary.get("package_categories", {})
+    if pkg_cats:
+        bridge.log("  Package Categories Detected:")
+        for cat, count in sorted(pkg_cats.items(), key=lambda x: -x[1]):
+            bridge.log(f"    {count:3d}  {cat}")
+        bridge.log("")
+
+    # Top issues by category
+    by_cat = summary.get("by_category", {})
+    if by_cat:
+        bridge.log("  Issues by Category:")
+        for cat, count in sorted(by_cat.items(), key=lambda x: -x[1]):
+            bridge.log(f"    {count:3d}  {cat}")
+        bridge.log("")
+
+    # Critical issues
+    critical = [i for i in issues if i.severity == Severity.CRITICAL]
+    if critical:
+        bridge.log(f"  Critical Issues ({len(critical)}):")
+        for s in critical[:15]:
+            icon = Severity.icon(s.severity)
+            bridge.log(f"    {icon} {s.file_path}:{s.line} - {s.message}")
+            if s.suggestion:
+                bridge.log(f"       Fix: {s.suggestion}")
+        if len(critical) > 15:
+            bridge.log(f"    ... and {len(critical) - 15} more")
+    bridge.log("")
+
+
+def print_health_report(report, summary: Dict[str, Any]):
+    """Print the ASCII project health report."""
+    bridge = get_bridge()
+    bridge.log(f"\n{SEP}")
+    bridge.log("PROJECT HEALTH REPORT")
+    bridge.log(f"{SEP}")
+
+    bridge.log(f"  Health Score: {report.score}/100  Grade: {report.grade}")
+    bridge.log(f"  Checks: {summary.get('checks_passed', 0)}/"
+               f"{summary.get('checks_total', 0)} passed")
+    bridge.log("")
+
+    for check in report.checks:
+        icon = "✅" if check.passed else "❌"
+        bridge.log(f"  {icon} {check.name:<20} (weight: {check.weight})")
+        if not check.passed and check.detail:
+            bridge.log(f"     → {check.detail}")
+
+    if report.files_created:
+        bridge.log(f"\n  Auto-Created Files:")
+        for f in report.files_created:
+            bridge.log(f"    ✔ {f}")
+    bridge.log("")
 
 def _build_smell_summary(smells):
     """Build smell summary dict."""

@@ -1,14 +1,14 @@
 
 
-__version__ = "6.0.0"
+__version__ = "7.0.0"
 
 # Safe separator: always ASCII dash — renders correctly on every terminal/console
 SEP = "-"
 
 BANNER = f"""
 {'='*64}
-  X-RAY Claude v{__version__} — Unified Code Quality Scanner
-  AST Smells + Ruff Lint + Bandit Security
+  X-RAY Claude v{__version__} — Universal Code Quality Scanner
+  Python + JS/TS/React | AST Smells | Ruff | Bandit | Health
 {'='*64}
 """
 

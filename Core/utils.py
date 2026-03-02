@@ -151,7 +151,7 @@ def check_trial_license() -> bool:
         print(f"  \u2716 {exc}")
         print()
         return False
-    except ImportError:
-        # x_ray_core not available — skip trial check (dev mode)
+    except (ImportError, AttributeError):
+        # x_ray_core not available or missing check_trial — skip trial check (dev mode)
         return True
 

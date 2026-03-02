@@ -1,14 +1,15 @@
-# X-Ray — AI-Powered Code Quality Scanner & Rust Accelerator
+# X-Ray — AI-Powered Universal Code Quality Scanner & Rust Accelerator
 
-**Version 5.3.0** · Python 3.10+ · 905 tests · 5 languages · MIT License
+**Version 7.0.0** · Python 3.10+ · 905+ tests · Python + JS/TS/React · 5 languages · MIT License
 
 ---
 
 ## What Is X-Ray?
 
-X-Ray is a **two-phase code quality platform** that *diagnoses* problems in any
-Python codebase, then helps you *cure* them — including automatically transpiling
-performance-critical functions to Rust.
+X-Ray is a **universal code quality platform** that *diagnoses* problems in
+**Python, JavaScript, TypeScript, and React** codebases, then helps you *cure*
+them — including auto-fixing smells, generating test suites, and transpiling
+performance-critical Python functions to Rust.
 
 It ships with a **Flet desktop GUI** (Material 3), an **interactive CLI**, and
 a full **AST-based Python → Rust transpiler** verified against 14 real projects.
@@ -17,14 +18,17 @@ a full **AST-based Python → Rust transpiler** verified against 14 real project
 
 | Feature | Details |
 |---|---|
-| 6 Analyzers | Code Smells · Duplicates · Ruff Lint · Bandit Security · Rust Advisor · **UI Compat** |
+| 9 Analyzers | Code Smells · Duplicates · Ruff Lint · Bandit Security · **Web Smells** · **Project Health** · Rust Advisor · UI Compat · **Test Generator** |
+| **JS/TS/React** | Full analysis of `.js`, `.ts`, `.jsx`, `.tsx` files — imports, functions, React components, 142 package mappings in 15 categories |
 | Unified Grade | Single A+ → F score (0–100) combining all tools |
 | Desktop GUI | Flet (Flutter engine), light/dark mode, 9 dashboard tabs |
 | 5 Languages | English · Română · Español · Français · Deutsch |
+| **Test Generator** | Auto-generates pytest (Python) or Vitest/Jest (JS/TS) test suites from scan data — import smoke, function, class, smell regression, structure tests |
+| **Auto-Fix** | `--fix-smells` removes console.log, debug prints, creates missing project files |
 | Rust Transpiler | AST-based, 19 module handlers, 54.7 % coverage across 14 projects |
 | LLM Fallback | Local LLM fills `todo!()` stubs, validates with `rustc --check` |
 | **UIBridge** | Swappable output layer — Flet, tqdm, Streamlit, NiceGUI, tests all use one bridge |
-| 905 Tests | Smoke, unit, integration, parity, fuzz, transpilation, bridge |
+| 905+ Tests | Smoke, unit, integration, parity, fuzz, transpilation, bridge |
 | Zero Core Deps | Core analyzers use only Python stdlib |
 
 ---
@@ -77,11 +81,20 @@ CLI mode also works: `x_ray.exe --path C:\project --full-scan`
 # Default scan (smells + lint + security)
 python x_ray_claude.py --path /your/project
 
-# Full 4-tool scan with unified grade
+# Full scan with unified grade (includes web smells + health checks)
 python x_ray_claude.py --full-scan --path /your/project
 
 # Save JSON report
 python x_ray_claude.py --full-scan --report results.json --path /your/project
+
+# Scan a JS/TS/React project
+python x_ray_claude.py --full-scan --path /your/react-app
+
+# Auto-generate test suite from scan data
+python x_ray_claude.py --full-scan --gen-tests --path /your/project
+
+# Auto-fix code smells (console.log, debug prints, missing files)
+python x_ray_claude.py --full-scan --fix-smells --path /your/project
 
 # Rank functions for Rust porting
 python x_ray_claude.py --rustify --path /your/project
@@ -97,7 +110,11 @@ python x_ray_claude.py --rustify --path /your/project
 | `--duplicates` | Find similar/duplicate functions |
 | `--lint` | Ruff linter only |
 | `--security` | Bandit security only |
-| `--full-scan` | Run all analyzers |
+| `--full-scan` | Run all analyzers (auto-enables `--web` + `--health`) |
+| `--web` | Web smell detection for JS/TS/React files |
+| `--health` | Project structural health checks |
+| `--fix-smells` | Auto-fix code smells (console.log, debug prints, missing files) |
+| `--gen-tests` | Auto-generate test suite from scan analysis data |
 | `--rustify` | Score & rank functions for Rust porting |
 | `--report FILE` | Save JSON report to file |
 | `--graph` | Generate interactive HTML dependency graph |
@@ -112,10 +129,12 @@ python x_ray_claude.py --rustify --path /your/project
 
 | Analyzer | What It Checks |
 |---|---|
-| **Code Smells** | 12+ categories — long functions, god classes, deep nesting, high cyclomatic complexity, missing docstrings, boolean blindness, too many params/returns/branches |
+| **Code Smells** | 15+ categories — long functions, god classes, deep nesting, high cyclomatic complexity, missing docstrings, boolean blindness, magic numbers, mutable defaults, dead code, too many params/returns/branches |
 | **Duplicate Finder** | 4-stage pipeline: exact hash → structural hash → token n-gram + AST histogram → semantic similarity |
 | **Ruff Lint** | Fast Python linting (unused imports, undefined names, bare-excepts, style) |
 | **Bandit Security** | Security audit (hardcoded passwords, SQL injection, unsafe eval, subprocess) |
+| **Web Smells** | JS/TS/React analysis — console.log pollution, `any` abuse, huge React components, missing error boundaries, mixed imports, inline styles, prop drilling, magic strings, nested ternaries |
+| **Project Health** | 10 structural checks — README, LICENSE, .gitignore, tests dir, CI config, lock file, type config, linter config, docs, changelog |
 | **UI Compat** | AST-scans for UI framework calls (Flet, tkinter, PyQt, PySide, Kivy, wxPython, Dear PyGui), validates kwargs against live `inspect.signature()`, catches `TypeError` before runtime |
 
 ### Phase 2 — Cure (Rustify)
@@ -128,6 +147,16 @@ python x_ray_claude.py --rustify --path /your/project
 | **Auto-Rustify Pipeline** | End-to-end: Scan → Score → Transpile → Cargo build → Verify |
 | **Rust Core** | Optional `x_ray_core.pyd` (PyO3 + Rayon) replaces Python hot-paths with 10–50× speedup |
 | **Trial License** | AES-256-GCM + HMAC-SHA256 hardware-locked trial gate, compiled in Rust |
+
+### Phase 3 — Generate (`--gen-tests`)
+
+| Capability | Description |
+|---|---|
+| **Test Generator** | Reads X-Ray analysis data and auto-creates a test suite your project can run |
+| **Python Tests** | Generates `pytest` files: import smoke, per-module function tests, class instantiation, smell regression, project structure validation |
+| **JS/TS Tests** | Generates `Vitest`/`Jest` files: import smoke, per-file function tests, React component render tests, structure checks |
+| **5 Test Categories** | Import Smoke · Function/Class Tests · Smell Regression · Structure · React Components |
+| **Smell Fixer** | `--fix-smells` auto-comments `console.log` / debug `print()`, creates missing `.gitignore`, `LICENSE`, `package.json` |
 
 ---
 
@@ -243,12 +272,16 @@ X_Ray/
 ├── x_ray_web.py                 # Streamlit web UI
 ├── x_ray_exe.py                 # Standalone exe (interactive wizard + trial license)
 │
-├── Analysis/                    # Analyzers (20 modules)
-│   ├── smells.py                #   Code smell detector (12+ categories)
+├── Analysis/                    # Analyzers (25 modules)
+│   ├── smells.py                #   Code smell detector (15+ categories)
 │   ├── duplicates.py            #   4-stage duplicate finder
 │   ├── similarity.py            #   Similarity metrics (Python + Rust paths)
-│   ├── lint.py                  #   Ruff linter integration
+│   ├── lint.py                  #   Ruff linter integration + auto-fix
 │   ├── security.py              #   Bandit security scanner
+│   ├── web_smells.py            #   JS/TS/React web smell detector (NEW v7.0)
+│   ├── project_health.py        #   Structural health checker (NEW v7.0)
+│   ├── smell_fixer.py           #   Auto-fix engine for --fix-smells (NEW v7.0)
+│   ├── test_generator.py        #   Test suite auto-generator (NEW v7.0)
 │   ├── rust_advisor.py          #   Rust porting candidate scorer
 │   ├── transpiler.py            #   AST Python→Rust transpiler (2,259 lines)
 │   ├── llm_transpiler.py        #   LLM fallback transpiler (426 lines)
@@ -275,6 +308,7 @@ X_Ray/
 │
 ├── Lang/                        # Language support
 │   ├── python_ast.py            #   Python AST parser + parallel scanner
+│   ├── js_ts_analyzer.py        #   JS/TS/JSX/TSX regex analyzer (NEW v7.0)
 │   └── tokenizer.py             #   Token-level similarity
 │
 ├── tests/                       # 905 tests
@@ -317,20 +351,20 @@ X_Ray/
     ┌────▼──────────────────────────────────┐
     │         Core/scan_phases.py           │
     │    Phase orchestrator + ETA           │
-    └──┬───┬───┬───┬───┬───┬───────────────┘
-       │   │   │   │   │   │
-    ┌──▼┐┌─▼┐┌─▼┐┌─▼┐┌─▼┐┌─▼──────────┐
-    │ S ││ D ││ L ││ B ││ R ││ UI Compat │
-    │ m ││ u ││ i ││ a ││ u ││           │
-    │ e ││ p ││ n ││ n ││ s ││ Validates │
-    │ l ││ l ││ t ││ d ││ t ││ UI kwargs │
-    │ l ││ s ││   ││ i ││ i ││ vs. live  │
-    │ s ││   ││   ││ t ││ f ││ signatures│
-    │   ││   ││   ││   ││ y ││           │
-    └───┘└───┘└───┘└───┘└───┘└───────────┘
+    └──┬───┬───┬───┬───┬───┬───┬───┬─────────┘
+       │   │   │   │   │   │   │   │
+    ┌──▼┐┌─▼┐┌─▼┐┌─▼┐┌─▼┐┌─▼┐┌─▼┐┌─▼────────┐
+    │ S ││ D ││ L ││ B ││ W ││ H ││ R ││ TestGen  │
+    │ m ││ u ││ i ││ a ││ e ││ e ││ u ││ ──────── │
+    │ e ││ p ││ n ││ n ││ b ││ a ││ s ││ Generates│
+    │ l ││ l ││ t ││ d ││   ││ l ││ t ││ pytest / │
+    │ l ││ s ││   ││ i ││ S ││ t ││ i ││ Vitest   │
+    │ s ││   ││   ││ t ││ m ││ h ││ f ││ suites   │
+    │   ││   ││   ││   ││ l ││   ││ y ││          │
+    └───┘└───┘└───┘└───┘└───┘└───┘└───┘└──────────┘
        │         │                │
     ┌──▼─────────▼────────────────▼────┐
-    │       Lang/ (AST + Tokenizer)    │
+    │  Lang/ (AST + Tokenizer + JS/TS) │
     └──────────────┬───────────────────┘
                    │
     ┌──────────────▼───────────────────┐

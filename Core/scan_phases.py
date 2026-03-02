@@ -33,6 +33,8 @@ class AnalysisComponents(NamedTuple):
     lint_issues: _Any
     sec_analyzer: _Any
     sec_issues: _Any
+    web_detector: _Any = None
+    health_analyzer: _Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +131,51 @@ def run_ui_compat_phase(root: Path, exclude=None):
     return analyzer, raw_issues, smell_issues
 
 
+def run_web_smell_phase(root: Path, exclude=None):
+    """Run JS/TS/React web smell detection. Returns (detector, smells)."""
+    from Analysis.web_smells import WebSmellDetector
+    detector = WebSmellDetector()
+    get_bridge().status("Scanning JS/TS/React Code Smells (X-Ray Web)...")
+    smells = detector.detect(root, exclude=exclude)
+    return detector, smells
+
+
+def run_health_phase(root: Path, auto_fix: bool = False):
+    """Run project health/structural check. Returns analyzer with report."""
+    from Analysis.project_health import ProjectHealthAnalyzer
+    analyzer = ProjectHealthAnalyzer()
+    get_bridge().status("Checking Project Health (X-Ray)...")
+    analyzer.analyze(root, auto_fix=auto_fix)
+    return analyzer
+
+
+def run_smell_fix_phase(root: Path, exclude=None):
+    """Run the auto-fix smell engine. Returns SmellFixResult."""
+    from Analysis.smell_fixer import SmellFixer
+    fixer = SmellFixer()
+    get_bridge().status("Auto-Fixing Code Smells (X-Ray)...")
+    result = fixer.fix_all(root, exclude=exclude)
+    return result
+
+
+def run_test_gen_phase(root: Path, functions=None, classes=None,
+                       smells=None, js_analyses=None, health_checks=None,
+                       output_dir=None):
+    """Generate monkey tests from analysis data. Returns TestGenReport."""
+    from Analysis.test_generator import TestGeneratorEngine
+    engine = TestGeneratorEngine(root)
+    get_bridge().status("Generating Monkey Tests (X-Ray)...")
+    report = engine.generate(
+        functions=functions,
+        classes=classes,
+        smells=smells,
+        js_analyses=js_analyses,
+        health_checks=health_checks,
+        output_dir=output_dir or root,
+    )
+    return report
+
+
 def run_rustify_scan(root: Path, exclude=None) -> dict:
     """Rank functions by Rust-porting suitability and print results."""
     from Analysis.rust_advisor import RustAdvisor
@@ -159,7 +206,8 @@ def run_rustify_scan(root: Path, exclude=None) -> dict:
 
 def collect_reports(components: AnalysisComponents) -> dict:
     """Print all analysis reports, compute unified grade, return combined results."""
-    detector, finder, linter, lint_issues, sec_analyzer, sec_issues = components
+    detector, finder, linter, lint_issues, sec_analyzer, sec_issues, \
+        web_detector, health_analyzer = components
     results: dict = {}
 
     if detector:
@@ -181,6 +229,18 @@ def collect_reports(components: AnalysisComponents) -> dict:
         summary = sec_analyzer.summary(sec_issues)
         print_security_report(sec_issues, summary)
         results["security"] = summary
+
+    if web_detector:
+        summary = web_detector.summary()
+        from Analysis.reporting import print_web_report
+        print_web_report(web_detector.smells, summary)
+        results["web"] = summary
+
+    if health_analyzer and health_analyzer.report:
+        summary = health_analyzer.summary()
+        from Analysis.reporting import print_health_report
+        print_health_report(health_analyzer.report, summary)
+        results["health"] = summary
 
     grade_info = print_unified_grade(results)
     results["grade"] = grade_info
