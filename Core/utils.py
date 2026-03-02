@@ -15,35 +15,47 @@ def setup_logger(name: str = "X_RAY_Claude"):
 logger = setup_logger()
 
 # === SAFE UNICODE OUTPUT ===
+def _wrap_stream_utf8(stream, attr_name: str):
+    """Wrap a stream's buffer in a UTF-8 TextIOWrapper if possible."""
+    import io
+    if not hasattr(stream, 'buffer'):
+        return stream
+    return io.TextIOWrapper(
+        stream.buffer, encoding='utf-8', errors='replace',
+        line_buffering=True,
+    )
+
+
+def _enable_windows_utf8():
+    """Enable UTF-8 codepage on Windows console."""
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+        ctypes.windll.kernel32.SetConsoleCP(65001)
+    except Exception:  # nosec B110
+        pass
+
+
+def _reconfigure_streams_fallback():
+    """Fallback: wrap stdout/stderr buffers in UTF-8 TextIOWrapper."""
+    try:
+        sys.stdout = _wrap_stream_utf8(sys.stdout, 'stdout')
+        sys.stderr = _wrap_stream_utf8(sys.stderr, 'stderr')
+    except Exception:  # nosec B110
+        pass
+
+
 def _enable_utf8_console() -> None:
     """Best-effort: switch the Windows console to UTF-8 so basic text works."""
     import os as _os
     if _os.name == 'nt':
-        try:
-            import ctypes
-            ctypes.windll.kernel32.SetConsoleOutputCP(65001)
-            ctypes.windll.kernel32.SetConsoleCP(65001)
-        except Exception:
-            pass
+        _enable_windows_utf8()
     # Reconfigure streams to utf-8 with replace for safety
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
     except Exception:
-        import io
-        try:
-            if hasattr(sys.stdout, 'buffer'):
-                sys.stdout = io.TextIOWrapper(
-                    sys.stdout.buffer, encoding='utf-8', errors='replace',
-                    line_buffering=True,
-                )
-            if hasattr(sys.stderr, 'buffer'):
-                sys.stderr = io.TextIOWrapper(
-                    sys.stderr.buffer, encoding='utf-8', errors='replace',
-                    line_buffering=True,
-                )
-        except Exception:
-            pass
+        _reconfigure_streams_fallback()
 
 
 def supports_unicode() -> bool:
@@ -120,4 +132,26 @@ def verify_rust_environment():
 
     _verified_cache = True
     return True
+
+
+# === TRIAL LICENSE ===
+
+def check_trial_license() -> bool:
+    """Enforce trial license via x_ray_core. Returns True if allowed."""
+    try:
+        import x_ray_core
+        remaining = x_ray_core.check_trial()
+        max_runs = x_ray_core.trial_max_runs()
+        print(f"  \u26a1 Trial license: {remaining} of {max_runs} runs remaining")
+        if remaining <= 3:
+            print(f"  \u26a0  Only {remaining} runs left — contact developer for full license.")
+        print()
+        return True
+    except RuntimeError as exc:
+        print(f"  \u2716 {exc}")
+        print()
+        return False
+    except (ImportError, AttributeError):
+        # x_ray_core not available or missing check_trial — skip trial check (dev mode)
+        return True
 

@@ -20,6 +20,7 @@ PROJECT = Path(SPECPATH)
 
 # Find tools
 ruff_path = shutil.which("ruff") or str(PROJECT / ".venv" / "Scripts" / "ruff.exe")
+bandit_path = shutil.which("bandit") or str(PROJECT / ".venv" / "Scripts" / "bandit.exe")
 x_ray_core_pyd = str(PROJECT / ".venv" / "Lib" / "site-packages" / "x_ray_core" / "x_ray_core.cp313-win_amd64.pyd")
 
 # Fallback x_ray_core location
@@ -27,12 +28,15 @@ if not os.path.isfile(x_ray_core_pyd):
     x_ray_core_pyd = str(PROJECT / "x_ray_core.pyd")
 
 print(f"  [spec] ruff.exe:      {ruff_path}")
+print(f"  [spec] bandit.exe:    {bandit_path}")
 print(f"  [spec] x_ray_core:    {x_ray_core_pyd}")
 
 # --- Binaries to bundle alongside the exe ---
 binaries = []
 if os.path.isfile(ruff_path):
     binaries.append((ruff_path, '.'))          # ruff.exe → output root
+if os.path.isfile(bandit_path):
+    binaries.append((bandit_path, '.'))        # bandit.exe → output root
 if os.path.isfile(x_ray_core_pyd):
     binaries.append((x_ray_core_pyd, '.'))     # x_ray_core.pyd → output root
 
@@ -107,7 +111,6 @@ a = Analysis(
     excludes=[
         'streamlit',      # Not needed for CLI
         'matplotlib',
-        'tkinter',
         'PyQt5',
         'PyQt6',
         'wx',

@@ -52,15 +52,17 @@ def assert_all_issues_are_smell_issues(issues):
 
 def assert_not_available_when_tool_missing(analyzer_cls):
     """Analyzer reports not-available when its CLI tool is missing."""
-    with patch("shutil.which", return_value=None):
+    with patch("Analysis._analyzer_base._find_tool", return_value=None):
         analyzer = analyzer_cls()
+        analyzer._tool_path = None
         assert analyzer.available is False
 
 
 def assert_returns_empty_when_not_available(analyzer_cls):
     """Analyzer.analyze() returns [] when tool is missing."""
-    with patch("shutil.which", return_value=None):
+    with patch("Analysis._analyzer_base._find_tool", return_value=None):
         analyzer = analyzer_cls()
+        analyzer._tool_path = None
         assert analyzer.analyze(Path("/fake/path")) == []
 
 

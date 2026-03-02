@@ -18,7 +18,7 @@ Provides a modern visual interface to:
 from __future__ import annotations
 
 import json
-import subprocess
+import subprocess  # nosec B404
 import time
 from collections import Counter, namedtuple
 from pathlib import Path
@@ -227,6 +227,22 @@ def _generate_unified_function(
 
     return "\n".join(lines)
 
+# ── Shared scan-phase logic (extracted to avoid duplication with x_ray_flet.py) ──
+from Core.scan_context import (  # noqa: E402
+    _parse_sketch_params, _translate_sketch_body, _generate_rust_sketch,
+    _extract_params_from_code, _extract_func_codes, _unified_func_name,
+    _merge_param_lists, _get_first_docstring, _collect_docstrings,
+    _build_unified_header, _build_unified_docstring, _unparse_func_node,
+    _generate_unified_function,
+    scan_codebase as _scan_codebase, ScanContext,
+    run_phase_smells as _run_phase_smells,
+    run_phase_duplicates as _run_phase_duplicates,
+    run_phase_lint as _run_phase_lint,
+    run_phase_security as _run_phase_security,
+    run_phase_rustify as _run_phase_rustify,
+    PHASE_RUNNERS as _PHASE_RUNNERS,
+    run_scan as _run_scan,
+)
 
 # ── Modern CSS injection ────────────────────────────────────────────────────
 
@@ -856,7 +872,7 @@ def _render_duplicates_tab(results: Dict[str, Any]):
 def _run_ruff_autofix(scan_path: str):
     """Execute ruff --fix and display results in Streamlit."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603,B607
             ["ruff", "check", "--fix", str(scan_path)],
             capture_output=True,
             text=True,

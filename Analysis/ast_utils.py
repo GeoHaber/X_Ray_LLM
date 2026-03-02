@@ -7,6 +7,7 @@ import os
 from Core.types import FunctionRecord, ClassRecord
 from Core.config import _ALWAYS_SKIP, _BUILTIN_NAMES
 from Core.ast_helpers import compute_nesting_depth, compute_complexity
+from Analysis.scan_cache import get_cache
 
 logger = logging.getLogger("X_RAY_AST")
 
@@ -70,6 +71,23 @@ class ASTNormalizer(ast.NodeTransformer):
         return node
 
 
+def _ast_max_depth(node, limit=50, _depth=0):
+    """Compute max nesting depth of an AST node, capped at *limit*."""
+    if _depth >= limit:
+        return limit
+    best = _depth
+    for child in ast.iter_child_nodes(node):
+        best = max(best, _ast_max_depth(child, limit, _depth + 1))
+        if best >= limit:
+            return limit
+    return best
+
+
+def _hash_source(source: str) -> str:
+    """SHA-256 hash a source string, returning '' on failure."""
+    return hashlib.sha256(source.encode()).hexdigest() if source else ""
+
+
 def _compute_structure_hash(node: ast.AST) -> str:
     """Compute hash of normalized AST source for structural fingerprinting.
 
@@ -77,13 +95,19 @@ def _compute_structure_hash(node: ast.AST) -> str:
     that structurally identical functions with different names produce the
     same hash.  Uses ``ast.unparse`` instead of ``ast.dump`` to avoid
     C-level stack overflow on deeply nested AST nodes.
+
+    Falls back to code_hash (plain source hash) if the AST is too deeply
+    nested and deepcopy/unparse would hang.
     """
     try:
         import copy
 
+        if _ast_max_depth(node) >= 50:
+            # Too deep — fall back to plain ast.unparse without normalization
+            return _hash_source(ast.unparse(node))
+
         normalized = ASTNormalizer().visit(copy.deepcopy(node))
-        source = ast.unparse(normalized)
-        return hashlib.sha256(source.encode()).hexdigest()
+        return _hash_source(ast.unparse(normalized))
     except Exception:
         return ""
 
@@ -104,6 +128,25 @@ def extract_functions_from_file(
     fpath: Path, root: Path
 ) -> Tuple[List[FunctionRecord], List[ClassRecord], Optional[str]]:
     """Parse one file and extract all functions and classes."""
+def extract_functions_from_file(fpath: Path, root: Path,
+                                 use_cache: bool = True) -> Tuple[
+        List[FunctionRecord], List[ClassRecord], Optional[str]]:
+    """Parse one file and extract all functions and classes.
+
+    When *use_cache* is True (default), results are looked up in the
+    module-level :class:`~Analysis.scan_cache.ScanCache` singleton and
+    stored on a cache miss, so subsequent scans of unchanged files
+    skip re-parsing entirely.
+    """
+    cache = get_cache() if use_cache else None
+
+    # ── cache lookup ────────────────────────────────────────────────────────
+    if cache is not None:
+        hit = cache.get(fpath)
+        if hit is not None:
+            return hit["functions"], hit["classes"], hit["error"]
+
+    # ── parse ────────────────────────────────────────────────────────────────
     try:
         source = fpath.read_text(encoding="utf-8", errors="ignore")
     except Exception as e:
@@ -126,6 +169,10 @@ def extract_functions_from_file(
         elif isinstance(node, ast.ClassDef):
             class_record = _build_class_record(node, rel_path)
             classes.append(class_record)
+
+    # ── cache store ─────────────────────────────────────────────────────────
+    if cache is not None:
+        cache.put(fpath, {"functions": functions, "classes": classes, "error": None})
 
     return functions, classes, None
 

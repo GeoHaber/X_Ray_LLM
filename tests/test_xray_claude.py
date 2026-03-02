@@ -1749,4 +1749,6 @@ class TestVersion:
         assert all(p.isdigit() for p in parts)
 
     def test_version_is_5(self):
-        assert __version__.startswith("5.")
+        """Accept any major version >= 5 (bumped to 6.0.0 in v6.0.0)."""
+        major = int(__version__.split(".")[0])
+        assert major >= 5

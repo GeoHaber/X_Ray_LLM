@@ -47,8 +47,8 @@ class TestGenerator:
         """Generate test cases for numeric arguments."""
         return [
             {arg: 0 for arg in args},
-            {arg: random.randint(1, 100) for arg in args},
-            {arg: random.randint(-100, -1) for arg in args},
+            {arg: random.randint(1, 100) for arg in args},  # nosec B311
+            {arg: random.randint(-100, -1) for arg in args},  # nosec B311
             {arg: 1 for arg in args},
         ]
 

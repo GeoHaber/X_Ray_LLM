@@ -1,4 +1,6 @@
 import re
+
+import ast
 from typing import List, Dict, Any
 import asyncio
 from collections import Counter
@@ -21,6 +23,111 @@ _BOOL_PREFIXES = (
 
 # Reddit/r/Python: Classes named Common, Utility, Utils, Helper often become god-class dumping grounds
 _UTILITY_CLASS_PATTERNS = ("common", "utility", "utils", "helper", "misc", "general")
+# Numeric literals that are never flagged as magic numbers
+_ALLOWED_MAGIC = frozenset({0, 1, -1, 2, 100})
+
+
+def _check_magic_numbers(func: FunctionRecord, smells: list, threshold: int = 2):
+    """Flag bare numeric literals (other than 0/1/-1/2/100) used in arithmetic/comparisons."""
+    try:
+        tree = ast.parse(func.code)
+    except Exception:
+        return
+    found = []
+    for node in ast.walk(tree):
+        # Only flag constants inside binary ops, comparisons, augmented assigns — not in function signatures
+        if not isinstance(node, ast.Constant):
+            continue
+        if not isinstance(node.value, (int, float)):
+            continue
+        if isinstance(node.value, bool):
+            continue
+        if node.value in _ALLOWED_MAGIC:
+            continue
+        found.append(node.value)
+    if len(found) >= threshold:
+        # de-duplicate for display
+        unique = sorted({v for v in found}, key=lambda v: abs(v))[:5]
+        sample = ", ".join(str(v) for v in unique)
+        smells.append(SmellIssue(
+            file_path=func.file_path, line=func.line_start,
+            end_line=func.line_end, category="magic-number",
+            severity=Severity.INFO, name=func.name,
+            metric_value=len(found),
+            message=f"Function '{func.name}' contains {len(found)} magic number(s): {sample}",
+            suggestion="Extract magic numbers into named constants (e.g. MAX_RETRIES = 5).",
+        ))
+
+
+def _check_mutable_default_arg(func: FunctionRecord, smells: list):
+    """Flag functions with mutable default arguments (list, dict, set literals)."""
+    try:
+        tree = ast.parse(func.code)
+    except Exception:
+        return
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for default in node.args.defaults + node.args.kw_defaults:
+            if default is None:
+                continue
+            if isinstance(default, (ast.List, ast.Dict, ast.Set)):
+                type_name = type(default).__name__.lower().replace('ast.', '')
+                smells.append(SmellIssue(
+                    file_path=func.file_path, line=func.line_start,
+                    end_line=func.line_end, category="mutable-default-arg",
+                    severity=Severity.WARNING, name=func.name,
+                    metric_value=0,
+                    message=f"Function '{func.name}' uses a mutable {type(default).__name__.lower()} as a default argument",
+                    suggestion="Use None as default and initialise inside the function body: `if arg is None: arg = []`.",
+                ))
+                break  # one warning per function is enough
+        break  # only check the outermost function def
+
+
+def _check_dead_code(func: FunctionRecord, smells: list):
+    """Flag unreachable statements after an unconditional return/raise."""
+    try:
+        tree = ast.parse(func.code)
+    except Exception:
+        return
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                  ast.If, ast.For, ast.While, ast.With,
+                                  ast.Try)):
+            continue
+        body = getattr(node, "body", [])
+        _scan_body_for_dead_code(body, func, smells)
+        # also scan else / orelse branches
+        for attr in ("orelse", "finalbody", "handlers"):
+            branch = getattr(node, attr, [])
+            if isinstance(branch, list):
+                _scan_body_for_dead_code(branch, func, smells)
+
+
+def _scan_body_for_dead_code(body: list, func: FunctionRecord, smells: list):
+    """Scan one statement list for unreachable code after return/raise/continue/break."""
+    for i, stmt in enumerate(body):
+        if isinstance(stmt, (ast.Return, ast.Raise, ast.Continue, ast.Break)):
+            remaining = [s for s in body[i + 1:]
+                         if not isinstance(s, (ast.Pass, ast.Expr))  # skip bare pass/docstrings
+                         or (isinstance(s, ast.Expr) and not isinstance(s.value, ast.Constant))]
+            if remaining:
+                dead_line = getattr(remaining[0], "lineno", func.line_start)
+                stmt_type = type(stmt).__name__.lower()
+                smells.append(SmellIssue(
+                    file_path=func.file_path,
+                    line=dead_line,
+                    end_line=getattr(remaining[-1], "end_lineno", dead_line),
+                    category="dead-code",
+                    severity=Severity.WARNING, name=func.name,
+                    metric_value=len(remaining),
+                    message=(f"Function '{func.name}' has {len(remaining)} unreachable "
+                             f"statement(s) after `{stmt_type}` (line {stmt.lineno})"),
+                    suggestion="Remove unreachable code, or move it before the exit statement.",
+                ))
+                break  # one warning per block per function
+
 
 # Reddit/r/Python: 99%+ of cases need __init__ only; __new__ adds overhead unless for singletons/immutables
 _MIN_METHODS_UTILITY_SMELL = 5
@@ -79,6 +186,31 @@ def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
                 category="long-function",
                 severity=Severity.CRITICAL,
                 name=func.name,
+    def _check_function(self, func: FunctionRecord):
+        """Dispatch all per-function smell checks."""
+        t = self.thresholds
+        self._check_long_function(func, t)
+        self._check_deep_nesting(func, t)
+        self._check_high_complexity(func, t)
+        self._check_too_many_params(func, t)
+        self._check_missing_docstring(func, t)
+        self._check_too_many_returns(func, t)
+        _check_boolean_blindness(func, self.smells)
+        self._check_too_many_branches(func, t)
+        _check_magic_numbers(func, self.smells,
+                             threshold=t.get("magic_number_min_count", 2))
+        _check_mutable_default_arg(func, self.smells)
+        _check_dead_code(func, self.smells)
+
+    # -- individual smell checks -------------------------------------------
+
+    def _check_long_function(self, func: FunctionRecord, t: dict):
+        """Flag functions exceeding the line-count threshold."""
+        if func.size_lines >= t["very_long_function"]:
+            self.smells.append(SmellIssue(
+                file_path=func.file_path, line=func.line_start,
+                end_line=func.line_end, category="long-function",
+                severity=Severity.CRITICAL, name=func.name,
                 metric_value=func.size_lines,
                 message=f"Function '{func.name}' is {func.size_lines} lines (limit: {t['very_long_function']})",
                 suggestion="Split into smaller focused functions. Extract logical blocks.",

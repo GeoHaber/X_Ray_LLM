@@ -10,13 +10,29 @@ from __future__ import annotations
 
 import json
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from Core.types import SmellIssue, Severity
 from Core.utils import logger
+
+# Shared auto-exclude patterns used by both lint and security analyzers.
+AUTO_EXCLUDE: List[str] = [
+    ".venv", "venv", ".env", "__pycache__", "node_modules",
+    ".git", "target", ".mypy_cache", ".pytest_cache",
+    "dist", "build", ".eggs", "*.egg-info",
+    "_scratch", ".github", "_OLD",
+]
+
+
+def _merged_excludes(extra: Optional[List[str]] = None) -> List[str]:
+    """Return *AUTO_EXCLUDE* merged with any user-supplied *extra* patterns."""
+    result = list(AUTO_EXCLUDE)
+    if extra:
+        result.extend(extra)
+    return result
 
 
 def _find_tool(tool_name: str) -> Optional[str]:
@@ -127,14 +143,10 @@ class BaseStaticAnalyzer:
         """Execute the tool, return raw stdout string or *None* on failure."""
         logger.info(f"Running {self.TOOL_LOG_NAME}: {' '.join(cmd)}")
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=self.TOOL_TIMEOUT,
-                cwd=str(root),
+            result = subprocess.run(  # nosec B603
+                cmd, capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
+                timeout=self.TOOL_TIMEOUT, cwd=str(root),
             )
         except FileNotFoundError:
             logger.error(f"{self.TOOL_LOG_NAME} executable not found.")

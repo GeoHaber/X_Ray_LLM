@@ -34,6 +34,36 @@ def add_common_scan_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--report", help="Save JSON report to file")
     parser.add_argument("--exclude", nargs="*", help="Exclude directories")
+    parser.add_argument(
+        "--fix", action="store_true",
+        help="Auto-fix Ruff lint issues after analysis (implies --lint)",
+    )
+    parser.add_argument(
+        "--fix-smells", action="store_true",
+        help="Auto-repair common code smells: comment out console.log/debug "
+             "prints, create missing project files (.gitignore, LICENSE, etc.)",
+    )
+    parser.add_argument(
+        "--web", action="store_true",
+        help="Scan JS/TS/JSX/TSX files for web-specific code smells",
+    )
+    parser.add_argument(
+        "--health", action="store_true",
+        help="Run project health & structural completeness check",
+    )
+    parser.add_argument(
+        "--gen-tests", action="store_true",
+        help="Auto-generate monkey tests from analysis data (pytest for Python, "
+             "Vitest for JS/TS). Writes to --test-output dir.",
+    )
+    parser.add_argument(
+        "--test-output", metavar="DIR", default=".",
+        help="Output directory for generated test files (default: project root)",
+    )
+    parser.add_argument(
+        "--compare", metavar="PREV_REPORT",
+        help="Path to a previous JSON report; prints score delta after scan",
+    )
 
 
 def normalize_scan_args(
@@ -59,6 +89,9 @@ def normalize_scan_args(
             *extra_flags,
         )
     )
+    specific = any(getattr(args, f, False)
+                   for f in ("smell", "duplicates", "lint", "security",
+                             "rustify", "web", "health", *extra_flags))
     if args.full_scan or not specific:
         args.smell = True
         args.format = True
@@ -66,4 +99,6 @@ def normalize_scan_args(
         args.security = True
         if args.full_scan:
             args.duplicates = True
+            args.web = True
+            args.health = True
     return args

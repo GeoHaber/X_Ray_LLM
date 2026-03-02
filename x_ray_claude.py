@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-X_RAY_Claude.py — Smart AI-Powered Code Analyzer (X-Ray 5.0)
+X_RAY_Claude.py — Smart AI-Powered Code Analyzer (X-Ray 7.0)
 =============================================================
 
-Unified code quality scanner combining:
+Universal code quality scanner combining:
   - AST-based structural analysis (smells, duplicates)
   - Ruff format check (code formatting)
   - Ruff linter (style, imports, hygiene)
@@ -20,7 +20,9 @@ Usage::
     python X_RAY_Claude.py --full-scan                  # everything (all 5 analyzers)
     python X_RAY_Claude.py --report scan_results.json   # save JSON report
     python X_RAY_Claude.py --rustify                    # rank functions for Rust porting
-    python X_RAY_Claude.py --rustify --report rust.json  # save candidate report
+    python X_RAY_Claude.py --lint --fix                 # lint + auto-apply Ruff fixes
+    python X_RAY_Claude.py --fix-smells                 # auto-repair common issues
+    python X_RAY_Claude.py --compare prev.json          # show delta vs previous scan
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ from typing import List, Tuple
 
 from Core.config import BANNER
 from Core.inference import LLMHelper
+from Core.ui_bridge import get_bridge
 
 from Analysis.reporting import print_unified_grade  # noqa: F401 — used by external callers
 from Core.scan_phases import (
@@ -560,10 +563,17 @@ def _run_format_phase(args, root):
 
 
 def _run_lint_phase(args, root):
-    """Run Ruff lint analysis if requested."""
+    """Run Ruff lint analysis (and optionally auto-fix) if requested."""
     if not args.lint:
         return None, []
-    return run_lint_phase(root, exclude=args.exclude)
+    linter, issues = run_lint_phase(root, exclude=args.exclude)
+    if getattr(args, "fix", False) and linter is not None:
+        n_fixed = linter.fix(root, exclude=args.exclude)
+        if n_fixed:
+            print(f"  ✔ Ruff auto-fix applied {n_fixed} issue(s)")
+        else:
+            print("  ℹ No auto-fixable Ruff issues found")
+    return linter, issues
 
 
 def _run_security_phase(args, root):
@@ -571,6 +581,41 @@ def _run_security_phase(args, root):
     if not args.security:
         return None, []
     return run_security_phase(root, exclude=args.exclude)
+
+
+def _run_web_phase(args, root):
+    """Run JS/TS/React web smell detection if requested."""
+    if not getattr(args, "web", False):
+        return None
+    detector, smells = run_web_smell_phase(root, exclude=args.exclude)
+    return detector
+
+
+def _run_health_phase(args, root):
+    """Run project health check if requested."""
+    if not getattr(args, "health", False):
+        return None
+    auto_fix = getattr(args, "fix_smells", False)
+    return run_health_phase(root, auto_fix=auto_fix)
+
+
+def _run_fix_smells_phase(args, root):
+    """Run auto-fix smell engine if requested."""
+    if not getattr(args, "fix_smells", False):
+        return None
+    result = run_smell_fix_phase(root, exclude=args.exclude)
+    bridge = get_bridge()
+    if result.fixes_applied:
+        bridge.log(f"\n  ✔ Auto-Fix Applied: {result.fixes_applied} fix(es)")
+        if result.console_logs_commented:
+            bridge.log(f"    - {result.console_logs_commented} console.log(s) commented out")
+        if result.prints_commented:
+            bridge.log(f"    - {result.prints_commented} debug print(s) commented out")
+        if result.project_files_created:
+            bridge.log(f"    - Created: {', '.join(result.project_files_created)}")
+    else:
+        bridge.log("  ℹ No auto-fixable smells found")
+    return result
 
 
 def _run_rustify(root: Path, args: argparse.Namespace) -> dict:
@@ -665,6 +710,42 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
     sec_analyzer, sec_issues = _run_security_phase(args, root)
     all_issues.extend(sec_issues)
 
+    # ── New v7.0 phases ──
+    web_detector = _run_web_phase(args, root)
+    health_analyzer = _run_health_phase(args, root)
+
+    # ── Auto-fix smells (--fix-smells) ──
+    _run_fix_smells_phase(args, root)
+
+    # ── Test generation (--gen-tests) ──
+    if getattr(args, "gen_tests", False):
+        from Core.scan_phases import run_test_gen_phase
+        # Collect JS analyses from web_detector if present
+        js_analyses = None
+        if web_detector and hasattr(web_detector, "_analyses"):
+            js_analyses = web_detector._analyses
+        health_checks = None
+        if health_analyzer and hasattr(health_analyzer, "report") and health_analyzer.report:
+            health_checks = health_analyzer.report.checks
+        test_output = Path(getattr(args, "test_output", ".")).resolve()
+        test_report = run_test_gen_phase(
+            root,
+            functions=functions,
+            classes=classes,
+            smells=all_issues,
+            js_analyses=js_analyses,
+            health_checks=health_checks,
+            output_dir=test_output,
+        )
+        bridge = get_bridge()
+        bridge.log(f"\n  {'='*60}")
+        bridge.log(f"  🧪 MONKEY TESTS GENERATED")
+        bridge.log(f"     Files: {len(test_report.files_created)}")
+        bridge.log(f"     Tests: {test_report.total_tests}")
+        bridge.log(f"     Languages: {', '.join(test_report.languages)}")
+        bridge.log(f"     Output: {test_output}")
+        bridge.log(f"  {'='*60}")
+
     # ── Async LLM Enrichment (Parallel) ──
     if llm and (detector or finder):
         tasks = []
@@ -698,12 +779,35 @@ async def main_async():
     args = _parse_args()
     print(BANNER)
 
+    # --- Trial license gate ---
+    if not _check_trial_license():
+        sys.exit(1)
+
     root = Path(args.path).resolve()
     if not root.is_dir():
         print(f"Error: {root} is not a directory.")
         sys.exit(1)
 
+    # Load previous scan for trend comparison (--compare)
+    prev_results = None
+    compare_path = getattr(args, "compare", None)
+    if compare_path:
+        from Analysis.trend import load_prev_results
+        prev_results = load_prev_results(compare_path)
+        if prev_results is None:
+            print(f"  [!] --compare: could not read '{compare_path}' — trend disabled")
+
     results = await _run_full_scan(root, args)
+
+    # Print trend delta if available (injected into print_unified_grade via results key)
+    if prev_results and "grade" in results:
+        from Analysis.reporting import print_unified_grade as _pug
+        from Analysis.trend import compare_scans, format_grade_delta
+        delta = compare_scans(prev_results, results)
+        delta_line = format_grade_delta(delta)
+        if delta_line:
+            print(f"  {delta_line}")
+        results.setdefault("grade", {}).update({"delta": delta})
 
     # Save Report
     if args.report:

@@ -1,5 +1,6 @@
 """Test the expanded transpiler capabilities."""
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from Analysis.transpiler import transpile_function_code
@@ -149,13 +150,13 @@ for name, code in tests.items():
         has_todo = "// TODO" in result
         has_comment_only_try = "// try {" in result
         if has_todo and name not in ("nested class",):  # some TODOs are OK
-            print(f"  [WARN] Contains // TODO markers")
+            print("  [WARN] Contains // TODO markers")
         if has_comment_only_try:
-            print(f"  [FAIL] try/except still comment-only!")
+            print("  [FAIL] try/except still comment-only!")
             failed += 1
         else:
             passed += 1
-            print(f"  [OK]")
+            print("  [OK]")
     except Exception as e:
         print(f"  [FAIL] Exception: {e}")
         failed += 1

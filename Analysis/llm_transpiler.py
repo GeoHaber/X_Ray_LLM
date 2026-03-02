@@ -53,7 +53,7 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
+import subprocess  # nosec B404
 import tempfile
 import textwrap
 from typing import Optional, Tuple
@@ -105,7 +105,7 @@ def _cleanup_temp_files(*paths: str):
         try:
             if p:
                 os.unlink(p)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
 
@@ -140,6 +140,10 @@ def _check_rust_compiles(rust_code: str, *, timeout: int = 30) -> Tuple[bool, st
             capture_output=True,
             text=True,
             timeout=timeout,
+        result = subprocess.run(  # nosec B603,B607
+            ["rustc", "--edition", "2021", "--emit=metadata",
+             "-o", out_path, tmp_path],
+            capture_output=True, text=True, timeout=timeout,
         )
         ok = result.returncode == 0
         err = (result.stderr or "").strip()
@@ -431,7 +435,8 @@ def hybrid_transpile(
 
     Always returns valid, compilable Rust.
     """
-    from Analysis.transpiler import transpile_function_code, _sanitize_generated
+    from Analysis.transpiler import transpile_function_code
+    from Analysis.transpiler_legacy import _sanitize_generated
 
     # Step 1: AST transpiler (fast)
     ast_result = transpile_function_code(

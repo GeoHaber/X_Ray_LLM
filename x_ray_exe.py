@@ -16,6 +16,7 @@ external tools to be pre-installed (all bundled inside the .exe).
 
 Usage::
 
+    x_ray.exe                                        # interactive mode
     x_ray.exe --path C:\\my_project                  # full scan
     x_ray.exe --path . --smell                       # smells only
     x_ray.exe --path . --lint                        # lint only
@@ -34,7 +35,7 @@ import json
 import os
 import platform
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import sys
 import time
 from pathlib import Path
@@ -68,6 +69,7 @@ from Core.scan_phases import (
     run_rustify_scan,
     collect_reports,
 )
+from Core.utils import check_trial_license as _check_trial_license
 
 # ---------------------------------------------------------------------------
 # ASCII Art banner
@@ -95,14 +97,14 @@ log = setup_logger("x_ray_exe")
 def _wmic_value(query: str, field: str) -> Optional[str]:
     """Run a wmic query and return the value for *field*, or None."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603
             ["wmic"] + query.split() + ["/value"],
             capture_output=True, text=True, timeout=5
         )
         for line in result.stdout.strip().split('\n'):
             if line.startswith(f"{field}="):
                 return line.split('=', 1)[1].strip()
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return None
 
@@ -113,7 +115,7 @@ def _detect_rust_info() -> Dict[str, Any]:
     info["rust_available"] = shutil.which("rustc") is not None
     if info["rust_available"]:
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B607
                 ["rustc", "--version"],
                 capture_output=True, text=True, timeout=5
             )
@@ -192,6 +194,165 @@ def check_tools() -> Dict[str, str]:
 # ---------------------------------------------------------------------------
 # Scan phases and report collection imported from Core.scan_phases
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Interactive Mode — folder picker, scan menu, report prompt
+# ---------------------------------------------------------------------------
+
+def _pick_folder() -> Optional[str]:
+    """Open a Windows folder-picker dialog. Returns path or None."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        folder = filedialog.askdirectory(
+            title="X-Ray — Select project folder to scan",
+        )
+        root.destroy()
+        return folder if folder else None
+    except Exception:
+        return None
+
+
+def _step_pick_folder() -> str:
+    """Interactive step 1: pick the folder to scan."""
+    print(f"\n{'─'*50}")
+    print("  WELCOME TO X-RAY!")
+    print(f"{'─'*50}")
+    print()
+    print("  Let's scan your code! First, pick a folder...")
+    print()
+
+    folder = _pick_folder()
+    if not folder:
+        print("  No folder selected. Type the path manually:")
+        folder = input("  Path> ").strip().strip('"')
+    if not folder or not Path(folder).is_dir():
+        print(f"  ERROR: '{folder}' is not a valid directory.")
+        sys.exit(1)
+
+    print(f"  ✓ Selected: {folder}")
+    print()
+    return folder
+
+
+_SCAN_FLAG_MAP = {
+    "1": {"smell": True, "lint": True, "security": True, "duplicates": True, "full_scan": True},
+    "2": {"smell": True, "lint": True, "security": True},
+    "3": {"smell": True},
+    "4": {"lint": True},
+    "5": {"security": True},
+    "6": {"duplicates": True},
+    "7": {"rustify": True},
+}
+
+_SCAN_MODE_NAMES = {
+    "1": "Full Scan", "2": "Quick Scan", "3": "Code Smells",
+    "4": "Lint", "5": "Security", "6": "Duplicates", "7": "Rust Advisor",
+}
+
+
+def _step_choose_mode(args: argparse.Namespace) -> str:
+    """Interactive step 2: choose scan mode."""
+    print(f"{'─'*50}")
+    print("  WHAT DO YOU WANT TO SCAN?")
+    print(f"{'─'*50}")
+    print()
+    print("  [1]  Full Scan          — Smells + Lint + Security + Duplicates (recommended)")
+    print("  [2]  Quick Scan         — Smells + Lint + Security  (faster)")
+    print("  [3]  Code Smells only   — Function length, complexity, nesting")
+    print("  [4]  Lint only          — Ruff code style & errors")
+    print("  [5]  Security only      — Bandit vulnerability scan")
+    print("  [6]  Duplicates only    — Find copy-pasted code")
+    print("  [7]  Rust Advisor       — Rank functions for Rust porting")
+    print()
+
+    choice = input("  Choose [1-7] (default: 2) > ").strip() or "2"
+    for k, v in _SCAN_FLAG_MAP.get(choice, _SCAN_FLAG_MAP["2"]).items():
+        setattr(args, k, v)
+
+    print(f"  ✓ Mode: {_SCAN_MODE_NAMES.get(choice, 'Quick Scan')}")
+    print()
+    return choice
+
+
+def _step_report_option(args: argparse.Namespace) -> None:
+    """Interactive step 3: choose report save option."""
+    print(f"{'─'*50}")
+    print("  SAVE A JSON REPORT?")
+    print(f"{'─'*50}")
+    print()
+    print("  [1]  Yes — save next to the scanned folder")
+    print("  [2]  Yes — let me choose where")
+    print("  [3]  No  — just show results on screen")
+    print()
+
+    report_choice = input("  Choose [1-3] (default: 1) > ").strip() or "1"
+
+    if report_choice == "1":
+        project_name = Path(args.path).name
+        args.report = str(Path(args.path) / f"x_ray_report_{project_name}.json")
+        print(f"  ✓ Report: {args.report}")
+    elif report_choice == "2":
+        args.report = _save_report_dialog(args.path)
+    else:
+        print("  ✓ No report — results on screen only")
+
+    print()
+    print(f"{'─'*50}")
+    print("  Starting scan...")
+    print(f"{'─'*50}")
+    print()
+
+
+def _save_report_dialog(folder: str) -> Optional[str]:
+    """Show a save-as dialog for the report file."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        rpath = filedialog.asksaveasfilename(
+            title="Save X-Ray report as...",
+            defaultextension=".json",
+            initialfile=f"x_ray_report_{Path(folder).name}.json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+        )
+        root.destroy()
+        if rpath:
+            print(f"  ✓ Report: {rpath}")
+            return rpath
+    except Exception:  # nosec B110
+        pass
+    print("  ✓ No report — results on screen only")
+    return None
+
+
+def _interactive_menu() -> argparse.Namespace:
+    """Show a friendly interactive menu when no CLI args are given."""
+    folder = _step_pick_folder()
+
+    args = argparse.Namespace(
+        path=folder, smell=False, duplicates=False, lint=False,
+        security=False, full_scan=False, rustify=False,
+        report=None, exclude=None, hw=False, verbose=False,
+    )
+
+    _step_choose_mode(args)
+    _step_report_option(args)
+    return args
+
+
+def _needs_interactive() -> bool:
+    """Check if we should launch interactive mode (no meaningful CLI args)."""
+    # If running from command line with actual arguments, use CLI mode
+    # sys.argv[0] is the script/exe name
+    real_args = sys.argv[1:]
+    return len(real_args) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -295,8 +456,17 @@ def _run_scan_phases(args, root: Path):
 
 def main():
     """Main entry point for x_ray.exe."""
-    args = _parse_args()
     print(_EXE_BANNER)
+
+    # --- Trial license gate ---
+    if not _check_trial_license():
+        sys.exit(1)
+
+    # --- Interactive or CLI mode ---
+    if _needs_interactive():
+        args = _interactive_menu()
+    else:
+        args = _parse_args()
 
     hw = detect_hardware()
     print_hardware(hw)

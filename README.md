@@ -1,12 +1,15 @@
-# X-Ray — AI-Powered Code Quality Scanner & Rust Accelerator
+# X-Ray — AI-Powered Universal Code Quality Scanner & Rust Accelerator
 
-**Version 5.1.0** · Python 3.10+ · MIT License
+**Version 7.0.0** · Python 3.10+ · 905+ tests · Python + JS/TS/React · 5 languages · MIT License
 
 X-Ray *diagnoses* problems in Python codebases, then helps you *cure* them — including transpiling performance-critical functions to Rust.
 
 ---
 
-## What It Does
+X-Ray is a **universal code quality platform** that *diagnoses* problems in
+**Python, JavaScript, TypeScript, and React** codebases, then helps you *cure*
+them — including auto-fixing smells, generating test suites, and transpiling
+performance-critical Python functions to Rust.
 
 | Phase | Tools |
 |-------|-------|
@@ -15,10 +18,20 @@ X-Ray *diagnoses* problems in Python codebases, then helps you *cure* them — i
 
 **Output:** Single grade (A+ → F) + JSON report + interactive graph.
 
-**Entry points:**
-- **CLI** — `x_ray_claude.py` (default)
-- **Desktop** — `x_ray_flet.py` (Flet GUI)
-- **Web** — `x_ray_web.py` (Streamlit)
+| Feature | Details |
+|---|---|
+| 9 Analyzers | Code Smells · Duplicates · Ruff Lint · Bandit Security · **Web Smells** · **Project Health** · Rust Advisor · UI Compat · **Test Generator** |
+| **JS/TS/React** | Full analysis of `.js`, `.ts`, `.jsx`, `.tsx` files — imports, functions, React components, 142 package mappings in 15 categories |
+| Unified Grade | Single A+ → F score (0–100) combining all tools |
+| Desktop GUI | Flet (Flutter engine), light/dark mode, 9 dashboard tabs |
+| 5 Languages | English · Română · Español · Français · Deutsch |
+| **Test Generator** | Auto-generates pytest (Python) or Vitest/Jest (JS/TS) test suites from scan data — import smoke, function, class, smell regression, structure tests |
+| **Auto-Fix** | `--fix-smells` removes console.log, debug prints, creates missing project files |
+| Rust Transpiler | AST-based, 19 module handlers, 54.7 % coverage across 14 projects |
+| LLM Fallback | Local LLM fills `todo!()` stubs, validates with `rustc --check` |
+| **UIBridge** | Swappable output layer — Flet, tqdm, Streamlit, NiceGUI, tests all use one bridge |
+| 905+ Tests | Smoke, unit, integration, parity, fuzz, transpilation, bridge |
+| Zero Core Deps | Core analyzers use only Python stdlib |
 
 ---
 
@@ -29,11 +42,50 @@ git clone https://github.com/GeoHaber/X_Ray.git
 cd X_Ray
 pip install -r requirements.txt   # optional; core works with stdlib only
 
-# Scan a project
+### Standalone EXE (share with friends)
+
+X-Ray ships as a portable `.exe` — no Python install required.
+Double-click to launch the interactive wizard:
+
+1. **Folder picker** — native Windows dialog to choose the project to scan
+2. **Scan mode menu** — 7 options from quick lint to full scan + rustify
+3. **Report prompt** — save JSON, print summary, or both
+
+Build it yourself:
+```bash
+pip install pyinstaller
+python -m PyInstaller x_ray.spec --noconfirm
+# Output: dist/x_ray/x_ray.exe (~64 MB, includes ruff, bandit, tkinter, Rust core)
+```
+
+The `.exe` includes a **hardware-locked trial system** (10 runs per machine):
+- Machine fingerprint → AES-256-GCM encrypted counter → HMAC-SHA256 integrity
+- All crypto runs in compiled Rust (`x_ray_core.pyd`) — no Python-side secrets
+- Counter stored at `%APPDATA%\x_ray\.xrl` (84 bytes, binary)
+- Each new machine gets a fresh 10 runs, no server needed
+
+CLI mode also works: `x_ray.exe --path C:\project --full-scan`
+
+### CLI
+
+```bash
+# Default scan (smells + lint + security)
 python x_ray_claude.py --path /your/project
 
-# Full scan + JSON report
+# Full scan with unified grade (includes web smells + health checks)
+python x_ray_claude.py --full-scan --path /your/project
+
+# Save JSON report
 python x_ray_claude.py --full-scan --report results.json --path /your/project
+
+# Scan a JS/TS/React project
+python x_ray_claude.py --full-scan --path /your/react-app
+
+# Auto-generate test suite from scan data
+python x_ray_claude.py --full-scan --gen-tests --path /your/project
+
+# Auto-fix code smells (console.log, debug prints, missing files)
+python x_ray_claude.py --full-scan --fix-smells --path /your/project
 
 # Rank functions for Rust porting
 python x_ray_claude.py --rustify --path /your/project

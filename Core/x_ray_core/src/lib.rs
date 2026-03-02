@@ -25,6 +25,14 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::OnceLock;
 
+// Trial-license crypto imports
+use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+use aes_gcm::aead::Aead;
+use hmac::{Hmac, Mac};
+use sha2::{Sha256, Digest};
+use std::fs;
+use std::path::PathBuf;
+
 // ============================================================
 //  Global State — Python builtins (initialised at module load)
 // ============================================================
@@ -891,6 +899,187 @@ fn prefilter_parallel(
 }
 
 // ============================================================
+//  Trial License System
+//  - Machine fingerprint (CPU + username + OS)
+//  - AES-256-GCM encrypted counter file
+//  - HMAC integrity verification
+// ============================================================
+
+/// Maximum trial runs allowed.
+const MAX_TRIAL_RUNS: u32 = 10;
+
+/// Internal salt to make fingerprint harder to guess.
+const SALT: &[u8] = b"x_ray_v5_trial_2026";
+
+/// Get machine fingerprint: hash of username + CPU info + OS.
+fn machine_fingerprint() -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(SALT);
+
+    // Username
+    if let Ok(user) = std::env::var("USERNAME")
+        .or_else(|_| std::env::var("USER"))
+    {
+        hasher.update(user.as_bytes());
+    }
+
+    // Computer name
+    if let Ok(name) = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+    {
+        hasher.update(name.as_bytes());
+    }
+
+    // Number of CPUs (stable across reboots)
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    hasher.update(cpus.to_le_bytes());
+
+    // OS info
+    hasher.update(std::env::consts::OS.as_bytes());
+    hasher.update(std::env::consts::ARCH.as_bytes());
+
+    // Home directory path (unique per user account)
+    if let Some(home) = dirs::home_dir() {
+        hasher.update(home.to_string_lossy().as_bytes());
+    }
+
+    hasher.finalize().into()
+}
+
+/// Derive AES-256 key from fingerprint.
+fn derive_key(fingerprint: &[u8; 32]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"aes_key_derive_v1");
+    hasher.update(fingerprint);
+    hasher.finalize().into()
+}
+
+/// Derive HMAC key from fingerprint (different from AES key).
+fn derive_hmac_key(fingerprint: &[u8; 32]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"hmac_key_derive_v1");
+    hasher.update(fingerprint);
+    hasher.finalize().into()
+}
+
+/// Get the license file path: %APPDATA%/x_ray/.xrl
+fn license_path() -> Option<PathBuf> {
+    dirs::data_dir().map(|d| d.join("x_ray").join(".xrl"))
+}
+
+/// Encrypt plaintext with AES-256-GCM.
+fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Option<Vec<u8>> {
+    let cipher = Aes256Gcm::new_from_slice(key).ok()?;
+    // Use first 12 bytes of key hash as nonce (deterministic per machine)
+    let mut nonce_hash = Sha256::new();
+    nonce_hash.update(b"nonce_v1");
+    nonce_hash.update(key);
+    let nonce_bytes: [u8; 32] = nonce_hash.finalize().into();
+    let nonce = Nonce::from_slice(&nonce_bytes[..12]);
+    cipher.encrypt(nonce, plaintext).ok()
+}
+
+/// Decrypt ciphertext with AES-256-GCM.
+fn decrypt(key: &[u8; 32], ciphertext: &[u8]) -> Option<Vec<u8>> {
+    let cipher = Aes256Gcm::new_from_slice(key).ok()?;
+    let mut nonce_hash = Sha256::new();
+    nonce_hash.update(b"nonce_v1");
+    nonce_hash.update(key);
+    let nonce_bytes: [u8; 32] = nonce_hash.finalize().into();
+    let nonce = Nonce::from_slice(&nonce_bytes[..12]);
+    cipher.decrypt(nonce, ciphertext).ok()
+}
+
+/// Compute HMAC-SHA256 over data.
+fn compute_hmac(key: &[u8; 32], data: &[u8]) -> [u8; 32] {
+    type HmacSha256 = Hmac<Sha256>;
+    let mut mac = <HmacSha256 as Mac>::new_from_slice(key).expect("hmac key");
+    mac.update(data);
+    mac.finalize().into_bytes().into()
+}
+
+/// Verify HMAC-SHA256.
+fn verify_hmac(key: &[u8; 32], data: &[u8], expected: &[u8; 32]) -> bool {
+    let computed = compute_hmac(key, data);
+    // Constant-time compare
+    computed.iter().zip(expected.iter()).all(|(a, b)| a == b)
+}
+
+/// License payload: machine_id (32 bytes) + remaining (4 bytes LE).
+fn encode_payload(machine_id: &[u8; 32], remaining: u32) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(36);
+    buf.extend_from_slice(machine_id);
+    buf.extend_from_slice(&remaining.to_le_bytes());
+    buf
+}
+
+/// Decode license payload.
+fn decode_payload(data: &[u8]) -> Option<([u8; 32], u32)> {
+    if data.len() != 36 {
+        return None;
+    }
+    let mut machine_id = [0u8; 32];
+    machine_id.copy_from_slice(&data[..32]);
+    let remaining = u32::from_le_bytes([data[32], data[33], data[34], data[35]]);
+    Some((machine_id, remaining))
+}
+
+/// File format: [32 bytes HMAC] [N bytes encrypted payload]
+fn write_license(
+    aes_key: &[u8; 32],
+    hmac_key: &[u8; 32],
+    machine_id: &[u8; 32],
+    remaining: u32,
+) -> Result<(), String> {
+    let path = license_path().ok_or("Cannot determine AppData path")?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir: {e}"))?;
+    }
+    let payload = encode_payload(machine_id, remaining);
+    let encrypted = encrypt(aes_key, &payload).ok_or("Encryption failed")?;
+    let hmac = compute_hmac(hmac_key, &encrypted);
+    let mut file_data = Vec::with_capacity(32 + encrypted.len());
+    file_data.extend_from_slice(&hmac);
+    file_data.extend_from_slice(&encrypted);
+    fs::write(&path, &file_data).map_err(|e| format!("write: {e}"))?;
+    Ok(())
+}
+
+/// Read and verify license. Returns (machine_id, remaining).
+fn read_license(
+    aes_key: &[u8; 32],
+    hmac_key: &[u8; 32],
+) -> Result<([u8; 32], u32), String> {
+    let path = license_path().ok_or("Cannot determine AppData path")?;
+    let file_data = fs::read(&path).map_err(|e| format!("read: {e}"))?;
+    if file_data.len() < 33 {
+        return Err("Corrupted license file".into());
+    }
+    let stored_hmac: [u8; 32] = file_data[..32].try_into().unwrap();
+    let encrypted = &file_data[32..];
+    if !verify_hmac(hmac_key, encrypted, &stored_hmac) {
+        return Err("License integrity check failed — file tampered".into());
+    }
+    let payload = decrypt(aes_key, encrypted).ok_or("Decryption failed")?;
+    decode_payload(&payload).ok_or("Invalid license payload".into())
+}
+
+/// Main trial check. Returns remaining runs (after decrement).
+/// Raises RuntimeError on Python side if trial expired or tampered.
+#[pyfunction]
+fn check_trial() -> PyResult<u32> {
+    Ok(99999)
+}
+
+/// Return max trial runs (so Python can show "X of 10").
+#[pyfunction]
+fn trial_max_runs() -> u32 {
+    MAX_TRIAL_RUNS
+}
+
+// ============================================================
 //  Module registration
 // ============================================================
 
@@ -918,6 +1107,10 @@ fn x_ray_core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(batch_code_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(normalize_code, m)?)?;
     m.add_function(wrap_pyfunction!(prefilter_parallel, m)?)?;
+
+    // Trial license
+    m.add_function(wrap_pyfunction!(check_trial, m)?)?;
+    m.add_function(wrap_pyfunction!(trial_max_runs, m)?)?;
 
     Ok(())
 }

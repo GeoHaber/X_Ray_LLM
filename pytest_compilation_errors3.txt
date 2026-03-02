@@ -1,0 +1,92 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0
+rootdir: C:\Users\Yo930\Desktop\_Python\X_Ray
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+tests\test_transpiler.py F                                               [100%]
+
+================================== FAILURES ===================================
+__________ TestCallRewritesCompilation.test_logger_rewrite_compiles ___________
+
+self = <tests.test_transpiler.TestCallRewritesCompilation object at 0x0000017E8462A490>
+
+    def test_logger_rewrite_compiles(self):
+        # Instead of testing `log::info!`, let's test a builtin rewrite that we know
+        # should compile without external crates, like `print`.
+        code = 'def log_stuff(msg: str, count: int):\n    print("Found {} items: {}", count, msg)'
+        rust = transpile_function_code(code)
+>       assert_compiles(rust)
+
+tests\test_transpiler.py:839: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+rust_code = 'pub struct RustNode;\npub struct RustEmitter;\npub struct RustFunction;\npub struct RustLet;\npub struct RustStatemen... String, count: i64) -> () {\n    \n    println!(""{}", "{}", "{}"", "Found {} items: {}".to_string(), count, msg);\n}'
+
+    def assert_compiles(rust_code: str, *, allow_warnings: bool = True):
+        """Assert that a Rust source string compiles with rustc.
+    
+        Wraps single functions in a main.rs stub with appropriate imports.
+        """
+        if not HAS_RUSTC:
+            pytest.skip("rustc not available")
+    
+        full = _wrap_rust_source(rust_code)
+    
+        with tempfile.NamedTemporaryFile(suffix=".rs", mode="w", delete=False,
+                                         encoding="utf-8") as f:
+            f.write(full)
+            f.flush()
+            tmp = f.name
+    
+        try:
+            result = subprocess.run(
+                ["rustc", "--edition", "2021", "--crate-type", "lib", tmp,
+                 "-o", tmp + ".out"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                errors = [line for line in result.stderr.splitlines() if "error" in line.lower()]
+                if errors:
+>                   pytest.fail(
+                        f"Rust compilation failed:\n{result.stderr}\n\n"
+                        f"--- Generated Source ---\n{full}"
+                    )
+E                   Failed: Rust compilation failed:
+E                   error: expected `,`, found `{`
+E                     --> C:\Users\Yo930\AppData\Local\Temp\tmpnf_cv0fk.rs:17:16
+E                      |
+E                   17 |     println!(""{}", "{}", "{}"", "Found {} items: {}".to_string(), count, msg);
+E                      |                ^ expected `,`
+E                   
+E                   error: aborting due to 1 previous error
+E                   
+E                   
+E                   
+E                   --- Generated Source ---
+E                   #![allow(unused_variables, unused_mut, dead_code, unused_imports)]
+E                   #![allow(unreachable_code, unused_assignments)]
+E                   use std::collections::{HashMap, HashSet};
+E                   
+E                   pub struct RustNode;
+E                   pub struct RustEmitter;
+E                   pub struct RustFunction;
+E                   pub struct RustLet;
+E                   pub struct RustStatement;
+E                   pub struct RustReturn;
+E                   pub struct RustIf;
+E                   pub struct RustFor;
+E                   pub struct RustMacro;
+E                   
+E                   fn log_stuff(msg: String, count: i64) -> () {
+E                       
+E                       println!(""{}", "{}", "{}"", "Found {} items: {}".to_string(), count, msg);
+E                   }
+E                   
+E                   fn main() {}
+
+tests\test_transpiler.py:96: Failed
+=========================== short test summary info ===========================
+FAILED tests/test_transpiler.py::TestCallRewritesCompilation::test_logger_rewrite_compiles
+============================== 1 failed in 0.96s ==============================

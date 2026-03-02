@@ -104,8 +104,23 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
     def _build_command(self, root: Path, exclude: Optional[List[str]]) -> List[str]:
         """Assemble the bandit CLI command list."""
         sev = self.severity_threshold.lower()
-        level = "-lll" if sev == "high" else "-ll" if sev == "medium" else "-l"
-        cmd = [self._tool_path, "-r", str(root), "-f", "json", level]
+        if sev == "high":
+            cmd.append("-lll")
+        elif sev == "medium":
+            cmd.append("-ll")
+        else:
+            cmd.append("-l")
+
+        # Auto-exclude common non-project directories
+        from Analysis._analyzer_base import _merged_excludes
+        all_exclude = _merged_excludes(exclude)
+
+        exclude_paths = []
+        for pat in all_exclude:
+            full = root / pat
+            exclude_paths.append(str(full) if full.exists() else pat)
+        if exclude_paths:
+            cmd.extend(["-x", ",".join(exclude_paths)])
 
         all_exclude = [*_DEFAULT_EXCLUDE, *(exclude or [])]
         paths = [str(root / p) if (root / p).exists() else p for p in all_exclude]

@@ -419,8 +419,19 @@ class DuplicateFinder:
                 cross_file_only,
                 self.SIZE_RATIO_MIN,
                 self.TOKEN_PREFILTER,
+            # Returns (key1, key2, token_sim) — string keys, not objects
+            raw_candidates = _rust_core.prefilter_parallel(
+                func_list, self._tokens, cross_file_only,
+                self.SIZE_RATIO_MIN, self.TOKEN_PREFILTER
             )
-            logger.info(f"Duplicate pre-filter (Rust): {len(candidates)} candidates")
+            logger.info(f"Duplicate pre-filter (Rust): {len(raw_candidates)} candidates")
+            # Resolve string keys back to FunctionRecord objects
+            func_map = {f.key: f for f in func_list}
+            candidates = [
+                (func_map[k1], func_map[k2], score)
+                for k1, k2, score in raw_candidates
+                if k1 in func_map and k2 in func_map
+            ]
             near_pairs = _batch_code_similarity(candidates, self.NEAR_DUP_THRESHOLD)
         else:
             candidates = self._prefilter_candidates(func_list, cross_file_only)
@@ -434,6 +445,11 @@ class DuplicateFinder:
         group_id = self._build_similarity_groups(
             near_pairs, group_id, "near", seen_keys
         )
+            near_pairs = [(f1, f2, sim)
+                         for f1, f2, _ in candidates
+                         if (sim := code_similarity(f1.code, f2.code)) >= self.NEAR_DUP_THRESHOLD]
+
+        group_id = self._build_similarity_groups(near_pairs, group_id, "near", seen_keys)
         return group_id
 
     def _stage_semantic_similarity(
