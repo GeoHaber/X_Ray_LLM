@@ -546,38 +546,61 @@ _PHASE_RUNNERS = {
 }
 
 
-def _run_scan(
-    root: Path,
-    modes: Dict[str, bool],
-    exclude: List[str],
-    thresholds: Dict[str, int],
-    progress_cb=None,
-) -> Dict[str, Any]:
-    """Run selected scan phases and return results dict.
+from dataclasses import dataclass
 
-    *progress_cb(fraction, phase_label)* is called to report 0.0-1.0
-    progress and the name of the current phase.
-    """
+@dataclass
+class UIScanContext:
+    root: Path
+    modes: Dict[str, bool]
+    exclude: List[str]
+    thresholds: Dict[str, int]
+    progress_cb: Optional[Callable] = None
+
+
+@dataclass
+class UIPhaseContext:
+    active: List[str]
+    scan_ctx: ScanContext
+    results: Dict[str, Any]
+    pi: int
+    pw: float
+    progress_cb: Optional[Callable]
+
+
+def _run_ui_phases(pctx: UIPhaseContext) -> int:
+    def _prog(label: str, sub: float = 1.0):
+        if pctx.progress_cb:
+            pctx.progress_cb(min((pctx.pi + sub) * pctx.pw, 1.0), label)
+
+    for key in pctx.active:
+        label, runner = _PHASE_RUNNERS[key]
+        _prog(label, 0.0)
+        runner(pctx.scan_ctx, pctx.results)
+        _prog(f"{key.title()} done")
+        pctx.pi += 1
+    return pctx.pi
+
+
+def _run_scan(ctx: UIScanContext) -> Dict[str, Any]:
+    """Run selected scan phases and return results dict."""
     results: Dict[str, Any] = {"meta": {}}
     t0 = time.time()
 
-    # ── Build phase list so we can distribute the progress bar evenly ──
-    need_ast = modes.get("smells") or modes.get("duplicates") or modes.get("rustify")
-    active = [k for k in _PHASE_RUNNERS if modes.get(k)]
-    n_phases = (1 if need_ast else 0) + len(active) + 1  # +1 for grade
+    need_ast = ctx.modes.get("smells") or ctx.modes.get("duplicates") or ctx.modes.get("rustify")
+    active = [k for k in _PHASE_RUNNERS if ctx.modes.get(k)]
+    n_phases = (1 if need_ast else 0) + len(active) + 1
     pw = 1.0 / max(n_phases, 1)
     pi = 0
 
     def _prog(label: str, sub: float = 1.0):
-        if progress_cb:
-            progress_cb(min((pi + sub) * pw, 1.0), label)
+        if ctx.progress_cb:
+            ctx.progress_cb(min((pi + sub) * pw, 1.0), label)
 
-    # ── AST parse ──
     functions, classes, errors, file_count = [], [], [], 0
     if need_ast:
         _prog("Parsing source files", 0.0)
         functions, classes, errors, file_count = _scan_codebase(
-            root, exclude, on_file=lambda d, t, _p: _prog(f"Parsing {d}/{t}", d / t)
+            ctx.root, ctx.exclude, on_file=lambda d, t, _p: _prog(f"Parsing {d}/{t}", d / t)
         )
         _prog("AST parse complete")
         pi += 1
@@ -598,16 +621,18 @@ def _run_scan(
         results["_code_map"] = code_map
         results["_functions"] = functions
 
-    # ── Run analysis phases via dispatch table ──
-    ctx = ScanContext(root, exclude, thresholds, functions, classes)
-    for key in active:
-        label, runner = _PHASE_RUNNERS[key]
-        _prog(label, 0.0)
-        runner(ctx, results)
-        _prog(f"{key.title()} done")
-        pi += 1
+    scan_ctx = ScanContext(ctx.root, ctx.exclude, ctx.thresholds, functions, classes)
+    
+    pctx = UIPhaseContext(
+        active=active,
+        scan_ctx=scan_ctx,
+        results=results,
+        pi=pi,
+        pw=pw,
+        progress_cb=ctx.progress_cb
+    )
+    pi = _run_ui_phases(pctx)
 
-    # ── Grade ──
     results["grade"] = compute_grade(results)
     results["meta"]["duration"] = round(time.time() - t0, 2)
     return results
@@ -1856,11 +1881,9 @@ def _sidebar_thresholds() -> Dict[str, int]:
     }
 
 
-def _render_sidebar() -> Dict[str, Any]:
-    """Build the entire sidebar; return scan configuration dict."""
-    with st.sidebar:
-        st.markdown(
-            """
+def _sidebar_header():
+    st.markdown(
+        """
         <div style="text-align:center; padding: 0.5rem 0 1rem 0;">
             <p style="font-family:'Cascadia Code','Consolas',monospace;
                       font-size:1.6rem; font-weight:700; margin:0;
@@ -1872,10 +1895,30 @@ def _render_sidebar() -> Dict[str, Any]:
                 Code Scanner</p>
         </div>
         """,
-            unsafe_allow_html=True,
-        )
-        st.caption(f"v{__version__}")
-        st.divider()
+        unsafe_allow_html=True,
+    )
+    st.caption(f"v{__version__}")
+    st.divider()
+
+
+def _sidebar_footer():
+    st.divider()
+    st.markdown(
+        """
+        <div style="text-align:center; opacity:0.3; font-size:0.65rem;
+                    font-family:'Cascadia Code','Consolas',monospace;">
+            AST · Ruff · Bandit · Rust<br>
+            github.com/GeoHaber/X_Ray
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_sidebar() -> Dict[str, Any]:
+    """Build the entire sidebar; return scan configuration dict."""
+    with st.sidebar:
+        _sidebar_header()
 
         # Directory picker
         st.markdown("##### 📁 Target")
@@ -1904,18 +1947,7 @@ def _render_sidebar() -> Dict[str, Any]:
         run_clicked = st.button(
             "⚡ Run X-Ray Scan", use_container_width=True, type="primary"
         )
-
-        st.divider()
-        st.markdown(
-            """
-        <div style="text-align:center; opacity:0.3; font-size:0.65rem;
-                    font-family:'Cascadia Code','Consolas',monospace;">
-            AST · Ruff · Bandit · Rust<br>
-            github.com/GeoHaber/X_Ray
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
+        _sidebar_footer()
 
     return {
         "scan_path": scan_path,
@@ -1945,7 +1977,14 @@ def _execute_scan_ui(
         progress_bar.progress(min(frac, 1.0))
         status_text.markdown(_mono_status(f"⚡ {label}"), unsafe_allow_html=True)
 
-    results = _run_scan(root, modes, exclude_dirs, thresholds, progress_cb=_on_progress)
+    ctx = UIScanContext(
+        root=root,
+        modes=modes,
+        exclude=exclude_dirs,
+        thresholds=thresholds,
+        progress_cb=_on_progress
+    )
+    results = _run_scan(ctx)
 
     progress_bar.progress(1.0)
     meta = results["meta"]

@@ -1022,8 +1022,6 @@ def _get_llm_engine():
 
 
 def _transpile_with_fallback(func: FunctionRecord, *, pyfunction: bool = True) -> str:
-def _transpile_with_fallback(func: FunctionRecord, *,
-                             pyfunction: bool = True) -> str:
     """AST transpile → if result has todo!(), try LLM fallback."""
     rust_code = transpile_function(func, pyfunction=pyfunction)
 
@@ -1268,17 +1266,7 @@ def _run_cargo_build(
     project_dir: Path, target: str, env: dict, timeout: int = 300
 ) -> subprocess.CompletedProcess:
     """Execute ``cargo build --release`` and return the CompletedProcess."""
-    cmd = ["cargo", "build", "--release"]
-    if target:
-        cmd.extend(["--target", target])
-    return subprocess.run(
-        cmd,
-        cwd=str(project_dir),
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        env=env,
-    return subprocess.run(  # nosec B603
+    return subprocess.run(  # nosec B603,B607
         cmd, cwd=str(project_dir),
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         timeout=timeout, env=env,
@@ -1394,13 +1382,6 @@ def _comment_out_failing_fns(src_path: Path, bad_lines: List[int]) -> int:
     return len(to_replace)
 
 
-def compile_with_repair(
-    project_dir: Path,
-    system: SystemProfile,
-    *,
-    mode: str = "pyo3",
-    max_retries: int = 3,
-) -> CompileResult:
 def compile_with_repair(project_dir: Path,
                         system: SystemProfile,
                         *,

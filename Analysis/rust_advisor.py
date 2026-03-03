@@ -473,6 +473,8 @@ class RustAdvisor:
             pure_icon = "Yes" if c.is_pure else " - "
             calls = str(c.call_count) if c.call_count else "  -"
             loc = f"{c.func.file_path}:{c.func.line_start}"
+            
+            # 1. Print to stdout
             print(
                 f"  {i:>3}  {c.score:>6.1f}  {pure_icon:>4}  "
                 f"{c.func.complexity:>3}  {c.func.size_lines:>5}  "
@@ -482,24 +484,24 @@ class RustAdvisor:
                 f"  {'':>3}  {'':>6}  {'':>4}  {'':>3}  "
                 f"{'':>5}  {'':>6}  {loc}  ({c.reason})"
             )
-
-        total_pure = sum(1 for c in candidates if c.is_pure)
-        print(
-            f"\n  {len(candidates)} functions scored, "
-            f"{total_pure} pure, "
-            f"top score: {candidates[0].score:.1f}"
-            if candidates
-            else ""
-        )
-        print(f"{'=' * 72}\n")
+            
+            # 2. Log to bridge
             bridge.log(f"  {i:>3}  {c.score:>6.1f}  {pure_icon:>4}  "
                        f"{c.func.complexity:>3}  {c.func.size_lines:>5}  "
                        f"{calls:>6}  {c.func.name}")
             bridge.log(f"  {'':>3}  {'':>6}  {'':>4}  {'':>3}  "
                        f"{'':>5}  {'':>6}  {loc}  ({c.reason})")
 
-        total_pure = sum(1 for c in candidates if c.is_pure)
-        bridge.log(f"\n  {len(candidates)} functions scored, "
-                   f"{total_pure} pure, "
-                   f"top score: {candidates[0].score:.1f}" if candidates else "")
+        footer_text = ""
+        if candidates:
+            total_pure = sum(1 for c in candidates if c.is_pure)
+            footer_text = (f"\n  {len(candidates)} functions scored, "
+                          f"{total_pure} pure, "
+                          f"top score: {candidates[0].score:.1f}")
+        
+        if footer_text:
+            print(footer_text)
+            bridge.log(footer_text)
+            
+        print(f"{'=' * 72}\n")
         bridge.log(f"{'='*72}\n")

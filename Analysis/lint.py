@@ -83,7 +83,6 @@ class LintAnalyzer(BaseStaticAnalyzer):
         if exclude:
             all_exclude.extend(exclude)
         for pat in all_exclude:
-        for pat in _merged_excludes(exclude):
             cmd.extend(["--exclude", pat])
         cmd.extend(self.extra_args)
         return cmd

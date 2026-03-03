@@ -454,15 +454,13 @@ def _run_scan_phases(args, root: Path):
     )
 
 
-def main():
-    """Main entry point for x_ray.exe."""
+def _init_exe_scan():
+    """Handle CLI/interactive setup, hardware detection, target logic."""
     print(_EXE_BANNER)
 
-    # --- Trial license gate ---
     if not _check_trial_license():
         sys.exit(1)
 
-    # --- Interactive or CLI mode ---
     if _needs_interactive():
         args = _interactive_menu()
     else:
@@ -471,10 +469,19 @@ def main():
     hw = detect_hardware()
     print_hardware(hw)
     if args.hw:
-        return
+        return args, hw, None
 
     _print_tool_status(check_tools())
     root = _resolve_target(args)
+    return args, hw, root
+
+
+def main():
+    """Main entry point for x_ray.exe."""
+    args, hw, root = _init_exe_scan()
+
+    if args.hw:
+        return
 
     # Rustify mode — separate workflow
     if args.rustify:

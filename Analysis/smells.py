@@ -174,9 +174,7 @@ def _check_boolean_blindness(func: FunctionRecord, smells: list):
         )
 
 
-def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
-    """Run all per-function smell checks (extracted to reduce CodeSmellDetector size)."""
-    # Size / structure
+def _check_function_size(func: FunctionRecord, t: dict, smells: list):
     if func.size_lines >= t["very_long_function"]:
         smells.append(
             SmellIssue(
@@ -186,31 +184,6 @@ def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
                 category="long-function",
                 severity=Severity.CRITICAL,
                 name=func.name,
-    def _check_function(self, func: FunctionRecord):
-        """Dispatch all per-function smell checks."""
-        t = self.thresholds
-        self._check_long_function(func, t)
-        self._check_deep_nesting(func, t)
-        self._check_high_complexity(func, t)
-        self._check_too_many_params(func, t)
-        self._check_missing_docstring(func, t)
-        self._check_too_many_returns(func, t)
-        _check_boolean_blindness(func, self.smells)
-        self._check_too_many_branches(func, t)
-        _check_magic_numbers(func, self.smells,
-                             threshold=t.get("magic_number_min_count", 2))
-        _check_mutable_default_arg(func, self.smells)
-        _check_dead_code(func, self.smells)
-
-    # -- individual smell checks -------------------------------------------
-
-    def _check_long_function(self, func: FunctionRecord, t: dict):
-        """Flag functions exceeding the line-count threshold."""
-        if func.size_lines >= t["very_long_function"]:
-            self.smells.append(SmellIssue(
-                file_path=func.file_path, line=func.line_start,
-                end_line=func.line_end, category="long-function",
-                severity=Severity.CRITICAL, name=func.name,
                 metric_value=func.size_lines,
                 message=f"Function '{func.name}' is {func.size_lines} lines (limit: {t['very_long_function']})",
                 suggestion="Split into smaller focused functions. Extract logical blocks.",
@@ -230,6 +203,8 @@ def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
                 suggestion="Consider splitting into smaller functions.",
             )
         )
+
+def _check_function_complexity(func: FunctionRecord, t: dict, smells: list):
     if func.nesting_depth >= t["very_deep_nesting"]:
         smells.append(
             SmellIssue(
@@ -286,6 +261,22 @@ def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
                 suggestion="Simplify branching logic. Consider lookup tables or strategy pattern.",
             )
         )
+    if func.branch_count >= t["too_many_branches"]:
+        smells.append(
+            SmellIssue(
+                file_path=func.file_path,
+                line=func.line_start,
+                end_line=func.line_end,
+                category="too-many-branches",
+                severity=Severity.WARNING,
+                name=func.name,
+                metric_value=func.branch_count,
+                message=f"Function '{func.name}' has {func.branch_count} branches (limit: {t['too_many_branches']})",
+                suggestion="Simplify with lookup tables, strategy pattern, or early returns.",
+            )
+        )
+
+def _check_function_signature(func: FunctionRecord, t: dict, smells: list):
     if len(func.parameters) >= t["too_many_params"]:
         smells.append(
             SmellIssue(
@@ -300,6 +291,37 @@ def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
                 suggestion="Group related parameters into a dataclass or config object.",
             )
         )
+    if func.return_count >= t["too_many_returns"]:
+        smells.append(
+            SmellIssue(
+                file_path=func.file_path,
+                line=func.line_start,
+                end_line=func.line_end,
+                category="too-many-returns",
+                severity=Severity.WARNING,
+                name=func.name,
+                metric_value=func.return_count,
+                message=f"Function '{func.name}' has {func.return_count} return statements (limit: {t['too_many_returns']})",
+                suggestion="Consolidate exit points. Consider a result variable.",
+            )
+        )
+    params = getattr(func, "mutable_default_params", None) or []
+    if params:
+        smells.append(
+            SmellIssue(
+                file_path=func.file_path,
+                line=func.line_start,
+                end_line=func.line_end,
+                category="mutable-default-arg",
+                severity=Severity.WARNING,
+                name=func.name,
+                metric_value=len(params),
+                message=f"Function '{func.name}' uses mutable default for: {', '.join(params)}",
+                suggestion="Use None as default, then assign inside: if x is None: x = []",
+            )
+        )
+
+def _check_function_style(func: FunctionRecord, t: dict, smells: list):
     if (
         not func.docstring
         and func.size_lines >= t["missing_docstring_size"]
@@ -318,34 +340,6 @@ def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
                 suggestion="Add a docstring explaining purpose, parameters, and return value.",
             )
         )
-    if func.return_count >= t["too_many_returns"]:
-        smells.append(
-            SmellIssue(
-                file_path=func.file_path,
-                line=func.line_start,
-                end_line=func.line_end,
-                category="too-many-returns",
-                severity=Severity.WARNING,
-                name=func.name,
-                metric_value=func.return_count,
-                message=f"Function '{func.name}' has {func.return_count} return statements (limit: {t['too_many_returns']})",
-                suggestion="Consolidate exit points. Consider a result variable.",
-            )
-        )
-    if func.branch_count >= t["too_many_branches"]:
-        smells.append(
-            SmellIssue(
-                file_path=func.file_path,
-                line=func.line_start,
-                end_line=func.line_end,
-                category="too-many-branches",
-                severity=Severity.WARNING,
-                name=func.name,
-                metric_value=func.branch_count,
-                message=f"Function '{func.name}' has {func.branch_count} branches (limit: {t['too_many_branches']})",
-                suggestion="Simplify with lookup tables, strategy pattern, or early returns.",
-            )
-        )
     _check_boolean_blindness(func, smells)
     if _has_nested_comprehension(func.code):
         smells.append(
@@ -359,21 +353,6 @@ def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
                 metric_value=0,
                 message=f"Function '{func.name}' contains nested comprehension(s)",
                 suggestion="Prefer explicit loops when comprehensions reduce readability.",
-            )
-        )
-    params = getattr(func, "mutable_default_params", None) or []
-    if params:
-        smells.append(
-            SmellIssue(
-                file_path=func.file_path,
-                line=func.line_start,
-                end_line=func.line_end,
-                category="mutable-default-arg",
-                severity=Severity.WARNING,
-                name=func.name,
-                metric_value=len(params),
-                message=f"Function '{func.name}' uses mutable default for: {', '.join(params)}",
-                suggestion="Use None as default, then assign inside: if x is None: x = []",
             )
         )
     if _has_bare_except(func.code):
@@ -390,6 +369,13 @@ def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
                 suggestion="Catch specific exceptions. Use except Exception if you must catch all errors.",
             )
         )
+
+def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
+    """Run all per-function smell checks (extracted to reduce CodeSmellDetector size)."""
+    _check_function_size(func, t, smells)
+    _check_function_complexity(func, t, smells)
+    _check_function_signature(func, t, smells)
+    _check_function_style(func, t, smells)
 
 
 def _run_class_checks(cls, t: dict, smells: list):
@@ -524,13 +510,11 @@ class CodeSmellDetector:
             _run_function_checks(func, t, self.smells)
         for cls in classes:
             _run_class_checks(cls, t, self.smells)
+        
         self.smells.sort(
             key=lambda s: (
-                0
-                if s.severity == Severity.CRITICAL
-                else 1
-                if s.severity == Severity.WARNING
-                else 2,
+                0 if s.severity == Severity.CRITICAL else
+                1 if s.severity == Severity.WARNING else 2,
                 s.file_path,
                 s.line,
             )

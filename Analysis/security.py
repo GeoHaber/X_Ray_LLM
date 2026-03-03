@@ -103,6 +103,8 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
 
     def _build_command(self, root: Path, exclude: Optional[List[str]]) -> List[str]:
         """Assemble the bandit CLI command list."""
+        cmd = [str(self._tool_path), "-r", str(root), "-f", "json"]
+
         sev = self.severity_threshold.lower()
         if sev == "high":
             cmd.append("-lll")
@@ -112,8 +114,14 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
             cmd.append("-l")
 
         # Auto-exclude common non-project directories
-        from Analysis._analyzer_base import _merged_excludes
-        all_exclude = _merged_excludes(exclude)
+        _DEFAULT_EXCLUDE = [
+            ".venv", "venv", ".env", "__pycache__", "node_modules",
+            ".git", "target", ".mypy_cache", ".pytest_cache",
+            "dist", "build", ".eggs", "*.egg-info", "_scratch", ".github",
+        ]
+        all_exclude = list(_DEFAULT_EXCLUDE)
+        if exclude:
+            all_exclude.extend(exclude)
 
         exclude_paths = []
         for pat in all_exclude:
@@ -122,10 +130,6 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
         if exclude_paths:
             cmd.extend(["-x", ",".join(exclude_paths)])
 
-        all_exclude = [*_DEFAULT_EXCLUDE, *(exclude or [])]
-        paths = [str(root / p) if (root / p).exists() else p for p in all_exclude]
-        if paths:
-            cmd.extend(["-x", ",".join(paths)])
         cmd.extend(self.extra_args)
         return cmd
 

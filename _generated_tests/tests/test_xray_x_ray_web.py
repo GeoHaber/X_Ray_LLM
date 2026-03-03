@@ -1,0 +1,11 @@
+"""Auto-generated monkey tests for x_ray_web.py by X-Ray v7.0.
+
+Tests function signatures, edge cases, and class instantiation.
+"""
+
+import pytest
+
+def test_x_ray_web_main_is_callable():
+    """Verify main exists and is callable."""
+    from x_ray_web import main
+    assert callable(main)

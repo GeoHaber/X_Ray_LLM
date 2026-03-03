@@ -382,13 +382,10 @@ def _extract_imports(source: str) -> List[JSImport]:
     return imports
 
 
-def _extract_functions(source: str, lines: List[str],
-                       rel_path: str, has_jsx: bool) -> List[JSFunction]:
-    """Extract all function-like constructs from JS/TS source."""
-    functions: List[JSFunction] = []
-    seen_lines: set = set()
-
-    # ── Function declarations ────────────────────────────────────────
+def _extract_func_declarations(
+    source: str, lines: List[str], rel_path: str, has_jsx: bool, seen_lines: set
+) -> List[JSFunction]:
+    functions = []
     for m in _RE_FUNC_DECL.finditer(source):
         lineno = source[:m.start()].count("\n")
         if lineno in seen_lines:
@@ -405,24 +402,20 @@ def _extract_functions(source: str, lines: List[str],
         is_component = has_jsx and name[0:1].isupper() and bool(_RE_JSX.search(code))
 
         functions.append(JSFunction(
-            name=name,
-            file_path=rel_path,
-            line_start=lineno + 1,
-            line_end=end_line + 1,
-            size_lines=end_line - lineno + 1,
-            parameters=params,
-            is_async=is_async,
-            is_arrow=False,
-            is_exported=is_exported,
-            is_react_component=is_component,
-            complexity=_count_complexity(code),
-            nesting_depth=_count_nesting(code),
-            code=code,
-            code_hash=_code_hash(code),
+            name=name, file_path=rel_path, line_start=lineno + 1, line_end=end_line + 1,
+            size_lines=end_line - lineno + 1, parameters=params, is_async=is_async,
+            is_arrow=False, is_exported=is_exported, is_react_component=is_component,
+            complexity=_count_complexity(code), nesting_depth=_count_nesting(code),
+            code=code, code_hash=_code_hash(code),
             kind="component" if is_component else "function",
         ))
+    return functions
 
-    # ── Arrow functions ──────────────────────────────────────────────
+
+def _extract_arrow_functions(
+    source: str, lines: List[str], rel_path: str, has_jsx: bool, seen_lines: set
+) -> List[JSFunction]:
+    functions = []
     for m in _RE_ARROW.finditer(source):
         lineno = source[:m.start()].count("\n")
         if lineno in seen_lines:
@@ -439,24 +432,20 @@ def _extract_functions(source: str, lines: List[str],
         is_component = has_jsx and name[0:1].isupper() and bool(_RE_JSX.search(code))
 
         functions.append(JSFunction(
-            name=name,
-            file_path=rel_path,
-            line_start=lineno + 1,
-            line_end=end_line + 1,
-            size_lines=end_line - lineno + 1,
-            parameters=params,
-            is_async=is_async,
-            is_arrow=True,
-            is_exported=is_exported,
-            is_react_component=is_component,
-            complexity=_count_complexity(code),
-            nesting_depth=_count_nesting(code),
-            code=code,
-            code_hash=_code_hash(code),
+            name=name, file_path=rel_path, line_start=lineno + 1, line_end=end_line + 1,
+            size_lines=end_line - lineno + 1, parameters=params, is_async=is_async,
+            is_arrow=True, is_exported=is_exported, is_react_component=is_component,
+            complexity=_count_complexity(code), nesting_depth=_count_nesting(code),
+            code=code, code_hash=_code_hash(code),
             kind="component" if is_component else "arrow",
         ))
+    return functions
 
-    # ── Class methods ────────────────────────────────────────────────
+
+def _extract_class_methods(
+    source: str, lines: List[str], rel_path: str, seen_lines: set
+) -> List[JSFunction]:
+    functions = []
     for m in _RE_METHOD.finditer(source):
         lineno = source[:m.start()].count("\n")
         if lineno in seen_lines:
@@ -474,22 +463,24 @@ def _extract_functions(source: str, lines: List[str],
         code = "\n".join(lines[lineno:end_line + 1])
 
         functions.append(JSFunction(
-            name=name,
-            file_path=rel_path,
-            line_start=lineno + 1,
-            line_end=end_line + 1,
-            size_lines=end_line - lineno + 1,
-            parameters=params,
-            is_async=is_async,
-            is_arrow=False,
-            is_exported=False,
-            is_react_component=False,
-            complexity=_count_complexity(code),
-            nesting_depth=_count_nesting(code),
-            code=code,
-            code_hash=_code_hash(code),
-            kind="method",
+            name=name, file_path=rel_path, line_start=lineno + 1, line_end=end_line + 1,
+            size_lines=end_line - lineno + 1, parameters=params, is_async=is_async,
+            is_arrow=False, is_exported=False, is_react_component=False,
+            complexity=_count_complexity(code), nesting_depth=_count_nesting(code),
+            code=code, code_hash=_code_hash(code), kind="method",
         ))
+    return functions
+
+
+def _extract_functions(source: str, lines: List[str],
+                       rel_path: str, has_jsx: bool) -> List[JSFunction]:
+    """Extract all function-like constructs from JS/TS source."""
+    functions: List[JSFunction] = []
+    seen_lines: set = set()
+
+    functions.extend(_extract_func_declarations(source, lines, rel_path, has_jsx, seen_lines))
+    functions.extend(_extract_arrow_functions(source, lines, rel_path, has_jsx, seen_lines))
+    functions.extend(_extract_class_methods(source, lines, rel_path, seen_lines))
 
     return functions
 

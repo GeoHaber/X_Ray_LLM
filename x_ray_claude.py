@@ -51,7 +51,7 @@ from Core.scan_phases import (
     collect_reports,
 )
 
-from Core.utils import setup_logger
+from Core.utils import setup_logger, check_trial_license as _check_trial_license
 
 setup_logger()  # configure logging once — no duplicate basicConfig
 
@@ -680,20 +680,59 @@ def _run_rustify_exe(root: Path, args: argparse.Namespace) -> dict:
     return {"rustify_exe": report.to_dict()}
 
 
+from dataclasses import dataclass
+
+@dataclass
+class GenTestContext:
+    args: argparse.Namespace
+    root: Path
+    functions: list
+    classes: list
+    all_issues: list
+    web_detector: Any
+    health_analyzer: Any
+
+def _run_gen_tests_phase(ctx: GenTestContext):
+    """Run AI test generation phase if requested."""
+    if not getattr(ctx.args, "gen_tests", False):
+        return
+
+    from Core.scan_phases import run_test_gen_phase
+
+    # Collect JS analyses from web_detector if present
+    js_analyses = None
+    if ctx.web_detector and hasattr(ctx.web_detector, "_analyses"):
+        js_analyses = ctx.web_detector._analyses
+    health_checks = None
+    if ctx.health_analyzer and hasattr(ctx.health_analyzer, "report") and ctx.health_analyzer.report:
+        health_checks = ctx.health_analyzer.report.checks
+    test_output = Path(getattr(ctx.args, "test_output", ".")).resolve()
+
+    test_report = run_test_gen_phase(
+        ctx.root,
+        functions=ctx.functions,
+        classes=ctx.classes,
+        smells=ctx.all_issues,
+        js_analyses=js_analyses,
+        health_checks=health_checks,
+        output_dir=test_output,
+    )
+
+    bridge = get_bridge()
+    bridge.log(f"\n  {'='*60}")
+    bridge.log("  🧪 MONKEY TESTS GENERATED")
+    bridge.log(f"     Files: {len(test_report.files_created)}")
+    bridge.log(f"     Tests: {test_report.total_tests}")
+    bridge.log(f"     Languages: {', '.join(test_report.languages)}")
+    bridge.log(f"     Output: {test_output}")
+    bridge.log(f"  {'='*60}")
+
+
 # collect_reports imported from Core.scan_phases
 
 
-async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
-    """Execute all requested scan phases and return the results dict."""
-    # ── Rustify modes ──
-    if args.rustify_exe:
-        return _run_rustify_exe(root, args)
-    if args.rustify:
-        return _run_rustify(root, args)
-
-    llm = _init_llm(args, root)
-    functions, classes, errors = _scan_codebase_phase(root, args)
-
+def _run_analysis_phases(args: argparse.Namespace, root: Path, functions: list, classes: list):
+    """Run all primary synchronous analysis phases."""
     all_issues = []
 
     detector, smells = _run_smell_phase(args, functions, classes)
@@ -710,53 +749,56 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
     sec_analyzer, sec_issues = _run_security_phase(args, root)
     all_issues.extend(sec_issues)
 
-    # ── New v7.0 phases ──
     web_detector = _run_web_phase(args, root)
     health_analyzer = _run_health_phase(args, root)
+
+    return all_issues, detector, finder, fmt_analyzer, format_issues, linter, lint_issues, sec_analyzer, sec_issues, web_detector, health_analyzer
+
+
+async def _run_async_enrichment(llm, detector, finder, functions):
+    """Run asynchronous LLM enrichment for smells and duplicates."""
+    if not llm or not (detector or finder):
+        return
+
+    tasks = []
+    if detector:
+        tasks.append(detector.enrich_with_llm_async(llm))
+    if finder:
+        from Analysis.duplicates import enrich_with_llm_async as _dup_enrich
+        tasks.append(_dup_enrich(finder, llm, functions))
+    if tasks:
+        await asyncio.gather(*tasks)
+
+
+async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
+    """Execute all requested scan phases and return the results dict."""
+    # ── Rustify modes ──
+    if args.rustify_exe:
+        return _run_rustify_exe(root, args)
+    if args.rustify:
+        return _run_rustify(root, args)
+
+    llm = _init_llm(args, root)
+    functions, classes, errors = _scan_codebase_phase(root, args)
+
+    # ── Synchronous Phases ──
+    (
+        all_issues, detector, finder, fmt_analyzer, format_issues,
+        linter, lint_issues, sec_analyzer, sec_issues,
+        web_detector, health_analyzer
+    ) = _run_analysis_phases(args, root, functions, classes)
 
     # ── Auto-fix smells (--fix-smells) ──
     _run_fix_smells_phase(args, root)
 
     # ── Test generation (--gen-tests) ──
-    if getattr(args, "gen_tests", False):
-        from Core.scan_phases import run_test_gen_phase
-        # Collect JS analyses from web_detector if present
-        js_analyses = None
-        if web_detector and hasattr(web_detector, "_analyses"):
-            js_analyses = web_detector._analyses
-        health_checks = None
-        if health_analyzer and hasattr(health_analyzer, "report") and health_analyzer.report:
-            health_checks = health_analyzer.report.checks
-        test_output = Path(getattr(args, "test_output", ".")).resolve()
-        test_report = run_test_gen_phase(
-            root,
-            functions=functions,
-            classes=classes,
-            smells=all_issues,
-            js_analyses=js_analyses,
-            health_checks=health_checks,
-            output_dir=test_output,
-        )
-        bridge = get_bridge()
-        bridge.log(f"\n  {'='*60}")
-        bridge.log(f"  🧪 MONKEY TESTS GENERATED")
-        bridge.log(f"     Files: {len(test_report.files_created)}")
-        bridge.log(f"     Tests: {test_report.total_tests}")
-        bridge.log(f"     Languages: {', '.join(test_report.languages)}")
-        bridge.log(f"     Output: {test_output}")
-        bridge.log(f"  {'='*60}")
+    _run_gen_tests_phase(GenTestContext(
+        args=args, root=root, functions=functions, classes=classes,
+        all_issues=all_issues, web_detector=web_detector, health_analyzer=health_analyzer
+    ))
 
     # ── Async LLM Enrichment (Parallel) ──
-    if llm and (detector or finder):
-        tasks = []
-        if detector:
-            tasks.append(detector.enrich_with_llm_async(llm))
-        if finder:
-            from Analysis.duplicates import enrich_with_llm_async as _dup_enrich
-
-            tasks.append(_dup_enrich(finder, llm, functions))
-        if tasks:
-            await asyncio.gather(*tasks)
+    await _run_async_enrichment(llm, detector, finder, functions)
 
     from Core.scan_phases import AnalysisComponents
 

@@ -449,36 +449,75 @@ def _collect_code_map(functions):
     return code_map
 
 
-def _run_scan(root: Path, modes: Dict[str, bool],
-              exclude: List[str], thresholds: Dict[str, int],
-              progress_cb=None,
-              page: "ft.Page | None" = None,
-              log_list: "ft.ListView | None" = None) -> Dict[str, Any]:
-    """Run the full scan pipeline.
+def _run_flet_ast_parsing(
+    root: Path, exclude: List[str], progress_cb: Optional[Callable], t0: float
+) -> tuple[List[FunctionRecord], List[ClassRecord], List[str], int]:
+    parse_cb = _make_parse_progress_cb(progress_cb, t0)
+    return _scan_codebase(root, exclude, progress_cb=parse_cb)
 
-    progress_cb(frac, label, files_done, total_files, eta_secs)
 
-    When ``page`` is provided, a :class:`FletBridge` is registered
-    before the scan so all library log/status calls are routed to the
-    Flet UI instead of stdout.
-    """
+from dataclasses import dataclass
+
+@dataclass
+class FletScanContext:
+    root: Path
+    modes: Dict[str, bool]
+    exclude: List[str]
+    thresholds: Dict[str, int]
+    progress_cb: Optional[Callable] = None
+    page: Optional["ft.Page"] = None
+    log_list: Optional["ft.ListView"] = None
+
+
+def _run_flet_phases(
+    ctx: FletScanContext,
+    functions: List[FunctionRecord],
+    classes: List[ClassRecord],
+    results: Dict[str, Any],
+) -> None:
+    step, total_steps = 0, sum(1 for v in ctx.modes.values() if v)
+
+    _phases = [
+        ("smells", "Detecting code smells…",
+         lambda: _phase_smells(functions, classes, ctx.thresholds, results)),
+        ("duplicates", "Finding duplicates…",
+         lambda: _phase_duplicates(functions, results)),
+        ("lint", "Running Ruff lint…",
+         lambda: _phase_lint(ctx.root, ctx.exclude, results)),
+        ("security", "Running Bandit security…",
+         lambda: _phase_security(ctx.root, ctx.exclude, results)),
+        ("rustify", "Scoring Rust candidates…",
+         lambda: _phase_rustify(functions, results)),
+        ("ui_compat", "Checking UI API compatibility…",
+         lambda: _phase_ui_compat(ctx.root, ctx.exclude, results)),
+    ]
+    for mode_key, label, runner in _phases:
+        if not ctx.modes.get(mode_key):
+            continue
+        step += 1
+        if ctx.progress_cb:
+            ctx.progress_cb(0.4 + (step / max(total_steps, 1)) * 0.55, label, 0, 0, -1)
+        runner()
+
+
+def _run_scan(ctx: FletScanContext) -> Dict[str, Any]:
+    """Run the full scan pipeline."""
     from Core.ui_bridge import PrintBridge
 
-    # Register the Flet bridge so all scan/analysis modules route output to UI
-    if page is not None:
-        set_bridge(FletBridge(page, log_list=log_list, progress_cb=progress_cb))
+    if ctx.page is not None:
+        set_bridge(FletBridge(ctx.page, log_list=ctx.log_list, progress_cb=ctx.progress_cb))
 
     try:
         results: Dict[str, Any] = {"meta": {}}
         t0 = time.time()
 
-        need_ast = modes.get("smells") or modes.get("duplicates") or modes.get("rustify")
+        need_ast = ctx.modes.get("smells") or ctx.modes.get("duplicates") or ctx.modes.get("rustify")
         functions, classes, errors, file_count = [], [], [], 0
 
         if need_ast:
-            parse_cb = _make_parse_progress_cb(progress_cb, time.time())
-            functions, classes, errors, file_count = _scan_codebase(
-                root, exclude, progress_cb=parse_cb)
+            functions, classes, errors, file_count = _run_flet_ast_parsing(
+                ctx.root, ctx.exclude, ctx.progress_cb, t0
+            )
 
         results["meta"].update(files=file_count, functions=len(functions),
                                classes=len(classes), errors=len(errors),
@@ -488,39 +527,19 @@ def _run_scan(root: Path, modes: Dict[str, bool],
             results["_code_map"] = _collect_code_map(functions)
             results["_functions"] = functions
 
-        step, total_steps = 0, sum(1 for v in modes.values() if v)
-
-        _phases = [
-            ("smells", "Detecting code smells…",
-             lambda: _phase_smells(functions, classes, thresholds, results)),
-            ("duplicates", "Finding duplicates…",
-             lambda: _phase_duplicates(functions, results)),
-            ("lint", "Running Ruff lint…",
-             lambda: _phase_lint(root, exclude, results)),
-            ("security", "Running Bandit security…",
-             lambda: _phase_security(root, exclude, results)),
-            ("rustify", "Scoring Rust candidates…",
-             lambda: _phase_rustify(functions, results)),
-            ("ui_compat", "Checking UI API compatibility…",
-             lambda: _phase_ui_compat(root, exclude, results)),
-        ]
-        for mode_key, label, runner in _phases:
-            if not modes.get(mode_key):
-                continue
-            step += 1
-            if progress_cb:
-                progress_cb(0.4 + (step / max(total_steps, 1)) * 0.55, label, 0, 0, -1)
-            runner()
+        _run_flet_phases(
+            ctx, functions, classes, results
+        )
 
         results["grade"] = compute_grade(results)
         results["meta"]["duration"] = round(time.time() - t0, 2)
-        if progress_cb:
-            progress_cb(1.0, "Done!", 0, 0, 0)
         return results
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
     finally:
-        # Always restore the default bridge after the scan completes
-        # so subsequent non-scan operations aren't affected
-        if page is not None:
+        if ctx.page is not None:
             set_bridge(PrintBridge())
 
 
@@ -1369,6 +1388,31 @@ def _build_graph_canvas(graph: SmartGraph) -> ft.Control:
     return cv.Canvas(on_resize=_paint, expand=True)
 
 
+def _build_graph_metrics(graph) -> ft.Row:
+    """Build the top metrics row for the graph tab."""
+    healthy = sum(1 for n in graph.nodes if n.get("health") == "healthy")
+    warning = sum(1 for n in graph.nodes if n.get("health") == "warning")
+    critical = sum(1 for n in graph.nodes if n.get("health") == "critical")
+
+    return ft.Row([
+        metric_tile("🟢", healthy, "Healthy", ft.Colors.GREEN_400),
+        metric_tile("🟡", warning, "Warning", ft.Colors.AMBER_400),
+        metric_tile("🔴", critical, "Critical", ft.Colors.RED_400),
+        metric_tile("🔗", len(graph.edges), "Dup Links", TH.accent),
+    ], spacing=8)
+
+
+def _build_graph_group_chart(graph) -> ft.Control:
+    """Build the 'per-group breakdown' bar chart for the graph tab."""
+    group_counts = Counter(
+        str(Path(n.get("group", ".")).name) or "root"
+        for n in graph.nodes)
+    top_groups = group_counts.most_common(10)
+    if not top_groups:
+        return ft.Container()
+    return bar_chart([(g, c, TH.accent) for g, c in top_groups])
+
+
 def _build_graph_tab(results: Dict[str, Any],
                      page: ft.Page) -> ft.Control:
     """Build the codebase health graph tab with interactive HTML viewer."""
@@ -1383,16 +1427,7 @@ def _build_graph_tab(results: Dict[str, Any],
     graph = SmartGraph()
     graph.build(functions, smells, dup_groups or [], Path("."))
 
-    healthy = sum(1 for n in graph.nodes if n.get("health") == "healthy")
-    warning = sum(1 for n in graph.nodes if n.get("health") == "warning")
-    critical = sum(1 for n in graph.nodes if n.get("health") == "critical")
-
-    metrics = ft.Row([
-        metric_tile("🟢", healthy, "Healthy", ft.Colors.GREEN_400),
-        metric_tile("🟡", warning, "Warning", ft.Colors.AMBER_400),
-        metric_tile("🔴", critical, "Critical", ft.Colors.RED_400),
-        metric_tile("🔗", len(graph.edges), "Dup Links", TH.accent),
-    ], spacing=8)
+    metrics = _build_graph_metrics(graph)
 
     # Write full interactive HTML graph
     html_content = _generate_graph_html(graph)
@@ -1404,14 +1439,7 @@ def _build_graph_tab(results: Dict[str, Any],
     def _open_graph(_e):
         page.launch_url(graph_file.as_uri())
 
-    # Per-group breakdown
-    group_counts = Counter(
-        str(Path(n.get("group", ".")).name) or "root"
-        for n in graph.nodes)
-    top_groups = group_counts.most_common(10)
-    group_chart = bar_chart([
-        (g, c, TH.accent) for g, c in top_groups
-    ]) if top_groups else ft.Container()
+    group_chart = _build_graph_group_chart(graph)
 
     # Canvas preview
     canvas_preview = ft.Container(
@@ -1446,9 +1474,9 @@ def _build_graph_tab(results: Dict[str, Any],
         ft.Divider(color=TH.divider, height=12),
         canvas_preview,
         ft.Divider(color=TH.divider, height=12),
-        section_title("Functions by Module", "📂"),
+        section_title("Components", "📂"),
         group_chart,
-    ], spacing=10, expand=True)
+    ], spacing=10, expand=True, scroll=ft.ScrollMode.ADAPTIVE)
 
 
 def _run_nexus_pipeline(results, page, status_text, progress_bar, trans_results_col):
@@ -2286,14 +2314,7 @@ def _make_progress_callback(page, progress, scan_t0):
     return progress_cb
 
 
-async def _start_scan_handler(page, state, progress, main_content,
-                              build_dashboard_fn):
-    """Run scan with rich progress, then show dashboard."""
-    if not state["root_path"]:
-        _show_snack(page, t("select_dir_first"), bgcolor=ft.Colors.RED_400)
-        return
-
-    # Activate progress UI
+def _prepare_scan_ui(page, state, progress, main_content):
     progress["bar"].visible = True
     progress["bar"].value = 0
     progress["ring"].visible = True
@@ -2301,7 +2322,6 @@ async def _start_scan_handler(page, state, progress, main_content,
     progress["detail"].value = ""
     progress["eta"].value = ""
 
-    # Show compact status in sidebar
     sidebar_status = state.get("_sidebar_status")
     if sidebar_status:
         sidebar_status.content = ft.Row([
@@ -2314,17 +2334,46 @@ async def _start_scan_handler(page, state, progress, main_content,
     main_content.controls = [_build_scan_progress_screen(progress)]
     page.update()
 
+
+def _finalize_scan_ui(page, state, progress, main_content, results):
+    results["_scan_path"] = state["root_path"]
+    state["results"] = results
+    _reset_progress_widgets(progress)
+
+    sidebar_status = state.get("_sidebar_status")
+    if sidebar_status:
+        sidebar_status.content = None
+
+    main_content.controls = [_build_scan_complete_screen(results)]
+    page.update()
+
+
+async def _start_scan_handler(page, state, progress, main_content,
+                              build_dashboard_fn):
+    """Run scan with rich progress, then show dashboard."""
+    if not state["root_path"]:
+        _show_snack(page, t("select_dir_first"), bgcolor=ft.Colors.RED_400)
+        return
+
+    _prepare_scan_ui(page, state, progress, main_content)
+
     scan_t0 = time.time()
     progress_cb = _make_progress_callback(page, progress, scan_t0)
 
     try:
         loop = asyncio.get_event_loop()
+        ctx = FletScanContext(
+            root=Path(state["root_path"]),
+            modes=state["modes"],
+            exclude=state["exclude"],
+            thresholds=state["thresholds"],
+            progress_cb=progress_cb,
+            page=page,
+            log_list=state.get("log_list")
+        )
         results = await loop.run_in_executor(
             None,
-            lambda: _run_scan(
-                Path(state["root_path"]), state["modes"],
-                state["exclude"], state["thresholds"],
-                progress_cb=progress_cb))
+            lambda: _run_scan(ctx))
     except Exception as exc:
         _reset_progress_widgets(progress)
         sidebar_status = state.get("_sidebar_status")
@@ -2334,17 +2383,7 @@ async def _start_scan_handler(page, state, progress, main_content,
         page.update()
         return
 
-    results["_scan_path"] = state["root_path"]
-    state["results"] = results
-    _reset_progress_widgets(progress)
-
-    # Clear sidebar status
-    sidebar_status = state.get("_sidebar_status")
-    if sidebar_status:
-        sidebar_status.content = None
-
-    main_content.controls = [_build_scan_complete_screen(results)]
-    page.update()
+    _finalize_scan_ui(page, state, progress, main_content, results)
 
     await asyncio.sleep(0.8)
     build_dashboard_fn(results)
@@ -2642,12 +2681,10 @@ def _install_resize_handler(page, main_fn):
     page.on_resized = on_resize
 
 
-async def main(page: ft.Page):
-    """Flet application entry point."""
-    _setup_page(page)
+async def _setup_main_state(page: ft.Page):
+    """Initialize state and file picker for the main app."""
     state = _init_state(page)
 
-    # ── File picker ──────────────────────────────────────────────────────
     file_picker = ft.FilePicker()
     if not any(isinstance(s, ft.FilePicker) for s in page.services):
         page.services.append(file_picker)
@@ -2668,13 +2705,16 @@ async def main(page: ft.Page):
             path_text.color = TH.accent
             page.update()
 
-    # ── Widgets ──────────────────────────────────────────────────────────
+    return state, path_text, pick_directory
+
+
+def _build_main_ui(page: ft.Page, state: dict, path_text, pick_directory):
+    """Build the top-level Flet UI layout and wire up scan events."""
     mode_checks = _build_mode_checks(state)
     theme_icon, lang_dd = _build_theme_lang_controls(page, main)
     progress = _build_progress_widgets()
     main_content = ft.Column([], expand=True, scroll=ft.ScrollMode.AUTO)
 
-    # Lightweight sidebar scan indicator (separate from main progress)
     sidebar_status = ft.Container(content=None)
     state["_sidebar_status"] = sidebar_status
 
@@ -2694,6 +2734,17 @@ async def main(page: ft.Page):
 
     layout, _narrow = _build_responsive_layout(
         page, sidebar, main_content, theme_icon)
+
+    return layout, main_content, build_dashboard
+
+
+async def main(page: ft.Page):
+    """Flet application entry point."""
+    _setup_page(page)
+    state, path_text, pick_directory = await _setup_main_state(page)
+
+    layout, main_content, build_dashboard = _build_main_ui(
+        page, state, path_text, pick_directory)
 
     if state.get("results"):
         build_dashboard(state["results"])

@@ -85,6 +85,41 @@ def _print_banner(port: int):
     print("  Press Ctrl+C to stop.\n")
 
 
+def _launch_streamlit(port: int, ui_script: Path):
+    """Launch Streamlit programmatically with correct configuration."""
+    # Set config via environment variables (most reliable method)
+    os.environ["STREAMLIT_SERVER_PORT"] = str(port)
+    os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
+    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
+    os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+    os.environ["STREAMLIT_GLOBAL_DEVELOPMENT_MODE"] = "false"
+    os.environ["STREAMLIT_CLIENT_TOOLBAR_MODE"] = "viewer"
+
+    from streamlit import config
+
+    config.set_option("server.port", port)
+    config.set_option("server.headless", True)
+    config.set_option("server.fileWatcherType", "none")
+    config.set_option("browser.gatherUsageStats", False)
+    config.set_option("global.developmentMode", False)
+    config.set_option("client.toolbarMode", "viewer")
+
+    from streamlit.web.bootstrap import run as streamlit_run
+
+    try:
+        streamlit_run(
+            main_script_path=str(ui_script),
+            is_hello=False,
+            args=[],
+            flag_options={},
+        )
+    except KeyboardInterrupt:
+        print("\n  X-Ray server stopped.")
+    except Exception as e:
+        print(f"\n  ERROR: {e}")
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="X-Ray Standalone Web App")
     parser.add_argument(
@@ -118,38 +153,7 @@ def main():
         t = threading.Thread(target=_open_browser_delayed, args=(url, 3.0), daemon=True)
         t.start()
 
-    # Launch Streamlit programmatically
-    # Set config via environment variables (most reliable method)
-    os.environ["STREAMLIT_SERVER_PORT"] = str(port)
-    os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
-    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
-    os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-    os.environ["STREAMLIT_GLOBAL_DEVELOPMENT_MODE"] = "false"
-    os.environ["STREAMLIT_CLIENT_TOOLBAR_MODE"] = "viewer"
-
-    from streamlit import config
-
-    config.set_option("server.port", port)
-    config.set_option("server.headless", True)
-    config.set_option("server.fileWatcherType", "none")
-    config.set_option("browser.gatherUsageStats", False)
-    config.set_option("global.developmentMode", False)
-    config.set_option("client.toolbarMode", "viewer")
-
-    from streamlit.web.bootstrap import run as streamlit_run
-
-    try:
-        streamlit_run(
-            main_script_path=str(ui_script),
-            is_hello=False,
-            args=[],
-            flag_options={},
-        )
-    except KeyboardInterrupt:
-        print("\n  X-Ray server stopped.")
-    except Exception as e:
-        print(f"\n  ERROR: {e}")
-        sys.exit(1)
+    _launch_streamlit(port, ui_script)
 
 
 if __name__ == "__main__":

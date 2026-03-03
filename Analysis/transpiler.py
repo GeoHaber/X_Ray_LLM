@@ -452,53 +452,76 @@ class IRBuilder(ast.NodeVisitor):
         "open":      'std::fs::read_to_string({arg0}).expect("Failed to read file")',
     }
 
+    _BUILTIN_DISPATCH = {
+        "print":      lambda s, a: s._handle_builtin_print(a),
+        "range":      lambda s, a: s._handle_builtin_range(a),
+        "sorted":     lambda s, a: s._handle_builtin_sorted(a),
+        "list":       lambda s, a: s._handle_builtin_collection("list", a),
+        "dict":       lambda s, a: s._handle_builtin_collection("dict", a),
+        "set":        lambda s, a: s._handle_builtin_collection("set", a),
+        "isinstance": lambda s, a: s._handle_builtin_isinstance(a),
+        "getattr":    lambda s, a: s._handle_builtin_getattr(a),
+        "min":        lambda s, a: f"{a[0]}.min({a[1]})" if len(a) > 1 else a[0],
+        "max":        lambda s, a: f"{a[0]}.max({a[1]})" if len(a) > 1 else a[0],
+        "zip":        lambda s, a: f"{a[0]}.into_iter().zip({a[1]}.into_iter())",
+        "Path":       lambda s, a: "PathBuf::new()" if not a else f"PathBuf::from({a[0]})",
+    }
+
     def _expr_call_builtin(self, node: ast.Call) -> str:
         func_name = self._parse_expr(node.func)
         args      = [self._parse_expr(a) for a in node.args]
-        arg0      = args[0] if args else ""
-        arg1      = args[1] if len(args) > 1 else ""
-
+        
+        # 1. Map directly to template
         if tmpl := self._BUILTIN_MAP.get(func_name):
-            return tmpl.format(arg0=arg0, arg1=arg1, args=", ".join(args))
+            return tmpl.format(arg0=args[0] if args else "", 
+                               arg1=args[1] if len(args) > 1 else "", 
+                               args=", ".join(args))
 
-        if func_name == "min": return f"{arg0}.min({arg1})"
-        if func_name == "max": return f"{arg0}.max({arg1})"
-        if func_name == "zip": return f"{arg0}.into_iter().zip({arg1}.into_iter())"
-
-        if func_name == "print":
-            placeholders = ", ".join(['"{}"'] * len(args))
-            return f'println!("{placeholders}", {", ".join(args)})'
-
-        if func_name == "range":
-            if len(args) == 1: return f"(0..{arg0})"
-            if len(args) == 2: return f"({arg0}..{arg1})"
-            return f"({arg0}..{arg1}).step_by({args[2]} as usize)"
-
-        if func_name == "sorted":
-            self.emitter.emit(f"/* TODO: proper sorted({arg0}) */")
-            return f"{{ let mut temp = {arg0}; temp.sort(); temp }}" if arg0 else "vec![]"
-
-        if func_name == "list":
-            return "Vec::new()" if not args else f"{arg0}.into_iter().collect::<Vec<_>>()"
-        if func_name == "dict":
-            self.emitter.require_import("std::collections::HashMap")
-            return "HashMap::new()"
-        if func_name == "set":
-            self.emitter.require_import("std::collections::HashSet")
-            return "HashSet::new()" if not args else f"{arg0}.into_iter().collect::<HashSet<_>>()"
-
-        if func_name == "isinstance" and len(args) == 2:
-            typ = args[1].replace("ast.", "")
-            return "true" if typ == "int" else f"matches!({arg0}, RustNode::{typ}(_))"
-
-        if func_name == "getattr":
-            default = args[2] if len(args) == 3 else "None"
-            return f"{arg0}.get_{arg1.replace(chr(34), '')}().unwrap_or({default})"
-
-        if func_name == "Path":
-            return "PathBuf::new()" if not args else f"PathBuf::from({arg0})"
+        # 2. Dispatch to specific handlers
+        if handler := self._BUILTIN_DISPATCH.get(func_name):
+            return handler(self, args)
 
         return f"{func_name}({', '.join(args)})"
+
+    # --- Builtin Specific Handlers ---
+
+    def _handle_builtin_print(self, args: List[str]) -> str:
+        placeholders = ", ".join(['"{}"'] * len(args))
+        return f'println!("{placeholders}", {", ".join(args)})'
+
+    def _handle_builtin_range(self, args: List[str]) -> str:
+        if len(args) == 1: return f"(0..{args[0]})"
+        if len(args) == 2: return f"({args[0]}..{args[1]})"
+        return f"({args[0]}..{args[1]}).step_by({args[2]} as usize)"
+
+    def _handle_builtin_sorted(self, args: List[str]) -> str:
+        arg0 = args[0] if args else "vec![]"
+        self.emitter.emit(f"/* TODO: proper sorted({arg0}) */")
+        return f"{{ let mut temp = {arg0}; temp.sort(); temp }}"
+
+    def _handle_builtin_collection(self, kind: str, args: List[str]) -> str:
+        arg0 = args[0] if args else ""
+        if kind == "list":
+            return "Vec::new()" if not args else f"{arg0}.into_iter().collect::<Vec<_>>()"
+        if kind == "dict":
+            self.emitter.require_import("std::collections::HashMap")
+            return "HashMap::new()"
+        if kind == "set":
+            self.emitter.require_import("std::collections::HashSet")
+            return "HashSet::new()" if not args else f"{arg0}.into_iter().collect::<HashSet<_>>()"
+        return ""
+
+    def _handle_builtin_isinstance(self, args: List[str]) -> str:
+        if len(args) != 2: return "false"
+        arg0 = args[0]
+        typ = args[1].replace("ast.", "")
+        return "true" if typ == "int" else f"matches!({arg0}, RustNode::{typ}(_))"
+
+    def _handle_builtin_getattr(self, args: List[str]) -> str:
+        arg0 = args[0]
+        arg1 = args[1]
+        default = args[2] if len(args) == 3 else "None"
+        return f"{arg0}.get_{arg1.replace(chr(34), '')}().unwrap_or({default})"
 
     # ── attribute constants (sys.argv, logging.INFO, …) ─────────────────────
 
@@ -902,56 +925,7 @@ class IRBuilder(ast.NodeVisitor):
             if name in ("self", "cls"):
                 params.append("&self")
                 continue
-            # Simplistic type inference mapping
-            rtype = "String"
-            if arg.annotation:
-                if isinstance(arg.annotation, ast.Name):
-                    py_t = arg.annotation.id
-                    if py_t == "int": rtype = "i64"
-                    elif py_t == "float": rtype = "f64"
-                    elif py_t == "bool": rtype = "bool"
-                    elif py_t == "str": rtype = "String"
-                    elif py_t == "list": rtype = "Vec<String>"
-                    elif py_t == "dict": 
-                        rtype = "HashMap<String, String>"
-                        self.emitter.require_import("std::collections::HashMap")
-                    else: rtype = py_t # Custom class pass-through
-                elif isinstance(arg.annotation, ast.Constant) and isinstance(arg.annotation.value, str):
-                    rtype = arg.annotation.value # Handle string forward refs like "RustEmitter"
-                elif isinstance(arg.annotation, ast.Subscript):
-                    # Basic List[...] mapping
-                    if getattr(arg.annotation.value, "id", "") in ("List", "list"):
-                        inner = getattr(arg.annotation.slice, "id", "String")
-                        if inner == "int": inner = "i64"
-                        elif inner == "float": inner = "f64"
-                        elif inner == "bool": inner = "bool"
-                        elif inner == "str": inner = "String"
-                        rtype = f"Vec<{inner}>"
-                    elif getattr(arg.annotation.value, "id", "") in ("Dict", "dict"):
-                        self.emitter.require_import("std::collections::HashMap")
-                        if isinstance(arg.annotation.slice, ast.Tuple) and len(arg.annotation.slice.elts) == 2:
-                            k_id = getattr(arg.annotation.slice.elts[0], "id", "String")
-                            v_id = getattr(arg.annotation.slice.elts[1], "id", "String")
-                            map_t = lambda t: {"int": "i64", "float": "f64", "bool": "bool", "str": "String"}.get(t, t)
-                            rtype = f"HashMap<{map_t(k_id)}, {map_t(v_id)}>"
-                        else:
-                            rtype = "HashMap<String, String>"
-            else:
-                # Name-based heuristic type inference for untyped parameters
-                raw = arg.arg
-                if raw in ("i", "j", "k", "n", "m"):
-                    rtype = "i64"
-                elif raw in ("x", "y", "z"):
-                    rtype = "f64"
-                elif raw in ("count", "num", "index", "size", "length", "offset", "depth", "width", "height"):
-                    rtype = "i64"
-                elif raw in ("timeout", "delay", "rate", "ratio", "weight", "score", "threshold"):
-                    rtype = "f64"
-                elif raw in ("items", "elements", "values", "results", "entries", "records", "rows"):
-                    rtype = "Vec<String>"
-                elif raw in ("config", "settings", "options", "kwargs", "params", "metadata"):
-                    self.emitter.require_import("std::collections::HashMap")
-                    rtype = "HashMap<String, String>"
+            rtype = self._resolve_rust_type(arg.annotation, arg.arg)
             params.append(f"{name}: {rtype}")
             
         if node.args.vararg:
@@ -960,98 +934,81 @@ class IRBuilder(ast.NodeVisitor):
             self.emitter.require_import("std::collections::HashMap")
             params.append(f"{safe_name(node.args.kwarg.arg)}: HashMap<String, String>")
             
-        ret_type = "String"
-        if getattr(node, "returns", None):
-            if isinstance(node.returns, ast.Name):
-                py_t = node.returns.id
-                if py_t == "int": ret_type = "i64"
-                elif py_t == "float": ret_type = "f64"
-                elif py_t == "bool": ret_type = "bool"
-                elif py_t == "str": ret_type = "String"
-                elif py_t == "list": ret_type = "Vec<String>"
-                elif py_t == "dict": 
-                    ret_type = "HashMap<String, String>"
-                    self.emitter.require_import("std::collections::HashMap")
-                elif py_t == "None": ret_type = "()"
-                else: ret_type = py_t
-            elif isinstance(node.returns, ast.Constant) and isinstance(node.returns.value, str):
-                ret_type = node.returns.value
-            elif isinstance(node.returns, ast.Subscript):
-                sub_name = getattr(node.returns.value, "id", "")
-                if sub_name in ("List", "list"):
-                    inner = getattr(node.returns.slice, "id", "String")
-                    if inner == "int": inner = "i64"
-                    elif inner == "float": inner = "f64"
-                    elif inner == "bool": inner = "bool"
-                    elif inner == "str": inner = "String"
-                    ret_type = f"Vec<{inner}>"
-                elif sub_name in ("Dict", "dict"):
-                    self.emitter.require_import("std::collections::HashMap")
-                    if isinstance(node.returns.slice, ast.Tuple) and len(node.returns.slice.elts) == 2:
-                        k_id = getattr(node.returns.slice.elts[0], "id", "String")
-                        v_id = getattr(node.returns.slice.elts[1], "id", "String")
-                        map_t = lambda t: {"int": "i64", "float": "f64", "bool": "bool", "str": "String"}.get(t, t)
-                        ret_type = f"HashMap<{map_t(k_id)}, {map_t(v_id)}>"
-                    else:
-                        ret_type = "HashMap<String, String>"
-                elif sub_name == "Optional":
-                    inner_t = "String"
-                    if isinstance(node.returns.slice, ast.Name):
-                        py_inner = node.returns.slice.id
-                        if py_inner == "int": inner_t = "i64"
-                        elif py_inner == "float": inner_t = "f64"
-                        elif py_inner == "bool": inner_t = "bool"
-                        elif py_inner == "str": inner_t = "String"
-                        else: inner_t = py_inner
-                    ret_type = f"Option<{inner_t}>"
-        
-        # Infer return type from param types when no annotation given
-        if ret_type == "String" and not getattr(node, "returns", None):
-            param_types = [p.split(": ")[1] if ": " in p else "" for p in params]
-            param_types = [t for t in param_types if t]  # filter empty
-            if param_types:
-                if all(t == "f64" for t in param_types):
-                    ret_type = "f64"
-                elif all(t == "i64" for t in param_types):
-                    ret_type = "i64"
-                elif all(t == "bool" for t in param_types):
-                    ret_type = "bool"
-        
-        body = self.parse_body(node.body)
-        
-        # Detect void functions: no return statements with values -> ()
-        def _has_return_value(nodes):
-            for n in nodes:
-                if isinstance(n, RustReturn) and n.value is not None:
-                    return True
-                if isinstance(n, RustIf):
-                    if _has_return_value(n.body) or _has_return_value(n.orelse):
-                        return True
-                if isinstance(n, RustFor):
-                    if _has_return_value(n.body):
-                        return True
-                if isinstance(n, RustBlock):
-                    if _has_return_value(n.body):
-                        return True
-            return False
-        
-        if not getattr(node, "returns", None) and not _has_return_value(body):
-            ret_type = "()"
-        
-        is_async = isinstance(node, ast.AsyncFunctionDef)
-        
-        # Post-process: wrap return values in Some() for Option<T> return types
-        if ret_type.startswith("Option<"):
-            self._wrap_returns_in_some(body)
-        
-        return RustFunction(
+        ret_type = self._resolve_rust_type(getattr(node, "returns", None), "RET")
+            
+        # stage IR function
+        fn = RustFunction(
             name=safe_name(node.name),
             params=params,
             return_type=ret_type,
-            body=body,
-            is_async=is_async,
-            docstring=f"Transpiled from {source_info}" if source_info else None
+            body=self.parse_body(node.body),
+            is_async=isinstance(node, ast.AsyncFunctionDef),
+            docstring=ast.get_docstring(node)
         )
+        
+        # recursive return-wrap for Option if needed
+        if ret_type.startswith("Option<"):
+            self._wrap_returns_in_some(fn.body)
+            
+        return fn
+
+    # --- Type Inference Helpers ---
+
+    def _resolve_rust_type(self, ann: Optional[ast.AST], name_hint: str = "") -> str:
+        """Resolve a Python annotation or name-hint into a Rust type string."""
+        if ann is None:
+            return self._infer_by_name(name_hint)
+            
+        if isinstance(ann, ast.Name):
+            return self._map_basic_type(ann.id)
+            
+        if isinstance(ann, ast.Constant) and isinstance(ann.value, str):
+            return ann.value
+            
+        if isinstance(ann, ast.Subscript):
+            return self._handle_complex_type(ann)
+            
+        return "String"
+
+    def _map_basic_type(self, py_t: str) -> str:
+        type_map = {
+            "int": "i64", "float": "f64", "bool": "bool", "str": "String", 
+            "list": "Vec<String>", "None": "()"
+        }
+        if py_t == "dict":
+            self.emitter.require_import("std::collections::HashMap")
+            return "HashMap<String, String>"
+        return type_map.get(py_t, py_t)
+
+    def _handle_complex_type(self, ann: ast.Subscript) -> str:
+        base = getattr(ann.value, "id", "")
+        if base in ("List", "list"):
+            inner = getattr(ann.slice, "id", "String")
+            return f"Vec<{self._map_basic_type(inner)}>"
+            
+        if base in ("Dict", "dict"):
+            self.emitter.require_import("std::collections::HashMap")
+            if isinstance(ann.slice, ast.Tuple) and len(ann.slice.elts) == 2:
+                k = getattr(ann.slice.elts[0], "id", "String")
+                v = getattr(ann.slice.elts[1], "id", "String")
+                return f"HashMap<{self._map_basic_type(k)}, {self._map_basic_type(v)}>"
+            return "HashMap<String, String>"
+            
+        if base in ("Optional", "Union"): # Simplistic Option mapping
+            inner = getattr(ann.slice, "id", "String")
+            return f"Option<{self._map_basic_type(inner)}>"
+            
+        return "String"
+
+    def _infer_by_name(self, name: str) -> str:
+        """Fallback name-based type inference."""
+        if name in ("i", "j", "k", "n", "m", "count", "num", "index", "size", "length"): return "i64"
+        if name in ("x", "y", "z", "score", "rate", "threshold", "weight"): return "f64"
+        if name in ("items", "elements", "values", "results", "entries"): return "Vec<String>"
+        if name in ("config", "settings", "options", "kwargs", "params"):
+            self.emitter.require_import("std::collections::HashMap")
+            return "HashMap<String, String>"
+        return "String"
 
 # --- PUBLIC API EXPORTS ---
 
