@@ -1,0 +1,854 @@
+{
+  "grade": {
+    "score": 3.5,
+    "letter": "F",
+    "breakdown": {
+      "smells": {
+        "penalty": 7.9,
+        "critical": 10,
+        "warning": 68,
+        "info": 196
+      },
+      "duplicates": {
+        "penalty": 15,
+        "groups": 152
+      },
+      "lint": {
+        "penalty": 25,
+        "critical": 158,
+        "warning": 59,
+        "info": 60,
+        "fixable": 96
+      },
+      "security": {
+        "penalty": 0.4,
+        "critical": 0,
+        "warning": 0,
+        "info": 75
+      }
+    },
+    "tools_run": [
+      "X-Ray Smells",
+      "X-Ray Duplicates",
+      "Ruff Lint",
+      "Bandit Security",
+      "X-Ray Smells",
+      "X-Ray Duplicates",
+      "Ruff Lint",
+      "Bandit Security"
+    ]
+  },
+  "files": 221,
+  "functions": 5212,
+  "classes": 306,
+  "smells_summary": {
+    "total": 274,
+    "critical": 10,
+    "warning": 68,
+    "info": 196,
+    "by_category": {
+      "god-class": 3,
+      "long-function": 22,
+      "complex-function": 21,
+      "deep-nesting": 11,
+      "too-many-returns": 11,
+      "too-many-branches": 5,
+      "too-many-params": 4,
+      "large-class": 1,
+      "missing-docstring": 41,
+      "dataclass-candidate": 9,
+      "boolean-blindness": 41,
+      "complex-comprehension": 90,
+      "missing-class-docstring": 14,
+      "utility-class-name": 1
+    },
+    "worst_files": {
+      "_rustified_exe_build/test_rust_verify.py": 79,
+      "Analysis/transpiler.py": 24,
+      "Analysis/test_generator.py": 15,
+      "Analysis/auto_rustify.py": 10,
+      "Analysis/smells.py": 9,
+      "tests/test_xray_claude.py": 9,
+      "x_ray_flet.py": 8,
+      "Analysis/NexusMode/orchestrator.py": 7,
+      "Lang/js_ts_analyzer.py": 6,
+      "Analysis/ast_utils.py": 6
+    }
+  },
+  "duplicates_summary": {
+    "total_groups": 152,
+    "exact_duplicates": 7,
+    "structural_duplicates": 4,
+    "near_duplicates": 47,
+    "semantic_duplicates": 94,
+    "total_functions_involved": 1341,
+    "avg_similarity": 0.684
+  },
+  "lint_summary": {
+    "total": 277,
+    "critical": 158,
+    "warning": 59,
+    "info": 60,
+    "fixable": 96,
+    "by_rule": {
+      "F811": 131,
+      "F401": 47,
+      "F541": 30,
+      "F821": 27,
+      "E701": 21,
+      "invalid-syntax": 7,
+      "F841": 6,
+      "E402": 3,
+      "F601": 2,
+      "E401": 2,
+      "E741": 1
+    },
+    "worst_files": {
+      "Analysis\\test_generator.py": 30,
+      "_generated_tests\\tests\\test_xray_Core_ui_bridge.py": 24,
+      "_generated_tests\\tests\\test_xray_Analysis_transpiler.py": 21,
+      "Analysis\\transpiler.py": 19,
+      "x_ray_ui.py": 14,
+      "Analysis\\reporting.py": 11,
+      "_generated_tests\\tests\\test_xray_tests_test_xray_claude.py": 11,
+      "x_ray_flet.py": 11,
+      "Analysis\\auto_rustify.py": 10,
+      "_generated_tests\\tests\\test_xray_Analysis_test_generator.py": 10
+    },
+    "source": "ruff"
+  },
+  "security_summary": {
+    "total": 75,
+    "critical": 0,
+    "warning": 0,
+    "info": 75,
+    "fixable": 0,
+    "by_rule": {
+      "B603": 34,
+      "B110": 17,
+      "B607": 15,
+      "B311": 6,
+      "B112": 3
+    },
+    "worst_files": {
+      "_mothership\\hardware_detection.py": 17,
+      "tests\\test_parity_py_vs_rust.py": 10,
+      "Analysis\\auto_rustify.py": 6,
+      "tests\\rust_harness\\benchmark.py": 6,
+      "tests\\test_monkey_torture.py": 6,
+      "tests\\test_transpiler.py": 4,
+      "Core\\ui_bridge.py": 3,
+      "x_ray_flet.py": 3,
+      "Analysis\\smell_fixer.py": 2,
+      "Core\\scan_context.py": 2
+    },
+    "source": "bandit",
+    "by_confidence": {
+      "HIGH": 75
+    }
+  },
+  "critical_smells": [
+    {
+      "severity": "critical",
+      "category": "god-class",
+      "name": "ProjectHealthAnalyzer",
+      "file": "Analysis/project_health.py",
+      "line": 85,
+      "message": "Class 'ProjectHealthAnalyzer' has 16 methods (limit: 15)",
+      "suggestion": "Split into smaller classes with single responsibility. Consider delegation or mixins."
+    },
+    {
+      "severity": "critical",
+      "category": "long-function",
+      "name": "_run_function_checks",
+      "file": "Analysis/smells.py",
+      "line": 177,
+      "message": "Function '_run_function_checks' is 191 lines (limit: 120)",
+      "suggestion": "Split into smaller focused functions. Extract logical blocks."
+    },
+    {
+      "severity": "critical",
+      "category": "long-function",
+      "name": "_gen_module_tests",
+      "file": "Analysis/test_generator.py",
+      "line": 187,
+      "message": "Function '_gen_module_tests' is 151 lines (limit: 120)",
+      "suggestion": "Split into smaller focused functions. Extract logical blocks."
+    },
+    {
+      "severity": "critical",
+      "category": "complex-function",
+      "name": "_gen_module_tests",
+      "file": "Analysis/test_generator.py",
+      "line": 187,
+      "message": "Function '_gen_module_tests' has cyclomatic complexity 27 (limit: 20)",
+      "suggestion": "Decompose into smaller, single-responsibility functions."
+    },
+    {
+      "severity": "critical",
+      "category": "god-class",
+      "name": "IRBuilder",
+      "file": "Analysis/transpiler.py",
+      "line": 232,
+      "message": "Class 'IRBuilder' has 55 methods (limit: 15)",
+      "suggestion": "Split into smaller classes with single responsibility. Consider delegation or mixins."
+    },
+    {
+      "severity": "critical",
+      "category": "long-function",
+      "name": "build_function",
+      "file": "Analysis/transpiler.py",
+      "line": 898,
+      "message": "Function 'build_function' is 157 lines (limit: 120)",
+      "suggestion": "Split into smaller focused functions. Extract logical blocks."
+    },
+    {
+      "severity": "critical",
+      "category": "deep-nesting",
+      "name": "build_function",
+      "file": "Analysis/transpiler.py",
+      "line": 898,
+      "message": "Function 'build_function' has nesting depth 12 (limit: 6)",
+      "suggestion": "Use early returns, guard clauses, or extract nested blocks."
+    },
+    {
+      "severity": "critical",
+      "category": "complex-function",
+      "name": "build_function",
+      "file": "Analysis/transpiler.py",
+      "line": 898,
+      "message": "Function 'build_function' has cyclomatic complexity 79 (limit: 20)",
+      "suggestion": "Decompose into smaller, single-responsibility functions."
+    },
+    {
+      "severity": "critical",
+      "category": "god-class",
+      "name": "WebSmellDetector",
+      "file": "Analysis/web_smells.py",
+      "line": 48,
+      "message": "Class 'WebSmellDetector' has 16 methods (limit: 15)",
+      "suggestion": "Split into smaller classes with single responsibility. Consider delegation or mixins."
+    },
+    {
+      "severity": "critical",
+      "category": "deep-nesting",
+      "name": "_find_matching_brace",
+      "file": "Lang/js_ts_analyzer.py",
+      "line": 186,
+      "message": "Function '_find_matching_brace' has nesting depth 7 (limit: 6)",
+      "suggestion": "Use early returns, guard clauses, or extract nested blocks."
+    },
+    {
+      "severity": "warning",
+      "category": "deep-nesting",
+      "name": "identify_targets",
+      "file": "Analysis/NexusMode/orchestrator.py",
+      "line": 60,
+      "message": "Function 'identify_targets' has nesting depth 5 (limit: 4)",
+      "suggestion": "Flatten with early returns or extract helper functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "identify_targets",
+      "file": "Analysis/NexusMode/orchestrator.py",
+      "line": 60,
+      "message": "Function 'identify_targets' has cyclomatic complexity 10 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "deep-nesting",
+      "name": "verify_and_build",
+      "file": "Analysis/NexusMode/orchestrator.py",
+      "line": 235,
+      "message": "Function 'verify_and_build' has nesting depth 4 (limit: 4)",
+      "suggestion": "Flatten with early returns or extract helper functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "extract_functions_from_file",
+      "file": "Analysis/ast_utils.py",
+      "line": 131,
+      "message": "Function 'extract_functions_from_file' has cyclomatic complexity 10 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-returns",
+      "name": "py_type_to_rust",
+      "file": "Analysis/auto_rustify.py",
+      "line": 289,
+      "message": "Function 'py_type_to_rust' has 8 return statements (limit: 5)",
+      "suggestion": "Consolidate exit points. Consider a result variable."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_build_main_rs",
+      "file": "Analysis/auto_rustify.py",
+      "line": 1084,
+      "message": "Function '_build_main_rs' is 72 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "analyze",
+      "file": "Analysis/project_health.py",
+      "line": 104,
+      "message": "Function 'analyze' is 67 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "print_web_report",
+      "file": "Analysis/reporting.py",
+      "line": 429,
+      "message": "Function 'print_web_report' has cyclomatic complexity 10 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-returns",
+      "name": "get",
+      "file": "Analysis/scan_cache.py",
+      "line": 91,
+      "message": "Function 'get' has 6 return statements (limit: 5)",
+      "suggestion": "Consolidate exit points. Consider a result variable."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-returns",
+      "name": "_comment_debug_prints",
+      "file": "Analysis/smell_fixer.py",
+      "line": 175,
+      "message": "Function '_comment_debug_prints' has 5 return statements (limit: 5)",
+      "suggestion": "Consolidate exit points. Consider a result variable."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "_check_magic_numbers",
+      "file": "Analysis/smells.py",
+      "line": 30,
+      "message": "Function '_check_magic_numbers' has cyclomatic complexity 10 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "_run_function_checks",
+      "file": "Analysis/smells.py",
+      "line": 177,
+      "message": "Function '_run_function_checks' has cyclomatic complexity 15 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-branches",
+      "name": "_run_function_checks",
+      "file": "Analysis/smells.py",
+      "line": 177,
+      "message": "Function '_run_function_checks' has 13 branches (limit: 8)",
+      "suggestion": "Simplify with lookup tables, strategy pattern, or early returns."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_run_class_checks",
+      "file": "Analysis/smells.py",
+      "line": 370,
+      "message": "Function '_run_class_checks' is 90 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "_run_class_checks",
+      "file": "Analysis/smells.py",
+      "line": 370,
+      "message": "Function '_run_class_checks' has cyclomatic complexity 12 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-branches",
+      "name": "_gen_module_tests",
+      "file": "Analysis/test_generator.py",
+      "line": 187,
+      "message": "Function '_gen_module_tests' has 13 branches (limit: 8)",
+      "suggestion": "Simplify with lookup tables, strategy pattern, or early returns."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_gen_smell_regression",
+      "file": "Analysis/test_generator.py",
+      "line": 341,
+      "message": "Function '_gen_smell_regression' is 80 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "deep-nesting",
+      "name": "_gen_smell_regression",
+      "file": "Analysis/test_generator.py",
+      "line": 341,
+      "message": "Function '_gen_smell_regression' has nesting depth 4 (limit: 4)",
+      "suggestion": "Flatten with early returns or extract helper functions."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_gen_structure_tests",
+      "file": "Analysis/test_generator.py",
+      "line": 424,
+      "message": "Function '_gen_structure_tests' is 62 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_gen_module_tests",
+      "file": "Analysis/test_generator.py",
+      "line": 578,
+      "message": "Function '_gen_module_tests' is 77 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "_gen_module_tests",
+      "file": "Analysis/test_generator.py",
+      "line": 578,
+      "message": "Function '_gen_module_tests' has cyclomatic complexity 10 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "deep-nesting",
+      "name": "detect_project_type",
+      "file": "Analysis/test_generator.py",
+      "line": 765,
+      "message": "Function 'detect_project_type' has nesting depth 5 (limit: 4)",
+      "suggestion": "Flatten with early returns or extract helper functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "detect_project_type",
+      "file": "Analysis/test_generator.py",
+      "line": 765,
+      "message": "Function 'detect_project_type' has cyclomatic complexity 13 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-returns",
+      "name": "detect_project_type",
+      "file": "Analysis/test_generator.py",
+      "line": 765,
+      "message": "Function 'detect_project_type' has 6 return statements (limit: 5)",
+      "suggestion": "Consolidate exit points. Consider a result variable."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "generate",
+      "file": "Analysis/test_generator.py",
+      "line": 800,
+      "message": "Function 'generate' is 64 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "generate",
+      "file": "Analysis/test_generator.py",
+      "line": 800,
+      "message": "Function 'generate' has cyclomatic complexity 14 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-params",
+      "name": "generate",
+      "file": "Analysis/test_generator.py",
+      "line": 800,
+      "message": "Function 'generate' has 6 parameters (limit: 6)",
+      "suggestion": "Group related parameters into a dataclass or config object."
+    },
+    {
+      "severity": "warning",
+      "category": "large-class",
+      "name": "IRBuilder",
+      "file": "Analysis/transpiler.py",
+      "line": 232,
+      "message": "Class 'IRBuilder' is 823 lines (limit: 500)",
+      "suggestion": "Extract logical groups of methods into separate classes or modules."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-returns",
+      "name": "_expr_name_const",
+      "file": "Analysis/transpiler.py",
+      "line": 255,
+      "message": "Function '_expr_name_const' has 5 return statements (limit: 5)",
+      "suggestion": "Consolidate exit points. Consider a result variable."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-returns",
+      "name": "_expr_compare",
+      "file": "Analysis/transpiler.py",
+      "line": 303,
+      "message": "Function '_expr_compare' has 7 return statements (limit: 5)",
+      "suggestion": "Consolidate exit points. Consider a result variable."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "_expr_call_attr",
+      "file": "Analysis/transpiler.py",
+      "line": 405,
+      "message": "Function '_expr_call_attr' has cyclomatic complexity 10 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-returns",
+      "name": "_expr_call_attr",
+      "file": "Analysis/transpiler.py",
+      "line": 405,
+      "message": "Function '_expr_call_attr' has 5 return statements (limit: 5)",
+      "suggestion": "Consolidate exit points. Consider a result variable."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "_expr_call_builtin",
+      "file": "Analysis/transpiler.py",
+      "line": 455,
+      "message": "Function '_expr_call_builtin' has cyclomatic complexity 17 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-returns",
+      "name": "_expr_call_builtin",
+      "file": "Analysis/transpiler.py",
+      "line": 455,
+      "message": "Function '_expr_call_builtin' has 16 return statements (limit: 5)",
+      "suggestion": "Consolidate exit points. Consider a result variable."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-branches",
+      "name": "_expr_call_builtin",
+      "file": "Analysis/transpiler.py",
+      "line": 455,
+      "message": "Function '_expr_call_builtin' has 15 branches (limit: 8)",
+      "suggestion": "Simplify with lookup tables, strategy pattern, or early returns."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-returns",
+      "name": "_expr_slice",
+      "file": "Analysis/transpiler.py",
+      "line": 601,
+      "message": "Function '_expr_slice' has 5 return statements (limit: 5)",
+      "suggestion": "Consolidate exit points. Consider a result variable."
+    },
+    {
+      "severity": "warning",
+      "category": "deep-nesting",
+      "name": "_stmt_assign",
+      "file": "Analysis/transpiler.py",
+      "line": 697,
+      "message": "Function '_stmt_assign' has nesting depth 4 (limit: 4)",
+      "suggestion": "Flatten with early returns or extract helper functions."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-returns",
+      "name": "_stmt_assign",
+      "file": "Analysis/transpiler.py",
+      "line": 697,
+      "message": "Function '_stmt_assign' has 5 return statements (limit: 5)",
+      "suggestion": "Consolidate exit points. Consider a result variable."
+    },
+    {
+      "severity": "warning",
+      "category": "deep-nesting",
+      "name": "_wrap_returns_in_some",
+      "file": "Analysis/transpiler.py",
+      "line": 885,
+      "message": "Function '_wrap_returns_in_some' has nesting depth 5 (limit: 4)",
+      "suggestion": "Flatten with early returns or extract helper functions."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-returns",
+      "name": "build_function",
+      "file": "Analysis/transpiler.py",
+      "line": 898,
+      "message": "Function 'build_function' has 6 return statements (limit: 5)",
+      "suggestion": "Consolidate exit points. Consider a result variable."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-branches",
+      "name": "build_function",
+      "file": "Analysis/transpiler.py",
+      "line": 898,
+      "message": "Function 'build_function' has 64 branches (limit: 8)",
+      "suggestion": "Simplify with lookup tables, strategy pattern, or early returns."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-params",
+      "name": "_add",
+      "file": "Analysis/web_smells.py",
+      "line": 284,
+      "message": "Function '_add' has 9 parameters (limit: 6)",
+      "suggestion": "Group related parameters into a dataclass or config object."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "run_scan",
+      "file": "Core/scan_context.py",
+      "line": 384,
+      "message": "Function 'run_scan' is 104 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "deep-nesting",
+      "name": "run_scan",
+      "file": "Core/scan_context.py",
+      "line": 384,
+      "message": "Function 'run_scan' has nesting depth 4 (limit: 4)",
+      "suggestion": "Flatten with early returns or extract helper functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "run_scan",
+      "file": "Core/scan_context.py",
+      "line": 384,
+      "message": "Function 'run_scan' has cyclomatic complexity 16 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-params",
+      "name": "run_test_gen_phase",
+      "file": "Core/scan_phases.py",
+      "line": 185,
+      "message": "Function 'run_test_gen_phase' has 7 parameters (limit: 6)",
+      "suggestion": "Group related parameters into a dataclass or config object."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "collect_reports",
+      "file": "Core/scan_phases.py",
+      "line": 232,
+      "message": "Function 'collect_reports' has cyclomatic complexity 11 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "progress",
+      "file": "Core/ui_bridge.py",
+      "line": 177,
+      "message": "Function 'progress' has cyclomatic complexity 10 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "_find_matching_brace",
+      "file": "Lang/js_ts_analyzer.py",
+      "line": 186,
+      "message": "Function '_find_matching_brace' has cyclomatic complexity 10 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "deep-nesting",
+      "name": "_count_nesting",
+      "file": "Lang/js_ts_analyzer.py",
+      "line": 221,
+      "message": "Function '_count_nesting' has nesting depth 4 (limit: 4)",
+      "suggestion": "Flatten with early returns or extract helper functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "_extract_imports",
+      "file": "Lang/js_ts_analyzer.py",
+      "line": 339,
+      "message": "Function '_extract_imports' has cyclomatic complexity 11 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_extract_functions",
+      "file": "Lang/js_ts_analyzer.py",
+      "line": 385,
+      "message": "Function '_extract_functions' is 110 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "_extract_functions",
+      "file": "Lang/js_ts_analyzer.py",
+      "line": 385,
+      "message": "Function '_extract_functions' has cyclomatic complexity 10 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "deep-nesting",
+      "name": "get_cc",
+      "file": "find_crits.py",
+      "line": 22,
+      "message": "Function 'get_cc' has nesting depth 5 (limit: 4)",
+      "suggestion": "Flatten with early returns or extract helper functions."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_run_full_scan",
+      "file": "x_ray_claude.py",
+      "line": 686,
+      "message": "Function '_run_full_scan' is 89 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "_run_full_scan",
+      "file": "x_ray_claude.py",
+      "line": 686,
+      "message": "Function '_run_full_scan' has cyclomatic complexity 13 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-branches",
+      "name": "_run_full_scan",
+      "file": "x_ray_claude.py",
+      "line": 686,
+      "message": "Function '_run_full_scan' has 9 branches (limit: 8)",
+      "suggestion": "Simplify with lookup tables, strategy pattern, or early returns."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "main",
+      "file": "x_ray_exe.py",
+      "line": 457,
+      "message": "Function 'main' is 71 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_run_scan",
+      "file": "x_ray_flet.py",
+      "line": 452,
+      "message": "Function '_run_scan' is 73 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "complex-function",
+      "name": "_run_scan",
+      "file": "x_ray_flet.py",
+      "line": 452,
+      "message": "Function '_run_scan' has cyclomatic complexity 11 (limit: 10)",
+      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
+    },
+    {
+      "severity": "warning",
+      "category": "too-many-params",
+      "name": "_run_scan",
+      "file": "x_ray_flet.py",
+      "line": 452,
+      "message": "Function '_run_scan' has 7 parameters (limit: 6)",
+      "suggestion": "Group related parameters into a dataclass or config object."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_generate_graph_html",
+      "file": "x_ray_flet.py",
+      "line": 1182,
+      "message": "Function '_generate_graph_html' is 113 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_build_graph_tab",
+      "file": "x_ray_flet.py",
+      "line": 1372,
+      "message": "Function '_build_graph_tab' is 80 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_start_scan_handler",
+      "file": "x_ray_flet.py",
+      "line": 2289,
+      "message": "Function '_start_scan_handler' is 62 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "main",
+      "file": "x_ray_flet.py",
+      "line": 2645,
+      "message": "Function 'main' is 64 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_run_scan",
+      "file": "x_ray_ui.py",
+      "line": 549,
+      "message": "Function '_run_scan' is 65 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "_render_sidebar",
+      "file": "x_ray_ui.py",
+      "line": 1859,
+      "message": "Function '_render_sidebar' is 68 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    },
+    {
+      "severity": "warning",
+      "category": "long-function",
+      "name": "main",
+      "file": "x_ray_web.py",
+      "line": 88,
+      "message": "Function 'main' is 65 lines (limit: 60)",
+      "suggestion": "Consider splitting into smaller functions."
+    }
+  ]
+}
