@@ -43,7 +43,6 @@ from Core.types import FunctionRecord
 from Analysis.rust_advisor import RustAdvisor, RustCandidate
 from Analysis.ast_utils import extract_functions_from_file, collect_py_files
 from Analysis.test_gen import TestGenerator
-from Analysis.transpiler import transpile_function_code
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1.  CPU / OS Detection
@@ -289,13 +288,20 @@ def _is_transpilable(func) -> bool:
 def py_type_to_rust(py_type: str, py_default: str = "PyObject") -> str:
     """Convert a Python type annotation string to Rust type."""
     py_t = py_type.strip()
-    if py_t == "int": return "i64"
-    if py_t == "float": return "f64"
-    if py_t == "bool": return "bool"
-    if py_t == "str": return "String"
-    if py_t == "list" or py_t.startswith("List"): return "Vec<String>"
-    if py_t == "dict" or py_t.startswith("Dict"): return "HashMap<String, String>"
-    if py_t == "None": return "()"
+    if py_t == "int":
+        return "i64"
+    if py_t == "float":
+        return "f64"
+    if py_t == "bool":
+        return "bool"
+    if py_t == "str":
+        return "String"
+    if py_t == "list" or py_t.startswith("List"):
+        return "Vec<String>"
+    if py_t == "dict" or py_t.startswith("Dict"):
+        return "HashMap<String, String>"
+    if py_t == "None":
+        return "()"
     return py_default
 
 
@@ -1547,54 +1553,6 @@ class PipelineReport:
     errors: List[str] = field(default_factory=list)
     phases: List[Dict[str, Any]] = field(default_factory=list)
 
-
-@dataclass
-class RustifyConfig:
-    """Configuration bundle for RustifyPipeline."""
-
-    crate_name: str = "xray_rustified"
-    min_score: float = 5.0
-    max_candidates: int = 50
-    mode: str = "pyo3"
-    exclude_dirs: Optional[List[str]] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {
-            "system": self.system.to_dict(),
-            "scan_duration_s": self.scan_duration_s,
-            "candidates_total": self.candidates_total,
-            "candidates_selected": self.candidates_selected,
-            "test_gen_path": self.test_gen_path,
-            "verify_test_path": self.verify_test_path,
-            "cargo_project_path": self.cargo_project_path,
-            "errors": self.errors,
-            "phases": self.phases,
-        }
-        if self.compile_result:
-            d["compile"] = {
-                "success": self.compile_result.success,
-                "target": self.compile_result.target_triple,
-                "artefact": self.compile_result.artefact_path,
-                "duration_s": self.compile_result.duration_s,
-                "rustflags": self.compile_result.rustflags,
-            }
-        if self.verify_result:
-            d["verify"] = {
-                "success": self.verify_result.success,
-                "passed": self.verify_result.tests_passed,
-                "failed": self.verify_result.tests_failed,
-            }
-        return d
-
-
-@dataclass
-class RustifyConfig:
-    """Configuration bundle for RustifyPipeline."""
-    crate_name: str = "xray_rustified"
-    min_score: float = 5.0
-    max_candidates: int = 50
-    mode: str = "pyo3"
-    exclude_dirs: Optional[List[str]] = None
 
 
 class RustifyPipeline:

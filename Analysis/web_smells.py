@@ -116,8 +116,6 @@ class WebSmellDetector:
 
     def _check_file(self, analysis: JSFileAnalysis) -> None:
         """Run all smell checks on one file analysis."""
-        fp = analysis.file_path
-
         # 1. Large file
         self._check_large_file(analysis)
 

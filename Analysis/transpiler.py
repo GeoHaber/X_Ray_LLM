@@ -1,9 +1,8 @@
 import ast
 import textwrap
 import logging
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any, Set, Union
-from pathlib import Path
+from dataclasses import dataclass
+from typing import List, Dict, Optional, Any, Set
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,7 @@ class RustStatement(RustNode):
     expr: RustExpr
     
     def generate(self, emitter: "RustEmitter"):
-        emitter.emit(f"")
+        emitter.emit("")
         emitter.emit_inline(self.expr.code)
         emitter.emit_inline(";")
         emitter.emit_newline()
@@ -712,7 +711,7 @@ class IRBuilder(ast.NodeVisitor):
                     nodes.append(result)
             else:
                 code_str = ast.unparse(stmt).replace('"', '\\"')
-                nodes.append(RustMacro("todo", [f'"Unmapped Statement: {{}}"', f'"{code_str}"']))
+                nodes.append(RustMacro("todo", ['"Unmapped Statement: {}"', f'"{code_str}"']))
         return nodes
 
     # ── statement handlers ───────────────────────────────────────────────────
@@ -1002,9 +1001,12 @@ class IRBuilder(ast.NodeVisitor):
 
     def _infer_by_name(self, name: str) -> str:
         """Fallback name-based type inference."""
-        if name in ("i", "j", "k", "n", "m", "count", "num", "index", "size", "length"): return "i64"
-        if name in ("x", "y", "z", "score", "rate", "threshold", "weight"): return "f64"
-        if name in ("items", "elements", "values", "results", "entries"): return "Vec<String>"
+        if name in ("i", "j", "k", "n", "m", "count", "num", "index", "size", "length"):
+            return "i64"
+        if name in ("x", "y", "z", "score", "rate", "threshold", "weight"):
+            return "f64"
+        if name in ("items", "elements", "values", "results", "entries"):
+            return "Vec<String>"
         if name in ("config", "settings", "options", "kwargs", "params"):
             self.emitter.require_import("std::collections::HashMap")
             return "HashMap<String, String>"

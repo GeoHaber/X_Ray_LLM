@@ -124,10 +124,6 @@ def _walk_definitions(node: ast.AST):
             yield from _walk_definitions(child)
 
 
-def extract_functions_from_file(
-    fpath: Path, root: Path
-) -> Tuple[List[FunctionRecord], List[ClassRecord], Optional[str]]:
-    """Parse one file and extract all functions and classes."""
 def extract_functions_from_file(fpath: Path, root: Path,
                                  use_cache: bool = True) -> Tuple[
         List[FunctionRecord], List[ClassRecord], Optional[str]]:
