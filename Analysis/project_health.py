@@ -80,6 +80,104 @@ def _score_to_grade(score: int) -> str:
     return "F"
 
 
+# ── Auto-fix helpers (module-level to keep ProjectHealthAnalyzer lean) ──
+
+def _create_gitignore_file(root: Path) -> None:
+    """Create a sensible .gitignore."""
+    content = """\
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.egg
+.eggs/
+
+# ── Node.js ──
+node_modules/
+.next/
+.nuxt/
+dist/
+coverage/
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── Environment ──
+.env
+.env.local
+.env.*.local
+
+# ── Build ──
+*.log
+npm-debug.log*
+yarn-debug.log*
+"""
+    (root / ".gitignore").write_text(content, encoding="utf-8")
+    logger.info("Created .gitignore")
+
+
+def _create_license_file(root: Path) -> None:
+    """Create an MIT LICENSE file."""
+    from datetime import datetime
+    year = datetime.now().year
+    content = f"""\
+MIT License
+
+Copyright (c) {year}
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+    (root / "LICENSE").write_text(content, encoding="utf-8")
+    logger.info("Created LICENSE (MIT)")
+
+
+def _create_package_json_file(root: Path) -> None:
+    """Create a minimal package.json for a JS/TS workspace."""
+    name = root.name.lower().replace(" ", "-").replace("_", "-")
+    content = {
+        "name": name,
+        "version": "1.0.0",
+        "private": True,
+        "description": "",
+        "scripts": {
+            "start": "echo \"No start script defined\"",
+            "test": "echo \"No test script defined\"",
+        },
+    }
+    (root / "package.json").write_text(
+        json.dumps(content, indent=2) + "\n", encoding="utf-8"
+    )
+    logger.info("Created package.json")
+
+
 # ── Health analyzer ─────────────────────────────────────────────────────
 
 class ProjectHealthAnalyzer:
@@ -182,7 +280,7 @@ class ProjectHealthAnalyzer:
             detail="Prevents committing build artifacts and secrets",
         )
         if not exists and auto_fix:
-            self._create_gitignore(root)
+            _create_gitignore_file(root)
             created.append(".gitignore")
             check.passed = True
             check.detail = "Auto-created .gitignore"
@@ -213,7 +311,7 @@ class ProjectHealthAnalyzer:
             detail="Add a LICENSE file to clarify usage rights",
         )
         if not found and auto_fix:
-            self._create_license(root)
+            _create_license_file(root)
             created.append("LICENSE")
             check.passed = True
             check.detail = "Auto-created MIT LICENSE"
@@ -243,7 +341,7 @@ class ProjectHealthAnalyzer:
         )
 
         if not found and auto_fix and has_js:
-            self._create_package_json(root)
+            _create_package_json_file(root)
             created.append("package.json")
             check.passed = True
             check.detail = "Auto-created package.json"
@@ -353,103 +451,7 @@ class ProjectHealthAnalyzer:
             detail="Add CHANGELOG.md to document version history",
         )
 
-    # ── Auto-fix: create missing files ──────────────────────────────────
-
-    @staticmethod
-    def _create_gitignore(root: Path) -> None:
-        """Create a sensible .gitignore."""
-        content = """\
-# ── Python ──
-__pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-build/
-.venv/
-venv/
-*.egg
-.eggs/
-
-# ── Node.js ──
-node_modules/
-.next/
-.nuxt/
-dist/
-coverage/
-
-# ── IDE ──
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# ── OS ──
-.DS_Store
-Thumbs.db
-
-# ── Environment ──
-.env
-.env.local
-.env.*.local
-
-# ── Build ──
-*.log
-npm-debug.log*
-yarn-debug.log*
-"""
-        (root / ".gitignore").write_text(content, encoding="utf-8")
-        logger.info("Created .gitignore")
-
-    @staticmethod
-    def _create_license(root: Path) -> None:
-        """Create an MIT LICENSE file."""
-        from datetime import datetime
-        year = datetime.now().year
-        content = f"""\
-MIT License
-
-Copyright (c) {year}
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-"""
-        (root / "LICENSE").write_text(content, encoding="utf-8")
-        logger.info("Created LICENSE (MIT)")
-
-    @staticmethod
-    def _create_package_json(root: Path) -> None:
-        """Create a minimal package.json for a JS/TS workspace."""
-        name = root.name.lower().replace(" ", "-").replace("_", "-")
-        content = {
-            "name": name,
-            "version": "1.0.0",
-            "private": True,
-            "description": "",
-            "scripts": {
-                "start": "echo \"No start script defined\"",
-                "test": "echo \"No test script defined\"",
-            },
-        }
-        (root / "package.json").write_text(
-            json.dumps(content, indent=2) + "\n", encoding="utf-8"
-        )
-        logger.info("Created package.json")
+    # ── Auto-fix: create missing files — delegated to module-level helpers ──
 
     # ── Summary ─────────────────────────────────────────────────────────
 

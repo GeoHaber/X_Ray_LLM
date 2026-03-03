@@ -184,6 +184,145 @@ class PythonTestGenerator:
 
     # ── Per-module tests ──
 
+    def _gen_function_test_cases(
+        self, func: FunctionRecord, mod: str, safe_mod: str
+    ) -> tuple[list, int]:
+        """Generate test lines and count for a single function."""
+        lines: list = []
+        count = 0
+        safe_name = _safe_identifier(func.name)
+        params = func.parameters
+
+        # Test 1: callable check
+        lines += [
+            f'def test_{safe_mod}_{safe_name}_is_callable():',
+            f'    """Verify {func.name} exists and is callable."""',
+            f'    from {mod} import {func.name}',
+            f'    assert callable({func.name})',
+            '',
+        ]
+        count += 1
+
+        # Test 2: call with None args (monkey test)
+        non_self = [p for p in params if p not in ("self", "cls")]
+        if non_self:
+            none_args = ", ".join(["None"] * len(non_self))
+            lines += [
+                f'def test_{safe_mod}_{safe_name}_none_args():',
+                f'    """Monkey: call {func.name} with None args — should not crash unhandled."""',
+                f'    from {mod} import {func.name}',
+                f'    try:',
+                f'        {func.name}({none_args})',
+                f'    except (TypeError, ValueError, AttributeError, KeyError):',
+                f'        pass  # Expected — function should raise, not crash',
+                f'    except Exception as e:',
+                f'        pytest.fail(f"Unexpected exception: {{type(e).__name__}}: {{e}}")',
+                '',
+            ]
+            count += 1
+
+        # Test 3: return type check (if annotated)
+        if func.return_type and func.return_type not in ("None", "void"):
+            lines += [
+                f'def test_{safe_mod}_{safe_name}_return_type():',
+                f'    """Verify {func.name} returns expected type."""',
+                f'    from {mod} import {func.name}',
+                f'    # Smoke check — return type should be: {func.return_type}',
+                f'    # (requires valid args to test; assert function exists)',
+                f'    assert callable({func.name})',
+                '',
+            ]
+            count += 1
+
+        # Test 4: async functions
+        if func.is_async:
+            lines += [
+                f'@pytest.mark.asyncio',
+                f'async def test_{safe_mod}_{safe_name}_is_async():',
+                f'    """Verify {func.name} is an async coroutine."""',
+                f'    from {mod} import {func.name}',
+                f'    import inspect',
+                f'    assert inspect.iscoroutinefunction({func.name})',
+                '',
+            ]
+            count += 1
+
+        # Test 5: high complexity
+        if func.complexity >= 10:
+            lines += [
+                f'def test_{safe_mod}_{safe_name}_high_complexity():',
+                f'    """Flag: {func.name} has CC={func.complexity} — verify it handles edge cases."""',
+                f'    from {mod} import {func.name}',
+                f'    # X-Ray detected CC={func.complexity} (cyclomatic complexity)',
+                f'    # This function has many branches — test edge cases carefully',
+                f'    assert callable({func.name}), "Complex function should be importable"',
+                '',
+            ]
+            count += 1
+
+        return lines, count
+
+    def _gen_class_test_cases(
+        self, cls: ClassRecord, mod: str, safe_mod: str
+    ) -> tuple[list, int]:
+        """Generate test lines and count for a single class."""
+        lines: list = []
+        count = 0
+        safe_cls = _safe_identifier(cls.name)
+
+        # Test: class is importable
+        lines += [
+            f'def test_{safe_mod}_{safe_cls}_is_class():',
+            f'    """Verify {cls.name} exists and is a class."""',
+            f'    from {mod} import {cls.name}',
+            f'    assert isinstance({cls.name}, type) or callable({cls.name})',
+            '',
+        ]
+        count += 1
+
+        # Test: public methods exist
+        if cls.methods:
+            public = [m for m in cls.methods if not m.startswith("_") or m == "__init__"]
+            if public:
+                method_list = ", ".join(f'"{m}"' for m in public[:10])
+                lines += [
+                    f'def test_{safe_mod}_{safe_cls}_has_methods():',
+                    f'    """Verify {cls.name} has expected methods."""',
+                    f'    from {mod} import {cls.name}',
+                    f'    expected = [{method_list}]',
+                    f'    for method in expected:',
+                    f'        assert hasattr({cls.name}, method), f"Missing method: {{method}}"',
+                    '',
+                ]
+                count += 1
+
+        # Test: base classes
+        if cls.base_classes and cls.base_classes != ["object"]:
+            bases = ", ".join(f'"{b}"' for b in cls.base_classes)
+            lines += [
+                f'def test_{safe_mod}_{safe_cls}_inheritance():',
+                f'    """Verify {cls.name} inherits from expected bases."""',
+                f'    from {mod} import {cls.name}',
+                f'    base_names = [b.__name__ for b in {cls.name}.__mro__]',
+                f'    for base in [{bases}]:',
+                f'        assert base in base_names, f"Missing base: {{base}}"',
+                '',
+            ]
+            count += 1
+
+        # Test: docstring present
+        if not cls.docstring:
+            lines += [
+                f'def test_{safe_mod}_{safe_cls}_has_docstring():',
+                f'    """Lint: {cls.name} should have a docstring."""',
+                f'    from {mod} import {cls.name}',
+                f'    assert {cls.name}.__doc__, "{cls.name} is missing a docstring"',
+                '',
+            ]
+            count += 1
+
+        return lines, count
+
     def _gen_module_tests(
         self,
         fpath: str,
@@ -199,138 +338,30 @@ class PythonTestGenerator:
 
         lines = [
             f'"""Auto-generated monkey tests for {fpath} by X-Ray v7.0.',
-            '',
-            'Tests function signatures, edge cases, and class instantiation.',
-            '"""',
-            '',
-            'import pytest',
-            '',
+            '', 'Tests function signatures, edge cases, and class instantiation.', '"""',
+            '', 'import pytest', '',
         ]
-
         test_count = 0
 
-        # --- Function tests ---
         for func in functions:
             if func.name.startswith("_") and func.name != "__init__":
-                continue  # skip private helpers (test public API)
+                continue
+            fn_lines, fn_count = self._gen_function_test_cases(func, mod, safe_mod)
+            lines.extend(fn_lines)
+            test_count += fn_count
 
-            safe_name = _safe_identifier(func.name)
-            params = func.parameters
-
-            # Test 1: callable check
-            lines.append(f'def test_{safe_mod}_{safe_name}_is_callable():')
-            lines.append(f'    """Verify {func.name} exists and is callable."""')
-            lines.append(f'    from {mod} import {func.name}')
-            lines.append(f'    assert callable({func.name})')
-            lines.append('')
-            test_count += 1
-
-            # Test 2: call with None args (monkey test)
-            if params and not any(p == "self" or p == "cls" for p in params):
-                non_self = [p for p in params if p not in ("self", "cls")]
-                if non_self:
-                    none_args = ", ".join(["None"] * len(non_self))
-                    lines.append(f'def test_{safe_mod}_{safe_name}_none_args():')
-                    lines.append(f'    """Monkey: call {func.name} with None args — should not crash unhandled."""')
-                    lines.append(f'    from {mod} import {func.name}')
-                    lines.append(f'    try:')
-                    lines.append(f'        {func.name}({none_args})')
-                    lines.append(f'    except (TypeError, ValueError, AttributeError, KeyError):')
-                    lines.append(f'        pass  # Expected — function should raise, not crash')
-                    lines.append(f'    except Exception as e:')
-                    lines.append(f'        pytest.fail(f"Unexpected exception: {{type(e).__name__}}: {{e}}")')
-                    lines.append('')
-                    test_count += 1
-
-            # Test 3: return type check (if annotated)
-            if func.return_type and func.return_type not in ("None", "void"):
-                lines.append(f'def test_{safe_mod}_{safe_name}_return_type():')
-                lines.append(f'    """Verify {func.name} returns expected type."""')
-                lines.append(f'    from {mod} import {func.name}')
-                lines.append(f'    # Smoke check — return type should be: {func.return_type}')
-                lines.append(f'    # (requires valid args to test; assert function exists)')
-                lines.append(f'    assert callable({func.name})')
-                lines.append('')
-                test_count += 1
-
-            # Test 4: async functions
-            if func.is_async:
-                lines.append(f'@pytest.mark.asyncio')
-                lines.append(f'async def test_{safe_mod}_{safe_name}_is_async():')
-                lines.append(f'    """Verify {func.name} is an async coroutine."""')
-                lines.append(f'    from {mod} import {func.name}')
-                lines.append(f'    import inspect')
-                lines.append(f'    assert inspect.iscoroutinefunction({func.name})')
-                lines.append('')
-                test_count += 1
-
-            # Test 5: complex functions get deeper tests
-            if func.complexity >= 10:
-                lines.append(f'def test_{safe_mod}_{safe_name}_high_complexity():')
-                lines.append(f'    """Flag: {func.name} has CC={func.complexity} — verify it handles edge cases."""')
-                lines.append(f'    from {mod} import {func.name}')
-                lines.append(f'    # X-Ray detected CC={func.complexity} (cyclomatic complexity)')
-                lines.append(f'    # This function has many branches — test edge cases carefully')
-                lines.append(f'    assert callable({func.name}), "Complex function should be importable"')
-                lines.append('')
-                test_count += 1
-
-        # --- Class tests ---
         for cls in classes:
             if cls.name.startswith("_"):
                 continue
-
-            safe_cls = _safe_identifier(cls.name)
-
-            # Test: class exists and is importable
-            lines.append(f'def test_{safe_mod}_{safe_cls}_is_class():')
-            lines.append(f'    """Verify {cls.name} exists and is a class."""')
-            lines.append(f'    from {mod} import {cls.name}')
-            lines.append(f'    assert isinstance({cls.name}, type) or callable({cls.name})')
-            lines.append('')
-            test_count += 1
-
-            # Test: check methods exist
-            if cls.methods:
-                public_methods = [m for m in cls.methods if not m.startswith("_") or m == "__init__"]
-                if public_methods:
-                    method_list = ", ".join(f'"{m}"' for m in public_methods[:10])
-                    lines.append(f'def test_{safe_mod}_{safe_cls}_has_methods():')
-                    lines.append(f'    """Verify {cls.name} has expected methods."""')
-                    lines.append(f'    from {mod} import {cls.name}')
-                    lines.append(f'    expected = [{method_list}]')
-                    lines.append(f'    for method in expected:')
-                    lines.append(f'        assert hasattr({cls.name}, method), f"Missing method: {{method}}"')
-                    lines.append('')
-                    test_count += 1
-
-            # Test: base classes
-            if cls.base_classes and cls.base_classes != ["object"]:
-                bases = ", ".join(f'"{b}"' for b in cls.base_classes)
-                lines.append(f'def test_{safe_mod}_{safe_cls}_inheritance():')
-                lines.append(f'    """Verify {cls.name} inherits from expected bases."""')
-                lines.append(f'    from {mod} import {cls.name}')
-                lines.append(f'    base_names = [b.__name__ for b in {cls.name}.__mro__]')
-                lines.append(f'    for base in [{bases}]:')
-                lines.append(f'        assert base in base_names, f"Missing base: {{base}}"')
-                lines.append('')
-                test_count += 1
-
-            # Test: has docstring
-            if not cls.docstring:
-                lines.append(f'def test_{safe_mod}_{safe_cls}_has_docstring():')
-                lines.append(f'    """Lint: {cls.name} should have a docstring."""')
-                lines.append(f'    from {mod} import {cls.name}')
-                lines.append(f'    assert {cls.name}.__doc__, "{cls.name} is missing a docstring"')
-                lines.append('')
-                test_count += 1
+            cls_lines, cls_count = self._gen_class_test_cases(cls, mod, safe_mod)
+            lines.extend(cls_lines)
+            test_count += cls_count
 
         if test_count == 0:
             return None
 
-        test_fname = f"test_xray_{safe_mod}.py"
         return GeneratedTestFile(
-            path=f"tests/{test_fname}",
+            path=f"tests/test_xray_{safe_mod}.py",
             content="\n".join(lines),
             test_count=test_count,
             language="python",
