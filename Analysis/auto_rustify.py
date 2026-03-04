@@ -100,7 +100,8 @@ def detect_system() -> SystemProfile:
         try:
             out = subprocess.check_output(["rustc", "-vV"], text=True, timeout=10)
             out = subprocess.check_output(  # nosec B607
-                ["rustc", "-vV"], text=True, timeout=10)
+                ["rustc", "-vV"], text=True, timeout=10
+            )
             m = re.search(r"host:\s+(\S+)", out)
             if m:
                 rust_target = m.group(1)
@@ -1034,6 +1035,7 @@ def _transpile_with_fallback(func: FunctionRecord, *, pyfunction: bool = True) -
     if "todo!()" not in rust_code:
         return rust_code
     from Analysis.llm_transpiler import get_cached_llm_transpiler
+
     llm = get_cached_llm_transpiler()
     if llm is None:
         return rust_code
@@ -1145,15 +1147,15 @@ def _build_main_rs(candidates: List[RustCandidate], crate_name: str) -> str:
     sections.append(f"    pyo3::append_to_inittab!({crate_name});")
     sections.append("    pyo3::prepare_freethreaded_python();")
     sections.append("    Python::with_gil(|py| {")
-    sections.append("        let sys = py.import(\"sys\")?;")
-    sections.append("        let path_obj = sys.getattr(\"path\")?;")
+    sections.append('        let sys = py.import("sys")?;')
+    sections.append('        let path_obj = sys.getattr("path")?;')
     sections.append("        let path: &Bound<'_, PyList> = path_obj.downcast()?;")
     sections.append("        let current_dir = std::env::current_dir().unwrap();")
     sections.append("        path.insert(0, current_dir.to_str().unwrap())?;")
     sections.append("        let args: Vec<String> = std::env::args().collect();")
-    sections.append("        sys.setattr(\"argv\", args.into_py(py))?;")
-    sections.append("        let x_ray_exe = py.import(\"x_ray_exe\")?;")
-    sections.append("        x_ray_exe.call_method0(\"main\")?;")
+    sections.append('        sys.setattr("argv", args.into_py(py))?;')
+    sections.append('        let x_ray_exe = py.import("x_ray_exe")?;')
+    sections.append('        x_ray_exe.call_method0("main")?;')
     sections.append("        Ok(())")
     sections.append("    })")
     sections.append("}")
@@ -1272,10 +1274,16 @@ def _run_cargo_build(
     project_dir: Path, target: str, env: dict, timeout: int = 300
 ) -> subprocess.CompletedProcess:
     """Execute ``cargo build --release`` and return the CompletedProcess."""
-    return subprocess.run(  # nosec B603,B607
-        cmd, cwd=str(project_dir),
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        timeout=timeout, env=env,
+    cmd = ["cargo", "build", "--release", "--target", target]  # nosec B607
+    return subprocess.run(  # nosec B603
+        cmd,
+        cwd=str(project_dir),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        env=env,
     )
 
 
@@ -1388,11 +1396,13 @@ def _comment_out_failing_fns(src_path: Path, bad_lines: List[int]) -> int:
     return len(to_replace)
 
 
-def compile_with_repair(project_dir: Path,
-                        system: SystemProfile,
-                        *,
-                        mode: str = "pyo3",
-                        max_retries: int = 20) -> CompileResult:
+def compile_with_repair(
+    project_dir: Path,
+    system: SystemProfile,
+    *,
+    mode: str = "pyo3",
+    max_retries: int = 20,
+) -> CompileResult:
     """Compile the crate, auto-fixing broken functions on failure.
 
     If compilation fails, identifies which functions have errors,
@@ -1553,6 +1563,16 @@ class PipelineReport:
     errors: List[str] = field(default_factory=list)
     phases: List[Dict[str, Any]] = field(default_factory=list)
 
+
+@dataclass
+class RustifyConfig:
+    """Configuration bundle for RustifyPipeline."""
+
+    crate_name: str = "xray_rustified"
+    min_score: float = 3.0
+    max_candidates: int = 100
+    mode: str = "binary"
+    exclude_dirs: List[str] = field(default_factory=list)
 
 
 class RustifyPipeline:
@@ -1739,6 +1759,7 @@ class RustifyPipeline:
 
         except Exception as exc:
             import traceback
+
             trace_str = traceback.format_exc()
             report.errors.append(f"Pipeline error: {exc}\n{trace_str}")
 

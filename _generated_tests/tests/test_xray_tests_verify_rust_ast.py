@@ -3,7 +3,6 @@
 Tests function signatures, edge cases, and class instantiation.
 """
 
-import pytest
 
 def test_tests_verify_rust_ast_setUp_is_callable():
     """Verify setUp exists and is callable."""

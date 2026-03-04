@@ -30,7 +30,13 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
-    Any, Dict, FrozenSet, List, Optional, Set, Tuple,
+    Any,
+    Dict,
+    FrozenSet,
+    List,
+    Optional,
+    Set,
+    Tuple,
 )
 
 from Core.types import SmellIssue, Severity
@@ -42,28 +48,31 @@ from Core.ui_bridge import get_bridge
 # Data types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class UICallSite:
     """A single UI constructor / method call found in source code."""
+
     file_path: str
     line: int
     end_line: int
-    module_alias: str          # e.g. "ft"
-    full_qual: str             # e.g. "ft.TabBar"
-    resolved_name: str         # e.g. "flet.TabBar"
-    kwargs_used: List[str]     # keyword arg names passed
-    positional_count: int      # number of positional args
-    is_method: bool            # True if ft.Class.method() pattern
-    source_snippet: str = ""   # the call as written
+    module_alias: str  # e.g. "ft"
+    full_qual: str  # e.g. "ft.TabBar"
+    resolved_name: str  # e.g. "flet.TabBar"
+    kwargs_used: List[str]  # keyword arg names passed
+    positional_count: int  # number of positional args
+    is_method: bool  # True if ft.Class.method() pattern
+    source_snippet: str = ""  # the call as written
 
 
 @dataclass
 class UICompatIssue:
     """One incompatibility finding (wraps into SmellIssue for reporting)."""
+
     call: UICallSite
-    bad_kwarg: str             # the offending keyword name
-    accepted: FrozenSet[str]   # what the constructor actually accepts
-    has_var_keyword: bool       # True if ctor has **kwargs
+    bad_kwarg: str  # the offending keyword name
+    accepted: FrozenSet[str]  # what the constructor actually accepts
+    has_var_keyword: bool  # True if ctor has **kwargs
     suggestion: str = ""
 
     def to_smell(self) -> SmellIssue:
@@ -107,6 +116,7 @@ class UICompatIssue:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _edit_distance(a: str, b: str) -> int:
     """Minimal Levenshtein distance."""
     if len(a) < len(b):
@@ -115,11 +125,13 @@ def _edit_distance(a: str, b: str) -> int:
     for i, ca in enumerate(a):
         curr = [i + 1]
         for j, cb in enumerate(b):
-            curr.append(min(
-                prev[j + 1] + 1,
-                curr[j] + 1,
-                prev[j] + (0 if ca == cb else 1),
-            ))
+            curr.append(
+                min(
+                    prev[j + 1] + 1,
+                    curr[j] + 1,
+                    prev[j] + (0 if ca == cb else 1),
+                )
+            )
         prev = curr
     return prev[-1]
 
@@ -167,6 +179,7 @@ def _get_accepted_params(callable_obj: Any) -> Tuple[FrozenSet[str], bool]:
 # ---------------------------------------------------------------------------
 # AST visitor — extract UI calls
 # ---------------------------------------------------------------------------
+
 
 class _UICallVisitor(ast.NodeVisitor):
     """
@@ -230,18 +243,20 @@ class _UICallVisitor(ast.NodeVisitor):
         full_qual = ".".join(parts)
         resolved = module_name + "." + ".".join(parts[1:])
 
-        self.calls.append(UICallSite(
-            file_path=self.file_path,
-            line=node.lineno,
-            end_line=getattr(node, "end_lineno", node.lineno),
-            module_alias=alias,
-            full_qual=full_qual,
-            resolved_name=resolved,
-            kwargs_used=kwargs_used,
-            positional_count=len(node.args),
-            is_method=len(parts) > 2,
-            source_snippet=ast.dump(node)[:200],
-        ))
+        self.calls.append(
+            UICallSite(
+                file_path=self.file_path,
+                line=node.lineno,
+                end_line=getattr(node, "end_lineno", node.lineno),
+                module_alias=alias,
+                full_qual=full_qual,
+                resolved_name=resolved,
+                kwargs_used=kwargs_used,
+                positional_count=len(node.args),
+                is_method=len(parts) > 2,
+                source_snippet=ast.dump(node)[:200],
+            )
+        )
         self.generic_visit(node)
 
 
@@ -294,9 +309,16 @@ class UICompatAnalyzer:
 
     # Modules that are safe to import for signature inspection
     SAFE_MODULES: Set[str] = {
-        "flet", "tkinter", "PyQt5", "PyQt6",
-        "PySide2", "PySide6", "customtkinter",
-        "kivy", "dearpygui", "wx",
+        "flet",
+        "tkinter",
+        "PyQt5",
+        "PyQt6",
+        "PySide2",
+        "PySide6",
+        "customtkinter",
+        "kivy",
+        "dearpygui",
+        "wx",
     }
 
     def __init__(self, *, extra_modules: Optional[Set[str]] = None):
@@ -305,8 +327,9 @@ class UICompatAnalyzer:
 
     # -- public API --------------------------------------------------------
 
-    def analyze(self, path: Path,
-                exclude: Optional[List[str]] = None) -> List[UICompatIssue]:
+    def analyze(
+        self, path: Path, exclude: Optional[List[str]] = None
+    ) -> List[UICompatIssue]:
         """
         Analyze a single file or directory tree.
 
@@ -317,13 +340,24 @@ class UICompatAnalyzer:
             return self._analyze_file(path)
         return self.analyze_tree(path, exclude=exclude)
 
-    def analyze_tree(self, root: Path,
-                     exclude: Optional[List[str]] = None) -> List[UICompatIssue]:
+    def analyze_tree(
+        self, root: Path, exclude: Optional[List[str]] = None
+    ) -> List[UICompatIssue]:
         """Recursively scan a directory for .py files."""
-        exclude_set = set(exclude or [
-            ".venv", "venv", "__pycache__", ".git", "node_modules",
-            "target", "dist", "build", ".eggs",
-        ])
+        exclude_set = set(
+            exclude
+            or [
+                ".venv",
+                "venv",
+                "__pycache__",
+                ".git",
+                "node_modules",
+                "target",
+                "dist",
+                "build",
+                ".eggs",
+            ]
+        )
         issues: List[UICompatIssue] = []
         for py in sorted(root.rglob("*.py")):
             # Skip excluded dirs
@@ -335,14 +369,17 @@ class UICompatAnalyzer:
                 logger.debug(f"ui_compat: skipping {py}: {exc}")
         return issues
 
-    def analyze_to_smells(self, path: Path,
-                          exclude: Optional[List[str]] = None
-                          ) -> List[SmellIssue]:
+    def analyze_to_smells(
+        self, path: Path, exclude: Optional[List[str]] = None
+    ) -> List[SmellIssue]:
         """Convenience: analyze and convert straight to SmellIssue list."""
         return [issue.to_smell() for issue in self.analyze(path, exclude)]
 
-    def summary(self, issues: Optional[List[SmellIssue]] = None,
-                raw: Optional[List[UICompatIssue]] = None) -> Dict[str, Any]:
+    def summary(
+        self,
+        issues: Optional[List[SmellIssue]] = None,
+        raw: Optional[List[UICompatIssue]] = None,
+    ) -> Dict[str, Any]:
         """Build summary dict compatible with X-Ray reporting."""
         if raw is not None:
             smells = [i.to_smell() for i in raw]
@@ -360,7 +397,7 @@ class UICompatAnalyzer:
                 bad_kwargs[r.bad_kwarg] = bad_kwargs.get(r.bad_kwarg, 0) + 1
         return {
             "total": total,
-            "critical": total,   # all UI compat issues are critical
+            "critical": total,  # all UI compat issues are critical
             "warning": 0,
             "info": 0,
             "by_widget": dict(sorted(by_widget.items(), key=lambda x: -x[1])),
@@ -381,7 +418,9 @@ class UICompatAnalyzer:
         bridge.log(f"  Found {len(issues)} incompatible UI call(s):\n")
         for i, issue in enumerate(issues, 1):
             c = issue.call
-            bridge.log(f"  {i}. {c.resolved_name}() \u2014 line {c.line} in {c.file_path}")
+            bridge.log(
+                f"  {i}. {c.resolved_name}() \u2014 line {c.line} in {c.file_path}"
+            )
             bridge.log(f"     \u274c Bad kwarg: '{issue.bad_kwarg}'")
             if issue.suggestion:
                 bridge.log(f"     \U0001f4a1 {issue.suggestion}")
@@ -390,8 +429,9 @@ class UICompatAnalyzer:
 
     # -- internals ---------------------------------------------------------
 
-    def _analyze_file(self, path: Path,
-                      root: Optional[Path] = None) -> List[UICompatIssue]:
+    def _analyze_file(
+        self, path: Path, root: Optional[Path] = None
+    ) -> List[UICompatIssue]:
         """Parse one file, extract UI calls, validate kwargs."""
         try:
             source = path.read_text(encoding="utf-8", errors="replace")
@@ -405,8 +445,11 @@ class UICompatAnalyzer:
 
         # Filter to modules we can safely import
         allowed = self.SAFE_MODULES | self.extra_modules
-        ui_aliases = {k: v for k, v in aliases.items()
-                      if v in allowed or v.split(".")[0] in allowed}
+        ui_aliases = {
+            k: v
+            for k, v in aliases.items()
+            if v in allowed or v.split(".")[0] in allowed
+        }
         if not ui_aliases:
             return []
 
@@ -452,8 +495,10 @@ class UICompatAnalyzer:
 
         return [
             UICompatIssue(
-                call=call, bad_kwarg=kwarg,
-                accepted=accepted, has_var_keyword=has_var_kw,
+                call=call,
+                bad_kwarg=kwarg,
+                accepted=accepted,
+                has_var_keyword=has_var_kw,
             )
             for kwarg in call.kwargs_used
             if kwarg not in accepted
@@ -477,14 +522,20 @@ class UICompatAnalyzer:
 # Standalone CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def main():
     """Quick CLI: ``python -m Analysis.ui_compat path/to/file_or_dir``."""
     import argparse
-    parser = argparse.ArgumentParser(
-        description="X-Ray UI API Compatibility Checker")
+
+    parser = argparse.ArgumentParser(description="X-Ray UI API Compatibility Checker")
     parser.add_argument("path", help="File or directory to scan")
-    parser.add_argument("--extra-module", "-m", action="append", default=[],
-                        help="Additional module names to inspect (repeatable)")
+    parser.add_argument(
+        "--extra-module",
+        "-m",
+        action="append",
+        default=[],
+        help="Additional module names to inspect (repeatable)",
+    )
     args = parser.parse_args()
 
     analyzer = UICompatAnalyzer(extra_modules=set(args.extra_module))

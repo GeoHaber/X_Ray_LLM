@@ -45,6 +45,7 @@ from typing import Optional, Protocol, runtime_checkable
 # Protocol — the contract every bridge must satisfy
 # ---------------------------------------------------------------------------
 
+
 @runtime_checkable
 class UIBridge(Protocol):
     """
@@ -65,19 +66,17 @@ class UIBridge(Protocol):
         ``label`` is a short description of the item being processed.
     """
 
-    def log(self, msg: str) -> None:
-        ...
+    def log(self, msg: str) -> None: ...
 
-    def status(self, label: str) -> None:
-        ...
+    def status(self, label: str) -> None: ...
 
-    def progress(self, done: int, total: int, label: str = "") -> None:
-        ...
+    def progress(self, done: int, total: int, label: str = "") -> None: ...
 
 
 # ---------------------------------------------------------------------------
 # PrintBridge — default; keeps existing CLI output unchanged
 # ---------------------------------------------------------------------------
+
 
 class PrintBridge:
     """Default bridge: routes everything to stdout via ``print()``.
@@ -112,6 +111,7 @@ class PrintBridge:
 # NullBridge — silent; perfect for unit tests and headless jobs
 # ---------------------------------------------------------------------------
 
+
 class NullBridge:
     """Silent bridge — swallows all output.
 
@@ -135,6 +135,7 @@ class NullBridge:
 # TqdmBridge — rich progress bars when tqdm is installed
 # ---------------------------------------------------------------------------
 
+
 class TqdmBridge:
     """Bridge that uses tqdm for progress bars.
 
@@ -151,6 +152,7 @@ class TqdmBridge:
         self._bar: Optional[object] = None
         try:
             import tqdm as _tqdm  # noqa: F401
+
             self._has_tqdm = True
         except ImportError:
             self._has_tqdm = False
@@ -160,6 +162,7 @@ class TqdmBridge:
         if self._has_tqdm:
             try:
                 from tqdm import tqdm
+
                 tqdm.write(msg)
                 return
             except Exception:
@@ -181,18 +184,19 @@ class TqdmBridge:
             return
         try:
             from tqdm import tqdm
+
             if self._bar is None or getattr(self._bar, "total", 0) != total:
                 self._close_bar()
                 self._bar = tqdm(
                     total=max(total, 1),
-                    desc=label[:self._desc_width] or "Scanning",
+                    desc=label[: self._desc_width] or "Scanning",
                     unit="file",
                     dynamic_ncols=True,
                 )
             if done > getattr(self._bar, "n", 0):
                 self._bar.update(done - self._bar.n)
             if label:
-                self._bar.set_postfix_str(label[-self._desc_width:], refresh=False)
+                self._bar.set_postfix_str(label[-self._desc_width :], refresh=False)
             if done >= total:
                 self._close_bar()
         except Exception:
@@ -239,6 +243,7 @@ def set_bridge(bridge: UIBridge) -> None:
 # ---------------------------------------------------------------------------
 # Convenience shorthands (optional; keeps call sites terse)
 # ---------------------------------------------------------------------------
+
 
 def log(msg: str) -> None:
     """Shorthand: ``get_bridge().log(msg)``."""

@@ -3,7 +3,6 @@
 Tests function signatures, edge cases, and class instantiation.
 """
 
-import pytest
 
 def test_tests_test_phase1_modularization_test_extract_functions_is_callable():
     """Verify test_extract_functions exists and is callable."""

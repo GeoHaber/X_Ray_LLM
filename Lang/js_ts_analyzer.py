@@ -13,17 +13,23 @@ import hashlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Dict, Tuple
+from typing import List, Dict, Tuple
 
 
 # ── Scannable web extensions ────────────────────────────────────────────
 
 WEB_EXTENSIONS = frozenset({".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs"})
 DEVOPS_EXTENSIONS = frozenset({".yml", ".yaml"})
-DEVOPS_FILENAMES = frozenset({
-    "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
-    "Jenkinsfile", "Makefile", ".dockerignore",
-})
+DEVOPS_FILENAMES = frozenset(
+    {
+        "Dockerfile",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        "Jenkinsfile",
+        "Makefile",
+        ".dockerignore",
+    }
+)
 
 
 def is_web_file(filename: str) -> bool:
@@ -44,6 +50,7 @@ def is_devops_file(filename: str) -> bool:
 
 
 # ── JS/TS function record ──────────────────────────────────────────────
+
 
 @dataclass
 class JSFunction:
@@ -137,14 +144,15 @@ _RE_CLASS = re.compile(
 # React component: const Name = (props) => ( ... JSX ... )
 # or function Name(props) { return <div>...</div> }
 _RE_REACT_COMPONENT = re.compile(
-    r"(?:const|function)\s+(?P<name>[A-Z]\w+)", re.MULTILINE,
+    r"(?:const|function)\s+(?P<name>[A-Z]\w+)",
+    re.MULTILINE,
 )
 
 # Import patterns
 _RE_IMPORT = re.compile(
     r"^import\s+(?:"
-    r"(?P<default>\w+)"                          # default import
-    r"|(?:\{?\s*(?P<named>[^}]+?)\s*\}?)"        # named imports
+    r"(?P<default>\w+)"  # default import
+    r"|(?:\{?\s*(?P<named>[^}]+?)\s*\}?)"  # named imports
     r"(?:\s*,\s*(?:\{?\s*(?P<named2>[^}]+?)\s*\}?))?"
     r")\s+from\s+['\"](?P<module>[^'\"]+)['\"]",
     re.MULTILINE,
@@ -182,6 +190,7 @@ _RE_JSX = re.compile(r"<[A-Z]\w+[\s/>]|<\/[A-Z]\w+>|<\w+\.[A-Z]")
 
 
 # ── Core analysis functions ─────────────────────────────────────────────
+
 
 def _find_matching_brace(lines: List[str], start_line: int) -> int:
     """Find the line number of the closing brace starting from *start_line*.
@@ -322,12 +331,12 @@ def analyze_js_file(fpath: Path, root: Path) -> JSFileAnalysis:
 
     # ── Find console.log calls ──────────────────────────────────────────
     for m in _RE_CONSOLE.finditer(source):
-        lineno = source[:m.start()].count("\n") + 1
+        lineno = source[: m.start()].count("\n") + 1
         analysis.console_logs.append(lineno)
 
     # ── Find TODOs ──────────────────────────────────────────────────────
     for m in _RE_TODO.finditer(source):
-        lineno = source[:m.start()].count("\n") + 1
+        lineno = source[: m.start()].count("\n") + 1
         analysis.todos.append((lineno, m.group(1).strip()))
 
     # ── Extract functions ───────────────────────────────────────────────
@@ -341,7 +350,7 @@ def _extract_imports(source: str) -> List[JSImport]:
     imports: List[JSImport] = []
 
     for m in _RE_IMPORT.finditer(source):
-        lineno = source[:m.start()].count("\n") + 1
+        lineno = source[: m.start()].count("\n") + 1
         default_name = m.group("default")
         named = m.group("named") or ""
         named2 = m.group("named2") or ""
@@ -358,26 +367,35 @@ def _extract_imports(source: str) -> List[JSImport]:
                     if n.strip()
                 )
 
-        imports.append(JSImport(
-            module=module,
-            names=names,
-            line=lineno,
-            is_default=bool(default_name),
-        ))
+        imports.append(
+            JSImport(
+                module=module,
+                names=names,
+                line=lineno,
+                is_default=bool(default_name),
+            )
+        )
 
     for m in _RE_REQUIRE.finditer(source):
-        lineno = source[:m.start()].count("\n") + 1
+        lineno = source[: m.start()].count("\n") + 1
         names_str = m.group("names") or ""
         module = m.group("module")
         names = [n.strip() for n in names_str.split(",") if n.strip()]
-        imports.append(JSImport(module=module, names=names, line=lineno, is_default=True))
+        imports.append(
+            JSImport(module=module, names=names, line=lineno, is_default=True)
+        )
 
     for m in _RE_DYNAMIC_IMPORT.finditer(source):
-        lineno = source[:m.start()].count("\n") + 1
-        imports.append(JSImport(
-            module=m.group("module"), names=[], line=lineno,
-            is_default=False, is_dynamic=True,
-        ))
+        lineno = source[: m.start()].count("\n") + 1
+        imports.append(
+            JSImport(
+                module=m.group("module"),
+                names=[],
+                line=lineno,
+                is_default=False,
+                is_dynamic=True,
+            )
+        )
 
     return imports
 
@@ -387,7 +405,7 @@ def _extract_func_declarations(
 ) -> List[JSFunction]:
     functions = []
     for m in _RE_FUNC_DECL.finditer(source):
-        lineno = source[:m.start()].count("\n")
+        lineno = source[: m.start()].count("\n")
         if lineno in seen_lines:
             continue
         seen_lines.add(lineno)
@@ -398,17 +416,28 @@ def _extract_func_declarations(
         is_async = bool(m.group("async"))
 
         end_line = _find_matching_brace(lines, lineno)
-        code = "\n".join(lines[lineno:end_line + 1])
+        code = "\n".join(lines[lineno : end_line + 1])
         is_component = has_jsx and name[0:1].isupper() and bool(_RE_JSX.search(code))
 
-        functions.append(JSFunction(
-            name=name, file_path=rel_path, line_start=lineno + 1, line_end=end_line + 1,
-            size_lines=end_line - lineno + 1, parameters=params, is_async=is_async,
-            is_arrow=False, is_exported=is_exported, is_react_component=is_component,
-            complexity=_count_complexity(code), nesting_depth=_count_nesting(code),
-            code=code, code_hash=_code_hash(code),
-            kind="component" if is_component else "function",
-        ))
+        functions.append(
+            JSFunction(
+                name=name,
+                file_path=rel_path,
+                line_start=lineno + 1,
+                line_end=end_line + 1,
+                size_lines=end_line - lineno + 1,
+                parameters=params,
+                is_async=is_async,
+                is_arrow=False,
+                is_exported=is_exported,
+                is_react_component=is_component,
+                complexity=_count_complexity(code),
+                nesting_depth=_count_nesting(code),
+                code=code,
+                code_hash=_code_hash(code),
+                kind="component" if is_component else "function",
+            )
+        )
     return functions
 
 
@@ -417,7 +446,7 @@ def _extract_arrow_functions(
 ) -> List[JSFunction]:
     functions = []
     for m in _RE_ARROW.finditer(source):
-        lineno = source[:m.start()].count("\n")
+        lineno = source[: m.start()].count("\n")
         if lineno in seen_lines:
             continue
         seen_lines.add(lineno)
@@ -428,17 +457,28 @@ def _extract_arrow_functions(
         is_async = bool(m.group("async"))
 
         end_line = _find_matching_brace(lines, lineno)
-        code = "\n".join(lines[lineno:end_line + 1])
+        code = "\n".join(lines[lineno : end_line + 1])
         is_component = has_jsx and name[0:1].isupper() and bool(_RE_JSX.search(code))
 
-        functions.append(JSFunction(
-            name=name, file_path=rel_path, line_start=lineno + 1, line_end=end_line + 1,
-            size_lines=end_line - lineno + 1, parameters=params, is_async=is_async,
-            is_arrow=True, is_exported=is_exported, is_react_component=is_component,
-            complexity=_count_complexity(code), nesting_depth=_count_nesting(code),
-            code=code, code_hash=_code_hash(code),
-            kind="component" if is_component else "arrow",
-        ))
+        functions.append(
+            JSFunction(
+                name=name,
+                file_path=rel_path,
+                line_start=lineno + 1,
+                line_end=end_line + 1,
+                size_lines=end_line - lineno + 1,
+                parameters=params,
+                is_async=is_async,
+                is_arrow=True,
+                is_exported=is_exported,
+                is_react_component=is_component,
+                complexity=_count_complexity(code),
+                nesting_depth=_count_nesting(code),
+                code=code,
+                code_hash=_code_hash(code),
+                kind="component" if is_component else "arrow",
+            )
+        )
     return functions
 
 
@@ -447,7 +487,7 @@ def _extract_class_methods(
 ) -> List[JSFunction]:
     functions = []
     for m in _RE_METHOD.finditer(source):
-        lineno = source[:m.start()].count("\n")
+        lineno = source[: m.start()].count("\n")
         if lineno in seen_lines:
             continue
         seen_lines.add(lineno)
@@ -460,26 +500,43 @@ def _extract_class_methods(
         is_async = bool(m.group("async"))
 
         end_line = _find_matching_brace(lines, lineno)
-        code = "\n".join(lines[lineno:end_line + 1])
+        code = "\n".join(lines[lineno : end_line + 1])
 
-        functions.append(JSFunction(
-            name=name, file_path=rel_path, line_start=lineno + 1, line_end=end_line + 1,
-            size_lines=end_line - lineno + 1, parameters=params, is_async=is_async,
-            is_arrow=False, is_exported=False, is_react_component=False,
-            complexity=_count_complexity(code), nesting_depth=_count_nesting(code),
-            code=code, code_hash=_code_hash(code), kind="method",
-        ))
+        functions.append(
+            JSFunction(
+                name=name,
+                file_path=rel_path,
+                line_start=lineno + 1,
+                line_end=end_line + 1,
+                size_lines=end_line - lineno + 1,
+                parameters=params,
+                is_async=is_async,
+                is_arrow=False,
+                is_exported=False,
+                is_react_component=False,
+                complexity=_count_complexity(code),
+                nesting_depth=_count_nesting(code),
+                code=code,
+                code_hash=_code_hash(code),
+                kind="method",
+            )
+        )
     return functions
 
 
-def _extract_functions(source: str, lines: List[str],
-                       rel_path: str, has_jsx: bool) -> List[JSFunction]:
+def _extract_functions(
+    source: str, lines: List[str], rel_path: str, has_jsx: bool
+) -> List[JSFunction]:
     """Extract all function-like constructs from JS/TS source."""
     functions: List[JSFunction] = []
     seen_lines: set = set()
 
-    functions.extend(_extract_func_declarations(source, lines, rel_path, has_jsx, seen_lines))
-    functions.extend(_extract_arrow_functions(source, lines, rel_path, has_jsx, seen_lines))
+    functions.extend(
+        _extract_func_declarations(source, lines, rel_path, has_jsx, seen_lines)
+    )
+    functions.extend(
+        _extract_arrow_functions(source, lines, rel_path, has_jsx, seen_lines)
+    )
     functions.extend(_extract_class_methods(source, lines, rel_path, seen_lines))
 
     return functions
@@ -489,73 +546,176 @@ def _extract_functions(source: str, lines: List[str],
 
 JS_PACKAGE_CATEGORIES: Dict[str, List[str]] = {
     "react-core": [
-        "react", "react-dom", "react-router", "react-router-dom",
-        "react-helmet", "react-hook-form", "react-query",
-        "react-redux", "react-scripts", "react-select",
-        "react-table", "react-transition-group", "react-spring",
-        "react-i18next", "react-dropzone", "react-modal",
-        "react-toastify", "react-icons", "react-datepicker",
+        "react",
+        "react-dom",
+        "react-router",
+        "react-router-dom",
+        "react-helmet",
+        "react-hook-form",
+        "react-query",
+        "react-redux",
+        "react-scripts",
+        "react-select",
+        "react-table",
+        "react-transition-group",
+        "react-spring",
+        "react-i18next",
+        "react-dropzone",
+        "react-modal",
+        "react-toastify",
+        "react-icons",
+        "react-datepicker",
     ],
     "next-js": [
-        "next", "next-auth", "next-i18next", "next-seo",
-        "next-themes", "next-mdx-remote",
+        "next",
+        "next-auth",
+        "next-i18next",
+        "next-seo",
+        "next-themes",
+        "next-mdx-remote",
     ],
     "state-management": [
-        "redux", "redux-toolkit", "@reduxjs/toolkit", "zustand",
-        "recoil", "jotai", "mobx", "mobx-react", "valtio", "xstate",
+        "redux",
+        "redux-toolkit",
+        "@reduxjs/toolkit",
+        "zustand",
+        "recoil",
+        "jotai",
+        "mobx",
+        "mobx-react",
+        "valtio",
+        "xstate",
     ],
     "ui-framework": [
-        "@mui/material", "@chakra-ui/react", "antd", "tailwindcss",
-        "bootstrap", "react-bootstrap", "@headlessui/react",
-        "styled-components", "@emotion/react", "@emotion/styled",
-        "radix-ui", "@radix-ui/react-dialog", "shadcn-ui",
+        "@mui/material",
+        "@chakra-ui/react",
+        "antd",
+        "tailwindcss",
+        "bootstrap",
+        "react-bootstrap",
+        "@headlessui/react",
+        "styled-components",
+        "@emotion/react",
+        "@emotion/styled",
+        "radix-ui",
+        "@radix-ui/react-dialog",
+        "shadcn-ui",
     ],
     "testing": [
-        "jest", "@jest/globals", "vitest", "cypress", "playwright",
-        "@testing-library/react", "@testing-library/jest-dom",
-        "@testing-library/user-event", "mocha", "chai", "sinon",
-        "supertest", "nock", "msw",
+        "jest",
+        "@jest/globals",
+        "vitest",
+        "cypress",
+        "playwright",
+        "@testing-library/react",
+        "@testing-library/jest-dom",
+        "@testing-library/user-event",
+        "mocha",
+        "chai",
+        "sinon",
+        "supertest",
+        "nock",
+        "msw",
     ],
     "build-tools": [
-        "webpack", "vite", "esbuild", "rollup", "parcel", "turbo",
-        "babel", "@babel/core", "@babel/preset-env", "swc",
-        "tsup", "unbuild",
+        "webpack",
+        "vite",
+        "esbuild",
+        "rollup",
+        "parcel",
+        "turbo",
+        "babel",
+        "@babel/core",
+        "@babel/preset-env",
+        "swc",
+        "tsup",
+        "unbuild",
     ],
     "http-client": [
-        "axios", "node-fetch", "got", "ky", "superagent",
-        "undici", "ofetch",
+        "axios",
+        "node-fetch",
+        "got",
+        "ky",
+        "superagent",
+        "undici",
+        "ofetch",
     ],
     "server-framework": [
-        "express", "fastify", "koa", "hapi", "nestjs", "@nestjs/core",
-        "hono", "h3",
+        "express",
+        "fastify",
+        "koa",
+        "hapi",
+        "nestjs",
+        "@nestjs/core",
+        "hono",
+        "h3",
     ],
     "database": [
-        "prisma", "@prisma/client", "mongoose", "sequelize",
-        "typeorm", "knex", "drizzle-orm", "pg", "mysql2",
-        "better-sqlite3", "redis", "ioredis",
+        "prisma",
+        "@prisma/client",
+        "mongoose",
+        "sequelize",
+        "typeorm",
+        "knex",
+        "drizzle-orm",
+        "pg",
+        "mysql2",
+        "better-sqlite3",
+        "redis",
+        "ioredis",
     ],
     "auth": [
-        "jsonwebtoken", "passport", "bcrypt", "bcryptjs",
-        "jose", "oauth4webapi",
+        "jsonwebtoken",
+        "passport",
+        "bcrypt",
+        "bcryptjs",
+        "jose",
+        "oauth4webapi",
     ],
     "validation": [
-        "zod", "yup", "joi", "class-validator", "ajv", "superstruct",
+        "zod",
+        "yup",
+        "joi",
+        "class-validator",
+        "ajv",
+        "superstruct",
     ],
     "utility": [
-        "lodash", "ramda", "date-fns", "dayjs", "moment", "uuid",
-        "nanoid", "chalk", "debug", "dotenv", "cross-env",
+        "lodash",
+        "ramda",
+        "date-fns",
+        "dayjs",
+        "moment",
+        "uuid",
+        "nanoid",
+        "chalk",
+        "debug",
+        "dotenv",
+        "cross-env",
     ],
     "type-system": [
-        "typescript", "ts-node", "@types/node", "@types/react",
-        "@types/jest", "tsx",
+        "typescript",
+        "ts-node",
+        "@types/node",
+        "@types/react",
+        "@types/jest",
+        "tsx",
     ],
     "linting": [
-        "eslint", "prettier", "@typescript-eslint/parser",
-        "@typescript-eslint/eslint-plugin", "eslint-config-next",
+        "eslint",
+        "prettier",
+        "@typescript-eslint/parser",
+        "@typescript-eslint/eslint-plugin",
+        "eslint-config-next",
     ],
     "devops": [
-        "docker-compose", "pm2", "nodemon", "concurrently",
-        "husky", "lint-staged", "commitlint",
+        "docker-compose",
+        "pm2",
+        "nodemon",
+        "concurrently",
+        "husky",
+        "lint-staged",
+        "commitlint",
     ],
 }
 

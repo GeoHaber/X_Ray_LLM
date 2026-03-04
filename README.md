@@ -26,8 +26,9 @@ performance-critical Python functions to Rust.
 | Desktop GUI | Flet (Flutter engine), light/dark mode, 9 dashboard tabs |
 | 5 Languages | English · Română · Español · Français · Deutsch |
 | **Test Generator** | Auto-generates pytest (Python) or Vitest/Jest (JS/TS) test suites from scan data — import smoke, function, class, smell regression, structure tests |
+| **Nexus Mode** | Advanced orchestration combining multi-agents, self-correction, and LLM guidance |
 | **Auto-Fix** | `--fix-smells` removes console.log, debug prints, creates missing project files |
-| Rust Transpiler | AST-based, 19 module handlers, 54.7 % coverage across 14 projects |
+| Rust Transpiler | AST-based, 19 module handlers, fully extracted God-class structures, 54.7% coverage |
 | LLM Fallback | Local LLM fills `todo!()` stubs, validates with `rustc --check` |
 | **UIBridge** | Swappable output layer — Flet, tqdm, Streamlit, NiceGUI, tests all use one bridge |
 | 905+ Tests | Smoke, unit, integration, parity, fuzz, transpilation, bridge |

@@ -13,11 +13,9 @@ Covers:
   - categorize_imports
 """
 
-import hashlib
 import textwrap
 from pathlib import Path
 
-import pytest
 
 from Lang.js_ts_analyzer import (
     JSFileAnalysis,
@@ -36,6 +34,7 @@ from Lang.js_ts_analyzer import (
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def _tmp_js(tmp_path: Path, filename: str, content: str) -> Path:
     """Write a temporary JS/TS file and return its path."""
     f = tmp_path / filename
@@ -44,6 +43,7 @@ def _tmp_js(tmp_path: Path, filename: str, content: str) -> Path:
 
 
 # ── is_web_file ───────────────────────────────────────────────────────────────
+
 
 class TestIsWebFile:
     def test_js_extension(self):
@@ -73,6 +73,7 @@ class TestIsWebFile:
 
 # ── is_devops_file ────────────────────────────────────────────────────────────
 
+
 class TestIsDevopsFile:
     def test_dockerfile(self):
         assert is_devops_file("Dockerfile") is True
@@ -92,6 +93,7 @@ class TestIsDevopsFile:
 
 
 # ── JSFunction dataclass ──────────────────────────────────────────────────────
+
 
 class TestJSFunction:
     def test_location_string(self):
@@ -137,6 +139,7 @@ class TestJSFunction:
 
 # ── _parse_params ─────────────────────────────────────────────────────────────
 
+
 class TestParseParams:
     def test_simple_params(self):
         result = _parse_params("a, b, c")
@@ -163,6 +166,7 @@ class TestParseParams:
 
 
 # ── _count_complexity ─────────────────────────────────────────────────────────
+
 
 class TestCountComplexity:
     def test_simple_function(self):
@@ -191,6 +195,7 @@ class TestCountComplexity:
 
 # ── _count_nesting ────────────────────────────────────────────────────────────
 
+
 class TestCountNesting:
     def test_flat_code(self):
         code = "function f() { return 1; }"
@@ -205,6 +210,7 @@ class TestCountNesting:
 
 
 # ── _extract_imports ──────────────────────────────────────────────────────────
+
 
 class TestExtractImports:
     def test_es_import(self):
@@ -249,30 +255,42 @@ class TestExtractImports:
 
 # ── analyze_js_file ───────────────────────────────────────────────────────────
 
+
 class TestAnalyzeJsFile:
     def test_basic_function_extraction(self, tmp_path):
-        f = _tmp_js(tmp_path, "app.js", """
+        f = _tmp_js(
+            tmp_path,
+            "app.js",
+            """
             function greet(name) {
                 return "Hello " + name;
             }
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         assert isinstance(result, JSFileAnalysis)
         assert any(fn.name == "greet" for fn in result.functions)
 
     def test_arrow_function_extraction(self, tmp_path):
-        f = _tmp_js(tmp_path, "utils.js", """
+        f = _tmp_js(
+            tmp_path,
+            "utils.js",
+            """
             const add = (a, b) => a + b;
             const multiply = (x, y) => {
                 return x * y;
             };
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         names = {fn.name for fn in result.functions}
         assert "add" in names or "multiply" in names
 
     def test_class_method_extraction(self, tmp_path):
-        f = _tmp_js(tmp_path, "service.js", """
+        f = _tmp_js(
+            tmp_path,
+            "service.js",
+            """
             class UserService {
                 constructor(db) {
                     this.db = db;
@@ -281,60 +299,80 @@ class TestAnalyzeJsFile:
                     return await this.db.find(id);
                 }
             }
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         names = {fn.name for fn in result.functions}
         assert "getUser" in names or "constructor" in names
 
     def test_import_detection(self, tmp_path):
-        f = _tmp_js(tmp_path, "app.js", """
+        f = _tmp_js(
+            tmp_path,
+            "app.js",
+            """
             import React from 'react';
             import { useState } from 'react';
             import axios from 'axios';
 
             function App() { return null; }
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         modules = {i.module for i in result.imports}
         assert "react" in modules
         assert "axios" in modules
 
     def test_console_log_detection(self, tmp_path):
-        f = _tmp_js(tmp_path, "debug.js", """
+        f = _tmp_js(
+            tmp_path,
+            "debug.js",
+            """
             function buggy() {
                 console.log("debug 1");
                 console.log("debug 2");
                 console.log("debug 3");
                 return true;
             }
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         assert len(result.console_logs) >= 3
 
     def test_todo_detection(self, tmp_path):
-        f = _tmp_js(tmp_path, "todo.js", """
+        f = _tmp_js(
+            tmp_path,
+            "todo.js",
+            """
             // TODO: fix this later
             function broken() {
                 // FIXME: this crashes on null
                 return null;
             }
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         assert len(result.todos) >= 2
 
     def test_jsx_detection(self, tmp_path):
-        f = _tmp_js(tmp_path, "Component.jsx", """
+        f = _tmp_js(
+            tmp_path,
+            "Component.jsx",
+            """
             import React from 'react';
             function Button({ onClick, label }) {
                 return <Button onClick={onClick}>{label}</Button>;
             }
             export default Button;
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         assert result.has_jsx is True
 
     def test_typescript_language_detection(self, tmp_path):
-        f = _tmp_js(tmp_path, "api.ts", """
+        f = _tmp_js(
+            tmp_path,
+            "api.ts",
+            """
             interface User {
                 id: number;
                 name: string;
@@ -342,7 +380,8 @@ class TestAnalyzeJsFile:
             async function fetchUser(id: number): Promise<User> {
                 return await fetch('/api/user/' + id).then(r => r.json());
             }
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         assert result.language in ("typescript", "ts")
 
@@ -353,38 +392,50 @@ class TestAnalyzeJsFile:
         assert result.total_lines >= 40  # allow some tolerance
 
     def test_exported_function_detected(self, tmp_path):
-        f = _tmp_js(tmp_path, "exported.js", """
+        f = _tmp_js(
+            tmp_path,
+            "exported.js",
+            """
             export function publicAPI(x) {
                 return x * 2;
             }
             function privateHelper(x) {
                 return x + 1;
             }
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         exported = [fn for fn in result.functions if fn.is_exported]
         assert len(exported) >= 1
         assert any(fn.name == "publicAPI" for fn in exported)
 
     def test_async_function_detected(self, tmp_path):
-        f = _tmp_js(tmp_path, "async.js", """
+        f = _tmp_js(
+            tmp_path,
+            "async.js",
+            """
             async function loadData(url) {
                 const response = await fetch(url);
                 return response.json();
             }
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         async_fns = [fn for fn in result.functions if fn.is_async]
         assert len(async_fns) >= 1
 
     def test_react_component_detected(self, tmp_path):
         # JSX detection requires uppercase component tags in the code
-        f = _tmp_js(tmp_path, "Widget.jsx", """
+        f = _tmp_js(
+            tmp_path,
+            "Widget.jsx",
+            """
             import React from 'react';
             function Widget({ title }) {
                 return <Widget>{title}</Widget>;
             }
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         # If JSX is present and function starts with uppercase, it's a component
         assert result.has_jsx is True
@@ -408,7 +459,10 @@ class TestAnalyzeJsFile:
         assert result.imports == []
 
     def test_function_complexity_populated(self, tmp_path):
-        f = _tmp_js(tmp_path, "complex.js", """
+        f = _tmp_js(
+            tmp_path,
+            "complex.js",
+            """
             function decide(a, b, c) {
                 if (a) {
                     if (b) {
@@ -419,7 +473,8 @@ class TestAnalyzeJsFile:
                 }
                 return 0;
             }
-        """)
+        """,
+        )
         result = analyze_js_file(f, tmp_path)
         fns = [fn for fn in result.functions if fn.name == "decide"]
         if fns:
@@ -427,6 +482,7 @@ class TestAnalyzeJsFile:
 
 
 # ── categorize_imports ────────────────────────────────────────────────────────
+
 
 class TestCategorizeImports:
     def test_react_category(self):
@@ -441,7 +497,9 @@ class TestCategorizeImports:
         assert isinstance(cats, dict)
 
     def test_unknown_package_categorized(self):
-        imports = [JSImport(module="my-custom-package", names=[], line=1, is_default=True)]
+        imports = [
+            JSImport(module="my-custom-package", names=[], line=1, is_default=True)
+        ]
         cats = categorize_imports(imports)
         assert isinstance(cats, dict)
         assert len(cats) >= 0

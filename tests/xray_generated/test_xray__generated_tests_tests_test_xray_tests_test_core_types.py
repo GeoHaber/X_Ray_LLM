@@ -1,0 +1,205 @@
+"""Auto-generated monkey tests for _generated_tests/tests/test_xray_tests_test_core_types.py by X-Ray v7.0.
+
+Tests function signatures, edge cases, and class instantiation.
+"""
+
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_key_uses_stem_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_key_uses_stem_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_key_uses_stem_is_callable
+    assert callable(test_tests_test_core_types_test_key_uses_stem_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_key_strips_extension_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_key_strips_extension_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_key_strips_extension_is_callable
+    assert callable(test_tests_test_core_types_test_key_strips_extension_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_key_windows_paths_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_key_windows_paths_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_key_windows_paths_is_callable
+    assert callable(test_tests_test_core_types_test_key_windows_paths_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_location_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_location_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_location_is_callable
+    assert callable(test_tests_test_core_types_test_location_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_signature_with_return_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_signature_with_return_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_signature_with_return_is_callable
+    assert callable(test_tests_test_core_types_test_signature_with_return_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_signature_without_return_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_signature_without_return_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_signature_without_return_is_callable
+    assert callable(test_tests_test_core_types_test_signature_without_return_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_signature_no_params_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_signature_no_params_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_signature_no_params_is_callable
+    assert callable(test_tests_test_core_types_test_signature_no_params_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_is_async_default_false_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_is_async_default_false_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_is_async_default_false_is_callable
+    assert callable(test_tests_test_core_types_test_is_async_default_false_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_is_async_true_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_is_async_true_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_is_async_true_is_callable
+    assert callable(test_tests_test_core_types_test_is_async_true_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_all_fields_stored_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_all_fields_stored_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_all_fields_stored_is_callable
+    assert callable(test_tests_test_core_types_test_all_fields_stored_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_fields_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_fields_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_fields_is_callable
+    assert callable(test_tests_test_core_types_test_fields_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_no_init_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_no_init_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_no_init_is_callable
+    assert callable(test_tests_test_core_types_test_no_init_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_multiple_bases_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_multiple_bases_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_multiple_bases_is_callable
+    assert callable(test_tests_test_core_types_test_multiple_bases_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_defaults_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_defaults_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_defaults_is_callable
+    assert callable(test_tests_test_core_types_test_defaults_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_llm_analysis_override_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_llm_analysis_override_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_llm_analysis_override_is_callable
+    assert callable(test_tests_test_core_types_test_llm_analysis_override_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_defaults_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_defaults_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_defaults_is_callable
+    assert callable(test_tests_test_core_types_test_defaults_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_with_suggestion_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_with_suggestion_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_with_suggestion_is_callable
+    assert callable(test_tests_test_core_types_test_with_suggestion_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_fields_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_fields_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_fields_is_callable
+    assert callable(test_tests_test_core_types_test_fields_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_constants_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_constants_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_constants_is_callable
+    assert callable(test_tests_test_core_types_test_constants_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_icon_returns_string_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_icon_returns_string_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_icon_returns_string_is_callable
+    assert callable(test_tests_test_core_types_test_icon_returns_string_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_icon_warning_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_icon_warning_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_icon_warning_is_callable
+    assert callable(test_tests_test_core_types_test_icon_warning_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_icon_info_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_icon_info_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_icon_info_is_callable
+    assert callable(test_tests_test_core_types_test_icon_info_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_test_icon_unknown_returns_question_mark_is_callable_is_callable():
+    """Verify test_tests_test_core_types_test_icon_unknown_returns_question_mark_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_test_icon_unknown_returns_question_mark_is_callable
+    assert callable(test_tests_test_core_types_test_icon_unknown_returns_question_mark_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestFunctionRecord_is_class_is_callable():
+    """Verify test_tests_test_core_types_TestFunctionRecord_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestFunctionRecord_is_class
+    assert callable(test_tests_test_core_types_TestFunctionRecord_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestFunctionRecord_has_methods_is_callable():
+    """Verify test_tests_test_core_types_TestFunctionRecord_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestFunctionRecord_has_methods
+    assert callable(test_tests_test_core_types_TestFunctionRecord_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestClassRecord_is_class_is_callable():
+    """Verify test_tests_test_core_types_TestClassRecord_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestClassRecord_is_class
+    assert callable(test_tests_test_core_types_TestClassRecord_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestClassRecord_has_methods_is_callable():
+    """Verify test_tests_test_core_types_TestClassRecord_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestClassRecord_has_methods
+    assert callable(test_tests_test_core_types_TestClassRecord_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestClassRecord_has_docstring_is_callable():
+    """Verify test_tests_test_core_types_TestClassRecord_has_docstring exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestClassRecord_has_docstring
+    assert callable(test_tests_test_core_types_TestClassRecord_has_docstring)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestSmellIssue_is_class_is_callable():
+    """Verify test_tests_test_core_types_TestSmellIssue_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestSmellIssue_is_class
+    assert callable(test_tests_test_core_types_TestSmellIssue_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestSmellIssue_has_methods_is_callable():
+    """Verify test_tests_test_core_types_TestSmellIssue_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestSmellIssue_has_methods
+    assert callable(test_tests_test_core_types_TestSmellIssue_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestSmellIssue_has_docstring_is_callable():
+    """Verify test_tests_test_core_types_TestSmellIssue_has_docstring exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestSmellIssue_has_docstring
+    assert callable(test_tests_test_core_types_TestSmellIssue_has_docstring)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestDuplicateGroup_is_class_is_callable():
+    """Verify test_tests_test_core_types_TestDuplicateGroup_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestDuplicateGroup_is_class
+    assert callable(test_tests_test_core_types_TestDuplicateGroup_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestDuplicateGroup_has_methods_is_callable():
+    """Verify test_tests_test_core_types_TestDuplicateGroup_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestDuplicateGroup_has_methods
+    assert callable(test_tests_test_core_types_TestDuplicateGroup_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestDuplicateGroup_has_docstring_is_callable():
+    """Verify test_tests_test_core_types_TestDuplicateGroup_has_docstring exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestDuplicateGroup_has_docstring
+    assert callable(test_tests_test_core_types_TestDuplicateGroup_has_docstring)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestLibrarySuggestion_is_class_is_callable():
+    """Verify test_tests_test_core_types_TestLibrarySuggestion_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestLibrarySuggestion_is_class
+    assert callable(test_tests_test_core_types_TestLibrarySuggestion_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestLibrarySuggestion_has_methods_is_callable():
+    """Verify test_tests_test_core_types_TestLibrarySuggestion_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestLibrarySuggestion_has_methods
+    assert callable(test_tests_test_core_types_TestLibrarySuggestion_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestLibrarySuggestion_has_docstring_is_callable():
+    """Verify test_tests_test_core_types_TestLibrarySuggestion_has_docstring exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestLibrarySuggestion_has_docstring
+    assert callable(test_tests_test_core_types_TestLibrarySuggestion_has_docstring)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestSeverity_is_class_is_callable():
+    """Verify test_tests_test_core_types_TestSeverity_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestSeverity_is_class
+    assert callable(test_tests_test_core_types_TestSeverity_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestSeverity_has_methods_is_callable():
+    """Verify test_tests_test_core_types_TestSeverity_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestSeverity_has_methods
+    assert callable(test_tests_test_core_types_TestSeverity_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_core_types_test_tests_test_core_types_TestSeverity_has_docstring_is_callable():
+    """Verify test_tests_test_core_types_TestSeverity_has_docstring exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_core_types import test_tests_test_core_types_TestSeverity_has_docstring
+    assert callable(test_tests_test_core_types_TestSeverity_has_docstring)

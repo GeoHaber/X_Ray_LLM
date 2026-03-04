@@ -3,7 +3,6 @@
 Tests function signatures, edge cases, and class instantiation.
 """
 
-import pytest
 
 def test_tests_verify_integration_test_compute_structure_hash_uses_rust_is_callable():
     """Verify test_compute_structure_hash_uses_rust exists and is callable."""

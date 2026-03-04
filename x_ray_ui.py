@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 x_ray_ui.py â€” Streamlit GUI for X-Ray Code Quality Scanner
 ============================================================
@@ -22,7 +22,7 @@ import subprocess  # nosec B404
 import time
 from collections import Counter, namedtuple
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import streamlit as st
 
@@ -149,7 +149,12 @@ def _build_unified_header(
     ]
     for f in funcs_data:
         lines.append(f"#   - {f.get('file', '?')}:{f.get('line', '?')}")
-    lines.extend(["# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•", ""])
+    lines.extend(
+        [
+            "# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•",
+            "",
+        ]
+    )
     return lines
 
 
@@ -226,7 +231,6 @@ def _generate_unified_function(
         lines.append(base_code.replace(base_name, unified_name, 1))
 
     return "\n".join(lines)
-
 
 
 # â”€â”€ Modern CSS injection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -533,6 +537,7 @@ _PHASE_RUNNERS = {
 
 from dataclasses import dataclass  # noqa: E402
 
+
 @dataclass
 class UIScanContext:
     root: Path
@@ -571,7 +576,11 @@ def _run_scan(ctx: UIScanContext) -> Dict[str, Any]:
     results: Dict[str, Any] = {"meta": {}}
     t0 = time.time()
 
-    need_ast = ctx.modes.get("smells") or ctx.modes.get("duplicates") or ctx.modes.get("rustify")
+    need_ast = (
+        ctx.modes.get("smells")
+        or ctx.modes.get("duplicates")
+        or ctx.modes.get("rustify")
+    )
     active = [k for k in _PHASE_RUNNERS if ctx.modes.get(k)]
     n_phases = (1 if need_ast else 0) + len(active) + 1
     pw = 1.0 / max(n_phases, 1)
@@ -585,7 +594,9 @@ def _run_scan(ctx: UIScanContext) -> Dict[str, Any]:
     if need_ast:
         _prog("Parsing source files", 0.0)
         functions, classes, errors, file_count = _scan_codebase(
-            ctx.root, ctx.exclude, on_file=lambda d, t, _p: _prog(f"Parsing {d}/{t}", d / t)
+            ctx.root,
+            ctx.exclude,
+            on_file=lambda d, t, _p: _prog(f"Parsing {d}/{t}", d / t),
         )
         _prog("AST parse complete")
         pi += 1
@@ -607,14 +618,14 @@ def _run_scan(ctx: UIScanContext) -> Dict[str, Any]:
         results["_functions"] = functions
 
     scan_ctx = ScanContext(ctx.root, ctx.exclude, ctx.thresholds, functions, classes)
-    
+
     pctx = UIPhaseContext(
         active=active,
         scan_ctx=scan_ctx,
         results=results,
         pi=pi,
         pw=pw,
-        progress_cb=ctx.progress_cb
+        progress_cb=ctx.progress_cb,
     )
     pi = _run_ui_phases(pctx)
 
@@ -1020,7 +1031,9 @@ def _render_security_tab(results: Dict[str, Any]):
     )
 
     for s in filtered[:100]:
-        icon = {"critical": "ðŸ”´", "warning": "ðŸŸ¡", "info": "ðŸŸ¢"}.get(s.severity, "â“")
+        icon = {"critical": "ðŸ”´", "warning": "ðŸŸ¡", "info": "ðŸŸ¢"}.get(
+            s.severity, "â“"
+        )
         with st.expander(f"{icon} [{s.rule_code}] {s.file_path}:{s.line}"):
             st.write(f"**Issue:** {s.message}")
             if s.suggestion:
@@ -1671,7 +1684,9 @@ def _render_auto_rustify_tab(results: Dict[str, Any]):
 
     run_col1, run_col2 = st.columns([1, 3])
     with run_col1:
-        do_run = st.button("ðŸš€ Run Pipeline", type="primary", use_container_width=True)
+        do_run = st.button(
+            "ðŸš€ Run Pipeline", type="primary", use_container_width=True
+        )
     with run_col2:
         st.caption(f"Output directory: `{output_dir}`")
         st.caption("âš ï¸  Requires Rust toolchain (`rustup`, `cargo`).")
@@ -1692,7 +1707,9 @@ def _render_phase_timeline(phases: list):
     for phase in phases:
         name = phase.get("name", "?")
         status = phase.get("status", "?")
-        icon = "âœ…" if status == "ok" else "âš ï¸" if status == "no_candidates" else "âŒ"
+        icon = (
+            "âœ…" if status == "ok" else "âš ï¸" if status == "no_candidates" else "âŒ"
+        )
         parts = [
             f"{k}={v}"
             for k, v in phase.items()
@@ -1956,7 +1973,9 @@ def _execute_scan_ui(
 
     progress_bar = st.progress(0.0)
     status_text = st.empty()
-    status_text.markdown(_mono_status("âš¡ Initialising scanâ€¦"), unsafe_allow_html=True)
+    status_text.markdown(
+        _mono_status("âš¡ Initialising scanâ€¦"), unsafe_allow_html=True
+    )
 
     def _on_progress(frac: float, label: str):
         progress_bar.progress(min(frac, 1.0))
@@ -1967,7 +1986,7 @@ def _execute_scan_ui(
         modes=modes,
         exclude=exclude_dirs,
         thresholds=thresholds,
-        progress_cb=_on_progress
+        progress_cb=_on_progress,
     )
     results = _run_scan(ctx)
 

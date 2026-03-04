@@ -3,7 +3,6 @@
 Tests function signatures, edge cases, and class instantiation.
 """
 
-import pytest
 
 def test_tests_test_analysis_similarity_test_empty_string_is_callable():
     """Verify test_empty_string exists and is callable."""

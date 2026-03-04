@@ -17,13 +17,13 @@ Covers:
 import textwrap
 from pathlib import Path
 
-import pytest
 
 from Analysis.web_smells import WebSmellDetector, _make_web_smell
 from Core.types import SmellIssue
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _write(tmp_path: Path, filename: str, content: str) -> Path:
     f = tmp_path / filename
@@ -37,6 +37,7 @@ def _big_file(tmp_path: Path, filename: str, lines: int) -> Path:
 
 
 # ── _make_web_smell ───────────────────────────────────────────────────────────
+
 
 class TestMakeWebSmell:
     def test_returns_smell_issue(self):
@@ -83,6 +84,7 @@ class TestMakeWebSmell:
 
 # ── WebSmellDetector.detect ───────────────────────────────────────────────────
 
+
 class TestWebSmellDetectorDetect:
     def test_returns_list(self, tmp_path):
         _write(tmp_path, "app.js", "function f() { return 1; }\n")
@@ -91,11 +93,15 @@ class TestWebSmellDetectorDetect:
         assert isinstance(smells, list)
 
     def test_clean_small_file_no_smells(self, tmp_path):
-        _write(tmp_path, "clean.js", textwrap.dedent("""
+        _write(
+            tmp_path,
+            "clean.js",
+            textwrap.dedent("""
             function add(a, b) {
                 return a + b;
             }
-        """))
+        """),
+        )
         d = WebSmellDetector()
         smells = d.detect(tmp_path)
         # A small clean file should have 0 or very few smells
@@ -117,9 +123,12 @@ class TestWebSmellDetectorDetect:
         assert any("console" in c for c in categories)
 
     def test_import_sprawl_flagged(self, tmp_path):
-        imports = "\n".join([
-            f"import pkg{i} from 'package{i}';" for i in range(25)  # > 20 threshold
-        ])
+        imports = "\n".join(
+            [
+                f"import pkg{i} from 'package{i}';"
+                for i in range(25)  # > 20 threshold
+            ]
+        )
         _write(tmp_path, "sprawl.js", imports + "\nfunction f() {}\n")
         d = WebSmellDetector()
         smells = d.detect(tmp_path)
@@ -154,19 +163,24 @@ class TestWebSmellDetectorDetect:
         assert smells == []
 
     def test_tsx_file_analyzed(self, tmp_path):
-        _write(tmp_path, "App.tsx", textwrap.dedent("""
+        _write(
+            tmp_path,
+            "App.tsx",
+            textwrap.dedent("""
             import React from 'react';
             function App() {
                 return <div>Hello</div>;
             }
             export default App;
-        """))
+        """),
+        )
         d = WebSmellDetector()
         smells = d.detect(tmp_path)
         assert isinstance(smells, list)
 
 
 # ── Individual smell check coverage ──────────────────────────────────────────
+
 
 class TestIndividualSmellChecks:
     """Test specific smell thresholds via the detect() method."""
@@ -182,31 +196,40 @@ class TestIndividualSmellChecks:
         assert any("long" in c or "function" in c for c in categories)
 
     def test_too_many_params_flagged(self, tmp_path):
-        _write(tmp_path, "params.js", textwrap.dedent("""
+        _write(
+            tmp_path,
+            "params.js",
+            textwrap.dedent("""
             function doEverything(a, b, c, d, e, f, g, h) {
                 return a + b + c + d + e + f + g + h;
             }
-        """))
+        """),
+        )
         d = WebSmellDetector()
         smells = d.detect(tmp_path)
         categories = {s.category for s in smells}
         assert any("param" in c for c in categories)
 
     def test_async_no_catch_flagged(self, tmp_path):
-        _write(tmp_path, "asyncbad.js", textwrap.dedent("""
+        _write(
+            tmp_path,
+            "asyncbad.js",
+            textwrap.dedent("""
             async function fetchData(url) {
                 const data = await fetch(url);
                 return data.json();
             }
-        """))
+        """),
+        )
         d = WebSmellDetector()
         smells = d.detect(tmp_path)
-        categories = {s.category for s in smells}
+        _categories = {s.category for s in smells}
         # async-no-catch is optional; just verify list is returned
         assert isinstance(smells, list)
 
 
 # ── WebSmellDetector.summary ──────────────────────────────────────────────────
+
 
 class TestWebSmellDetectorSummary:
     def test_summary_before_detect(self):
@@ -235,6 +258,7 @@ class TestWebSmellDetectorSummary:
 
 
 # ── Custom thresholds ─────────────────────────────────────────────────────────
+
 
 class TestCustomThresholds:
     def test_lower_console_threshold_triggers_earlier(self, tmp_path):

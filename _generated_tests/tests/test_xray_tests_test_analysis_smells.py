@@ -3,7 +3,6 @@
 Tests function signatures, edge cases, and class instantiation.
 """
 
-import pytest
 
 def test_tests_test_analysis_smells_test_no_smell_under_threshold_is_callable():
     """Verify test_no_smell_under_threshold exists and is callable."""

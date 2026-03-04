@@ -14,9 +14,7 @@ Covers:
   - ProjectHealthAnalyzer.summary()
 """
 
-from pathlib import Path
 
-import pytest
 
 from Analysis.project_health import (
     HealthCheck,
@@ -30,6 +28,7 @@ from Analysis.project_health import (
 
 
 # ── _score_to_grade ───────────────────────────────────────────────────────────
+
 
 class TestScoreToGrade:
     def test_perfect_score(self):
@@ -60,6 +59,7 @@ class TestScoreToGrade:
 
 # ── HealthCheck dataclass ─────────────────────────────────────────────────────
 
+
 class TestHealthCheck:
     def test_creation(self):
         hc = HealthCheck(
@@ -81,9 +81,12 @@ class TestHealthCheck:
 
 # ── HealthReport dataclass ────────────────────────────────────────────────────
 
+
 class TestHealthReport:
     def test_to_dict_structure(self):
-        hc = HealthCheck(name="readme", description="Has README", weight=10, passed=True)
+        hc = HealthCheck(
+            name="readme", description="Has README", weight=10, passed=True
+        )
         report = HealthReport(root="/tmp/proj", score=90, grade="A-", checks=[hc])
         d = report.to_dict()
         assert "score" in d
@@ -101,6 +104,7 @@ class TestHealthReport:
 
 
 # ── Module-level auto-fix helpers ─────────────────────────────────────────────
+
 
 class TestAutoFixHelpers:
     def test_create_gitignore(self, tmp_path):
@@ -122,6 +126,7 @@ class TestAutoFixHelpers:
         pkg = tmp_path / "package.json"
         assert pkg.exists()
         import json
+
         data = json.loads(pkg.read_text())
         assert "name" in data
 
@@ -133,6 +138,7 @@ class TestAutoFixHelpers:
 
 
 # ── ProjectHealthAnalyzer.analyze ─────────────────────────────────────────────
+
 
 class TestProjectHealthAnalyzerAnalyze:
     """Tests for each individual health check."""
@@ -159,13 +165,17 @@ class TestProjectHealthAnalyzerAnalyze:
     def test_gitignore_check_passes_when_present(self, tmp_path):
         (tmp_path / ".gitignore").write_text("__pycache__\n")
         report = ProjectHealthAnalyzer().analyze(tmp_path)
-        gi_check = next((c for c in report.checks if "gitignore" in c.name.lower()), None)
+        gi_check = next(
+            (c for c in report.checks if "gitignore" in c.name.lower()), None
+        )
         assert gi_check is not None
         assert gi_check.passed is True
 
     def test_gitignore_check_fails_when_missing(self, tmp_path):
         report = ProjectHealthAnalyzer().analyze(tmp_path)
-        gi_check = next((c for c in report.checks if "gitignore" in c.name.lower()), None)
+        gi_check = next(
+            (c for c in report.checks if "gitignore" in c.name.lower()), None
+        )
         assert gi_check is not None
         assert gi_check.passed is False
 
@@ -174,13 +184,17 @@ class TestProjectHealthAnalyzerAnalyze:
     def test_readme_check_passes_when_present(self, tmp_path):
         (tmp_path / "README.md").write_text("# My Project\n")
         report = ProjectHealthAnalyzer().analyze(tmp_path)
-        readme_check = next((c for c in report.checks if "readme" in c.name.lower()), None)
+        readme_check = next(
+            (c for c in report.checks if "readme" in c.name.lower()), None
+        )
         if readme_check:
             assert readme_check.passed is True
 
     def test_readme_check_fails_when_missing(self, tmp_path):
         report = ProjectHealthAnalyzer().analyze(tmp_path)
-        readme_check = next((c for c in report.checks if "readme" in c.name.lower()), None)
+        readme_check = next(
+            (c for c in report.checks if "readme" in c.name.lower()), None
+        )
         if readme_check:
             assert readme_check.passed is False
 
@@ -189,7 +203,9 @@ class TestProjectHealthAnalyzerAnalyze:
     def test_license_check_passes_when_present(self, tmp_path):
         (tmp_path / "LICENSE").write_text("MIT License\n")
         report = ProjectHealthAnalyzer().analyze(tmp_path)
-        lic_check = next((c for c in report.checks if "license" in c.name.lower()), None)
+        lic_check = next(
+            (c for c in report.checks if "license" in c.name.lower()), None
+        )
         if lic_check:
             assert lic_check.passed is True
 
@@ -226,7 +242,9 @@ class TestProjectHealthAnalyzerAnalyze:
     def test_changelog_check_passes_when_present(self, tmp_path):
         (tmp_path / "CHANGELOG.md").write_text("# Changelog\n")
         report = ProjectHealthAnalyzer().analyze(tmp_path)
-        cl_check = next((c for c in report.checks if "changelog" in c.name.lower()), None)
+        cl_check = next(
+            (c for c in report.checks if "changelog" in c.name.lower()), None
+        )
         if cl_check:
             assert cl_check.passed is True
 
@@ -258,6 +276,7 @@ class TestProjectHealthAnalyzerAnalyze:
 
 # ── Auto-fix mode ─────────────────────────────────────────────────────────────
 
+
 class TestProjectHealthAutoFix:
     def test_auto_fix_creates_gitignore(self, tmp_path):
         assert not (tmp_path / ".gitignore").exists()
@@ -284,6 +303,7 @@ class TestProjectHealthAutoFix:
 
 
 # ── ProjectHealthAnalyzer.summary ────────────────────────────────────────────
+
 
 class TestProjectHealthSummary:
     def test_summary_before_analyze(self):

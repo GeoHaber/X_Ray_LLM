@@ -3,7 +3,6 @@
 Tests function signatures, edge cases, and class instantiation.
 """
 
-import pytest
 
 def test_tests_test_core_utils_test_returns_logger_instance_is_callable():
     """Verify test_returns_logger_instance exists and is callable."""

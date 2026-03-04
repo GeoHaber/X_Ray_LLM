@@ -3,7 +3,6 @@
 Tests function signatures, edge cases, and class instantiation.
 """
 
-import pytest
 
 def test_tests_test_smells_new_test_flags_magic_numbers_is_callable():
     """Verify test_flags_magic_numbers exists and is callable."""

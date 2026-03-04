@@ -7,9 +7,7 @@ Note: PythonTestGenerator.generate() and JSTSTestGenerator.generate() both retur
 List[GeneratedTestFile], NOT a TestGenReport. They write files directly.
 """
 
-from pathlib import Path
 
-import pytest
 
 from Analysis.test_generator import (
     GeneratedTestFile,
@@ -25,6 +23,7 @@ from Core.types import ClassRecord, FunctionRecord, SmellIssue
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_func(name="add", fpath="utils.py", lines=10, params=None) -> FunctionRecord:
     return FunctionRecord(
@@ -80,6 +79,7 @@ def _make_smell(file="utils.py") -> SmellIssue:
 
 
 # ── Utility functions ─────────────────────────────────────────────────────────
+
 
 class TestSafeIdentifier:
     def test_plain_name(self):
@@ -143,6 +143,7 @@ class TestGroupByFile:
 
 # ── GeneratedTestFile & TestGenReport ─────────────────────────────────────────
 
+
 class TestGeneratedTestFile:
     def test_creation(self):
         gtf = GeneratedTestFile(
@@ -166,6 +167,7 @@ class TestTestGenReport:
 
 # ── PythonTestGenerator ───────────────────────────────────────────────────────
 # generate() returns List[GeneratedTestFile], not a TestGenReport
+
 
 class TestPythonTestGenerator:
     def test_generate_returns_list(self, tmp_path):
@@ -243,10 +245,12 @@ class TestPythonTestGenerator:
 # ── JSTSTestGenerator ─────────────────────────────────────────────────────────
 # generate() returns List[GeneratedTestFile], no output_dir param
 
+
 class TestJSTSTestGenerator:
     def _make_js_analysis(self, file_path="src/app.js", has_jsx=False):
         from Lang.js_ts_analyzer import JSFileAnalysis, JSFunction
         import hashlib
+
         fn = JSFunction(
             name="greet",
             file_path=file_path,

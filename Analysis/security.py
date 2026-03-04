@@ -24,9 +24,21 @@ from Core.utils import logger
 from Analysis._analyzer_base import BaseStaticAnalyzer
 
 _DEFAULT_EXCLUDE = [
-    ".venv", "venv", ".env", "__pycache__", "node_modules",
-    ".git", "target", ".mypy_cache", ".pytest_cache", "dist",
-    "build", ".eggs", "*.egg-info", "_scratch", ".github",
+    ".venv",
+    "venv",
+    ".env",
+    "__pycache__",
+    "node_modules",
+    ".git",
+    "target",
+    ".mypy_cache",
+    ".pytest_cache",
+    "dist",
+    "build",
+    ".eggs",
+    "*.egg-info",
+    "_scratch",
+    ".github",
 ]
 
 # Bandit severity → X-Ray severity
@@ -115,9 +127,21 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
 
         # Auto-exclude common non-project directories
         _DEFAULT_EXCLUDE = [
-            ".venv", "venv", ".env", "__pycache__", "node_modules",
-            ".git", "target", ".mypy_cache", ".pytest_cache",
-            "dist", "build", ".eggs", "*.egg-info", "_scratch", ".github",
+            ".venv",
+            "venv",
+            ".env",
+            "__pycache__",
+            "node_modules",
+            ".git",
+            "target",
+            ".mypy_cache",
+            ".pytest_cache",
+            "dist",
+            "build",
+            ".eggs",
+            "*.egg-info",
+            "_scratch",
+            ".github",
         ]
         all_exclude = list(_DEFAULT_EXCLUDE)
         if exclude:

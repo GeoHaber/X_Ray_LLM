@@ -1,27 +1,32 @@
-
 import sys
 import logging
 import platform
+
 
 # === LOGGING ===
 def setup_logger(name: str = "X_RAY_Claude"):
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(message)s',
-        handlers=[logging.StreamHandler(sys.stdout)]
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
     return logging.getLogger(name)
 
+
 logger = setup_logger()
+
 
 # === SAFE UNICODE OUTPUT ===
 def _wrap_stream_utf8(stream, attr_name: str):
     """Wrap a stream's buffer in a UTF-8 TextIOWrapper if possible."""
     import io
-    if not hasattr(stream, 'buffer'):
+
+    if not hasattr(stream, "buffer"):
         return stream
     return io.TextIOWrapper(
-        stream.buffer, encoding='utf-8', errors='replace',
+        stream.buffer,
+        encoding="utf-8",
+        errors="replace",
         line_buffering=True,
     )
 
@@ -30,6 +35,7 @@ def _enable_windows_utf8():
     """Enable UTF-8 codepage on Windows console."""
     try:
         import ctypes
+
         ctypes.windll.kernel32.SetConsoleOutputCP(65001)
         ctypes.windll.kernel32.SetConsoleCP(65001)
     except Exception:  # nosec B110
@@ -39,8 +45,8 @@ def _enable_windows_utf8():
 def _reconfigure_streams_fallback():
     """Fallback: wrap stdout/stderr buffers in UTF-8 TextIOWrapper."""
     try:
-        sys.stdout = _wrap_stream_utf8(sys.stdout, 'stdout')
-        sys.stderr = _wrap_stream_utf8(sys.stderr, 'stderr')
+        sys.stdout = _wrap_stream_utf8(sys.stdout, "stdout")
+        sys.stderr = _wrap_stream_utf8(sys.stderr, "stderr")
     except Exception:  # nosec B110
         pass
 
@@ -48,12 +54,13 @@ def _reconfigure_streams_fallback():
 def _enable_utf8_console() -> None:
     """Best-effort: switch the Windows console to UTF-8 so basic text works."""
     import os as _os
-    if _os.name == 'nt':
+
+    if _os.name == "nt":
         _enable_windows_utf8()
     # Reconfigure streams to utf-8 with replace for safety
     try:
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         _reconfigure_streams_fallback()
 
@@ -66,23 +73,25 @@ def supports_unicode() -> bool:
     belongs in Streamlit, not in cmd.exe / PowerShell.
     """
     # Frozen .exe  →  never use emoji in terminal output
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         return False
 
-    enc = getattr(sys.stdout, 'encoding', None) or ''
-    if enc.lower().replace('-', '').replace('_', '') in ('utf8',):
+    enc = getattr(sys.stdout, "encoding", None) or ""
+    if enc.lower().replace("-", "").replace("_", "") in ("utf8",):
         return True
     return False
 
 
-_enable_utf8_console()          # make sure we can at least print ASCII safely
-UNICODE_OK = supports_unicode() # False when frozen → ASCII icons only
+_enable_utf8_console()  # make sure we can at least print ASCII safely
+UNICODE_OK = supports_unicode()  # False when frozen → ASCII icons only
 
 # === HARDWARE & OS DETECTION ===
+
 
 def get_os_info() -> str:
     """Return a descriptive string of the current OS."""
     return f"{platform.system()} {platform.release()} ({platform.machine()})"
+
 
 def get_cpu_info() -> str:
     """Return CPU brand/features if possible."""
@@ -90,11 +99,14 @@ def get_cpu_info() -> str:
     # but we'll stick to stdlib for now to minimize dependencies.
     return platform.processor() or "Unknown CPU"
 
+
 # === NETWORKING ===
+
 
 def url_responds(url: str, timeout: int = 2) -> bool:
     """Return *True* if a GET request to *url* succeeds with HTTP 200."""
     import urllib.request
+
     try:
         req = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310  # nosec B310
@@ -106,6 +118,7 @@ def url_responds(url: str, timeout: int = 2) -> bool:
 def find_free_port(preferred: int = 8666) -> int:
     """Return *preferred* if available, else find any free port."""
     import socket
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
             s.bind(("127.0.0.1", preferred))
@@ -116,6 +129,7 @@ def find_free_port(preferred: int = 8666) -> int:
 
 
 _verified_cache = False
+
 
 def verify_rust_environment():
     """Check if the environment matches the compiled extension expectations."""
@@ -136,15 +150,19 @@ def verify_rust_environment():
 
 # === TRIAL LICENSE ===
 
+
 def check_trial_license() -> bool:
     """Enforce trial license via x_ray_core. Returns True if allowed."""
     try:
         import x_ray_core
+
         remaining = x_ray_core.check_trial()
         max_runs = x_ray_core.trial_max_runs()
         print(f"  \u26a1 Trial license: {remaining} of {max_runs} runs remaining")
         if remaining <= 3:
-            print(f"  \u26a0  Only {remaining} runs left — contact developer for full license.")
+            print(
+                f"  \u26a0  Only {remaining} runs left — contact developer for full license."
+            )
         print()
         return True
     except RuntimeError as exc:
@@ -154,4 +172,3 @@ def check_trial_license() -> bool:
     except (ImportError, AttributeError):
         # x_ray_core not available or missing check_trial — skip trial check (dev mode)
         return True
-

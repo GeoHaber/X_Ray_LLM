@@ -3,8 +3,8 @@ tests/test_smells_new.py — Tests for v6.0.0 new smell detectors
 ================================================================
 Covers: magic-number, mutable-default-arg, dead-code
 """
+
 import textwrap
-import pytest
 
 from Core.types import FunctionRecord, Severity
 from Analysis.smells import (
@@ -17,19 +17,25 @@ from Analysis.smells import (
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+
 def _make_func(code: str, name: str = "test_func") -> FunctionRecord:
     """Build a minimal FunctionRecord from a code snippet."""
     src = textwrap.dedent(code)
     import ast
     from Analysis.ast_utils import _build_function_record
+
     tree = ast.parse(src)
-    node = next(n for n in ast.walk(tree)
-                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))
+    node = next(
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    )
     lines = src.splitlines()
     return _build_function_record(node, "test.py", src, lines)
 
 
 # ── Magic Number ──────────────────────────────────────────────────────────────
+
 
 class TestMagicNumber:
     def test_flags_magic_numbers(self):
@@ -96,6 +102,7 @@ class TestMagicNumber:
 
 # ── Mutable Default Arg ───────────────────────────────────────────────────────
 
+
 class TestMutableDefaultArg:
     def test_list_default_flagged(self):
         func = _make_func("""
@@ -118,10 +125,13 @@ class TestMutableDefaultArg:
         assert any(s.category == "mutable-default-arg" for s in smells)
 
     def test_set_default_flagged(self):
-        func = _make_func("""
+        func = _make_func(
+            """
             def add_items(items=set()):
                 pass
-        """, name="add_items")
+        """,
+            name="add_items",
+        )
         # set() is a call, not ast.Set — should not fire on this particular form
         # (only ast.Set literal `{1,2}` is caught, not `set()`)
         smells = []
@@ -161,6 +171,7 @@ class TestMutableDefaultArg:
 
 
 # ── Dead Code ─────────────────────────────────────────────────────────────────
+
 
 class TestDeadCode:
     def test_statements_after_return_flagged(self):
@@ -233,6 +244,7 @@ class TestDeadCode:
 
 
 # ── Integration: CodeSmellDetector ──────────────────────────────────────────
+
 
 class TestSmellDetectorIntegration:
     def test_magic_number_in_full_detector(self):

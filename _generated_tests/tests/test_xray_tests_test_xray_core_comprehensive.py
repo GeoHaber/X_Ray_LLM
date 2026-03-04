@@ -3,7 +3,6 @@
 Tests function signatures, edge cases, and class instantiation.
 """
 
-import pytest
 
 def test_tests_test_xray_core_comprehensive_test_tokenize_basic_is_callable():
     """Verify test_tokenize_basic exists and is callable."""

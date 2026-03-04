@@ -3,7 +3,6 @@
 Tests function signatures, edge cases, and class instantiation.
 """
 
-import pytest
 
 def test_tests_test_core_types_test_key_uses_stem_is_callable():
     """Verify test_key_uses_stem exists and is callable."""

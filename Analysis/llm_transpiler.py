@@ -136,9 +136,10 @@ def _check_rust_compiles(rust_code: str, *, timeout: int = 30) -> Tuple[bool, st
         # --emit=metadata: type-check without producing a binary
         out_path = tmp_path.replace(".rs", ".rmeta")
         result = subprocess.run(  # nosec B603,B607
-            ["rustc", "--edition", "2021", "--emit=metadata",
-             "-o", out_path, tmp_path],
-            capture_output=True, text=True, timeout=timeout,
+            ["rustc", "--edition", "2021", "--emit=metadata", "-o", out_path, tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         ok = result.returncode == 0
         err = (result.stderr or "").strip()

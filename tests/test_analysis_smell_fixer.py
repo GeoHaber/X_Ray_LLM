@@ -7,7 +7,6 @@ Tests for Analysis/smell_fixer.py — auto-fix engine for the --fix-smells flag.
 import textwrap
 from pathlib import Path
 
-import pytest
 
 from Analysis.smell_fixer import SmellFixer, SmellFixResult
 
@@ -19,6 +18,7 @@ def _write(tmp_path: Path, filename: str, content: str) -> Path:
 
 
 # ── SmellFixResult ────────────────────────────────────────────────────────────
+
 
 class TestSmellFixResult:
     def test_initial_state(self):
@@ -40,6 +40,7 @@ class TestSmellFixResult:
 
 
 # ── _comment_console_lines ────────────────────────────────────────────────────
+
 
 class TestCommentConsoleLines:
     def _run(self, content):
@@ -76,6 +77,7 @@ class TestCommentConsoleLines:
 
 # ── _comment_debug_prints ─────────────────────────────────────────────────────
 
+
 class TestCommentDebugPrints:
     def _run(self, content):
         fixer = SmellFixer(dry_run=True)
@@ -102,14 +104,19 @@ class TestCommentDebugPrints:
 
 # ── File-level fixes ─────────────────────────────────────────────────────────
 
+
 class TestFileLevel:
     def test_fix_js_console_logs(self, tmp_path):
-        f = _write(tmp_path, "app.js", textwrap.dedent("""
+        f = _write(
+            tmp_path,
+            "app.js",
+            textwrap.dedent("""
             function debug() {
                 console.log("value");
                 console.log("other");
             }
-        """))
+        """),
+        )
         SmellFixer(dry_run=False)._fix_console_logs(tmp_path, exclude=None)
         content = f.read_text()
         # [X-Ray auto-fix] is prefixed to commented-out lines
@@ -130,13 +137,17 @@ class TestFileLevel:
         assert f.read_text() == original
 
     def test_fix_python_debug_prints(self, tmp_path):
-        f = _write(tmp_path, "debug.py", textwrap.dedent("""
+        f = _write(
+            tmp_path,
+            "debug.py",
+            textwrap.dedent("""
             def process():
                 print(f"DEBUG: starting")
                 result = 42
                 print(f"DEBUG: result={result}")
                 return result
-        """))
+        """),
+        )
         SmellFixer(dry_run=False)._fix_debug_prints(tmp_path, exclude=None)
         content = f.read_text()
         # [X-Ray auto-fix] is prefixed to commented-out debug prints
@@ -144,6 +155,7 @@ class TestFileLevel:
 
 
 # ── SmellFixer.fix_all ────────────────────────────────────────────────────────
+
 
 class TestFixAll:
     def test_returns_smell_fix_result(self, tmp_path):
@@ -171,7 +183,11 @@ class TestFixAll:
         f = _write(skip, "lib.js", 'console.log("skip");\n')
         original = f.read_text()
         SmellFixer(dry_run=False).fix_all(
-            tmp_path, exclude=["vendor"], fix_console=True, fix_prints=False, fix_project=False
+            tmp_path,
+            exclude=["vendor"],
+            fix_console=True,
+            fix_prints=False,
+            fix_project=False,
         )
         assert f.read_text() == original
 

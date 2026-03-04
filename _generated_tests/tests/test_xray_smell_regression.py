@@ -6,7 +6,6 @@ If a smell disappears (fixed), the test should be updated.
 
 import ast
 from pathlib import Path
-import pytest
 
 
 def _count_lines(filepath, func_name):

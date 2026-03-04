@@ -20,10 +20,22 @@ from Core.utils import logger
 
 # Shared auto-exclude patterns used by both lint and security analyzers.
 AUTO_EXCLUDE: List[str] = [
-    ".venv", "venv", ".env", "__pycache__", "node_modules",
-    ".git", "target", ".mypy_cache", ".pytest_cache",
-    "dist", "build", ".eggs", "*.egg-info",
-    "_scratch", ".github", "_OLD",
+    ".venv",
+    "venv",
+    ".env",
+    "__pycache__",
+    "node_modules",
+    ".git",
+    "target",
+    ".mypy_cache",
+    ".pytest_cache",
+    "dist",
+    "build",
+    ".eggs",
+    "*.egg-info",
+    "_scratch",
+    ".github",
+    "_OLD",
 ]
 
 
@@ -144,9 +156,13 @@ class BaseStaticAnalyzer:
         logger.info(f"Running {self.TOOL_LOG_NAME}: {' '.join(cmd)}")
         try:
             result = subprocess.run(  # nosec B603
-                cmd, capture_output=True, text=True,
-                encoding="utf-8", errors="replace",
-                timeout=self.TOOL_TIMEOUT, cwd=str(root),
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=self.TOOL_TIMEOUT,
+                cwd=str(root),
             )
         except FileNotFoundError:
             logger.error(f"{self.TOOL_LOG_NAME} executable not found.")

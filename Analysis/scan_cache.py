@@ -28,6 +28,7 @@ Usage
         cache.put(path, result)
     cache.save()
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -101,8 +102,7 @@ class ScanCache:
         if entry is None:
             return None
         # Fast check: mtime + size unchanged → hit
-        if (entry.get("mtime") == stat["mtime"]
-                and entry.get("size") == stat["size"]):
+        if entry.get("mtime") == stat["mtime"] and entry.get("size") == stat["size"]:
             return entry.get("result")
         # Slow fallback: content hash (mtime can lie on some filesystems)
         content_hash = _file_hash(path)
@@ -172,7 +172,8 @@ class ScanCache:
             raw = json.loads(self._path.read_text(encoding="utf-8"))
             # Evict entries from a different schema version
             self._data = {
-                k: v for k, v in raw.items()
+                k: v
+                for k, v in raw.items()
                 if isinstance(v, dict) and v.get("version") == _CACHE_VERSION
             }
         except Exception:

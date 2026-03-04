@@ -1,5 +1,7 @@
 """Auto-generated golden-value tests for Rust candidates."""
-import json, sys, importlib, pathlib
+import json
+import importlib
+import pathlib
 
 FIXTURE_DIR = pathlib.Path(r"C:\Users\Yo930\Desktop\_Python\X_Ray\_rustified_exe_build\golden")
 

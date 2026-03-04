@@ -4,7 +4,6 @@ Verifies essential files & directories exist.
 """
 
 from pathlib import Path
-import pytest
 
 
 ROOT = Path(__file__).parent.parent.resolve()

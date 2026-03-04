@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 X_RAY_Claude.py â€” Smart AI-Powered Code Analyzer (X-Ray 7.0)
 =============================================================
@@ -33,7 +33,7 @@ import sys
 import time
 import asyncio
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 from Core.config import BANNER
 from Core.inference import LLMHelper
@@ -48,6 +48,9 @@ from Core.scan_phases import (
     run_lint_phase,
     run_security_phase,
     run_rustify_scan,
+    run_web_smell_phase,
+    run_health_phase,
+    run_smell_fix_phase,
     collect_reports,
 )
 
@@ -185,7 +188,13 @@ _SCAN_OPTIONS = [
     ("lint", "Lint (Ruff)", "âœï¸", True, "Style, imports, hygiene"),
     ("security", "Security (Bandit)", "ðŸ›¡ï¸", True, "Vulnerability scanner"),
     ("rustify", "Rust Score", "ðŸ¦€", False, "Rank functions for Rust porting"),
-    ("rustify_exe", "Rustify â†’ EXE", "âš™ï¸", False, "Full transpile + compile pipeline"),
+    (
+        "rustify_exe",
+        "Rustify â†’ EXE",
+        "âš™ï¸",
+        False,
+        "Full transpile + compile pipeline",
+    ),
 ]
 
 
@@ -608,7 +617,9 @@ def _run_fix_smells_phase(args, root):
     if result.fixes_applied:
         bridge.log(f"\n  âœ” Auto-Fix Applied: {result.fixes_applied} fix(es)")
         if result.console_logs_commented:
-            bridge.log(f"    - {result.console_logs_commented} console.log(s) commented out")
+            bridge.log(
+                f"    - {result.console_logs_commented} console.log(s) commented out"
+            )
         if result.prints_commented:
             bridge.log(f"    - {result.prints_commented} debug print(s) commented out")
         if result.project_files_created:
@@ -682,6 +693,7 @@ def _run_rustify_exe(root: Path, args: argparse.Namespace) -> dict:
 
 from dataclasses import dataclass  # noqa: E402
 
+
 @dataclass
 class GenTestContext:
     args: argparse.Namespace
@@ -691,6 +703,7 @@ class GenTestContext:
     all_issues: list
     web_detector: Any
     health_analyzer: Any
+
 
 def _run_gen_tests_phase(ctx: GenTestContext):
     """Run AI test generation phase if requested."""
@@ -704,7 +717,11 @@ def _run_gen_tests_phase(ctx: GenTestContext):
     if ctx.web_detector and hasattr(ctx.web_detector, "_analyses"):
         js_analyses = ctx.web_detector._analyses
     health_checks = None
-    if ctx.health_analyzer and hasattr(ctx.health_analyzer, "report") and ctx.health_analyzer.report:
+    if (
+        ctx.health_analyzer
+        and hasattr(ctx.health_analyzer, "report")
+        and ctx.health_analyzer.report
+    ):
         health_checks = ctx.health_analyzer.report.checks
     test_output = Path(getattr(ctx.args, "test_output", ".")).resolve()
 
@@ -719,19 +736,21 @@ def _run_gen_tests_phase(ctx: GenTestContext):
     )
 
     bridge = get_bridge()
-    bridge.log(f"\n  {'='*60}")
+    bridge.log(f"\n  {'=' * 60}")
     bridge.log("  ðŸ§ª MONKEY TESTS GENERATED")
     bridge.log(f"     Files: {len(test_report.files_created)}")
     bridge.log(f"     Tests: {test_report.total_tests}")
     bridge.log(f"     Languages: {', '.join(test_report.languages)}")
     bridge.log(f"     Output: {test_output}")
-    bridge.log(f"  {'='*60}")
+    bridge.log(f"  {'=' * 60}")
 
 
 # collect_reports imported from Core.scan_phases
 
 
-def _run_analysis_phases(args: argparse.Namespace, root: Path, functions: list, classes: list):
+def _run_analysis_phases(
+    args: argparse.Namespace, root: Path, functions: list, classes: list
+):
     """Run all primary synchronous analysis phases."""
     all_issues = []
 
@@ -752,7 +771,19 @@ def _run_analysis_phases(args: argparse.Namespace, root: Path, functions: list, 
     web_detector = _run_web_phase(args, root)
     health_analyzer = _run_health_phase(args, root)
 
-    return all_issues, detector, finder, fmt_analyzer, format_issues, linter, lint_issues, sec_analyzer, sec_issues, web_detector, health_analyzer
+    return (
+        all_issues,
+        detector,
+        finder,
+        fmt_analyzer,
+        format_issues,
+        linter,
+        lint_issues,
+        sec_analyzer,
+        sec_issues,
+        web_detector,
+        health_analyzer,
+    )
 
 
 async def _run_async_enrichment(llm, detector, finder, functions):
@@ -765,6 +796,7 @@ async def _run_async_enrichment(llm, detector, finder, functions):
         tasks.append(detector.enrich_with_llm_async(llm))
     if finder:
         from Analysis.duplicates import enrich_with_llm_async as _dup_enrich
+
         tasks.append(_dup_enrich(finder, llm, functions))
     if tasks:
         await asyncio.gather(*tasks)
@@ -783,19 +815,34 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
 
     # â”€â”€ Synchronous Phases â”€â”€
     (
-        all_issues, detector, finder, fmt_analyzer, format_issues,
-        linter, lint_issues, sec_analyzer, sec_issues,
-        web_detector, health_analyzer
+        all_issues,
+        detector,
+        finder,
+        fmt_analyzer,
+        format_issues,
+        linter,
+        lint_issues,
+        sec_analyzer,
+        sec_issues,
+        web_detector,
+        health_analyzer,
     ) = _run_analysis_phases(args, root, functions, classes)
 
     # â”€â”€ Auto-fix smells (--fix-smells) â”€â”€
     _run_fix_smells_phase(args, root)
 
     # â”€â”€ Test generation (--gen-tests) â”€â”€
-    _run_gen_tests_phase(GenTestContext(
-        args=args, root=root, functions=functions, classes=classes,
-        all_issues=all_issues, web_detector=web_detector, health_analyzer=health_analyzer
-    ))
+    _run_gen_tests_phase(
+        GenTestContext(
+            args=args,
+            root=root,
+            functions=functions,
+            classes=classes,
+            all_issues=all_issues,
+            web_detector=web_detector,
+            health_analyzer=health_analyzer,
+        )
+    )
 
     # â”€â”€ Async LLM Enrichment (Parallel) â”€â”€
     await _run_async_enrichment(llm, detector, finder, functions)
@@ -835,15 +882,19 @@ async def main_async():
     compare_path = getattr(args, "compare", None)
     if compare_path:
         from Analysis.trend import load_prev_results
+
         prev_results = load_prev_results(compare_path)
         if prev_results is None:
-            print(f"  [!] --compare: could not read '{compare_path}' â€” trend disabled")
+            print(
+                f"  [!] --compare: could not read '{compare_path}' â€” trend disabled"
+            )
 
     results = await _run_full_scan(root, args)
 
     # Print trend delta if available (injected into print_unified_grade via results key)
     if prev_results and "grade" in results:
         from Analysis.trend import compare_scans, format_grade_delta
+
         delta = compare_scans(prev_results, results)
         delta_line = format_grade_delta(delta)
         if delta_line:

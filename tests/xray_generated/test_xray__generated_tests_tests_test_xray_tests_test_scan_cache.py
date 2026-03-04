@@ -1,0 +1,195 @@
+"""Auto-generated monkey tests for _generated_tests/tests/test_xray_tests_test_scan_cache.py by X-Ray v7.0.
+
+Tests function signatures, edge cases, and class instantiation.
+"""
+
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_tmp_cache_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_tmp_cache_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_tmp_cache_is_callable
+    assert callable(test_tests_test_scan_cache_tmp_cache_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_tmp_cache_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_tmp_cache_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_tmp_cache_none_args
+    assert callable(test_tests_test_scan_cache_tmp_cache_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_tmp_py_file_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_tmp_py_file_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_tmp_py_file_is_callable
+    assert callable(test_tests_test_scan_cache_tmp_py_file_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_tmp_py_file_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_tmp_py_file_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_tmp_py_file_none_args
+    assert callable(test_tests_test_scan_cache_tmp_py_file_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_miss_on_empty_cache_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_miss_on_empty_cache_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_miss_on_empty_cache_is_callable
+    assert callable(test_tests_test_scan_cache_test_miss_on_empty_cache_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_miss_on_empty_cache_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_test_miss_on_empty_cache_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_miss_on_empty_cache_none_args
+    assert callable(test_tests_test_scan_cache_test_miss_on_empty_cache_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_hit_after_put_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_hit_after_put_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_hit_after_put_is_callable
+    assert callable(test_tests_test_scan_cache_test_hit_after_put_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_hit_after_put_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_test_hit_after_put_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_hit_after_put_none_args
+    assert callable(test_tests_test_scan_cache_test_hit_after_put_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_put_increments_size_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_put_increments_size_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_put_increments_size_is_callable
+    assert callable(test_tests_test_scan_cache_test_put_increments_size_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_put_increments_size_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_test_put_increments_size_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_put_increments_size_none_args
+    assert callable(test_tests_test_scan_cache_test_put_increments_size_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_disabled_cache_always_misses_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_disabled_cache_always_misses_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_disabled_cache_always_misses_is_callable
+    assert callable(test_tests_test_scan_cache_test_disabled_cache_always_misses_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_disabled_cache_always_misses_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_test_disabled_cache_always_misses_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_disabled_cache_always_misses_none_args
+    assert callable(test_tests_test_scan_cache_test_disabled_cache_always_misses_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_invalidate_causes_miss_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_invalidate_causes_miss_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_invalidate_causes_miss_is_callable
+    assert callable(test_tests_test_scan_cache_test_invalidate_causes_miss_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_invalidate_causes_miss_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_test_invalidate_causes_miss_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_invalidate_causes_miss_none_args
+    assert callable(test_tests_test_scan_cache_test_invalidate_causes_miss_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_stale_after_content_change_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_stale_after_content_change_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_stale_after_content_change_is_callable
+    assert callable(test_tests_test_scan_cache_test_stale_after_content_change_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_stale_after_content_change_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_test_stale_after_content_change_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_stale_after_content_change_none_args
+    assert callable(test_tests_test_scan_cache_test_stale_after_content_change_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_clear_wipes_all_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_clear_wipes_all_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_clear_wipes_all_is_callable
+    assert callable(test_tests_test_scan_cache_test_clear_wipes_all_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_clear_wipes_all_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_test_clear_wipes_all_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_clear_wipes_all_none_args
+    assert callable(test_tests_test_scan_cache_test_clear_wipes_all_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_save_creates_file_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_save_creates_file_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_save_creates_file_is_callable
+    assert callable(test_tests_test_scan_cache_test_save_creates_file_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_save_creates_file_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_test_save_creates_file_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_save_creates_file_none_args
+    assert callable(test_tests_test_scan_cache_test_save_creates_file_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_reload_restores_hit_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_reload_restores_hit_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_reload_restores_hit_is_callable
+    assert callable(test_tests_test_scan_cache_test_reload_restores_hit_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_reload_restores_hit_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_test_reload_restores_hit_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_reload_restores_hit_none_args
+    assert callable(test_tests_test_scan_cache_test_reload_restores_hit_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_save_only_if_dirty_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_save_only_if_dirty_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_save_only_if_dirty_is_callable
+    assert callable(test_tests_test_scan_cache_test_save_only_if_dirty_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_save_only_if_dirty_none_args_is_callable():
+    """Verify test_tests_test_scan_cache_test_save_only_if_dirty_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_save_only_if_dirty_none_args
+    assert callable(test_tests_test_scan_cache_test_save_only_if_dirty_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_get_cache_returns_same_instance_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_get_cache_returns_same_instance_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_get_cache_returns_same_instance_is_callable
+    assert callable(test_tests_test_scan_cache_test_get_cache_returns_same_instance_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_test_reset_creates_fresh_instance_is_callable_is_callable():
+    """Verify test_tests_test_scan_cache_test_reset_creates_fresh_instance_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_test_reset_creates_fresh_instance_is_callable
+    assert callable(test_tests_test_scan_cache_test_reset_creates_fresh_instance_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestScanCacheBasic_is_class_is_callable():
+    """Verify test_tests_test_scan_cache_TestScanCacheBasic_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestScanCacheBasic_is_class
+    assert callable(test_tests_test_scan_cache_TestScanCacheBasic_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestScanCacheBasic_has_methods_is_callable():
+    """Verify test_tests_test_scan_cache_TestScanCacheBasic_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestScanCacheBasic_has_methods
+    assert callable(test_tests_test_scan_cache_TestScanCacheBasic_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestScanCacheBasic_has_docstring_is_callable():
+    """Verify test_tests_test_scan_cache_TestScanCacheBasic_has_docstring exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestScanCacheBasic_has_docstring
+    assert callable(test_tests_test_scan_cache_TestScanCacheBasic_has_docstring)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestScanCacheInvalidation_is_class_is_callable():
+    """Verify test_tests_test_scan_cache_TestScanCacheInvalidation_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestScanCacheInvalidation_is_class
+    assert callable(test_tests_test_scan_cache_TestScanCacheInvalidation_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestScanCacheInvalidation_has_methods_is_callable():
+    """Verify test_tests_test_scan_cache_TestScanCacheInvalidation_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestScanCacheInvalidation_has_methods
+    assert callable(test_tests_test_scan_cache_TestScanCacheInvalidation_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestScanCacheInvalidation_has_docstring_is_callable():
+    """Verify test_tests_test_scan_cache_TestScanCacheInvalidation_has_docstring exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestScanCacheInvalidation_has_docstring
+    assert callable(test_tests_test_scan_cache_TestScanCacheInvalidation_has_docstring)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestScanCachePersistence_is_class_is_callable():
+    """Verify test_tests_test_scan_cache_TestScanCachePersistence_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestScanCachePersistence_is_class
+    assert callable(test_tests_test_scan_cache_TestScanCachePersistence_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestScanCachePersistence_has_methods_is_callable():
+    """Verify test_tests_test_scan_cache_TestScanCachePersistence_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestScanCachePersistence_has_methods
+    assert callable(test_tests_test_scan_cache_TestScanCachePersistence_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestScanCachePersistence_has_docstring_is_callable():
+    """Verify test_tests_test_scan_cache_TestScanCachePersistence_has_docstring exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestScanCachePersistence_has_docstring
+    assert callable(test_tests_test_scan_cache_TestScanCachePersistence_has_docstring)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestGlobalCache_is_class_is_callable():
+    """Verify test_tests_test_scan_cache_TestGlobalCache_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestGlobalCache_is_class
+    assert callable(test_tests_test_scan_cache_TestGlobalCache_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestGlobalCache_has_methods_is_callable():
+    """Verify test_tests_test_scan_cache_TestGlobalCache_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestGlobalCache_has_methods
+    assert callable(test_tests_test_scan_cache_TestGlobalCache_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_scan_cache_test_tests_test_scan_cache_TestGlobalCache_has_docstring_is_callable():
+    """Verify test_tests_test_scan_cache_TestGlobalCache_has_docstring exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_scan_cache import test_tests_test_scan_cache_TestGlobalCache_has_docstring
+    assert callable(test_tests_test_scan_cache_TestGlobalCache_has_docstring)

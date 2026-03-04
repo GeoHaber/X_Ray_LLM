@@ -3,7 +3,6 @@
 Tests function signatures, edge cases, and class instantiation.
 """
 
-import pytest
 
 def test__mothership_models_to_list_is_callable():
     """Verify to_list exists and is callable."""

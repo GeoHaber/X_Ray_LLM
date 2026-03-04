@@ -5,7 +5,6 @@ without raising ImportError or SyntaxError.
 """
 
 import importlib
-import pytest
 
 def test_import_Analysis_NexusMode_adapters():
     """Smoke: Analysis.NexusMode.adapters imports without error."""
