@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-x_ray_flet.py â€” Flet Desktop/Web GUI for X-Ray Code Quality Scanner
+x_ray_flet.py — Flet Desktop/Web GUI for X-Ray Code Quality Scanner
 ======================================================================
 
 Launch with::
@@ -72,9 +72,9 @@ except ImportError:
     HAS_AUTO_RUSTIFY = False
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 #  FLET-SPECIFIC UI BRIDGE
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 class FletBridge:
@@ -158,9 +158,9 @@ class FletBridge:
             pass
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  THEME ENGINE  â€”  Dynamic Light / Dark
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
+#  THEME ENGINE  —  Dynamic Light / Dark
+# ═══════════════════════════════════════════════════════════════════════════════
 
 MONO_FONT = "Cascadia Code, Consolas, SF Mono, monospace"
 
@@ -182,13 +182,13 @@ BTN_H_MD = 40  # normal action buttons
 BTN_RADIUS = 10  # consistent border-radius for all buttons
 
 # â”€â”€ Responsive breakpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-BP_NARROW = 900  # below this â†’ single-column / drawer sidebar
+BP_NARROW = 900  # below this → single-column / drawer sidebar
 
 
 def _page_width(page: ft.Page) -> int:
     """Return page width, defaulting to narrow-safe value."""
     w = page.width
-    return int(w) if w and w > 0 else BP_NARROW - 1  # default â†’ narrow
+    return int(w) if w and w > 0 else BP_NARROW - 1  # default → narrow
 
 
 def is_narrow(page: ft.Page) -> bool:
@@ -212,7 +212,7 @@ GRADE_COLORS = {
     "F": "#880e4f",
 }
 
-SEV_ICONS = {"critical": "ðŸ”´", "warning": "ðŸŸ¡", "info": "ðŸŸ¢"}
+SEV_ICONS = {"critical": "🔴", "warning": "🟡", "info": "ðŸŸ¢"}
 SEV_COLORS = {
     "critical": ft.Colors.RED_400,
     "warning": ft.Colors.AMBER_400,
@@ -251,7 +251,7 @@ class _THMeta(type):
 
 
 class TH(metaclass=_THMeta):
-    """Dynamic theme â€” access colours as TH.accent, TH.bg, etc."""
+    """Dynamic theme — access colours as TH.accent, TH.bg, etc."""
 
     _dark = True
 
@@ -299,9 +299,9 @@ class TH(metaclass=_THMeta):
         cls._dark = not cls._dark
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 #  HELPER WIDGETS
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _show_snack(page, text: str, bgcolor=None):
@@ -368,9 +368,9 @@ def section_title(text: str, icon: str = ""):
     )
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  BAR CHART (pure Flet â€” no Plotly needed)
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
+#  BAR CHART (pure Flet — no Plotly needed)
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _make_proportional_bar(pct: float, color: str):
@@ -399,7 +399,7 @@ def _make_proportional_bar(pct: float, color: str):
 
 
 def bar_row_flex(label: str, count: int, max_count: int, color: str):
-    """Fully flexible bar row â€” works at any width."""
+    """Fully flexible bar row — works at any width."""
     pct = count / max(max_count, 1)
     return ft.Row(
         [
@@ -437,9 +437,9 @@ def bar_chart(items: list):
     )
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 #  SCAN ENGINE  (reused from x_ray_ui.py logic)
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _scan_codebase(root: Path, exclude: List[str], progress_cb=None):
@@ -562,7 +562,7 @@ def _make_parse_progress_cb(progress_cb, parse_t0):
         rate = done / max(elapsed, 0.01)
         eta = (total - done) / rate if rate > 0 else 0
         frac = 0.05 + (done / max(total, 1)) * 0.35
-        short = current_file if len(current_file) <= 50 else "â€¦" + current_file[-47:]
+        short = current_file if len(current_file) <= 50 else "…" + current_file[-47:]
         progress_cb(frac, f"Parsing {short}", done, total, eta)
 
     return _on_parse
@@ -609,27 +609,27 @@ def _run_flet_phases(
     _phases = [
         (
             "smells",
-            "Detecting code smellsâ€¦",
+            "Detecting code smells…",
             lambda: _phase_smells(functions, classes, ctx.thresholds, results),
         ),
         (
             "duplicates",
-            "Finding duplicatesâ€¦",
+            "Finding duplicates…",
             lambda: _phase_duplicates(functions, results),
         ),
         (
             "lint",
-            "Running Ruff lintâ€¦",
+            "Running Ruff lint…",
             lambda: _phase_lint(ctx.root, ctx.exclude, results),
         ),
         (
             "security",
-            "Running Bandit securityâ€¦",
+            "Running Bandit security…",
             lambda: _phase_security(ctx.root, ctx.exclude, results),
         ),
         (
             "rustify",
-            "Scoring Rust candidatesâ€¦",
+            "Scoring Rust candidates…",
             lambda: _phase_rustify(functions, results),
         ),
         (
@@ -704,9 +704,9 @@ def _run_scan(ctx: FletScanContext) -> Dict[str, Any]:
             set_bridge(PrintBridge())
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 #  RUST SKETCH GENERATOR
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _generate_rust_sketch(func: FunctionRecord) -> str:
@@ -745,9 +745,9 @@ def _generate_rust_sketch(func: FunctionRecord) -> str:
         return f"// Transpiler error for {func.name}\ntodo!()"
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 #  MARKDOWN REPORT BUILDER
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _format_section(data: dict, title: str) -> list:
@@ -790,14 +790,14 @@ def _build_markdown_report(results: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  TAB RENDERERS  â€” shared helpers
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
+#  TAB RENDERERS  — shared helpers
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _empty_result_box(label: str = "") -> ft.Container:
     """Return a green 'no issues' placeholder."""
-    text = label or f"âœ… {t('no_issues')}"
+    text = label or f"✅ {t('no_issues')}"
     return ft.Container(
         content=ft.Text(text, color=ft.Colors.GREEN_400, size=SZ_LG), padding=20
     )
@@ -850,9 +850,9 @@ def _build_issue_tile(s, code_map: Dict[str, str]) -> ft.ExpansionTile:
     )
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 #  TAB RENDERERS
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _build_smells_tab(results: Dict[str, Any]) -> ft.Control:
@@ -867,10 +867,10 @@ def _build_smells_tab(results: Dict[str, Any]) -> ft.Control:
         [
             metric_tile("ðŸ“Š", summary.get("total", 0), t("total")),
             metric_tile(
-                "ðŸ”´", summary.get("critical", 0), t("critical"), ft.Colors.RED_400
+                "🔴", summary.get("critical", 0), t("critical"), ft.Colors.RED_400
             ),
             metric_tile(
-                "ðŸŸ¡", summary.get("warning", 0), t("warning"), ft.Colors.AMBER_400
+                "🟡", summary.get("warning", 0), t("warning"), ft.Colors.AMBER_400
             ),
             metric_tile("ðŸŸ¢", summary.get("info", 0), t("info"), ft.Colors.GREEN_400),
         ],
@@ -883,7 +883,7 @@ def _build_smells_tab(results: Dict[str, Any]) -> ft.Control:
         cat_data = sorted(by_cat.items(), key=lambda x: -x[1])
         cat_chart = ft.Column(
             [
-                section_title(t("by_category"), "ðŸ“‚"),
+                section_title(t("by_category"), "📁"),
                 bar_chart([(c, n, "#ff6b6b") for c, n in cat_data[:12]]),
             ],
             spacing=8,
@@ -903,7 +903,7 @@ def _build_smells_tab(results: Dict[str, Any]) -> ft.Control:
             ft.Divider(color=TH.divider, height=30),
             cat_chart,
             ft.Divider(color=TH.divider, height=20),
-            section_title(t("all_issues"), "ðŸ“‹"),
+            section_title(t("all_issues"), "📋"),
             ft.ListView(
                 controls=issue_tiles,
                 expand=True,
@@ -926,7 +926,7 @@ def _build_dup_group_tile(g, code_map):
         controls.append(
             ft.Container(
                 content=ft.Text(
-                    f"ðŸ’¡ {g.merge_suggestion}", size=SZ_BODY, italic=True
+                    f"💡 {g.merge_suggestion}", size=SZ_BODY, italic=True
                 ),
                 bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.BLUE_200),
                 padding=10,
@@ -940,7 +940,7 @@ def _build_dup_group_tile(g, code_map):
             ft.Column(
                 [
                     ft.Text(
-                        f"ðŸ“„ {loc} â€” {f.get('name', '?')} "
+                        f"📄 {loc} — {f.get('name', '?')} "
                         f"({f.get('size', '?')} lines)",
                         size=SZ_BODY,
                         font_family=MONO_FONT,
@@ -967,7 +967,7 @@ def _build_dup_group_tile(g, code_map):
         )
     return ft.ExpansionTile(
         title=ft.Text(
-            f"Group {g.group_id} â€” {g.similarity_type} ({sim_pct})", size=SZ_MD
+            f"Group {g.group_id} — {g.similarity_type} ({sim_pct})", size=SZ_MD
         ),
         subtitle=ft.Text(func_names, size=SZ_SM, color=TH.muted),
         controls=[ft.Container(content=ft.Column(controls, spacing=8), padding=12)],
@@ -985,7 +985,7 @@ def _build_duplicates_tab(results: Dict[str, Any]) -> ft.Control:
 
     metrics = ft.Row(
         [
-            metric_tile("ðŸ“‹", summary.get("total_groups", 0), t("groups")),
+            metric_tile("📋", summary.get("total_groups", 0), t("groups")),
             metric_tile("ðŸŽ¯", summary.get("exact_duplicates", 0), t("exact")),
             metric_tile("â‰ˆ", summary.get("near_duplicates", 0), t("near")),
             metric_tile("ðŸ§ ", summary.get("semantic_duplicates", 0), t("semantic")),
@@ -1027,7 +1027,7 @@ def _build_lint_fix_bar(results, summary, page):
                 text=True,
                 timeout=60,
             )
-            fix_result.value = f"âœ… Auto-fix done! {r.stdout.strip()}"
+            fix_result.value = f"✅ Auto-fix done! {r.stdout.strip()}"
             fix_result.color = ft.Colors.GREEN_400
         except FileNotFoundError:
             fix_result.value = "âŒ Ruff not found"
@@ -1109,10 +1109,10 @@ def _build_lint_tab(results: Dict[str, Any], page: ft.Page) -> ft.Control:
         [
             metric_tile("ðŸ“Š", summary.get("total", 0), t("total")),
             metric_tile(
-                "ðŸ”´", summary.get("critical", 0), t("critical"), ft.Colors.RED_400
+                "🔴", summary.get("critical", 0), t("critical"), ft.Colors.RED_400
             ),
             metric_tile(
-                "ðŸŸ¡", summary.get("warning", 0), t("warning"), ft.Colors.AMBER_400
+                "🟡", summary.get("warning", 0), t("warning"), ft.Colors.AMBER_400
             ),
             metric_tile(
                 "ðŸ”§", summary.get("fixable", 0), t("auto_fixable"), TH.accent2
@@ -1144,7 +1144,7 @@ def _build_lint_tab(results: Dict[str, Any], page: ft.Page) -> ft.Control:
             ft.Divider(color=TH.divider, height=20),
             rule_chart,
             ft.Divider(color=TH.divider, height=20),
-            section_title(t("all_issues"), "ðŸ“‹"),
+            section_title(t("all_issues"), "📋"),
             ft.ListView(
                 controls=issue_tiles, expand=True, spacing=4, auto_scroll=False
             ),
@@ -1165,7 +1165,7 @@ def _build_security_tab(results: Dict[str, Any]) -> ft.Control:
     if not issues:
         return ft.Container(
             content=ft.Text(
-                f"âœ… {t('no_issues')}", color=ft.Colors.GREEN_400, size=SZ_LG
+                f"✅ {t('no_issues')}", color=ft.Colors.GREEN_400, size=SZ_LG
             ),
             padding=20,
         )
@@ -1173,9 +1173,9 @@ def _build_security_tab(results: Dict[str, Any]) -> ft.Control:
     metrics = ft.Row(
         [
             metric_tile("ðŸ›¡ï¸", summary.get("total", 0), t("total")),
-            metric_tile("ðŸ”´", summary.get("critical", 0), "High", ft.Colors.RED_400),
+            metric_tile("🔴", summary.get("critical", 0), "High", ft.Colors.RED_400),
             metric_tile(
-                "ðŸŸ¡", summary.get("warning", 0), "Medium", ft.Colors.AMBER_400
+                "🟡", summary.get("warning", 0), "Medium", ft.Colors.AMBER_400
             ),
         ],
         spacing=8,
@@ -1225,7 +1225,7 @@ def _build_security_tab(results: Dict[str, Any]) -> ft.Control:
         [
             metrics,
             ft.Divider(color=TH.divider, height=20),
-            section_title(t("all_issues"), "ðŸ”’"),
+            section_title(t("all_issues"), "🔒"),
             ft.ListView(
                 controls=issue_tiles, expand=True, spacing=4, auto_scroll=False
             ),
@@ -1265,7 +1265,7 @@ def _code_panel(label, emoji, code_text, color):
 def _build_rustify_candidate(rank, cand, code_map):
     """Build a single expansion tile for a Rust-portability candidate."""
     fn = cand.func
-    purity = "ðŸŸ¢ Pure" if cand.is_pure else "ðŸ”´ Impure"
+    purity = "ðŸŸ¢ Pure" if cand.is_pure else "🔴 Impure"
     code = code_map.get(f"{fn.file_path}:{fn.line_start}", code_map.get(fn.key, ""))
     rust_code = _generate_rust_sketch(fn) if code else "// No source"
 
@@ -1284,12 +1284,12 @@ def _build_rustify_candidate(rank, cand, code_map):
             ],
             spacing=8,
         ),
-        ft.Text(f"ðŸ“„ {fn.file_path}:{fn.line_start}", size=SZ_SM, color=TH.muted),
+        ft.Text(f"📄 {fn.file_path}:{fn.line_start}", size=SZ_SM, color=TH.muted),
     ]
     if cand.reason:
         ctrls.append(
             ft.Text(
-                f"ðŸ’¡ {cand.reason}",
+                f"💡 {cand.reason}",
                 size=SZ_SM,
                 italic=True,
                 color=ft.Colors.AMBER_200,
@@ -1300,7 +1300,7 @@ def _build_rustify_candidate(rank, cand, code_map):
             ft.Row(
                 [
                     _code_panel("Python", "ðŸ", code, ft.Colors.AMBER_300),
-                    _code_panel("Rust", "ðŸ¦€", rust_code, ft.Colors.CYAN_200),
+                    _code_panel("Rust", "🦀", rust_code, ft.Colors.CYAN_200),
                 ],
                 spacing=12,
                 expand=True,
@@ -1371,9 +1371,9 @@ def _build_rustify_tab(results: Dict[str, Any]) -> ft.Control:
 
     metrics = ft.Row(
         [
-            metric_tile("ðŸ¦€", summary.get("total_scored", 0), t("scored")),
+            metric_tile("🦀", summary.get("total_scored", 0), t("scored")),
             metric_tile(
-                "âœ…", summary.get("pure_count", 0), t("pure"), ft.Colors.GREEN_400
+                "✅", summary.get("pure_count", 0), t("pure"), ft.Colors.GREEN_400
             ),
             metric_tile("ðŸ†", summary.get("top_score", 0), t("top_score"), TH.accent),
             metric_tile(
@@ -1417,7 +1417,7 @@ def _build_heatmap_tab(results: Dict[str, Any]) -> ft.Control:
             file_issues[s.file_path] += 1
 
     if not file_issues:
-        return ft.Text(f"âœ… {t('no_issues')}", color=ft.Colors.GREEN_400, size=SZ_LG)
+        return ft.Text(f"✅ {t('no_issues')}", color=ft.Colors.GREEN_400, size=SZ_LG)
 
     ranked = file_issues.most_common(30)
     mx = ranked[0][1] if ranked else 1
@@ -1434,7 +1434,7 @@ def _build_heatmap_tab(results: Dict[str, Any]) -> ft.Control:
             if pct > 0.25
             else "#00c853"
         )
-        display = fpath if len(fpath) <= 55 else "â€¦" + fpath[-52:]
+        display = fpath if len(fpath) <= 55 else "…" + fpath[-52:]
         tiles.append(
             ft.Container(
                 content=ft.Row(
@@ -1762,7 +1762,7 @@ network.once('stabilizationIterationsDone', function() {{
 
 
 def _layout_nodes_concentric(nodes: list):
-    """Position nodes in concentric rings by health: criticalâ†’inner, healthyâ†’outer."""
+    """Position nodes in concentric rings by health: critical→inner, healthy→outer."""
     import math
 
     groups = {"healthy": [], "warning": [], "critical": []}
@@ -1860,8 +1860,8 @@ def _build_graph_metrics(graph) -> ft.Row:
     return ft.Row(
         [
             metric_tile("ðŸŸ¢", healthy, "Healthy", ft.Colors.GREEN_400),
-            metric_tile("ðŸŸ¡", warning, "Warning", ft.Colors.AMBER_400),
-            metric_tile("ðŸ”´", critical, "Critical", ft.Colors.RED_400),
+            metric_tile("🟡", warning, "Warning", ft.Colors.AMBER_400),
+            metric_tile("🔴", critical, "Critical", ft.Colors.RED_400),
             metric_tile("ðŸ”—", len(graph.edges), "Dup Links", TH.accent),
         ],
         spacing=8,
@@ -1964,7 +1964,7 @@ def _build_graph_tab(results: Dict[str, Any], page: ft.Page) -> ft.Control:
             ft.Divider(color=TH.divider, height=12),
             canvas_preview,
             ft.Divider(color=TH.divider, height=12),
-            section_title("Components", "ðŸ“‚"),
+            section_title("Components", "📁"),
             group_chart,
         ],
         spacing=10,
@@ -2014,7 +2014,7 @@ def _run_nexus_pipeline(results, page, status_text, progress_bar, trans_results_
         page.update()
         verified = orchestrator.verify_and_build(res, progress_cb=cb)
 
-        status_text.value = f"âœ… Nexus Pipeline complete! {len(verified)}/{len(res)} passed Cargo Check."
+        status_text.value = f"✅ Nexus Pipeline complete! {len(verified)}/{len(res)} passed Cargo Check."
         status_text.color = ft.Colors.GREEN_400
 
         for r in res:
@@ -2313,7 +2313,7 @@ def _build_ui_health_tab(results):
 
 def _build_ui_compat_issue_tile(r):
     """Build one expansion tile for a UI-compat issue."""
-    icon = SEV_ICONS.get("critical", "ðŸ”´")
+    icon = SEV_ICONS.get("critical", "🔴")
     ctrls = [
         ft.Text(
             f"{t('issue')}: '{r.bad_kwarg}' is not valid for {r.call.resolved_name}()",
@@ -2332,7 +2332,7 @@ def _build_ui_compat_issue_tile(r):
         ctrls.append(
             ft.Text(
                 f"Accepted: {', '.join(top)}"
-                + (" â€¦" if len(r.accepted) > 15 else ""),
+                + (" …" if len(r.accepted) > 15 else ""),
                 size=SZ_SM,
                 color=TH.dim,
                 font_family=MONO_FONT,
@@ -2400,7 +2400,7 @@ def _build_ui_compat_tab(results: Dict[str, Any]) -> ft.Control:
         [
             metric_tile("ðŸ–¥ï¸", summary.get("total", 0), t("total")),
             metric_tile(
-                "ðŸ”´", summary.get("critical", 0), t("critical"), ft.Colors.RED_400
+                "🔴", summary.get("critical", 0), t("critical"), ft.Colors.RED_400
             ),
             metric_tile("ðŸ§©", len(summary.get("by_widget", {})), "Widgets"),
             metric_tile("ðŸ“", len(summary.get("by_file", {})), "Files"),
@@ -2451,18 +2451,18 @@ def _build_ui_compat_tab(results: Dict[str, Any]) -> ft.Control:
     )
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════════════════════════════
 #  ONBOARDING DIALOG
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════════════════════════════════════
 
-_ONBOARD_ICONS = ("ðŸ“‚", "ðŸ”", "âš¡", "ðŸ¦€", "ðŸš€")
+_ONBOARD_ICONS = ("📁", "ðŸ”", "⚡", "🦀", "🚀")
 
 
 def _make_step_dots(n, idx):
-    """Build the step-indicator dot row (â— current, â—‹ others)."""
+    """Build the step-indicator dot row (â— current, ○ others)."""
     dots = [
         ft.Text(
-            "â—" if i == idx else "â—‹",
+            "â—" if i == idx else "○",
             size=SZ_SM if i == idx else SZ_XS,
             color=TH.accent if i == idx else TH.muted,
         )
@@ -2539,7 +2539,7 @@ def _show_onboarding(page: ft.Page):
         modal=True,
         title=ft.Row(
             [
-                ft.Text("ðŸ”¬", size=SZ_H3),
+                ft.Text("🔬", size=SZ_H3),
                 ft.Text(
                     t("onboard_title"),
                     size=SZ_H3,
@@ -2580,9 +2580,9 @@ def _show_onboarding(page: ft.Page):
     page.show_dialog(dlg)
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════════════════════════════════════════════
 #  EXTRACTED HELPERS FOR main()
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
 def _build_grade_card(grade, narrow):
     """Build the grade display card for the dashboard header."""
@@ -2655,9 +2655,9 @@ def _build_penalty_chips(breakdown):
     """Build penalty chip controls from the grade breakdown."""
     labels_map = {
         "smells": "ðŸ” Smells",
-        "duplicates": "ðŸ“‹ Dups",
-        "lint": "ðŸ§¹ Lint",
-        "security": "ðŸ”’ Sec",
+        "duplicates": "📋 Dups",
+        "lint": "🧹 Lint",
+        "security": "🔒 Sec",
     }
     chips = []
     for k, d in breakdown.items():
@@ -2676,9 +2676,9 @@ def _build_penalty_chips(breakdown):
 
 _TAB_BUILDERS = [
     ("smells", "ðŸ”", "tab_smells", lambda r, _p: _build_smells_tab(r)),
-    ("duplicates", "ðŸ“‹", "tab_duplicates", lambda r, _p: _build_duplicates_tab(r)),
-    ("lint", "ðŸ§¹", "tab_lint", lambda r, p: _build_lint_tab(r, p)),
-    ("security", "ðŸ”’", "tab_security", lambda r, _p: _build_security_tab(r)),
+    ("duplicates", "📋", "tab_duplicates", lambda r, _p: _build_duplicates_tab(r)),
+    ("lint", "🧹", "tab_lint", lambda r, p: _build_lint_tab(r, p)),
+    ("security", "🔒", "tab_security", lambda r, _p: _build_security_tab(r)),
     ("rustify", "🦀", "tab_rustify", lambda r, _p: _build_rustify_tab(r)),
     ("ui_compat", "🖥️", "tab_ui_compat", lambda r, _p: _build_ui_compat_tab(r)),
     ("ui_health", "🩺", "UI Health", lambda r, _p: _build_ui_health_tab(r)),
@@ -2750,7 +2750,7 @@ def _build_export_bar(page, state, results):
             export = {k: v for k, v in results.items() if not k.startswith("_")}
             path = Path(state["root_path"]) / "xray_report.json"
             path.write_text(json.dumps(export, indent=2, default=str), encoding="utf-8")
-            _show_snack(page, f"ðŸ“¥ Saved to {path}")
+            _show_snack(page, f"📥 Saved to {path}")
         except Exception as exc:
             _show_snack(page, f"âŒ Export failed: {exc}", bgcolor=ft.Colors.RED_400)
 
@@ -2759,7 +2759,7 @@ def _build_export_bar(page, state, results):
             md = _build_markdown_report(results)
             path = Path(state["root_path"]) / "xray_report.md"
             path.write_text(md, encoding="utf-8")
-            _show_snack(page, f"ðŸ“¥ Saved to {path}")
+            _show_snack(page, f"📥 Saved to {path}")
         except Exception as exc:
             _show_snack(page, f"âŒ Export failed: {exc}", bgcolor=ft.Colors.RED_400)
 
@@ -2797,7 +2797,7 @@ def _build_export_bar(page, state, results):
             ft.Row(
                 [
             ft.Button(
-                        f"ðŸ“¥ {t('export_json')}",
+                        f"📥 {t('export_json')}",
                         on_click=on_export_json,
                         bgcolor=TH.card,
                         color=TH.text,
@@ -2807,7 +2807,7 @@ def _build_export_bar(page, state, results):
                         ),
                     ),
                     ft.Button(
-                        f"ðŸ“¥ {t('export_markdown')}",
+                        f"📥 {t('export_markdown')}",
                         on_click=on_export_md,
                         bgcolor=TH.card,
                         color=TH.text,
@@ -2847,9 +2847,9 @@ def _build_main_dashboard(page, state, main_content, results):
 
     stats = ft.Row(
         [
-            metric_tile("ðŸ“„", meta.get("files", 0), t("files")),
-            metric_tile("âš¡", meta.get("functions", 0), t("functions")),
-            metric_tile("ðŸ“¦", meta.get("classes", 0), t("classes")),
+            metric_tile("📄", meta.get("files", 0), t("files")),
+            metric_tile("⚡", meta.get("functions", 0), t("functions")),
+            metric_tile("📦", meta.get("classes", 0), t("classes")),
             metric_tile("â±ï¸", f"{meta.get('duration', 0):.1f}s", t("duration")),
         ],
         spacing=8,
@@ -2971,7 +2971,7 @@ def _build_landing_hero():
     """Build the animated X-RAY logo + subtitle for the landing page."""
     # Glow ring behind the icon
     glow = ft.Container(
-        content=ft.Text("ðŸ”¬", size=SZ_DISPLAY, text_align=ft.TextAlign.CENTER),
+        content=ft.Text("🔬", size=SZ_DISPLAY, text_align=ft.TextAlign.CENTER),
         width=90,
         height=90,
         border_radius=45,
@@ -3039,9 +3039,9 @@ _LANDING_CARDS = [
 _FEATURE_CHIPS = [
     ("ðŸ›", "AST Smells"),
     ("ðŸ“", "Ruff Lint"),
-    ("ðŸ”’", "Bandit Security"),
+    ("🔒", "Bandit Security"),
     ("ðŸ”", "Duplicates"),
-    ("ðŸ¦€", "Rust Advisor"),
+    ("🦀", "Rust Advisor"),
     ("ðŸ•¸ï¸", "Force Graph"),
     ("ðŸ”¥", "Heatmap"),
     ("ðŸ“Š", "Complexity"),
@@ -3121,7 +3121,7 @@ def _build_scan_progress_screen(progress):
         content=ft.Column(
             [
                 ft.Container(height=80),
-                ft.Text("ðŸ”¬", size=SZ_HERO, text_align=ft.TextAlign.CENTER),
+                ft.Text("🔬", size=SZ_HERO, text_align=ft.TextAlign.CENTER),
                 ft.Text(
                     t("scanning").upper(),
                     size=SZ_H2,
@@ -3204,7 +3204,7 @@ def _build_scan_complete_screen(results):
         content=ft.Column(
             [
                 ft.Container(height=80),
-                ft.Text("âœ…", size=SZ_HERO, text_align=ft.TextAlign.CENTER),
+                ft.Text("✅", size=SZ_HERO, text_align=ft.TextAlign.CENTER),
                 ft.Text(
                     t("scan_complete"),
                     size=SZ_H2,
@@ -3251,7 +3251,7 @@ def _make_progress_callback(page, progress, scan_t0):
         p_bar.value = min(frac, 1.0)
         p_label.value = label
         if total_files > 0:
-            p_detail.value = f"ðŸ“„  {files_done} / {total_files} files"
+            p_detail.value = f"📄  {files_done} / {total_files} files"
         else:
             elapsed = time.time() - scan_t0
             p_detail.value = f"â±ï¸  {elapsed:.0f}s elapsed"
@@ -3456,7 +3456,7 @@ def _build_app_sidebar(sidebar_cfg):
                 ft.Divider(color=TH.divider, height=12),
                 ft.Container(
                     content=ft.Button(
-                        f"âš¡ {t('scan_start')}",
+                        f"⚡ {t('scan_start')}",
                         width=260,
                         height=48,
                         color=ft.Colors.WHITE,
@@ -3613,9 +3613,9 @@ def _build_progress_widgets():
     }
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 #  MAIN APPLICATION
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _setup_page(page):
@@ -3916,6 +3916,6 @@ async def main(page: ft.Page):
         _show_onboarding(page)
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     ft.run(main)
