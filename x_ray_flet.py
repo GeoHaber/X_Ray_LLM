@@ -3033,6 +3033,7 @@ def _build_main_dashboard(page, state, main_content, results):
                     spacing=10,
                 ),
             ],
+            expand=True,
             spacing=20,
             vertical_alignment=ft.CrossAxisAlignment.START,
         )
