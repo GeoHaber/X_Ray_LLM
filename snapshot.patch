@@ -1,0 +1,2291 @@
+diff --git a/tests/test_xray_claude.py b/tests/test_xray_claude.py
+index 64cd17a..fda04a5 100644
+--- a/tests/test_xray_claude.py
++++ b/tests/test_xray_claude.py
+@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
+ from x_ray_claude import (
+     # Data classes
+     FunctionRecord, ClassRecord, SmellIssue, DuplicateGroup, LibrarySuggestion,
+-    Severity,
++    Severity, ReportData,
+     # Tokenization
+     tokenize, cosine_similarity, code_similarity, _term_freq,
+     # AST extraction
+@@ -940,9 +940,12 @@ class TestJSONReport:
+     def test_basic_structure(self):
+         f = _make_func()
+         c = _make_class()
+-        report = build_json_report(
+-            Path("."), [f], [c], [], [], [], 1.23
++        
++        data = ReportData(
++            functions=[f], classes=[c], smells=[], duplicates=[],
++            lib_sugs=[], smell_sum={}, dup_sum={}, lib_sum={}, scan_time=1.23
+         )
++        report = build_json_report(Path("."), data)
+         assert report["version"] == __version__
+         assert report["scan_time_seconds"] == 1.23
+         assert report["stats"]["total_functions"] == 1
+@@ -950,7 +953,11 @@ class TestJSONReport:
+ 
+     def test_serializable(self):
+         f = _make_func()
+-        report = build_json_report(Path("."), [f], [], [], [], [], 0.5)
++        data = ReportData(
++            functions=[f], classes=[], smells=[], duplicates=[],
++            lib_sugs=[], smell_sum={}, dup_sum={}, lib_sum={}, scan_time=0.5
++        )
++        report = build_json_report(Path("."), data)
+         # Should be JSON-serializable
+         j = json.dumps(report)
+         assert isinstance(j, str)
+@@ -961,7 +968,11 @@ class TestJSONReport:
+         f = _make_func(size_lines=130)
+         detector = CodeSmellDetector()
+         smells = detector.detect([f], [])
+-        report = build_json_report(Path("."), [f], [], smells, [], [], 0.1)
++        data = ReportData(
++            functions=[f], classes=[], smells=smells, duplicates=[],
++            lib_sugs=[], smell_sum={}, dup_sum={}, lib_sum={}, scan_time=0.1
++        )
++        report = build_json_report(Path("."), data)
+         assert report["smells"]["total"] > 0
+         assert len(report["smells"]["issues"]) > 0
+ 
+@@ -970,7 +981,11 @@ class TestJSONReport:
+             group_id=0, similarity_type="exact", avg_similarity=1.0,
+             functions=[{"key": "a.f", "name": "f", "file": "a.py", "line": 1}],
+         )
+-        report = build_json_report(Path("."), [], [], [], [group], [], 0.1)
++        data = ReportData(
++            functions=[], classes=[], smells=[], duplicates=[group],
++            lib_sugs=[], smell_sum={}, dup_sum={}, lib_sum={}, scan_time=0.1
++        )
++        report = build_json_report(Path("."), data)
+         assert report["duplicates"]["total_groups"] == 1
+ 
+     def test_includes_library_suggestions(self):
+@@ -979,8 +994,12 @@ class TestJSONReport:
+             functions=[{"name": "f", "file": "a.py", "line": 1}],
+             unified_api="def f():", rationale="reason",
+         )
+-        report = build_json_report(Path("."), [], [], [], [], [sug], 0.1)
+-        assert report["library_suggestions"]["total"] == 1
++        data = ReportData(
++            functions=[], classes=[], smells=[], duplicates=[],
++            lib_sugs=[sug], smell_sum={}, dup_sum={}, lib_sum={}, scan_time=0.1
++        )
++        report = build_json_report(Path("."), data)
++        assert report["lib_sugs"]["total"] == 1
+ 
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+@@ -1064,9 +1083,11 @@ class TestFullPipeline:
+         lib_sug = advisor.analyze(groups, functions)
+ 
+         # JSON report
+-        report = build_json_report(
+-            tmp_path, functions, classes, smells, groups, lib_sug, 0.5
++        data = ReportData(
++            functions=functions, classes=classes, smells=smells, duplicates=groups,
++            lib_sugs=lib_sug, smell_sum={}, dup_sum={}, lib_sum={}, scan_time=0.5
+         )
++        report = build_json_report(tmp_path, data)
+         assert report["stats"]["total_functions"] >= 2
+         j = json.dumps(report)
+         assert isinstance(j, str)
+@@ -1191,7 +1212,7 @@ class TestLLMHelper:
+         helper._available = None
+         # It may or may not be available depending on sys.path
+         # but we can at least verify it doesn't crash
+-        _ = helper.available
++        _ = helper.is_available
+ 
+     def test_query_sync_raises_without_llm(self, tmp_path):
+         from x_ray_claude import LLMHelper
+diff --git a/x_ray_claude.py b/x_ray_claude.py
+index 72609bc..9ad5498 100644
+--- a/x_ray_claude.py
++++ b/x_ray_claude.py
+@@ -57,7 +57,7 @@ import concurrent.futures
+ # Many Windows terminals (cp1252, cp437) crash on emoji / box-drawing chars.
+ # We detect capability once, provide ASCII fallbacks, and wrap stdout.
+ 
+-def _supports_unicode() -> bool:
++def supports_unicode() -> bool:
+     """Detect whether the current stdout can handle full Unicode."""
+     enc = getattr(sys.stdout, 'encoding', None) or ''
+     if enc.lower().replace('-', '').replace('_', '') in ('utf8', 'utf8'):
+@@ -86,7 +86,7 @@ def _supports_unicode() -> bool:
+     except Exception:
+         return False
+ 
+-UNICODE_OK = _supports_unicode()
++UNICODE_OK = supports_unicode()
+ 
+ # === LOGGING ===
+ logging.basicConfig(
+@@ -237,31 +237,47 @@ _ALWAYS_SKIP = frozenset({
+     "portable",
+ })
+ 
++def _parse_gitignore(root: Path) -> List[str]:
++    """Parse .gitignore file and return a list of exclusion patterns."""
++    gitignore_path = root / ".gitignore"
++    if not gitignore_path.exists():
++        return []
++    try:
++        lines = gitignore_path.read_text(encoding="utf-8").splitlines()
++        return [line.strip().rstrip("/") for line in lines if line.strip() and not line.strip().startswith("#")]
++    except Exception as e:
++        logger.warning(f"Could not read .gitignore: {e}")
++        return []
++
++
++def _is_valid_dir(d: str, rel_dir: str, exclude: List[str]) -> bool:
++    """Check if directory 'd' should be traversed."""
++    if d in _ALWAYS_SKIP or d.endswith(".egg-info"): 
++        return False
++    if exclude:
++        p = os.path.join(rel_dir, d) if rel_dir != "." else d
++        if any(p.startswith(ex) for ex in exclude): 
++            return False
++    return True
+ 
+ def collect_py_files(root: Path, exclude: List[str] = None,
+                      include: List[str] = None) -> List[Path]:
+     """Walk root and return .py files respecting include/exclude rules."""
+     exclude = exclude or []
+     include = include or []
++    exclude.extend(_parse_gitignore(root))
+     results = []
++
+     for dirpath, dirnames, filenames in os.walk(root):
+         rel_dir = os.path.relpath(dirpath, root)
+-        # Prune dirs in-place
+-        dirnames[:] = [
+-            d for d in dirnames
+-            if d not in _ALWAYS_SKIP
+-            and not d.endswith(".egg-info")
+-            and not (exclude and any(
+-                (os.path.join(rel_dir, d) if rel_dir != "." else d).startswith(p)
+-                for p in exclude))
+-        ]
++        dirnames[:] = [d for d in dirnames if _is_valid_dir(d, rel_dir, exclude)]
++        
+         if include:
+             top = rel_dir.split(os.sep)[0] if rel_dir != "." else "."
+             if top != "." and not any(top.startswith(p) for p in include):
+                 continue
+-        for fn in filenames:
+-            if fn.endswith(".py"):
+-                results.append(Path(dirpath) / fn)
++                
++        results.extend([Path(dirpath) / fn for fn in filenames if fn.endswith(".py")])
+     return results
+ 
+ 
+@@ -273,7 +289,7 @@ def _compute_nesting_depth(node: ast.AST) -> int:
+     """Compute maximum nesting depth of control flow in a function."""
+     max_depth = 0
+ 
+-    def _walk(n, depth):
++    def _walk(n, depth) -> None:
+         nonlocal max_depth
+         nesting_types = (ast.If, ast.For, ast.While, ast.Try, ast.With,
+                          ast.ExceptHandler)
+@@ -319,74 +335,139 @@ def _extract_functions_from_file(fpath: Path, root: Path) -> Tuple[
+ 
+     for node in ast.walk(tree):
+         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+-            # Skip nested functions (only top-level and class methods)
+-            start = max(node.lineno - 1, 0)
+-            end = node.end_lineno or start + 1
+-            code = "\n".join(lines[start:end])
+-            code_hash = hashlib.md5(code.encode()).hexdigest()
+-
+-            params = [a.arg for a in node.args.args if a.arg != "self"]
+-            ret = ast.unparse(node.returns) if node.returns and hasattr(ast, "unparse") else None
+-            try:
+-                decorators = [ast.unparse(d) for d in node.decorator_list]
+-            except Exception:
+-                decorators = []
+-
+-            calls: List[str] = []
+-            for child in ast.walk(node):
+-                if isinstance(child, ast.Call):
+-                    if isinstance(child.func, ast.Name):
+-                        calls.append(child.func.id)
+-                    elif isinstance(child.func, ast.Attribute):
+-                        calls.append(child.func.attr)
+-
+-            functions.append(FunctionRecord(
+-                name=node.name,
+-                file_path=rel_path,
+-                line_start=node.lineno,
+-                line_end=end,
+-                size_lines=end - start,
+-                parameters=params,
+-                return_type=ret,
+-                decorators=decorators,
+-                docstring=ast.get_docstring(node) or None,
+-                calls_to=list(set(calls)),
+-                complexity=_compute_complexity(node),
+-                nesting_depth=_compute_nesting_depth(node),
+-                code_hash=code_hash,
+-                code=code,
+-                is_async=isinstance(node, ast.AsyncFunctionDef),
+-            ))
+-
++            functions.append(_parse_function_node(node, rel_path, lines))
+         elif isinstance(node, ast.ClassDef):
+-            start = max(node.lineno - 1, 0)
+-            end = node.end_lineno or start + 1
+-            methods = [
+-                n.name for n in ast.walk(node)
+-                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+-            ]
+-            bases = []
+-            for b in node.bases:
+-                try:
+-                    bases.append(ast.unparse(b))
+-                except Exception:
+-                    bases.append("?")
+-
+-            classes.append(ClassRecord(
+-                name=node.name,
+-                file_path=rel_path,
+-                line_start=node.lineno,
+-                line_end=end,
+-                size_lines=end - start,
+-                method_count=len(methods),
+-                base_classes=bases,
+-                docstring=ast.get_docstring(node) or None,
+-                methods=methods,
+-                has_init="__init__" in methods,
+-            ))
++            classes.append(_parse_class_node(node, rel_path))
+ 
+     return functions, classes, None
+ 
++def _parse_function_node(node, rel_path: str, lines: List[str]) -> FunctionRecord:
++    start = max(node.lineno - 1, 0)
++    end = getattr(node, "end_lineno", start + 1)
++    code = "\n".join(lines[start:end])
++    code_hash = hashlib.md5(code.encode()).hexdigest()
++
++    params = [a.arg for a in node.args.args if a.arg != "self"]
++    ret = ast.unparse(node.returns) if node.returns and hasattr(ast, "unparse") else None
++    try:
++        decorators = [ast.unparse(d) for d in getattr(node, "decorator_list", [])]
++    except Exception:
++        decorators = []
++
++    calls = list(set(_extract_calls(node)))
++
++    return FunctionRecord(
++        name=node.name,
++        file_path=rel_path,
++        line_start=node.lineno,
++        line_end=end,
++        size_lines=end - start,
++        parameters=params,
++        return_type=ret,
++        decorators=decorators,
++        docstring=ast.get_docstring(node) or None,
++        calls_to=calls,
++        complexity=_compute_complexity(node),
++        nesting_depth=_compute_nesting_depth(node),
++        code_hash=code_hash,
++        code=code,
++        is_async=isinstance(node, ast.AsyncFunctionDef),
++    )
++
++def _extract_calls(node) -> List[str]:
++    calls = []
++    for child in ast.walk(node):
++        if not isinstance(child, ast.Call):
++            continue
++        if isinstance(child.func, ast.Name):
++            calls.append(child.func.id)
++        elif isinstance(child.func, ast.Attribute):
++            calls.append(child.func.attr)
++    return calls
++
++def _parse_class_node(node, rel_path: str) -> ClassRecord:
++    start = max(node.lineno - 1, 0)
++    end = getattr(node, "end_lineno", start + 1)
++    methods = [
++        n.name for n in ast.walk(node)
++        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
++    ]
++    bases = []
++    for b in node.bases:
++        try:
++            bases.append(ast.unparse(b))
++        except Exception:
++            bases.append("?")
++
++    return ClassRecord(
++        name=node.name,
++        file_path=rel_path,
++        line_start=node.lineno,
++        line_end=end,
++        size_lines=end - start,
++        method_count=len(methods),
++        base_classes=bases,
++        docstring=ast.get_docstring(node) or None,
++        methods=methods,
++        has_init="__init__" in methods,
++    )
++
++class CacheManager:
++    """Handles incremental caching to speed up consecutive scans."""
++    def __init__(self, root: Path):
++        self.cache_dir = root / ".xray_cache"
++        self.cache_file = self.cache_dir / "cache.json"
++        self.cache_data = {}
++        self.has_changes = False
++        self._load()
++
++    def _load(self):
++        if self.cache_file.exists():
++            try:
++                with open(self.cache_file, "r", encoding="utf-8") as f:
++                    self.cache_data = json.load(f)
++            except Exception as e:
++                logger.warning(f"Failed to load cache: {e}")
++                self.cache_data = {}
++
++    def save(self):
++        if self.has_changes:
++            self.cache_dir.mkdir(exist_ok=True)
++            try:
++                with open(self.cache_file, "w", encoding="utf-8") as f:
++                    json.dump(self.cache_data, f, indent=2)
++            except Exception as e:
++                logger.warning(f"Failed to save cache: {e}")
++
++    def get_file_hash(self, fpath: Path) -> str:
++        try:
++            return hashlib.md5(fpath.read_bytes()).hexdigest()
++        except Exception:
++            return ""
++
++    def get_cached_records(self, fpath: Path, rel_path: str) -> Tuple[Optional[Tuple[List[FunctionRecord], List[ClassRecord]]], str]:
++        file_hash = self.get_file_hash(fpath)
++        if not file_hash:
++            return None, file_hash
++
++        entry = self.cache_data.get(rel_path)
++        if entry and entry.get("hash") == file_hash:
++            try:
++                funcs = [FunctionRecord(**f) for f in entry.get("functions", [])]
++                clses = [ClassRecord(**c) for c in entry.get("classes", [])]
++                return (funcs, clses), file_hash
++            except Exception:
++                return None, file_hash
++        return None, file_hash
++
++    def update_cache(self, rel_path: str, file_hash: str, functions: List[FunctionRecord], classes: List[ClassRecord]):
++        self.cache_data[rel_path] = {
++            "hash": file_hash,
++            "functions": [asdict(f) for f in functions],
++            "classes": [asdict(c) for c in classes]
++        }
++        self.has_changes = True
++
+ 
+ def scan_codebase(root: Path, exclude: List[str] = None,
+                   include: List[str] = None) -> Tuple[
+@@ -397,18 +478,40 @@ def scan_codebase(root: Path, exclude: List[str] = None,
+     all_classes: List[ClassRecord] = []
+     errors: List[str] = []
+ 
+-    with concurrent.futures.ThreadPoolExecutor() as executor:
++    cache_manager = CacheManager(root)
++
++    to_parse = []
++    for f in py_files:
++        rel_path = str(f.relative_to(root)).replace("\\", "/")
++        cached_records, file_hash = cache_manager.get_cached_records(f, rel_path)
++        if cached_records:
++            funcs, clses = cached_records
++            all_functions.extend(funcs)
++            all_classes.extend(clses)
++        else:
++            to_parse.append((f, rel_path, file_hash))
++
++    if not to_parse:
++        return all_functions, all_classes, errors
++
++    with concurrent.futures.ProcessPoolExecutor() as executor:
+         futures = {
+-            executor.submit(_extract_functions_from_file, f, root): f
+-            for f in py_files
++            executor.submit(_extract_functions_from_file, item[0], root): item
++            for item in to_parse
+         }
+         for future in concurrent.futures.as_completed(futures):
++            f, rel_path, file_hash = futures[future]
+             funcs, clses, err = future.result()
++            if err:
++                errors.append(f"{f}: {err}")
++                continue
++                
+             all_functions.extend(funcs)
+             all_classes.extend(clses)
+-            if err:
+-                errors.append(f"{futures[future]}: {err}")
++            if file_hash:
++                cache_manager.update_cache(rel_path, file_hash, funcs, clses)
+ 
++    cache_manager.save()
+     return all_functions, all_classes, errors
+ 
+ 
+@@ -478,7 +581,7 @@ class LLMHelper:
+         self._available = None
+ 
+     @property
+-    def available(self) -> bool:
++    def is_available(self) -> bool:
+         if self._available is None:
+             try:
+                 if str(self._root) not in sys.path:
+@@ -489,10 +592,10 @@ class LLMHelper:
+                 self._available = False
+         return self._available
+ 
+-    def _ensure_loaded(self):
++    def _ensure_loaded(self) -> None:
+         if self._llm is not None:
+             return
+-        if not self.available:
++        if not self.is_available:
+             raise RuntimeError("LLM not available")
+ 
+         from Core.services.inference_engine import FIFOLlamaCppInference
+@@ -556,44 +659,18 @@ SMELL_THRESHOLDS = {
+     "missing_docstring_size": 15,  # only flag if function > N lines
+     "too_many_returns": 5,      # return statements
+     "too_many_branches": 8,     # if/elif branches
++    "missing_type_hints": 10,   # lines -> flag if a large function lacks hints
+ }
+ 
++_SECRET_REGEX = re.compile(
++    r"(?i)(password|secret|api[_-]?key|token|credentials?|auth)[_-]?.*['\"]\s*:\s*['\"][a-zA-Z0-9_\-]{8,}['\"]"
++)
+ 
+-class CodeSmellDetector:
+-    """
+-    Detects code smells via AST heuristics, optionally enriched by LLM.
+-    
+-    Two-stage approach:
+-      Stage 1 (fast):  AST metrics → flag suspects based on thresholds
+-      Stage 2 (slow):  Send suspects to LLM for detailed analysis + fix suggestions
+-    """
+-
+-    def __init__(self, thresholds: Dict[str, int] = None):
+-        self.thresholds = {**SMELL_THRESHOLDS, **(thresholds or {})}
+-        self.smells: List[SmellIssue] = []
+-
+-    def detect(self, functions: List[FunctionRecord],
+-               classes: List[ClassRecord]) -> List[SmellIssue]:
+-        """Run all heuristic smell detectors. Returns sorted list of SmellIssues."""
+-        self.smells = []
+-        for func in functions:
+-            self._check_function(func)
+-        for cls in classes:
+-            self._check_class(cls)
+-        # Sort: critical first, then by file/line
+-        self.smells.sort(key=lambda s: (
+-            0 if s.severity == Severity.CRITICAL else
+-            1 if s.severity == Severity.WARNING else 2,
+-            s.file_path, s.line
+-        ))
+-        return self.smells
+-
+-    def _check_function(self, func: FunctionRecord):
+-        t = self.thresholds
+ 
++def _check_func_size(func: FunctionRecord, t: dict, smells: list) -> None:
+         # Long function
+-        if func.size_lines >= t["very_long_function"]:
+-            self.smells.append(SmellIssue(
++    if func.size_lines >= t["very_long_function"]:
++        smells.append(SmellIssue(
+                 file_path=func.file_path, line=func.line_start,
+                 end_line=func.line_end, category="very-long-function",
+                 severity=Severity.CRITICAL, name=func.name,
+@@ -601,8 +678,8 @@ class CodeSmellDetector:
+                 message=f"Function '{func.name}' is {func.size_lines} lines (limit: {t['very_long_function']})",
+                 suggestion="Split into smaller focused functions. Extract logical blocks.",
+             ))
+-        elif func.size_lines >= t["long_function"]:
+-            self.smells.append(SmellIssue(
++    elif func.size_lines >= t["long_function"]:
++        smells.append(SmellIssue(
+                 file_path=func.file_path, line=func.line_start,
+                 end_line=func.line_end, category="long-function",
+                 severity=Severity.WARNING, name=func.name,
+@@ -611,9 +688,10 @@ class CodeSmellDetector:
+                 suggestion="Consider splitting into smaller functions.",
+             ))
+ 
++def _check_func_nesting(func: FunctionRecord, t: dict, smells: list) -> None:
+         # Deep nesting
+-        if func.nesting_depth >= t["very_deep_nesting"]:
+-            self.smells.append(SmellIssue(
++    if func.nesting_depth >= t["very_deep_nesting"]:
++        smells.append(SmellIssue(
+                 file_path=func.file_path, line=func.line_start,
+                 end_line=func.line_end, category="very-deep-nesting",
+                 severity=Severity.CRITICAL, name=func.name,
+@@ -621,8 +699,8 @@ class CodeSmellDetector:
+                 message=f"Function '{func.name}' has nesting depth {func.nesting_depth} (limit: {t['very_deep_nesting']})",
+                 suggestion="Use early returns, guard clauses, or extract nested blocks.",
+             ))
+-        elif func.nesting_depth >= t["deep_nesting"]:
+-            self.smells.append(SmellIssue(
++    elif func.nesting_depth >= t["deep_nesting"]:
++        smells.append(SmellIssue(
+                 file_path=func.file_path, line=func.line_start,
+                 end_line=func.line_end, category="deep-nesting",
+                 severity=Severity.WARNING, name=func.name,
+@@ -631,9 +709,10 @@ class CodeSmellDetector:
+                 suggestion="Flatten with early returns or extract helper functions.",
+             ))
+ 
++def _check_func_complexity(func: FunctionRecord, t: dict, smells: list) -> None:
+         # High cyclomatic complexity
+-        if func.complexity >= t["very_high_complexity"]:
+-            self.smells.append(SmellIssue(
++    if func.complexity >= t["very_high_complexity"]:
++        smells.append(SmellIssue(
+                 file_path=func.file_path, line=func.line_start,
+                 end_line=func.line_end, category="very-high-complexity",
+                 severity=Severity.CRITICAL, name=func.name,
+@@ -641,8 +720,8 @@ class CodeSmellDetector:
+                 message=f"Function '{func.name}' has cyclomatic complexity {func.complexity} (limit: {t['very_high_complexity']})",
+                 suggestion="Decompose into smaller, single-responsibility functions.",
+             ))
+-        elif func.complexity >= t["high_complexity"]:
+-            self.smells.append(SmellIssue(
++    elif func.complexity >= t["high_complexity"]:
++        smells.append(SmellIssue(
+                 file_path=func.file_path, line=func.line_start,
+                 end_line=func.line_end, category="high-complexity",
+                 severity=Severity.WARNING, name=func.name,
+@@ -651,9 +730,10 @@ class CodeSmellDetector:
+                 suggestion="Simplify branching logic. Consider lookup tables or strategy pattern.",
+             ))
+ 
++def _check_func_params(func: FunctionRecord, t: dict, smells: list) -> None:
+         # Too many parameters
+-        if len(func.parameters) >= t["too_many_params"]:
+-            self.smells.append(SmellIssue(
++    if len(func.parameters) >= t["too_many_params"]:
++        smells.append(SmellIssue(
+                 file_path=func.file_path, line=func.line_start,
+                 end_line=func.line_end, category="too-many-params",
+                 severity=Severity.WARNING, name=func.name,
+@@ -662,11 +742,12 @@ class CodeSmellDetector:
+                 suggestion="Group related parameters into a dataclass or config object.",
+             ))
+ 
++def _check_func_docstring(func: FunctionRecord, t: dict, smells: list) -> None:
+         # Missing docstring (only for non-trivial functions)
+-        if (not func.docstring
++    if (not func.docstring
+                 and func.size_lines >= t["missing_docstring_size"]
+                 and not func.name.startswith("_")):
+-            self.smells.append(SmellIssue(
++        smells.append(SmellIssue(
+                 file_path=func.file_path, line=func.line_start,
+                 end_line=func.line_end, category="missing-docstring",
+                 severity=Severity.INFO, name=func.name,
+@@ -675,10 +756,11 @@ class CodeSmellDetector:
+                 suggestion="Add a docstring explaining purpose, parameters, and return value.",
+             ))
+ 
++def _check_func_returns(func: FunctionRecord, t: dict, smells: list) -> None:
+         # Too many return statements
+-        return_count = func.code.count("\n    return ") + func.code.count("\nreturn ")
+-        if return_count >= t["too_many_returns"]:
+-            self.smells.append(SmellIssue(
++    return_count = func.code.count("\n    return ") + func.code.count("\nreturn ")
++    if return_count >= t["too_many_returns"]:
++        smells.append(SmellIssue(
+                 file_path=func.file_path, line=func.line_start,
+                 end_line=func.line_end, category="too-many-returns",
+                 severity=Severity.WARNING, name=func.name,
+@@ -687,11 +769,66 @@ class CodeSmellDetector:
+                 suggestion="Consolidate exit points. Consider a result variable.",
+             ))
+ 
+-        # Boolean blindness — function returns bool but name doesn't hint
++def _check_func_branches(func: FunctionRecord, t: dict, smells: list) -> None:
++        # Too many branches (if/elif)
++        # This is a simplified count, a more robust check would involve AST traversal
++    num_branches = func.code.count("if ") + func.code.count("elif ")
++    if num_branches >= t.get("too_many_branches", 8):
++        smells.append(SmellIssue(
++                file_path=func.file_path, line=func.line_start,
++                end_line=func.line_end, category="too-many-branches",
++                severity=Severity.WARNING, name=func.name,
++                metric_value=num_branches,
++                message=f"Function '{func.name}' has {num_branches} branches (limit: {t['too_many_branches']})",
++                suggestion="Extract complex conditional blocks or use polymorphism.",
++            ))
++
++
++class CodeSmellDetector:
++    """
++    Detects code smells via AST heuristics, optionally enriched by LLM.
++    
++    Two-stage approach:
++      Stage 1 (fast):  AST metrics → flag suspects based on thresholds
++      Stage 2 (slow):  Send suspects to LLM for detailed analysis + fix suggestions
++    """
++
++    def __init__(self, thresholds: Dict[str, int] = None):
++        self.thresholds = {**SMELL_THRESHOLDS, **(thresholds or {})}
++        self.smells: List[SmellIssue] = []
++
++    def detect(self, functions: List[FunctionRecord],
++               classes: List[ClassRecord]) -> List[SmellIssue]:
++        """Run all heuristic smell detectors. Returns sorted list of SmellIssues."""
++        self.smells = []
++        for func in functions:
++            self._check_function(func)
++            self._check_security(func)
++            self._check_typing(func)
++        for cls in classes:
++            self._check_class(cls)
++        # Sort: critical first, then by file/line
++        self.smells.sort(key=lambda s: (
++            0 if s.severity == Severity.CRITICAL else
++            1 if s.severity == Severity.WARNING else 2,
++            s.file_path, s.line
++        ))
++        return self.smells
++
++    def _check_function(self, func: FunctionRecord) -> None:
++        _check_func_size(func, self.thresholds, self.smells)
++        _check_func_nesting(func, self.thresholds, self.smells)
++        _check_func_complexity(func, self.thresholds, self.smells)
++        _check_func_params(func, self.thresholds, self.smells)
++        _check_func_docstring(func, self.thresholds, self.smells)
++        _check_func_returns(func, self.thresholds, self.smells)
++        _check_func_branches(func, self.thresholds, self.smells)
++        # Boolean blindness check remains here as it's a specific function property
++        t = self.thresholds
+         if (func.return_type and 'bool' in func.return_type.lower()
+-                and not any(func.name.startswith(p)
++                and not any(func.name.lstrip("_").startswith(p)
+                             for p in ("is_", "has_", "can_", "should_", "check_",
+-                                      "validate_", "contains_", "exists_"))):
++                                      "validate_", "contains_", "exists_", "supports_"))):
+             self.smells.append(SmellIssue(
+                 file_path=func.file_path, line=func.line_start,
+                 end_line=func.line_end, category="boolean-blindness",
+@@ -701,7 +838,7 @@ class CodeSmellDetector:
+                 suggestion="Rename to is_/has_/can_/should_/check_ prefix for clarity.",
+             ))
+ 
+-    def _check_class(self, cls: ClassRecord):
++    def _check_class(self, cls: ClassRecord) -> None:
+         t = self.thresholds
+ 
+         # God class (too many methods)
+@@ -750,8 +887,47 @@ class CodeSmellDetector:
+                 suggestion="If this class mainly holds data, convert to @dataclass for less boilerplate.",
+             ))
+ 
+-    def enrich_with_llm(self, llm: LLMHelper, max_calls: int = 20):
+-        """Send the worst smells to LLM for detailed analysis."""
++    def _check_security(self, func: FunctionRecord) -> None:
++        # Check for eval, exec, os.system
++        dangerous_calls = {"eval", "exec", "system", "Popen"}
++        used_dangerous = set(func.calls_to) & dangerous_calls
++        if used_dangerous:
++            self.smells.append(SmellIssue(
++                file_path=func.file_path, line=func.line_start,
++                end_line=func.line_end, category="security-dangerous-call",
++                severity=Severity.CRITICAL, name=func.name,
++                metric_value=len(used_dangerous),
++                message=f"Function '{func.name}' uses potentially dangerous calls: {', '.join(used_dangerous)}",
++                suggestion="Avoid dynamic execution or shell commands if possible. Validate all inputs.",
++            ))
++
++        # Regex search for obvious hardcoded secrets inside the function source
++        if _SECRET_REGEX.search(func.code):
++            self.smells.append(SmellIssue(
++                file_path=func.file_path, line=func.line_start,
++                end_line=func.line_end, category="security-hardcoded-secret",
++                severity=Severity.CRITICAL, name=func.name,
++                metric_value=1,
++                message=f"Function '{func.name}' contains what looks like a hardcoded secret/API key",
++                suggestion="Move secrets to environment variables or a secure vault.",
++            ))
++
++    def _check_typing(self, func: FunctionRecord) -> None:
++        t = self.thresholds
++        # Only nag about typing if the function is non-trivial and isn't a test/magic method
++        if func.size_lines >= t["missing_type_hints"] and not func.name.startswith("__") and not func.name.startswith("test_"):
++            if not func.return_type and func.name != "__init__":
++                self.smells.append(SmellIssue(
++                    file_path=func.file_path, line=func.line_start,
++                    end_line=func.line_end, category="missing-return-type",
++                    severity=Severity.INFO, name=func.name,
++                    metric_value=func.size_lines,
++                    message=f"Function '{func.name}' ({func.size_lines} lines) is missing a return type hint",
++                    suggestion="Add a -> Type annotation to improve maintainability.",
++                ))
++
++    def enrich_with_llm(self, llm: LLMHelper, max_calls: int = 20) -> None:
++        """Send the worst smells to LLM for detailed analysis and auto-fix patches."""
+         critical_smells = [
+             s for s in self.smells
+             if s.severity in (Severity.CRITICAL, Severity.WARNING)
+@@ -764,16 +940,16 @@ class CodeSmellDetector:
+         logger.info(f"Enriching {len(critical_smells)} smells with LLM...")
+         for smell in critical_smells:
+             prompt = (
+-                f"You are a Senior Python Architect reviewing code.\n"
++                f"You are an automated Python refactoring bot.\n"
+                 f"Issue: {smell.message}\n"
+                 f"Category: {smell.category}\n"
+                 f"File: {smell.file_path}:{smell.line}\n\n"
+-                f"Give a 2-3 sentence actionable recommendation to fix this. "
+-                f"Be specific about WHAT to extract or refactor.\n\n"
+-                f"Recommendation:"
++                f"Provide a short 1 sentence explanation, followed by a STRICT Unified Diff patch inside a ```diff block.\n"
++                f"Use `--- a/{smell.file_path}` and `+++ b/{smell.file_path}` in the diff header.\n"
++                f"Provide the exact lines to replace."
+             )
+             try:
+-                response = llm.query_sync(prompt, max_tokens=150)
++                response = llm.query_sync(prompt, max_tokens=300)
+                 smell.llm_analysis = response.strip()
+             except Exception as e:
+                 logger.debug(f"LLM enrichment failed: {e}")
+@@ -797,6 +973,75 @@ class CodeSmellDetector:
+ #  DUPLICATE FINDER
+ # ─────────────────────────────────────────────────────────────────────────────
+ 
++def _group_by_hash(functions: List[FunctionRecord], boilerplate: set) -> Dict[str, List[FunctionRecord]]:
++    hash_groups: Dict[str, List[FunctionRecord]] = defaultdict(list)
++    for func in functions:
++        if func.name not in boilerplate:
++            hash_groups[func.code_hash].append(func)
++    return hash_groups
++
++def _create_exact_group(group_id: int, group: List[FunctionRecord]) -> DuplicateGroup:
++    return DuplicateGroup(
++        group_id=group_id,
++        similarity_type="exact",
++        avg_similarity=1.0,
++        functions=[
++            {"key": f.key, "name": f.name, "file": f.file_path,
++             "line": f.line_start, "size": f.size_lines,
++             "similarity": 1.0}
++            for f in group
++        ],
++    )
++
++def _build_disjoint_set(near_pairs: List[Tuple[FunctionRecord, FunctionRecord, float]]) -> Dict[str, str]:
++    parent: Dict[str, str] = {}
++    def find_root(x):
++        while parent.get(x, x) != x:
++            parent[x] = parent.get(parent[x], parent[x])
++            x = parent[x]
++        return x
++    def union(a, b):
++        ra, rb = find_root(a), find_root(b)
++        if ra != rb: parent[ra] = rb
++
++    for f1, f2, sim in near_pairs:
++        parent.setdefault(f1.key, f1.key)
++        parent.setdefault(f2.key, f2.key)
++        union(f1.key, f2.key)
++    return parent
++
++def _build_clusters(near_pairs: List[Tuple[FunctionRecord, FunctionRecord, float]], parent: Dict[str, str]) -> Dict[str, List[Tuple[FunctionRecord, float]]]:
++    def find_root(x):
++        while parent.get(x, x) != x:
++            parent[x] = parent.get(parent[x], parent[x])
++            x = parent[x]
++        return x
++
++    clusters: Dict[str, List[Tuple[FunctionRecord, float]]] = defaultdict(list)
++    for f1, f2, sim in near_pairs:
++        root = find_root(f1.key)
++        if not any(x[0].key == f1.key for x in clusters[root]):
++            clusters[root].append((f1, 1.0))
++        if not any(x[0].key == f2.key for x in clusters[root]):
++            clusters[root].append((f2, sim))
++    return clusters
++
++def _create_near_group(group_id: int, members: List[Tuple[FunctionRecord, float]]) -> DuplicateGroup:
++    sims = [s for _, s in members]
++    avg = sum(sims) / len(sims) if sims else 0
++    return DuplicateGroup(
++        group_id=group_id,
++        similarity_type="near",
++        avg_similarity=round(avg, 3),
++        functions=[
++            {"key": f.key, "name": f.name, "file": f.file_path,
++             "line": f.line_start, "size": f.size_lines,
++             "similarity": round(sim, 3),
++             "signature": getattr(f, "signature", "")}
++            for f, sim in members
++        ],
++    )
++
+ class DuplicateFinder:
+     """
+     Cross-file function similarity detector.
+@@ -829,9 +1074,15 @@ class DuplicateFinder:
+              cross_file_only: bool = True) -> List[DuplicateGroup]:
+         """Find duplicate/similar function groups."""
+         self.groups = []
+-        group_id = 0
++        self._precompute_tokens(functions)
++        
++        seen_keys = self._find_exact_matches(functions, cross_file_only)
++        self._find_near_matches(functions, cross_file_only, seen_keys)
++        
++        self.groups.sort(key=lambda g: g.avg_similarity, reverse=True)
++        return self.groups
+ 
+-        # Pre-compute tokens (name + metadata + code body for broad matching)
++    def _precompute_tokens(self, functions: List[FunctionRecord]) -> None:
+         for func in functions:
+             text = " ".join([
+                 func.name,
+@@ -843,126 +1094,65 @@ class DuplicateFinder:
+             ])
+             self._tokens[func.key] = _term_freq(tokenize(text))
+ 
+-        # Stage 1: Exact hash matches
+-        hash_groups: Dict[str, List[FunctionRecord]] = defaultdict(list)
+-        for func in functions:
+-            if func.name not in self._BOILERPLATE:
+-                hash_groups[func.code_hash].append(func)
+-
++    def _find_exact_matches(self, functions: List[FunctionRecord], cross_file_only: bool) -> Set[str]:
++        hash_groups = _group_by_hash(functions, self._BOILERPLATE)
+         seen_keys: Set[str] = set()
++        group_id = sum(1 for _ in self.groups)
++        
+         for code_hash, group in hash_groups.items():
+-            if len(group) < 2:
+-                continue
+-            if cross_file_only:
+-                files = {f.file_path for f in group}
+-                if len(files) < 2:
+-                    continue
+-            self.groups.append(DuplicateGroup(
+-                group_id=group_id,
+-                similarity_type="exact",
+-                avg_similarity=1.0,
+-                functions=[
+-                    {"key": f.key, "name": f.name, "file": f.file_path,
+-                     "line": f.line_start, "size": f.size_lines,
+-                     "similarity": 1.0}
+-                    for f in group
+-                ],
+-            ))
++            if len(group) < 2: continue
++            if cross_file_only and len({f.file_path for f in group}) < 2: continue
++            self.groups.append(_create_exact_group(group_id, group))
+             seen_keys.update(f.key for f in group)
+             group_id += 1
++        return seen_keys
+ 
+-        # Stage 2: Token cosine pre-filter → SequenceMatcher
++    def _find_near_matches(self, functions: List[FunctionRecord], cross_file_only: bool, seen_keys: Set[str]) -> None:
+         func_list = [f for f in functions
+                      if f.key not in seen_keys
+                      and f.name not in self._BOILERPLATE
+                      and f.size_lines >= 5]
+ 
+-        # Pre-filter pairs with token cosine
+-        candidates: List[Tuple[FunctionRecord, FunctionRecord, float]] = []
++        candidates = self._get_similarity_candidates(func_list, cross_file_only)
++        near_pairs = self._evaluate_sequence_matcher(candidates)
++        self._cluster_and_commit_near_matches(functions, near_pairs)
++
++    def _get_similarity_candidates(self, func_list: List[FunctionRecord], cross_file_only: bool) -> List[Tuple[FunctionRecord, FunctionRecord, float]]:
++        candidates = []
+         for i, f1 in enumerate(func_list):
+             for f2 in func_list[i + 1:]:
+-                if cross_file_only and f1.file_path == f2.file_path:
+-                    continue
+-                # Size ratio check
++                if cross_file_only and f1.file_path == f2.file_path: continue
+                 ratio = min(f1.size_lines, f2.size_lines) / max(f1.size_lines, f2.size_lines)
+-                if ratio < self.SIZE_RATIO_MIN:
+-                    continue
+-                # Token cosine
++                if ratio < self.SIZE_RATIO_MIN: continue
++                
+                 tok_sim = cosine_similarity(
+                     self._tokens.get(f1.key, Counter()),
+                     self._tokens.get(f2.key, Counter()),
+                 )
+                 if tok_sim >= self.TOKEN_PREFILTER:
+                     candidates.append((f1, f2, tok_sim))
++        return candidates
+ 
+-        logger.info(f"Duplicate pre-filter: {len(candidates)} candidates from {len(func_list)} functions")
+-
+-        # Expensive SequenceMatcher on candidates only
+-        near_pairs: List[Tuple[FunctionRecord, FunctionRecord, float]] = []
++    def _evaluate_sequence_matcher(self, candidates: List[Tuple[FunctionRecord, FunctionRecord, float]]) -> List[Tuple[FunctionRecord, FunctionRecord, float]]:
++        near_pairs = []
+         for f1, f2, tok_sim in candidates:
+             sim = code_similarity(f1.code, f2.code)
+             if sim >= self.NEAR_DUP_THRESHOLD:
+                 near_pairs.append((f1, f2, sim))
++        return near_pairs
+ 
+-        # Cluster near-pairs via union-find
+-        parent: Dict[str, str] = {}
+-
+-        def find_root(x):
+-            while parent.get(x, x) != x:
+-                parent[x] = parent.get(parent[x], parent[x])
+-                x = parent[x]
+-            return x
+-
+-        def union(a, b):
+-            ra, rb = find_root(a), find_root(b)
+-            if ra != rb:
+-                parent[ra] = rb
+-
+-        for f1, f2, sim in near_pairs:
+-            parent.setdefault(f1.key, f1.key)
+-            parent.setdefault(f2.key, f2.key)
+-            union(f1.key, f2.key)
+-
+-        # Build clusters
+-        clusters: Dict[str, List[Tuple[FunctionRecord, float]]] = defaultdict(list)
+-        func_map = {f.key: f for f in functions}
+-        pair_sims: Dict[Tuple[str, str], float] = {
+-            (f1.key, f2.key): sim for f1, f2, sim in near_pairs
+-        }
+-
+-        for f1, f2, sim in near_pairs:
+-            root = find_root(f1.key)
+-            if not any(x[0].key == f1.key for x in clusters[root]):
+-                clusters[root].append((f1, 1.0))
+-            if not any(x[0].key == f2.key for x in clusters[root]):
+-                clusters[root].append((f2, sim))
++    def _cluster_and_commit_near_matches(self, functions: List[FunctionRecord], near_pairs: List[Tuple[FunctionRecord, FunctionRecord, float]]) -> None:
++        parent = _build_disjoint_set(near_pairs)
++        clusters = _build_clusters(near_pairs, parent)
+ 
++        group_id = sum(1 for _ in self.groups)
+         for root_key, members in clusters.items():
+-            if len(members) < 2:
+-                continue
+-            sims = [s for _, s in members]
+-            avg = sum(sims) / len(sims) if sims else 0
+-
+-            self.groups.append(DuplicateGroup(
+-                group_id=group_id,
+-                similarity_type="near",
+-                avg_similarity=round(avg, 3),
+-                functions=[
+-                    {"key": f.key, "name": f.name, "file": f.file_path,
+-                     "line": f.line_start, "size": f.size_lines,
+-                     "similarity": round(sim, 3),
+-                     "signature": f.signature}
+-                    for f, sim in members
+-                ],
+-            ))
++            if len(members) < 2: continue
++            self.groups.append(_create_near_group(group_id, members))
+             group_id += 1
+ 
+-        # Sort groups by avg similarity descending
+-        self.groups.sort(key=lambda g: g.avg_similarity, reverse=True)
+-        return self.groups
+-
+     def enrich_with_llm(self, llm: LLMHelper, functions: List[FunctionRecord],
+-                        max_calls: int = 15):
++                        max_calls: int = 15) -> None:
+         """Ask LLM if near-duplicates should be merged."""
+         func_map = {f.key: f for f in functions}
+         enriched = 0
+@@ -1036,13 +1226,7 @@ class LibraryAdvisor:
+     def __init__(self):
+         self.suggestions: List[LibrarySuggestion] = []
+ 
+-    def analyze(self, duplicate_groups: List[DuplicateGroup],
+-                functions: List[FunctionRecord]) -> List[LibrarySuggestion]:
+-        """Generate library extraction suggestions from duplicate analysis."""
+-        self.suggestions = []
+-        func_map = {f.key: f for f in functions}
+-
+-        # Approach 1: Direct from duplicate groups
++    def _analyze_exact_groups(self, duplicate_groups: List[DuplicateGroup], func_map: Dict[str, FunctionRecord]) -> None:
+         for group in duplicate_groups:
+             if len(group.functions) < self.MIN_GROUP_SIZE:
+                 continue
+@@ -1050,12 +1234,10 @@ class LibraryAdvisor:
+             if len(files) < self.MIN_CROSS_FILE_SPREAD:
+                 continue
+ 
+-            # Pick the "best" function (longest, has docstring)
+             best = max(
+                 group.functions,
+                 key=lambda f: (
+-                    1 if func_map.get(f["key"], None)
+-                         and func_map[f["key"]].docstring else 0,
++                    1 if func_map.get(f["key"], None) else 0,
+                     f.get("size", 0)
+                 )
+             )
+@@ -1064,15 +1246,13 @@ class LibraryAdvisor:
+                 continue
+ 
+             names = [f["name"] for f in group.functions]
+-            # Suggest a module name from common patterns
+             module_name = self._suggest_module_name(names)
+ 
+             self.suggestions.append(LibrarySuggestion(
+                 module_name=module_name,
+                 description=f"Consolidate {len(names)} similar implementations of '{names[0]}'",
+                 functions=[
+-                    {"name": f["name"], "file": f["file"],
+-                     "line": f["line"], "similarity": f.get("similarity", 1.0)}
++                    {"name": f["name"], "file": f["file"], "line": f["line"], "similarity": f.get("similarity", 1.0)}
+                     for f in group.functions
+                 ],
+                 unified_api=best_func.signature,
+@@ -1084,86 +1264,41 @@ class LibraryAdvisor:
+                 ),
+             ))
+ 
+-        # Approach 2: Cross-file function name analysis
++    def _create_cross_file_suggestion(self, name: str, funcs: List[FunctionRecord], files: set) -> None:
++        best_func = max(funcs, key=lambda f: (1 if f.docstring else 0, f.size_lines))
++        module_name = self._suggest_module_name([name])
++        self.suggestions.append(LibrarySuggestion(
++            module_name=module_name,
++            description=f"Function '{name}' reimplemented in {len(files)} files",
++            functions=[{"name": f.name, "file": f.file_path, "line": f.line_start, "similarity": 1.0} for f in funcs],
++            unified_api=best_func.signature,
++            rationale=f"Identical name across: {', '.join(sorted(files)[:4])}. Consider extracting to a shared utilities module.",
++        ))
++
++    def _analyze_cross_file_names(self, functions: List[FunctionRecord]) -> None:
+         name_files: Dict[str, List[FunctionRecord]] = defaultdict(list)
+         for func in functions:
+             if func.name not in DuplicateFinder._BOILERPLATE:
+                 name_files[func.name].append(func)
+ 
+-        already_suggested = {
+-            f["name"] for s in self.suggestions for f in s.functions
+-        }
++        already_suggested = {f["name"] for s in self.suggestions for f in s.functions}
+ 
+         for name, funcs in name_files.items():
+-            if name in already_suggested:
+-                continue
++            if name in already_suggested: continue
+             files = {f.file_path for f in funcs}
+-            if len(files) < self.MIN_CROSS_FILE_SPREAD:
+-                continue
+-            if len(funcs) < self.MIN_GROUP_SIZE:
+-                continue
+-
+-            best_func = max(funcs, key=lambda f: (
+-                1 if f.docstring else 0, f.size_lines
+-            ))
+-            module_name = self._suggest_module_name([name])
+-            self.suggestions.append(LibrarySuggestion(
+-                module_name=module_name,
+-                description=f"Function '{name}' reimplemented in {len(files)} files",
+-                functions=[
+-                    {"name": f.name, "file": f.file_path,
+-                     "line": f.line_start, "similarity": 1.0}
+-                    for f in funcs
+-                ],
+-                unified_api=best_func.signature,
+-                rationale=(
+-                    f"Identical name across: {', '.join(sorted(files)[:4])}. "
+-                    f"Consider extracting to a shared utilities module."
+-                ),
+-            ))
+-
+-        self.suggestions.sort(key=lambda s: len(s.functions), reverse=True)
+-        return self.suggestions
++            if len(files) < self.MIN_CROSS_FILE_SPREAD or len(funcs) < self.MIN_GROUP_SIZE: continue
++            self._create_cross_file_suggestion(name, funcs, files)
+ 
+-    def enrich_with_llm(self, llm: LLMHelper, functions: List[FunctionRecord],
+-                        max_calls: int = 10):
+-        """LLM generates unified API proposals for each suggestion."""
++    def analyze(self, duplicate_groups: List[DuplicateGroup], functions: List[FunctionRecord]) -> List[LibrarySuggestion]:
++        """Generate library extraction suggestions from duplicate analysis."""
++        self.suggestions = []
+         func_map = {f.key: f for f in functions}
+-        enriched = 0
+ 
+-        for suggestion in self.suggestions:
+-            if enriched >= max_calls:
+-                break
+-
+-            # Gather code snippets
+-            snippets = []
+-            for finfo in suggestion.functions[:3]:  # limit context
+-                key = f"{Path(finfo['file']).stem}.{finfo['name']}"
+-                func = func_map.get(key)
+-                if func:
+-                    snippets.append(f"# From {func.file_path}\n{func.code[:400]}")
+-
+-            if not snippets:
+-                continue
+-
+-            prompt = (
+-                "You are designing a shared Python library.\n"
+-                f"Module name: {suggestion.module_name}\n\n"
+-                "These similar functions exist across multiple files:\n\n"
+-                + "\n---\n".join(snippets) +
+-                "\n\nDesign a unified function that covers all use cases.\n"
+-                "Output:\n"
+-                "1. Function signature (def ...)\n"
+-                "2. One-line docstring\n"
+-                "3. Key design decisions (2 sentences)\n"
+-            )
+-            try:
+-                response = llm.query_sync(prompt, max_tokens=250)
+-                suggestion.unified_api = response.strip()
+-                enriched += 1
+-            except Exception as e:
+-                logger.debug(f"LLM library suggestion failed: {e}")
++        self._analyze_exact_groups(duplicate_groups, func_map)
++        self._analyze_cross_file_names(functions)
+ 
++        self.suggestions.sort(key=lambda s: len(s.functions), reverse=True)
++        return self.suggestions
+     def _suggest_module_name(self, func_names: List[str]) -> str:
+         """Suggest a module name from function naming patterns."""
+         name = func_names[0].lower()
+@@ -1195,251 +1330,116 @@ class LibraryAdvisor:
+ #  SMART GRAPH (Enhanced vis-network with health coloring)
+ # ─────────────────────────────────────────────────────────────────────────────
+ 
+-class SmartGraph:
+-    """
+-    Generates an interactive HTML graph with:
+-      - Health-colored file nodes (green/yellow/red based on smell count)
+-      - Enriched tooltips (smells, duplicates)
+-      - Duplicate connections shown as edges
+-    """
+-
+-    def __init__(self):
+-        self.nodes: List[Dict] = []
+-        self.edges: List[Dict] = []
+-        self._smells: List[SmellIssue] = []
+-        self._duplicates: List[DuplicateGroup] = []
+-        self._root_name: str = ""
+-
+-    def build(self, functions: List[FunctionRecord],
+-              smells: List[SmellIssue],
+-              duplicates: List[DuplicateGroup],
+-              root: Path):
+-        """Build graph data from analysis results."""
+-        self.nodes = []
+-        self.edges = []
+-        self._smells = list(smells)
+-        self._duplicates = list(duplicates)
+-        self._root_name = root.name
+-
+-        # Per-file metrics
+-        file_smells: Dict[str, List[SmellIssue]] = defaultdict(list)
+-        for s in smells:
+-            file_smells[s.file_path].append(s)
+-
+-        file_funcs: Dict[str, int] = Counter(f.file_path for f in functions)
+-
+-        # Parse all unique files
+-        all_files = sorted(set(f.file_path for f in functions))
+-        node_ids: Dict[str, int] = {}
+-
+-        for i, fpath in enumerate(all_files, 1):
+-            fsmells = file_smells.get(fpath, [])
+-            n_critical = sum(1 for s in fsmells if s.severity == Severity.CRITICAL)
+-            n_warning = sum(1 for s in fsmells if s.severity == Severity.WARNING)
+-            n_info = sum(1 for s in fsmells if s.severity == Severity.INFO)
+-
+-            # Color based on health
+-            if n_critical > 0:
+-                color = "#e74c3c"  # red
+-                health = "critical"
+-            elif n_warning > 0:
+-                color = "#f39c12"  # yellow/orange
+-                health = "warning"
+-            else:
+-                color = "#2ecc71"  # green
+-                health = "healthy"
+-
+-            # Tooltip (always Unicode — browsers handle it fine)
+-            tooltip_lines = [f"<b>{fpath}</b>"]
+-            tooltip_lines.append(f"Functions: {file_funcs.get(fpath, 0)}")
+-            if fsmells:
+-                tooltip_lines.append(f"<br/><b>Issues:</b>")
+-                for s in fsmells[:5]:
+-                    html_icon = Severity._ICONS_UNICODE.get(s.severity, "?")
+-                    tooltip_lines.append(
+-                        f"  {html_icon} {s.category}: {s.name}"
+-                    )
+-                if len(fsmells) > 5:
+-                    tooltip_lines.append(f"  ...+{len(fsmells) - 5} more")
+-
+-            node_ids[fpath] = i
+-            self.nodes.append({
+-                "id": i,
+-                "label": Path(fpath).name,
+-                "title": "<br/>".join(tooltip_lines),
+-                "color": color,
+-                "shape": "dot",
+-                "size": max(10, min(40, file_funcs.get(fpath, 1) * 3)),
+-                "health": health,
+-                "full_path": fpath,
+-            })
+-
+-        # Duplicate edges
+-        for group in duplicates:
+-            files_in_group = list(set(f["file"] for f in group.functions))
+-            for i, f1 in enumerate(files_in_group):
+-                for f2 in files_in_group[i + 1:]:
+-                    if f1 in node_ids and f2 in node_ids:
+-                        self.edges.append({
+-                            "from": node_ids[f1],
+-                            "to": node_ids[f2],
+-                            "label": f"{group.avg_similarity:.0%}",
+-                            "color": "#e67e22" if group.similarity_type == "near" else "#e74c3c",
+-                            "dashes": group.similarity_type == "near",
+-                            "title": (
+-                                f"Duplicate: {', '.join(f['name'] for f in group.functions[:3])}"
+-                            ),
+-                        })
+-
+-    def write_html(self, output_path: Path):
+-        """Write the interactive graph with side-panel lists to an HTML file."""
+-        nodes_json = json.dumps(self.nodes, indent=2)
+-        edges_json = json.dumps(self.edges, indent=2)
+-
+-        # Count health stats
+-        n_healthy = sum(1 for n in self.nodes if n.get("health") == "healthy")
+-        n_warning = sum(1 for n in self.nodes if n.get("health") == "warning")
+-        n_critical = sum(1 for n in self.nodes if n.get("health") == "critical")
+-
+-        # Build duplicate groups data for the HTML panel
+-        dup_rows = []
+-        for g in self._duplicates:
+-            dup_rows.append({
+-                "id": g.group_id,
+-                "type": g.similarity_type,
+-                "sim": round(g.avg_similarity * 100),
+-                "funcs": [
+-                    {"name": f["name"], "file": f["file"], "line": f.get("line", 0)}
+-                    for f in g.functions
+-                ],
+-                "merge": g.merge_suggestion or "",
+-            })
+-        dup_json = json.dumps(dup_rows)
+-
+-        # Build smell rows for the HTML panel
+-        smell_rows = []
+-        for s in self._smells:
+-            smell_rows.append({
+-                "sev": s.severity,
+-                "cat": s.category,
+-                "name": s.name,
+-                "file": s.file_path,
+-                "line": s.line,
+-                "msg": s.message,
+-                "sug": s.suggestion,
+-            })
+-        smell_json = json.dumps(smell_rows)
+-
+-        html = f"""<!DOCTYPE html>
++_SMART_GRAPH_TEMPLATE = """<!DOCTYPE html>
+ <html lang="en">
+ <head>
+ <meta charset="UTF-8">
+-<title>X-RAY Claude v{__version__} — Smart Code Graph</title>
++<title>X-RAY Claude v{VERSION} — Smart Code Graph</title>
+ <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+ <style>
+-  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+-  body {{ background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; overflow: hidden; }}
++  * { margin: 0; padding: 0; box-sizing: border-box; }
++  body { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+ 
+   /* ── Header ── */
+-  #header {{
++  #header {
+     height: 52px; padding: 0 20px; background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+     display: flex; justify-content: space-between; align-items: center;
+     box-shadow: 0 2px 10px rgba(0,0,0,.5); z-index: 100; position: relative;
+-  }}
+-  #header h1 {{ font-size: 17px; color: #00d4ff; white-space: nowrap; }}
+-  .tab-bar {{ display: flex; gap: 6px; }}
+-  .tab-btn {{
++  }
++  #header h1 { font-size: 17px; color: #00d4ff; white-space: nowrap; }
++  .tab-bar { display: flex; gap: 6px; }
++  .tab-btn {
+     padding: 6px 16px; background: rgba(255,255,255,.08); border: none;
+     color: #ccc; cursor: pointer; border-radius: 5px; font-size: 13px; font-weight: 500;
+     transition: .2s;
+-  }}
+-  .tab-btn:hover {{ background: rgba(255,255,255,.18); color: #fff; }}
+-  .tab-btn.active {{ background: #00d4ff; color: #000; }}
++  }
++  .tab-btn:hover { background: rgba(255,255,255,.18); color: #fff; }
++  .tab-btn.active { background: #00d4ff; color: #000; }
+ 
+   /* ── Panels ── */
+-  .panel {{ display: none; width: 100%; height: calc(100vh - 52px); }}
+-  .panel.active {{ display: flex; }}
++  .panel { display: none; width: 100%; height: calc(100vh - 52px); }
++  .panel.active { display: flex; }
+ 
+   /* Graph panel */
+-  #panel-graph {{ position: relative; }}
+-  #graph {{ width: 100%; height: 100%; }}
+-  .graph-legend {{
++  #panel-graph { position: relative; }
++  #graph { width: 100%; height: 100%; }
++  .graph-legend {
+     position: absolute; bottom: 16px; right: 16px;
+     background: rgba(0,0,0,.82); padding: 12px 16px; border-radius: 8px;
+     font-size: 12px; line-height: 1.8;
+-  }}
+-  .ldot {{ width: 11px; height: 11px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }}
++  }
++  .ldot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+ 
+   /* List panels (duplicates + smells) */
+-  .list-panel {{ flex-direction: column; overflow: hidden; }}
+-  .list-panel .toolbar {{
++  .list-panel { flex-direction: column; overflow: hidden; }
++  .list-panel .toolbar {
+     padding: 10px 20px; background: #16213e; display: flex; gap: 12px; align-items: center;
+     flex-shrink: 0;
+-  }}
+-  .search-input {{
++  }
++  .search-input {
+     flex: 1; max-width: 500px; padding: 8px 12px; background: rgba(255,255,255,.08);
+     border: 1px solid #333; border-radius: 5px; color: #fff; font-size: 13px;
+-  }}
+-  .search-input:focus {{ outline: none; border-color: #00d4ff; }}
+-  .stat-chip {{
++  }
++  .search-input:focus { outline: none; border-color: #00d4ff; }
++  .stat-chip {
+     padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+-  }}
+-  .stat-chip.exact {{ background: #e74c3c; }}
+-  .stat-chip.near {{ background: #e67e22; }}
+-  .stat-chip.crit {{ background: #e74c3c; }}
+-  .stat-chip.warn {{ background: #f39c12; color: #111; }}
+-  .stat-chip.info {{ background: #2ecc71; color: #111; }}
++  }
++  .stat-chip.exact { background: #e74c3c; }
++  .stat-chip.near { background: #e67e22; }
++  .stat-chip.crit { background: #e74c3c; }
++  .stat-chip.warn { background: #f39c12; color: #111; }
++  .stat-chip.info { background: #2ecc71; color: #111; }
+ 
+-  .list-scroll {{ flex: 1; overflow-y: auto; padding: 0 20px 20px 20px; }}
++  .list-scroll { flex: 1; overflow-y: auto; padding: 0 20px 20px 20px; }
+ 
+   /* Duplicate group cards */
+-  .dup-group {{
++  .dup-group {
+     margin: 12px 0; background: rgba(255,255,255,.04); border-radius: 8px;
+     border-left: 4px solid #e74c3c; overflow: hidden;
+-  }}
+-  .dup-group.near {{ border-left-color: #e67e22; }}
+-  .dup-group-header {{
++  }
++  .dup-group.near { border-left-color: #e67e22; }
++  .dup-group-header {
+     padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;
+     cursor: pointer; user-select: none;
+-  }}
+-  .dup-group-header:hover {{ background: rgba(255,255,255,.04); }}
+-  .dup-type {{ font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }}
+-  .dup-type.exact {{ color: #e74c3c; }}
+-  .dup-type.near {{ color: #e67e22; }}
+-  .dup-sim {{ color: #aaa; font-size: 12px; }}
+-  .dup-funcs {{ padding: 0 14px 10px 14px; }}
+-  .dup-func {{
++  }
++  .dup-group-header:hover { background: rgba(255,255,255,.04); }
++  .dup-type { font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
++  .dup-type.exact { color: #e74c3c; }
++  .dup-type.near { color: #e67e22; }
++  .dup-sim { color: #aaa; font-size: 12px; }
++  .dup-funcs { padding: 0 14px 10px 14px; }
++  .dup-func {
+     display: flex; gap: 10px; padding: 4px 0; font-size: 13px; align-items: baseline;
+-  }}
+-  .func-name {{ font-family: 'Cascadia Code', 'Fira Code', monospace; color: #00d4ff; font-weight: 600; min-width: 200px; }}
+-  .func-file {{ color: #888; font-size: 12px; }}
+-  .dup-merge {{ padding: 6px 14px 10px 14px; font-size: 12px; color: #f39c12; font-style: italic; }}
++  }
++  .func-name { font-family: 'Cascadia Code', 'Fira Code', monospace; color: #00d4ff; font-weight: 600; min-width: 200px; }
++  .func-file { color: #888; font-size: 12px; }
++  .dup-merge { padding: 6px 14px 10px 14px; font-size: 12px; color: #f39c12; font-style: italic; }
+ 
+   /* Smell table */
+-  .smell-table {{ width: 100%; border-collapse: collapse; }}
+-  .smell-table th {{
++  .smell-table { width: 100%; border-collapse: collapse; }
++  .smell-table th {
+     position: sticky; top: 0; background: #16213e; padding: 10px 12px;
+     text-align: left; font-size: 12px; font-weight: 600; cursor: pointer; user-select: none;
+     border-bottom: 2px solid #0f3460;
+-  }}
+-  .smell-table th:hover {{ background: #1a4d7a; }}
+-  .smell-table td {{ padding: 8px 12px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.06); }}
+-  .smell-table tr:hover {{ background: rgba(0,212,255,.08); }}
+-  .sev-badge {{
++  }
++  .smell-table th:hover { background: #1a4d7a; }
++  .smell-table td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.06); }
++  .smell-table tr:hover { background: rgba(0,212,255,.08); }
++  .sev-badge {
+     display: inline-block; padding: 2px 8px; border-radius: 10px;
+     font-size: 10px; font-weight: 700; text-transform: uppercase;
+-  }}
+-  .sev-badge.critical {{ background: #e74c3c; }}
+-  .sev-badge.warning {{ background: #f39c12; color: #111; }}
+-  .sev-badge.info {{ background: #2ecc71; color: #111; }}
+-  .cat-cell {{ font-family: monospace; color: #00d4ff; }}
+-  .msg-cell {{ color: #aaa; font-size: 12px; max-width: 350px; }}
++  }
++  .sev-badge.critical { background: #e74c3c; }
++  .sev-badge.warning { background: #f39c12; color: #111; }
++  .sev-badge.info { background: #2ecc71; color: #111; }
++  .cat-cell { font-family: monospace; color: #00d4ff; }
++  .msg-cell { color: #aaa; font-size: 12px; max-width: 350px; }
+ </style>
+ </head>
+ <body>
+ 
+ <div id="header">
+-  <h1>&#x1F50D; X-RAY Claude v{__version__} — {self._root_name}</h1>
++  <h1>&#x1F50D; X-RAY Claude v{VERSION} — {self._root_name}</h1>
+   <div class="tab-bar">
+     <button class="tab-btn active" onclick="showTab('graph')">&#x1F30D; Graph</button>
+     <button class="tab-btn" onclick="showTab('dups')">&#x1F534; Duplicates</button>
+@@ -1448,12 +1448,15 @@ class SmartGraph:
+ </div>
+ 
+ <!-- ── Graph Panel ── -->
+-<div id="panel-graph" class="panel active">
+-  <div id="graph"></div>
++<div id="panel-graph" class="panel active" style="flex-direction: column;">
++  <div class="toolbar" style="background: rgba(0,0,0,0.5); padding: 5px 20px;">
++    <input class="search-input" id="graphSearch" placeholder="&#x1F50D; Filter graph by file name..." oninput="filterGraph()">
++  </div>
++  <div id="graph" style="flex:1;"></div>
+   <div class="graph-legend">
+-    <div><span class="ldot" style="background:#2ecc71"></span>Healthy ({n_healthy})</div>
+-    <div><span class="ldot" style="background:#f39c12"></span>Warnings ({n_warning})</div>
+-    <div><span class="ldot" style="background:#e74c3c"></span>Critical ({n_critical})</div>
++    <div><span class="ldot" style="background:#2ecc71"></span>Healthy (__N_HEAL__)</div>
++    <div><span class="ldot" style="background:#f39c12"></span>Warnings (__N_WARN__)</div>
++    <div><span class="ldot" style="background:#e74c3c"></span>Critical (__N_CRIT__)</div>
+     <div style="margin-top:6px;color:#e67e22;font-size:11px">--- Duplicate links ({len(self.edges)})</div>
+     <div style="margin-top:8px;color:#666;font-size:11px">Scroll to zoom &middot; Drag to pan</div>
+   </div>
+@@ -1494,42 +1497,58 @@ class SmartGraph:
+ 
+ <script>
+ // ── Data ──
+-const nodesData = {nodes_json};
+-const edgesData = {edges_json};
+-const dupData   = {dup_json};
+-const smellData = {smell_json};
++const nodesData = __NODES_JSON__;
++const edgesData = __EDGES_JSON__;
++const dupData   = __DUP_JSON__;
++const smellData = __SMELL_JSON__;
+ 
+ // ── Tab switching ──
+-function showTab(name) {{
++function showTab(name) {
+   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+   document.getElementById('panel-' + name).classList.add('active');
+-  const idx = {{'graph':0,'dups':1,'smells':2}}[name];
++  const idx = {'graph':0,'dups':1,'smells':2}[name];
+   document.querySelectorAll('.tab-btn')[idx].classList.add('active');
+-}}
++}
+ 
+ // ── Graph ──
+ const container = document.getElementById('graph');
++const nodesDS = new vis.DataSet(nodesData);
++const edgesDS = new vis.DataSet(edgesData);
+ const network = new vis.Network(container,
+-  {{ nodes: new vis.DataSet(nodesData), edges: new vis.DataSet(edgesData) }},
+-  {{
+-    physics: {{ solver:'barnesHut', barnesHut:{{ gravitationalConstant:-3000, springLength:150, damping:.3 }} }},
+-    interaction: {{ hover:true, tooltipDelay:100 }},
+-    edges: {{ width:2, font:{{ size:10, color:'#888' }} }},
+-  }}
++  { nodes: nodesDS, edges: edgesDS },
++  {
++    physics: { solver:'barnesHut', barnesHut:{ gravitationalConstant:-3000, springLength:150, damping:.3 } },
++    interaction: { hover:true, tooltipDelay:100 },
++    edges: { width:2, font:{ size:10, color:'#888' } },
++  }
+ );
+ 
++function filterGraph() {
++  const q = document.getElementById('graphSearch').value.toLowerCase();
++  const allNodes = nodesData;
++  if (!q) {
++    nodesDS.update(allNodes.map(n => ({id: n.id, hidden: false})));
++    return;
++  }
++  const updates = allNodes.map(n => ({
++    id: n.id,
++    hidden: !(n.label.toLowerCase().includes(q) || (n.title && n.title.toLowerCase().includes(q)))
++  }));
++  nodesDS.update(updates);
++}
++
+ // ── Duplicates list ──
+ const dupExact = dupData.filter(g => g.type==='exact').length;
+ const dupNear  = dupData.filter(g => g.type==='near').length;
+ document.getElementById('dupExactChip').textContent = dupExact + ' exact';
+ document.getElementById('dupNearChip').textContent  = dupNear + ' near';
+ 
+-function renderDups(data) {{
++function renderDups(data) {
+   const el = document.getElementById('dupList');
+-  if (!data.length) {{ el.innerHTML = '<p style="padding:20px;color:#888">No duplicates match your search.</p>'; return; }}
++  if (!data.length) { el.innerHTML = '<p style="padding:20px;color:#888">No duplicates match your search.</p>'; return; }
+   let html = '';
+-  data.forEach(g => {{
++  data.forEach(g => {
+     const cls = g.type === 'near' ? 'near' : '';
+     html += '<div class="dup-group ' + cls + '">';
+     html += '<div class="dup-group-header">';
+@@ -1537,22 +1556,22 @@ function renderDups(data) {{
+     html += '<span class="dup-sim">' + g.sim + '% similar</span>';
+     html += '</div>';
+     html += '<div class="dup-funcs">';
+-    g.funcs.forEach(f => {{
++    g.funcs.forEach(f => {
+       html += '<div class="dup-func"><span class="func-name">' + f.name + '</span><span class="func-file">' + f.file + ':' + f.line + '</span></div>';
+-    }});
++    });
+     html += '</div>';
+     if (g.merge) html += '<div class="dup-merge">&#x1F4A1; ' + g.merge + '</div>';
+     html += '</div>';
+-  }});
++  });
+   el.innerHTML = html;
+-}}
++}
+ renderDups(dupData);
+ 
+-function filterDups() {{
++function filterDups() {
+   const q = document.getElementById('dupSearch').value.toLowerCase();
+-  if (!q) {{ renderDups(dupData); return; }}
++  if (!q) { renderDups(dupData); return; }
+   renderDups(dupData.filter(g => g.funcs.some(f => f.name.toLowerCase().includes(q) || f.file.toLowerCase().includes(q))));
+-}}
++}
+ 
+ // ── Smells table ──
+ const smCrit = smellData.filter(s => s.sev==='critical').length;
+@@ -1563,11 +1582,11 @@ document.getElementById('smWarnChip').textContent = smWarn + ' warning';
+ document.getElementById('smInfoChip').textContent = smInfo + ' info';
+ 
+ let smellSorted = [...smellData];
+-const sevOrder = {{'critical':0,'warning':1,'info':2}};
++const sevOrder = {'critical':0,'warning':1,'info':2};
+ 
+-function renderSmells(data) {{
++function renderSmells(data) {
+   const tbody = document.getElementById('smellBody');
+-  if (!data.length) {{ tbody.innerHTML = '<tr><td colspan="6" style="padding:20px;color:#888">No smells match.</td></tr>'; return; }}
++  if (!data.length) { tbody.innerHTML = '<tr><td colspan="6" style="padding:20px;color:#888">No smells match.</td></tr>'; return; }
+   tbody.innerHTML = data.map(s =>
+     '<tr>' +
+     '<td><span class="sev-badge ' + s.sev + '">' + s.sev + '</span></td>' +
+@@ -1578,33 +1597,157 @@ function renderSmells(data) {{
+     '<td class="msg-cell">' + s.msg + '</td>' +
+     '</tr>'
+   ).join('');
+-}}
++}
+ renderSmells(smellSorted);
+ 
+-let smellSortDir = {{}};
+-function sortSmells(col) {{
++let smellSortDir = {};
++function sortSmells(col) {
+   const keys = ['sev','cat','name','file','line','msg'];
+   const key = keys[col];
+   const dir = smellSortDir[col] === 'asc' ? 'desc' : 'asc';
+-  smellSortDir = {{}}; smellSortDir[col] = dir;
+-  smellSorted.sort((a,b) => {{
++  smellSortDir = {}; smellSortDir[col] = dir;
++  smellSorted.sort((a,b) => {
+     let av = key==='sev' ? sevOrder[a.sev] : (key==='line' ? a.line : a[key].toLowerCase());
+     let bv = key==='sev' ? sevOrder[b.sev] : (key==='line' ? b.line : b[key].toLowerCase());
+     if (av < bv) return dir==='asc' ? -1 : 1;
+     if (av > bv) return dir==='asc' ? 1 : -1;
+     return 0;
+-  }});
++  });
+   renderSmells(smellSorted);
+-}}
++}
+ 
+-function filterSmells() {{
++function filterSmells() {
+   const q = document.getElementById('smellSearch').value.toLowerCase();
+-  if (!q) {{ renderSmells(smellSorted); return; }}
++  if (!q) { renderSmells(smellSorted); return; }
+   renderSmells(smellSorted.filter(s => s.name.toLowerCase().includes(q) || s.file.toLowerCase().includes(q) || s.cat.toLowerCase().includes(q)));
+-}}
++}
+ </script>
+ </body>
+ </html>"""
++
++@dataclass
++class SmartGraph:
++    """
++    Generates an interactive HTML graph with:
++      - Health-colored file nodes (green/yellow/red based on smell count)
++      - Enriched tooltips (smells, duplicates)
++      - Duplicate connections shown as edges
++    """
++    nodes: List[Dict] = field(default_factory=list)
++    edges: List[Dict] = field(default_factory=list)
++    _smells: List[SmellIssue] = field(default_factory=list)
++    _duplicates: List[DuplicateGroup] = field(default_factory=list)
++    _root_name: str = ""
++
++    def _build_nodes(self, all_files: List[str], file_smells: Dict[str, List[SmellIssue]], file_funcs: Dict[str, int]) -> Dict[str, int]:
++        node_ids: Dict[str, int] = {}
++        for i, fpath in enumerate(all_files, 1):
++            fsmells = file_smells.get(fpath, [])
++            n_critical = sum(1 for s in fsmells if s.severity == Severity.CRITICAL)
++            n_warning = sum(1 for s in fsmells if s.severity == Severity.WARNING)
++
++            if n_critical > 0:
++                color, health = "#e74c3c", "critical"
++            elif n_warning > 0:
++                color, health = "#f39c12", "warning"
++            else:
++                color, health = "#2ecc71", "healthy"
++
++            tooltip_lines = [f"<b>{fpath}</b>", f"Functions: {file_funcs.get(fpath, 0)}"]
++            if fsmells:
++                tooltip_lines.append(f"<br/><b>Issues:</b>")
++                for s in fsmells[:5]:
++                    html_icon = Severity._ICONS_UNICODE.get(s.severity, "?")
++                    tooltip_lines.append(f"  {html_icon} {s.category}: {s.name}")
++                if len(fsmells) > 5:
++                    tooltip_lines.append(f"  ...+{len(fsmells) - 5} more")
++
++            node_ids[fpath] = i
++            self.nodes.append({
++                "id": i, "label": Path(fpath).name,
++                "title": "<br/>".join(tooltip_lines),
++                "color": color, "shape": "dot",
++                "size": max(10, min(40, file_funcs.get(fpath, 1) * 3)),
++                "health": health, "full_path": fpath,
++            })
++        return node_ids
++
++    def _build_edges(self, duplicates: List[DuplicateGroup], node_ids: Dict[str, int]) -> None:
++        import itertools
++        for group in duplicates:
++            files_in_group = list(set(f["file"] for f in group.functions))
++            for f1, f2 in itertools.combinations(files_in_group, 2):
++                if f1 in node_ids and f2 in node_ids:
++                    self.edges.append({
++                        "from": node_ids[f1], "to": node_ids[f2],
++                        "label": f"{group.avg_similarity:.0%}",
++                        "color": "#e67e22" if group.similarity_type == "near" else "#e74c3c",
++                        "dashes": group.similarity_type == "near",
++                        "title": f"Duplicate: {', '.join(f['name'] for f in group.functions[:3])}",
++                    })
++
++    def build(self, functions: List[FunctionRecord], smells: List[SmellIssue], duplicates: List[DuplicateGroup], root: Path) -> None:
++        """Build graph data from analysis results."""
++        self.nodes, self.edges = [], []
++        self._smells, self._duplicates, self._root_name = list(smells), list(duplicates), root.name
++
++        file_smells: Dict[str, List[SmellIssue]] = defaultdict(list)
++        for s in smells:
++            file_smells[s.file_path].append(s)
++        file_funcs: Dict[str, int] = Counter(f.file_path for f in functions)
++        all_files = sorted(set(f.file_path for f in functions))
++
++        node_ids = self._build_nodes(all_files, file_smells, file_funcs)
++        self._build_edges(duplicates, node_ids)
++
++    def write_html(self, output_path: Path) -> None:
++        """Write the interactive graph with side-panel lists to an HTML file."""
++        nodes_json = json.dumps(self.nodes, indent=2)
++        edges_json = json.dumps(self.edges, indent=2)
++
++        # Count health stats
++        n_healthy = sum(1 for n in self.nodes if n.get("health") == "healthy")
++        n_warning = sum(1 for n in self.nodes if n.get("health") == "warning")
++        n_critical = sum(1 for n in self.nodes if n.get("health") == "critical")
++
++        # Build duplicate groups data for the HTML panel
++        dup_rows = []
++        for g in self._duplicates:
++            dup_rows.append({
++                "id": g.group_id,
++                "type": g.similarity_type,
++                "sim": round(g.avg_similarity * 100),
++                "funcs": [
++                    {"name": f["name"], "file": f["file"], "line": f.get("line", 0)}
++                    for f in g.functions
++                ],
++                "merge": g.merge_suggestion or "",
++            })
++        dup_json = json.dumps(dup_rows)
++
++        # Build smell rows for the HTML panel
++        smell_rows = []
++        for s in self._smells:
++            smell_rows.append({
++                "sev": s.severity,
++                "cat": s.category,
++                "name": s.name,
++                "file": s.file_path,
++                "line": s.line,
++                "msg": s.message,
++                "sug": s.suggestion,
++            })
++        smell_json = json.dumps(smell_rows)
++
++        html = _SMART_GRAPH_TEMPLATE \
++        .replace("{VERSION}", __version__) \
++        .replace("__NODES_JSON__", nodes_json) \
++        .replace("__EDGES_JSON__", edges_json) \
++        .replace("__DUP_JSON__", dup_json) \
++        .replace("__SMELL_JSON__", smell_json) \
++        .replace("__N_CRIT__", str(n_critical)) \
++        .replace("__N_WARN__", str(n_warning)) \
++        .replace("__N_HEAL__", str(n_healthy))
+         output_path.write_text(html, encoding="utf-8")
+         logger.info(f"Smart graph written to {output_path}")
+ 
+@@ -1613,7 +1756,22 @@ function filterSmells() {{
+ #  REPORT PRINTER
+ # ─────────────────────────────────────────────────────────────────────────────
+ 
+-def print_smell_report(smells: List[SmellIssue], summary: Dict[str, Any]):
++def _print_file_smells(fpath: str, file_smells: List[SmellIssue]) -> None:
++    n_cr = sum(1 for s in file_smells if s.severity == Severity.CRITICAL)
++    n_wr = sum(1 for s in file_smells if s.severity == Severity.WARNING)
++    n_in = sum(1 for s in file_smells if s.severity == Severity.INFO)
++    counts = f"{Severity.icon(Severity.CRITICAL)}{n_cr} {Severity.icon(Severity.WARNING)}{n_wr} {Severity.icon(Severity.INFO)}{n_in}"
++    print(f"\n    {fpath}  [{counts}]")
++    for s in file_smells:
++        icon = Severity.icon(s.severity)
++        print(f"      {icon} L{s.line:>4d}  {s.category:<25s} {s.name}")
++        print(f"              {s.message}")
++        print(f"              -> {s.suggestion}")
++        if s.llm_analysis:
++            for line in textwrap.wrap(s.llm_analysis, 65):
++                print(f"              [AI] {line}")
++
++def print_smell_report(smells: List[SmellIssue], summary: Dict[str, Any]) -> None:
+     """Pretty-print the code smell report."""
+     print(f"\n  {'='*58}")
+     print(f"    CODE SMELL REPORT")
+@@ -1635,19 +1793,7 @@ def print_smell_report(smells: List[SmellIssue], summary: Dict[str, Any]):
+         by_file[s.file_path].append(s)
+ 
+     for fpath, file_smells in sorted(by_file.items()):
+-        n_cr = sum(1 for s in file_smells if s.severity == Severity.CRITICAL)
+-        n_wr = sum(1 for s in file_smells if s.severity == Severity.WARNING)
+-        n_in = sum(1 for s in file_smells if s.severity == Severity.INFO)
+-        counts = f"{Severity.icon(Severity.CRITICAL)}{n_cr} {Severity.icon(Severity.WARNING)}{n_wr} {Severity.icon(Severity.INFO)}{n_in}"
+-        print(f"\n    {fpath}  [{counts}]")
+-        for s in file_smells:
+-            icon = Severity.icon(s.severity)
+-            print(f"      {icon} L{s.line:>4d}  {s.category:<25s} {s.name}")
+-            print(f"              {s.message}")
+-            print(f"              -> {s.suggestion}")
+-            if s.llm_analysis:
+-                for line in textwrap.wrap(s.llm_analysis, 65):
+-                    print(f"              [AI] {line}")
++        _print_file_smells(fpath, file_smells)
+ 
+     # Worst files
+     if summary["worst_files"]:
+@@ -1667,7 +1813,7 @@ def print_smell_report(smells: List[SmellIssue], summary: Dict[str, Any]):
+ 
+ 
+ def print_duplicate_report(groups: List[DuplicateGroup],
+-                           summary: Dict[str, Any]):
++                           summary: Dict[str, Any]) -> None:
+     """Pretty-print the duplicate finder report."""
+     print(f"\n  {'='*58}")
+     print(f"    SIMILAR FUNCTIONS REPORT")
+@@ -1689,7 +1835,7 @@ def print_duplicate_report(groups: List[DuplicateGroup],
+               f"(avg: {group.avg_similarity:.0%})")
+         for func in group.functions:
+             print(f"      {func['name']:<30s} {func['file']}:{func['line']}")
+-            if func.get("signature"):
++        if func.get("signature"):
+                 print(f"        {func['signature']}")
+         if group.merge_suggestion:
+             print(f"      [MERGE] {group.merge_suggestion}")
+@@ -1701,7 +1847,7 @@ def print_duplicate_report(groups: List[DuplicateGroup],
+ 
+ 
+ def print_library_report(suggestions: List[LibrarySuggestion],
+-                         summary: Dict[str, Any]):
++                         summary: Dict[str, Any]) -> None:
+     """Pretty-print the library extraction suggestions."""
+     print(f"\n  {'='*58}")
+     print(f"    LIBRARY EXTRACTION ADVISOR")
+@@ -1736,38 +1882,33 @@ def print_library_report(suggestions: List[LibrarySuggestion],
+ #  JSON REPORT
+ # ─────────────────────────────────────────────────────────────────────────────
+ 
+-def build_json_report(
+-    root: Path,
+-    functions: List[FunctionRecord],
+-    classes: List[ClassRecord],
+-    smells: List[SmellIssue],
+-    duplicates: List[DuplicateGroup],
+-    library_suggestions: List[LibrarySuggestion],
+-    scan_time: float,
+-) -> Dict[str, Any]:
++def _build_json_stats(data: ReportData) -> Dict[str, Any]:
++    return {
++        "total_functions": len(data.functions),
++        "total_classes": len(data.classes),
++        "total_files": len(set(f.file_path for f in data.functions)),
++        "total_lines": sum(f.size_lines for f in data.functions),
++        "avg_function_size": (
++            round(sum(f.size_lines for f in data.functions) / len(data.functions), 1)
++            if data.functions else 0
++        ),
++        "avg_complexity": (
++            round(sum(f.complexity for f in data.functions) / len(data.functions), 1)
++            if data.functions else 0
++        ),
++    }
++
++def build_json_report(root: Path, data: ReportData) -> Dict[str, Any]:
+     """Build a comprehensive JSON report."""
+     return {
+         "version": __version__,
+         "timestamp": datetime.now().isoformat(),
+         "root": str(root),
+-        "scan_time_seconds": round(scan_time, 2),
+-        "stats": {
+-            "total_functions": len(functions),
+-            "total_classes": len(classes),
+-            "total_files": len(set(f.file_path for f in functions)),
+-            "total_lines": sum(f.size_lines for f in functions),
+-            "avg_function_size": (
+-                round(sum(f.size_lines for f in functions) / len(functions), 1)
+-                if functions else 0
+-            ),
+-            "avg_complexity": (
+-                round(sum(f.complexity for f in functions) / len(functions), 1)
+-                if functions else 0
+-            ),
+-        },
++        "scan_time_seconds": round(data.scan_time, 2),
++        "stats": _build_json_stats(data),
+         "smells": {
+-            "summary": CodeSmellDetector().detect(functions, classes) and None,  # just to get count
+-            "total": len(smells),
++            "summary": CodeSmellDetector().detect(data.functions, data.classes) and None,
++            "total": len(data.smells),
+             "issues": [
+                 {
+                     "file": s.file_path, "line": s.line,
+@@ -1777,11 +1918,11 @@ def build_json_report(
+                     "metric": s.metric_value,
+                     "llm_analysis": s.llm_analysis or None,
+                 }
+-                for s in smells
++                for s in data.smells
+             ],
+         },
+         "duplicates": {
+-            "total_groups": len(duplicates),
++            "total_groups": len(data.duplicates),
+             "groups": [
+                 {
+                     "id": g.group_id, "type": g.similarity_type,
+@@ -1789,11 +1930,11 @@ def build_json_report(
+                     "functions": g.functions,
+                     "merge_suggestion": g.merge_suggestion or None,
+                 }
+-                for g in duplicates
++                for g in data.duplicates
+             ],
+         },
+-        "library_suggestions": {
+-            "total": len(library_suggestions),
++        "lib_sugs": {
++            "total": len(data.lib_sugs),
+             "suggestions": [
+                 {
+                     "module": s.module_name,
+@@ -1802,7 +1943,7 @@ def build_json_report(
+                     "functions": s.functions,
+                     "rationale": s.rationale,
+                 }
+-                for s in library_suggestions
++                for s in data.lib_sugs
+             ],
+         },
+     }
+@@ -1812,7 +1953,8 @@ def build_json_report(
+ #  CLI
+ # ─────────────────────────────────────────────────────────────────────────────
+ 
+-def parse_args():
++def parse_args() -> argparse.Namespace:
++    """Parse command line arguments and return the populated namespace."""
+     p = argparse.ArgumentParser(
+         prog="X_RAY_Claude",
+         description="Smart AI-Powered Code Analyzer (X-Ray 4.0)",
+@@ -1852,6 +1994,12 @@ def parse_args():
+     p.add_argument("--max-llm-calls", type=int, default=20,
+                    help="Max LLM calls per feature (default: 20)")
+ 
++    # Enterprise / CI / Auto-Fix
++    p.add_argument("--fail-on", type=str, default="",
++                   help="Comma-separated thresholds to exit code 1 (e.g., 'critical=5,warning=20')")
++    p.add_argument("--apply-fixes", action="store_true",
++                   help="Automatically apply LLM-generated bugfix patches to source files")
++
+     # Output
+     p.add_argument("--report", type=str, metavar="FILE",
+                    help="Save full JSON report to FILE")
+@@ -1867,45 +2015,53 @@ def parse_args():
+ #  MAIN
+ # ─────────────────────────────────────────────────────────────────────────────
+ 
+-def main():
++
++@dataclass
++class ReportData:
++    functions: List[FunctionRecord]
++    classes: List[ClassRecord]
++    smells: List[SmellIssue]
++    duplicates: List[DuplicateGroup]
++    lib_sugs: List[LibrarySuggestion]
++    smell_sum: Dict[str, Any]
++    dup_sum: Dict[str, Any]
++    lib_sum: Dict[str, Any]
++    scan_time: float
++
++def _resolve_features(args) -> None:
++    if args.full_scan:
++        args.smell = args.duplicates = args.suggest_library = args.graph = True
++    elif not any([args.smell, args.duplicates, args.suggest_library, args.graph]):
++        args.smell = args.duplicates = True
++
++def _run_analysis_pipeline(args, root, functions, classes, llm) -> Tuple:
++    smells, smell_summary = _run_smells(args, root, functions, classes, llm) if args.smell else ([], {})
++    duplicates, dup_summary = _run_duplicates(args, functions, llm) if args.duplicates else ([], {})
++    lib_sugs, lib_summary = _run_library_extraction(args, duplicates, functions, llm) if args.suggest_library else ([], {})
++
++    if args.graph:
++        _run_graph(functions, smells, duplicates, root)
++        
++    return smells, smell_summary, duplicates, dup_summary, lib_sugs, lib_summary
++
++def main() -> None:
++    """Main entrypoint for the X-Ray Claude CLI execution."""
+     args = parse_args()
+     print(BANNER)
+ 
+-    # Resolve root
+-    if args.path:
+-        root = Path(args.path).resolve()
+-    else:
+-        root = Path(__file__).parent.resolve()
+-
++    root = Path(args.path).resolve() if args.path else Path(__file__).parent.resolve()
+     if not root.exists():
+         print(f"  Error: Path {root} does not exist.")
+         sys.exit(1)
+ 
+-    # If --full-scan, enable everything
+-    if args.full_scan:
+-        args.smell = True
+-        args.duplicates = True
+-        args.suggest_library = True
+-        args.graph = True
+-
+-    # Default: if nothing specified, run smell + duplicates
+-    if not (args.smell or args.duplicates or args.suggest_library or args.graph):
+-        args.smell = True
+-        args.duplicates = True
+-
+-    # LLM helper (lazy)
++    _resolve_features(args)
+     llm = LLMHelper(root) if args.use_llm else None
+-
+     start_time = time.time()
+ 
+-    # ── Step 1: Scan codebase ──
+     print(f"  Scanning {root.name}/...")
+     functions, classes, errors = scan_codebase(root, args.exclude, args.include)
+-    scan_time = time.time() - start_time
+-
+     print(f"  Found {len(functions)} functions, {len(classes)} classes "
+-          f"in {len(set(f.file_path for f in functions))} files "
+-          f"({scan_time:.2f}s)")
++          f"({time.time() - start_time:.2f}s)")
+     if errors:
+         print(f"  Skipped {len(errors)} files with errors")
+ 
+@@ -1913,101 +2069,129 @@ def main():
+         print("  No functions found — nothing to analyze.")
+         return
+ 
+-    # ── Step 2: Code Smell Detection ──
+-    smells: List[SmellIssue] = []
+-    smell_summary: Dict[str, Any] = {}
+-    if args.smell:
+-        print(f"\n  Running code smell detection...")
+-        detector = CodeSmellDetector()
+-        smells = detector.detect(functions, classes)
+-        smell_summary = detector.summary()
++    smells, smell_summary, duplicates, dup_summary, lib_sugs, lib_summary = _run_analysis_pipeline(
++        args, root, functions, classes, llm
++    )
+ 
+-        if args.use_llm and llm:
+-            detector.enrich_with_llm(llm, args.max_llm_calls)
++    scan_time = time.time() - start_time
++    report_data = ReportData(functions, classes, smells, duplicates, lib_sugs, smell_summary, dup_summary, lib_summary, scan_time)
++    _finish_report(args, root, report_data)
+ 
+-        if not args.quiet:
+-            print_smell_report(smells, smell_summary)
+-        else:
+-            print(f"    {Severity.icon(Severity.CRITICAL)} {smell_summary['critical']}  "
+-                  f"{Severity.icon(Severity.WARNING)} {smell_summary['warning']}  "
+-                  f"{Severity.icon(Severity.INFO)} {smell_summary['info']}")
+-
+-    # ── Step 3: Duplicate Detection ──
+-    duplicates: List[DuplicateGroup] = []
+-    dup_summary: Dict[str, Any] = {}
+-    if args.duplicates:
+-        print(f"\n  Running duplicate detection...")
+-        finder = DuplicateFinder()
+-        duplicates = finder.find(functions, cross_file_only=True)
+-        dup_summary = finder.summary()
+-
+-        if args.use_llm and llm:
+-            finder.enrich_with_llm(llm, functions, args.max_llm_calls)
+-
+-        if not args.quiet:
+-            print_duplicate_report(duplicates, dup_summary)
+-        else:
+-            print(f"    {dup_summary['total_groups']} groups, "
+-                  f"{dup_summary['total_functions_involved']} functions")
+-
+-    # ── Step 4: Library Extraction Advisor ──
+-    library_suggestions: List[LibrarySuggestion] = []
+-    lib_summary: Dict[str, Any] = {}
+-    if args.suggest_library:
+-        print(f"\n  Running library extraction analysis...")
+-        advisor = LibraryAdvisor()
+-        library_suggestions = advisor.analyze(duplicates, functions)
+-        lib_summary = advisor.summary()
+-
+-        if args.use_llm and llm:
+-            advisor.enrich_with_llm(llm, functions, args.max_llm_calls)
+-
+-        if not args.quiet:
+-            print_library_report(library_suggestions, lib_summary)
+-        else:
+-            print(f"    {lib_summary['total_suggestions']} suggestions")
+ 
+-    # ── Step 5: Smart Graph ──
+-    if args.graph:
+-        print(f"\n  Generating smart code graph...")
+-        graph = SmartGraph()
+-        graph.build(functions, smells, duplicates, root)
+-        graph_path = root / "xray_claude_graph.html"
+-        graph.write_html(graph_path)
+-        print(f"    Written to {graph_path}")
+-
+-    # ── Step 6: JSON Report ──
+-    total_time = time.time() - start_time
++def _run_smells(args, root, functions, classes, llm) -> Tuple[List[SmellIssue], Dict[str, Any]]:
++    print(f"\n  Running code smell detection...")
++    detector = CodeSmellDetector()
++    smells = detector.detect(functions, classes)
++    
++    if args.use_llm and llm:
++        detector.enrich_with_llm(llm, args.max_llm_calls)
++        if args.apply_fixes:
++            _apply_llm_patches(smells, root)
++            
++    summary = detector.summary()
++    if not args.quiet:
++        print_smell_report(smells, summary)
++    else:
++        print(f"    {Severity.icon(Severity.CRITICAL)} {summary['critical']}  "
++              f"{Severity.icon(Severity.WARNING)} {summary['warning']}  "
++              f"{Severity.icon(Severity.INFO)} {summary['info']}")
++    return smells, summary
++
++def _apply_llm_patches(smells: List[SmellIssue], root: Path) -> None:
++    print("\n  Applying LLM-generated patches...")
++    import subprocess
++    applied_count = 0
++    for smell in smells:
++        if not smell.llm_analysis: continue
++        diff_match = re.search(r"```diff\n(.*?)```", smell.llm_analysis, re.DOTALL)
++        if not diff_match: continue
++        
++        patch_file = root / ".xray_auto.patch"
++        patch_file.write_text(diff_match.group(1).strip() + "\n", encoding="utf-8")
++        try:
++            subprocess.run(["git", "apply", "--allow-empty", "--ignore-whitespace", str(patch_file)],
++                           cwd=root, check=True, capture_output=True)
++            print(f"    [+] Patched {smell.file_path} (Smell: {smell.category})")
++            applied_count += 1
++        except subprocess.CalledProcessError as e:
++            print(f"    [-] Failed to patch {smell.file_path}: {e.stderr.decode('utf-8', 'ignore').strip()}")
++        finally:
++            if patch_file.exists(): patch_file.unlink()
++    print(f"  Applied {applied_count} patches successfully.")
++
++def _run_duplicates(args, functions, llm) -> Tuple[List[DuplicateGroup], Dict[str, Any]]:
++    print(f"\n  Running duplicate detection...")
++    finder = DuplicateFinder()
++    duplicates = finder.find(functions, cross_file_only=True)
++    if args.use_llm and llm:
++        finder.enrich_with_llm(llm, functions, args.max_llm_calls)
++    summary = finder.summary()
++    if not args.quiet:
++        print_duplicate_report(duplicates, summary)
++    else:
++        print(f"    {summary['total_groups']} groups, {summary['total_functions_involved']} functions")
++    return duplicates, summary
++
++def _run_library_extraction(args, duplicates, functions, llm) -> Tuple[List[LibrarySuggestion], Dict[str, Any]]:
++    print(f"\n  Running library extraction analysis...")
++    advisor = LibraryAdvisor()
++    suggestions = advisor.analyze(duplicates, functions)
++    if args.use_llm and llm:
++        advisor.enrich_with_llm(llm, functions, args.max_llm_calls)
++    summary = advisor.summary()
++    if not args.quiet:
++        print_library_report(suggestions, summary)
++    else:
++        print(f"    {summary['total_suggestions']} library suggestions")
++    return suggestions, summary
++
++def _run_graph(functions, smells, duplicates, root) -> None:
++    print(f"\n  Generating interactive trace graph...")
++    graph = SmartGraph()
++    graph.build(functions, smells, duplicates, root)
++    out_html = root.absolute() / "xray_graph.html"
++    try:
++        graph.write_html(out_html)
++        print(f"    Saved HTML graph to {out_html}")
++    except Exception as e:
++        print(f"    Failed to save graph: {e}")
++
++def _finish_report(args, root, data: ReportData) -> None:
+     if args.report:
+-        report = build_json_report(
+-            root, functions, classes, smells, duplicates,
+-            library_suggestions, total_time,
+-        )
+-        report_path = Path(args.report)
+-        if not report_path.is_absolute():
+-            report_path = root / args.report
+-        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+-        print(f"\n  JSON report saved to {report_path}")
++        report_path = root.absolute() / args.report
++        print(f"\n  Writing full JSON report to {report_path}...")
++        json_payload = build_json_report(root, data)
++        report_path.write_text(json.dumps(json_payload, indent=2), encoding="utf-8")
+ 
+-    # ── Final Summary ──
++    total_time = time.time() - data.scan_time
+     print(f"\n  {'='*58}")
+     print(f"    SCAN COMPLETE ({total_time:.2f}s)")
+-    print(f"  {SEP*58}")
+-    print(f"    Files:      {len(set(f.file_path for f in functions)):>6}")
+-    print(f"    Functions:  {len(functions):>6}")
+-    print(f"    Classes:    {len(classes):>6}")
+-    if smells:
+-        print(f"    Smells:     {len(smells):>6}  "
+-              f"({Severity.icon(Severity.CRITICAL)}{smell_summary.get('critical', 0)} "
+-              f"{Severity.icon(Severity.WARNING)}{smell_summary.get('warning', 0)} "
+-              f"{Severity.icon(Severity.INFO)}{smell_summary.get('info', 0)})")
+-    if duplicates:
+-        print(f"    Duplicates: {len(duplicates):>6} groups")
+-    if library_suggestions:
+-        print(f"    Library:    {len(library_suggestions):>6} suggestions")
++    print(f"  {'-'*58}")
++    print(f"    Files:        {len(set(f.file_path for f in data.functions)):>4d}")
++    print(f"    Functions:    {len(data.functions):>4d}")
++    print(f"    Classes:      {len(data.classes):>4d}")
++    if args.smell:
++        print(f"    Smells:       {data.smell_sum['total']:>4d}  "
++              f"({Severity.icon(Severity.CRITICAL)}{data.smell_sum['critical']} "
++              f"{Severity.icon(Severity.WARNING)}{data.smell_sum['warning']} "
++              f"{Severity.icon(Severity.INFO)}{data.smell_sum['info']})")
+     print(f"    LLM:        {'enabled' if args.use_llm else 'disabled'}")
+     print(f"  {'='*58}\n")
+ 
++    if args.fail_on:
++        _enforce_ci_cd(args.fail_on, data.smell_sum)
++
++def _enforce_ci_cd(fail_on: str, smell_sum: Dict[str, Any]) -> None:
++    thresholds = {}
++    for part in fail_on.split(","):
++        if "=" in part:
++            k, v = part.split("=", 1)
++            thresholds[k.strip().lower()] = int(v.strip())
++            
++    for sev in ("critical", "warning", "info"):
++        if sev in thresholds and smell_sum.get(sev, 0) > thresholds[sev]:
++            print(f"\n[CI/CD ERROR] {sev.title()} smells ({smell_sum[sev]}) exceed threshold ({thresholds[sev]})")
++            sys.exit(1)
+ 
+ if __name__ == "__main__":
+     main()

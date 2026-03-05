@@ -2071,7 +2071,7 @@ def _build_nexus_tab(results: Dict[str, Any], page: ft.Page) -> ft.Control:
     )
 
 
-def _run_rustify_pipeline(results, page, status_text, progress_bar):
+def _run_rustify_pipeline(results, page, status_text, progress_bar, error_log=None):
     """Execute the auto-rustify pipeline, updating UI widgets."""
     scan_path = results.get("_scan_path", "")
     if not scan_path:
@@ -2080,6 +2080,9 @@ def _run_rustify_pipeline(results, page, status_text, progress_bar):
         return
     progress_bar.visible = True
     status_text.value = "Running pipeline\u2026"
+    if error_log is not None:
+        error_log.value = ""
+        error_log.visible = False
     page.update()
     try:
 
@@ -2105,9 +2108,23 @@ def _run_rustify_pipeline(results, page, status_text, progress_bar):
             else "\u26a0\ufe0f Pipeline finished with issues"
         )
         status_text.color = ft.Colors.GREEN_400 if ok else ft.Colors.AMBER_400
+        # Show full compile error log if compilation failed
+        if not ok and error_log is not None:
+            stderr = ""
+            if report.compile_result and hasattr(report.compile_result, "stderr"):
+                stderr = report.compile_result.stderr or ""
+            elif report.errors:
+                stderr = "\n".join(report.errors)
+            if stderr:
+                error_log.value = stderr
+                error_log.visible = True
     except Exception as ex:
         status_text.value = f"\u274c Error: {ex}"
         status_text.color = ft.Colors.RED_400
+        if error_log is not None:
+            import traceback
+            error_log.value = traceback.format_exc()
+            error_log.visible = True
     progress_bar.visible = False
     page.update()
 
@@ -2134,6 +2151,22 @@ def _build_auto_rustify_tab(results: Dict[str, Any], page: ft.Page) -> ft.Contro
     status_text = ft.Text("", size=SZ_MD, color=TH.dim)
     prog_bar = ft.ProgressBar(
         width=500, color=TH.accent, bgcolor=TH.card, value=0, visible=False
+    )
+    # Full scrollable Cargo error log — hidden until compilation fails
+    error_log = ft.TextField(
+        value="",
+        multiline=True,
+        read_only=True,
+        visible=False,
+        min_lines=6,
+        max_lines=20,
+        font_family=MONO_FONT,
+        text_size=SZ_SM,
+        bgcolor=TH.code_bg,
+        border_color=ft.Colors.RED_400,
+        color=ft.Colors.RED_200,
+        label="Cargo compile errors",
+        expand=True,
     )
 
     return ft.Column(
@@ -2164,7 +2197,7 @@ def _build_auto_rustify_tab(results: Dict[str, Any], page: ft.Page) -> ft.Contro
                     ft.Button(
                         f"\ud83d\ude80 {t('run_pipeline')}",
                         on_click=lambda e: _run_rustify_pipeline(
-                            results, page, status_text, prog_bar
+                            results, page, status_text, prog_bar, error_log
                         ),
                         bgcolor=TH.accent2,
                         color=ft.Colors.WHITE,
@@ -2178,6 +2211,7 @@ def _build_auto_rustify_tab(results: Dict[str, Any], page: ft.Page) -> ft.Contro
                 spacing=12,
             ),
             prog_bar,
+            error_log,
         ],
         spacing=10,
     )
@@ -2635,30 +2669,77 @@ def _build_export_bar(page, state, results):
         except Exception as exc:
             _show_snack(page, f"âŒ Export failed: {exc}", bgcolor=ft.Colors.RED_400)
 
-    return ft.Row(
+    gen_test_status = ft.Text("", size=SZ_SM, color=TH.dim)
+
+    def on_gen_tests(e):
+        scan_path = state.get("root_path", "")
+        if not scan_path:
+            _show_snack(page, t("select_dir_first"), bgcolor=ft.Colors.RED_400)
+            return
+        gen_test_status.value = "⏳ Generating tests…"
+        gen_test_status.color = TH.dim
+        page.update()
+        try:
+            cmd = [sys.executable, str(ROOT / "x_ray_claude.py"), "--path", scan_path, "--gen-tests"]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)  # nosec B603
+            out_dir = Path(scan_path) / "tests" / "xray_generated"
+            if proc.returncode == 0:
+                gen_test_status.value = f"✅ Tests generated → {out_dir}"
+                gen_test_status.color = ft.Colors.GREEN_400
+                _show_snack(page, f"✅ Tests written to {out_dir}")
+            else:
+                gen_test_status.value = "⚠️ Generation finished with warnings"
+                gen_test_status.color = ft.Colors.AMBER_400
+        except subprocess.TimeoutExpired:
+            gen_test_status.value = "❌ Timed out (120 s)"
+            gen_test_status.color = ft.Colors.RED_400
+        except Exception as exc:
+            gen_test_status.value = f"❌ {exc}"
+            gen_test_status.color = ft.Colors.RED_400
+        page.update()
+
+    return ft.Column(
         [
+            ft.Row(
+                [
             ft.Button(
-                f"ðŸ“¥ {t('export_json')}",
-                on_click=on_export_json,
-                bgcolor=TH.card,
-                color=TH.text,
-                height=BTN_H_SM,
-                style=ft.ButtonStyle(
-                    shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS)
-                ),
+                        f"ðŸ“¥ {t('export_json')}",
+                        on_click=on_export_json,
+                        bgcolor=TH.card,
+                        color=TH.text,
+                        height=BTN_H_SM,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS)
+                        ),
+                    ),
+                    ft.Button(
+                        f"ðŸ“¥ {t('export_markdown')}",
+                        on_click=on_export_md,
+                        bgcolor=TH.card,
+                        color=TH.text,
+                        height=BTN_H_SM,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS)
+                        ),
+                    ),
+                    ft.Button(
+                        "🧪 Generate Tests",
+                        on_click=on_gen_tests,
+                        bgcolor=TH.surface,
+                        color=TH.accent,
+                        height=BTN_H_SM,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS),
+                            side=ft.BorderSide(1, TH.accent),
+                        ),
+                    ),
+                ],
+                spacing=12,
+                wrap=True,
             ),
-            ft.Button(
-                f"ðŸ“¥ {t('export_markdown')}",
-                on_click=on_export_md,
-                bgcolor=TH.card,
-                color=TH.text,
-                height=BTN_H_SM,
-                style=ft.ButtonStyle(
-                    shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS)
-                ),
-            ),
+            gen_test_status,
         ],
-        spacing=12,
+        spacing=4,
     )
 
 
@@ -3269,6 +3350,7 @@ def _build_app_sidebar(sidebar_cfg):
                     ),
                 ),
                 p["path_text"],
+                *([p["recent_dd"]] if p.get("recent_dd") is not None else []),
                 ft.Divider(color=TH.divider, height=12),
                 ft.Text(
                     t("scan_modes").upper(),
@@ -3474,6 +3556,41 @@ _DEFAULT_EXCLUDES = [
     "X_Ray_Standalone",
 ]
 
+# ── Settings persistence ────────────────────────────────────────────────────
+
+_SETTINGS_FILE = Path(__file__).parent / "xray_settings.json"
+_MAX_RECENT = 5
+
+
+def _load_settings() -> dict:
+    """Load persisted settings; returns {} on any error."""
+    try:
+        data = json.loads(_SETTINGS_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_settings(settings: dict) -> None:
+    """Write settings atomically; silently ignores write errors."""
+    try:
+        _SETTINGS_FILE.write_text(
+            json.dumps(settings, indent=2, default=str), encoding="utf-8"
+        )
+    except Exception:
+        pass
+
+
+def _push_recent_path(path: str) -> None:
+    """Prepend *path* to the recent_paths list, keeping at most _MAX_RECENT entries."""
+    s = _load_settings()
+    recent: list = s.get("recent_paths", [])
+    if path in recent:
+        recent.remove(path)
+    recent.insert(0, path)
+    s["recent_paths"] = recent[:_MAX_RECENT]
+    _save_settings(s)
+
 
 def _init_state(page):
     """Initialise or retrieve persisted scan state from page.data."""
@@ -3572,6 +3689,13 @@ async def _setup_main_state(page: ft.Page):
     """Initialize state and file picker for the main app."""
     state = _init_state(page)
 
+    # Load persisted recent paths into state so sidebar can see them
+    settings = _load_settings()
+    state.setdefault("recent_paths", settings.get("recent_paths", []))
+    # Restore last-used path if the current session hasn't set one yet
+    if not state["root_path"] and state["recent_paths"]:
+        state["root_path"] = state["recent_paths"][0]
+
     file_picker = ft.FilePicker()
     if not any(isinstance(s, ft.FilePicker) for s in page.services):
         page.services.append(file_picker)
@@ -3586,20 +3710,27 @@ async def _setup_main_state(page: ft.Page):
         overflow=ft.TextOverflow.ELLIPSIS,
     )
 
+    def _apply_path(p: str):
+        """Update state + UI for a newly selected path and persist it."""
+        state["root_path"] = p
+        path_text.value = p
+        path_text.color = TH.accent
+        path_text.italic = False
+        _push_recent_path(p)
+        state["recent_paths"] = _load_settings().get("recent_paths", [])
+
     async def pick_directory(e):
         result = await file_picker.get_directory_path(
             dialog_title=t("select_directory")
         )
         if result:
-            state["root_path"] = result
-            path_text.value = result
-            path_text.color = TH.accent
+            _apply_path(result)
             page.update()
 
-    return state, path_text, pick_directory
+    return state, path_text, pick_directory, _apply_path
 
 
-def _build_main_ui(page: ft.Page, state: dict, path_text, pick_directory):
+def _build_main_ui(page: ft.Page, state: dict, path_text, pick_directory, apply_path):
     """Build the top-level Flet UI layout and wire up scan events."""
     mode_checks = _build_mode_checks(state)
     theme_icon, lang_dd = _build_theme_lang_controls(page, main)
@@ -3615,10 +3746,35 @@ def _build_main_ui(page: ft.Page, state: dict, path_text, pick_directory):
     async def start_scan(e):
         await _start_scan_handler(page, state, progress, main_content, build_dashboard)
 
+    # Build recent-paths dropdown (only if we have any history)
+    recent = state.get("recent_paths", [])
+    if recent:
+        def _on_recent_pick(e):
+            chosen = e.control.value
+            if chosen:
+                apply_path(chosen)
+                page.update()
+
+        recent_dd = ft.Dropdown(
+            label="Recent paths",
+            options=[ft.dropdown.Option(key=p, text=p if len(p) <= 38 else "\u2026" + p[-35:]) for p in recent],
+            value=state["root_path"] if state["root_path"] in recent else None,
+            on_change=_on_recent_pick,
+            text_size=SZ_SM,
+            bgcolor=TH.card,
+            border_color=TH.border,
+            focused_border_color=TH.accent,
+            color=TH.text,
+            width=260,
+        )
+    else:
+        recent_dd = None
+
     sidebar = _build_app_sidebar(
         {
             "pick_directory": pick_directory,
             "path_text": path_text,
+            "recent_dd": recent_dd,
             "mode_checks": mode_checks,
             "start_scan": start_scan,
             "theme_icon": theme_icon,
@@ -3636,10 +3792,10 @@ def _build_main_ui(page: ft.Page, state: dict, path_text, pick_directory):
 async def main(page: ft.Page):
     """Flet application entry point."""
     _setup_page(page)
-    state, path_text, pick_directory = await _setup_main_state(page)
+    state, path_text, pick_directory, apply_path = await _setup_main_state(page)
 
     layout, main_content, build_dashboard = _build_main_ui(
-        page, state, path_text, pick_directory
+        page, state, path_text, pick_directory, apply_path
     )
 
     if state.get("results"):
