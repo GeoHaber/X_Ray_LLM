@@ -3530,14 +3530,19 @@ def _setup_page(page):
     page.window.height = 880
     page.padding = 0
     page.spacing = 0
-    page.fonts = {"mono": "Cascadia Code"}
+    # Register emoji font so Flutter renders emoji correctly on Windows
+    _emoji_font_path = "C:/Windows/Fonts/seguiemj.ttf"  # Segoe UI Emoji
+    page.fonts = {
+        "mono": "Cascadia Code",
+        "emoji": _emoji_font_path,
+    }
     page.theme = ft.Theme(
         color_scheme_seed=TH.accent,
-        font_family="Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+        font_family="Segoe UI, Segoe UI Emoji, Roboto, Helvetica, Arial, sans-serif",
     )
     page.dark_theme = ft.Theme(
         color_scheme_seed=TH.accent,
-        font_family="Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+        font_family="Segoe UI, Segoe UI Emoji, Roboto, Helvetica, Arial, sans-serif",
     )
 
 
