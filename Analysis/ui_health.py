@@ -277,6 +277,32 @@ class _PythonUIVisitor(ast.NodeVisitor):
     def _is_container(self, name: str) -> bool:
         return name in _FLET_CONTAINERS
 
+    def _check_empty_container(
+        self, call_node: ast.Call, varname: str, widget_name: str, lineno: int
+    ):
+        """UH007: flag container with explicitly empty controls list."""
+        controls_kw = _kw_value(call_node, "controls")
+        content_kw = _kw_value(call_node, "content")
+        has_children = (
+            (isinstance(controls_kw, (ast.List, ast.Tuple)) and controls_kw.elts)
+            or content_kw is not None
+            or call_node.args  # positional content
+        )
+        if has_children:
+            return
+        if isinstance(controls_kw, (ast.List, ast.Tuple)) and not controls_kw.elts:
+            self.issues.append(
+                UIHealthIssue(
+                    rule_code="UH007",
+                    file_path=self.file_path,
+                    line=lineno,
+                    end_line=lineno,
+                    widget_name=varname,
+                    detail=f"{widget_name}(controls=[]) — no children",
+                    suggestion="Add child controls or populate them later.",
+                )
+            )
+
     # -- visitors ------------------------------------------------------------
 
     def visit_Assign(self, node: ast.Assign):  # noqa: N802
@@ -302,35 +328,9 @@ class _PythonUIVisitor(ast.NodeVisitor):
 
                         # UH007: empty container?
                         if self._is_container(widget_name):
-                            controls_kw = _kw_value(node.value, "controls")
-                            content_kw = _kw_value(node.value, "content")
-                            has_children = (
-                                (
-                                    isinstance(controls_kw, (ast.List, ast.Tuple))
-                                    and controls_kw.elts
-                                )
-                                or content_kw is not None
-                                or node.value.args  # positional content
+                            self._check_empty_container(
+                                node.value, varname, widget_name, node.lineno
                             )
-                            if not has_children:
-                                # Only flag if controls_kw is explicitly empty list
-                                if (
-                                    isinstance(controls_kw, (ast.List, ast.Tuple))
-                                    and not controls_kw.elts
-                                ):
-                                    self.issues.append(
-                                        UIHealthIssue(
-                                            rule_code="UH007",
-                                            file_path=self.file_path,
-                                            line=node.lineno,
-                                            end_line=getattr(
-                                                node, "end_lineno", node.lineno
-                                            ),
-                                            widget_name=varname,
-                                            detail=f"{widget_name}(controls=[]) — no children",
-                                            suggestion="Add child controls or populate them later.",
-                                        )
-                                    )
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute):  # noqa: N802
@@ -348,6 +348,16 @@ class _PythonUIVisitor(ast.NodeVisitor):
     def visit_AugAssign(self, node: ast.AugAssign):  # noqa: N802
         self.generic_visit(node)
 
+    def _collect_parent_names(self, args):
+        """Add Name ids from call arguments to _added_to_parent set."""
+        for arg in args:
+            if isinstance(arg, ast.Name):
+                self._added_to_parent.add(arg.id)
+            elif isinstance(arg, (ast.List, ast.Tuple)):
+                for elt in arg.elts:
+                    if isinstance(elt, ast.Name):
+                        self._added_to_parent.add(elt.id)
+
     def visit_Call(self, node: ast.Call):  # noqa: N802
         """Track page.add(), column.controls.append(), etc."""
         func = node.func
@@ -355,13 +365,7 @@ class _PythonUIVisitor(ast.NodeVisitor):
         # page.add(widget, ...)  or  main_content.controls.append(widget)
         if isinstance(func, ast.Attribute):
             if func.attr in ("add", "append", "extend", "insert"):
-                for arg in node.args:
-                    if isinstance(arg, ast.Name):
-                        self._added_to_parent.add(arg.id)
-                    elif isinstance(arg, (ast.List, ast.Tuple)):
-                        for elt in arg.elts:
-                            if isinstance(elt, ast.Name):
-                                self._added_to_parent.add(elt.id)
+                self._collect_parent_names(node.args)
 
             # UH004: detect expand=True inside fixed container
             if func.attr in _FLET_CONTAINERS or (
@@ -370,11 +374,7 @@ class _PythonUIVisitor(ast.NodeVisitor):
                 self._check_layout_antipattern(node)
 
         # Also check direct calls: Column([widget, ...])
-        for arg in node.args:
-            if isinstance(arg, (ast.List, ast.Tuple)):
-                for elt in arg.elts:
-                    if isinstance(elt, ast.Name):
-                        self._added_to_parent.add(elt.id)
+        self._collect_parent_names(node.args)
 
         # Collect all Name references (for dead-widget detection)
         self.generic_visit(node)

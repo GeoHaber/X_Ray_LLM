@@ -204,27 +204,43 @@ def _find_matching_brace(lines: List[str], start_line: int) -> int:
 
     for i in range(start_line, len(lines)):
         line = lines[i]
-        j = 0
-        while j < len(line):
-            ch = line[j]
-            if in_string:
-                if ch == "\\" and j + 1 < len(line):
-                    j += 2
-                    continue
-                if ch == string_char:
-                    in_string = False
-            elif ch in ('"', "'", "`"):
-                in_string = True
-                string_char = ch
-            elif ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    return i
-            j += 1
+        depth, in_string, string_char, matched = _scan_braces_in_line(
+            line, depth, in_string, string_char
+        )
+        if matched:
+            return i
 
     return min(start_line + 200, len(lines) - 1)  # fallback cap
+
+
+def _scan_braces_in_line(
+    line: str, depth: int, in_string: bool, string_char: str
+) -> tuple:
+    """Process one line, tracking string state and brace depth.
+
+    Returns ``(depth, in_string, string_char, matched)`` where *matched*
+    is True if a closing ``}`` brought depth back to zero.
+    """
+    j = 0
+    while j < len(line):
+        ch = line[j]
+        if in_string:
+            if ch == "\\" and j + 1 < len(line):
+                j += 2
+                continue
+            if ch == string_char:
+                in_string = False
+        elif ch in ('"', "'", "`"):
+            in_string = True
+            string_char = ch
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return depth, in_string, string_char, True
+        j += 1
+    return depth, in_string, string_char, False
 
 
 def _count_nesting(code: str) -> int:
