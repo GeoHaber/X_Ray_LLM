@@ -3764,12 +3764,9 @@ def _build_main_ui(page: ft.Page, state: dict, path_text, pick_directory, apply_
             label="Recent paths",
             options=[ft.dropdown.Option(key=p, text=p if len(p) <= 38 else "\u2026" + p[-35:]) for p in recent],
             value=state["root_path"] if state["root_path"] in recent else None,
-            on_change=_on_recent_pick,
-            text_size=SZ_SM,
+            on_select=_on_recent_pick,
             bgcolor=TH.card,
             border_color=TH.border,
-            focused_border_color=TH.accent,
-            color=TH.text,
             width=260,
         )
     else:
