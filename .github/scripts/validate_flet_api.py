@@ -57,7 +57,7 @@ def check_file(filepath: Path) -> list[str]:
     try:
         with open(filepath, encoding="utf-8") as f:
             content = f.read()
-        tree = ast.parse(content)
+        ast.parse(content)  # validate syntax
     except (SyntaxError, UnicodeDecodeError) as e:
         return [f"{filepath}: Parse error: {e}"]
 
@@ -103,8 +103,11 @@ def check_file(filepath: Path) -> list[str]:
         # Causes WrapParentData vs FlexParentData crash
         if re.search(r"ft\.Row\(.*wrap\s*=\s*True", line) or (
             "wrap=True" in line
-            and any(kw in content.split("\n")[max(0, line_num - 5) : line_num]
-                    for kw in ["ft.Row("] if kw)
+            and any(
+                kw in content.split("\n")[max(0, line_num - 5) : line_num]
+                for kw in ["ft.Row("]
+                if kw
+            )
         ):
             # Simple heuristic: line itself has both ft.Row and wrap=True
             if "ft.Row" in line and "wrap=True" in line:

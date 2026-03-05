@@ -70,72 +70,68 @@ def _build_fn_tile(fn, code_map):
         else [],
     )
 
-    def _build_complexity_tab(results: Dict[str, Any]) -> ft.Control:
-        """Render the Complexity analysis tab."""
-        functions: list = results.get("_functions", [])
-        if not functions:
-            return ft.Text(
-                "No functions available. Enable Smells or Duplicates.",
-                color=TH.dim,
-                size=SZ_LG,
-            )
 
-            complexities = [f.complexity for f in functions]
-            sizes = [f.size_lines for f in functions]
-            avg_cc = sum(complexities) / len(complexities)
-            max_cc = max(complexities)
-            med_cc = sorted(complexities)[len(complexities) // 2]
+def _build_complexity_tab(results: Dict[str, Any]) -> ft.Control:
+    """Render the Complexity analysis tab."""
+    functions: list = results.get("_functions", [])
+    if not functions:
+        return ft.Text(
+            "No functions available. Enable Smells or Duplicates.",
+            color=TH.dim,
+            size=SZ_LG,
+        )
 
-            metrics = ft.Row(
-                [
-                    metric_tile("", f"{avg_cc:.1f}", t("avg_complexity")),
-                    metric_tile("", max_cc, t("max_complexity"), ft.Colors.RED_400),
-                    metric_tile("", med_cc, "Median CC"),
-                    metric_tile("", f"{sum(sizes) / len(sizes):.0f}", "Avg Size"),
-                ],
-                spacing=8,
-            )
+    complexities = [f.complexity for f in functions]
+    sizes = [f.size_lines for f in functions]
+    avg_cc = sum(complexities) / len(complexities)
+    max_cc = max(complexities)
+    med_cc = sorted(complexities)[len(complexities) // 2]
 
-            cc_buckets = _bucket_values(complexities, _CC_BUCKETS, _CC_LIMITS)
-            cc_chart = ft.Column(
-                [
-                    section_title(t("cc_distribution"), ""),
-                    bar_chart([(k, v, _CC_COLORS[k]) for k, v in cc_buckets.items()]),
-                ],
-                spacing=8,
-            )
+    metrics = ft.Row(
+        [
+            metric_tile("", f"{avg_cc:.1f}", t("avg_complexity")),
+            metric_tile("", max_cc, t("max_complexity"), ft.Colors.RED_400),
+            metric_tile("", med_cc, "Median CC"),
+            metric_tile("", f"{sum(sizes) / len(sizes):.0f}", "Avg Size"),
+        ],
+        spacing=8,
+    )
 
-            sz_buckets = _bucket_values(sizes, _SZ_BUCKETS, _SZ_LIMITS)
-            sz_chart = ft.Column(
-                [
-                    section_title(t("size_distribution"), ""),
-                    bar_chart(
-                        [
-                            (f"{k} lines", v, _SZ_COLORS[k])
-                            for k, v in sz_buckets.items()
-                        ]
-                    ),
-                ],
-                spacing=8,
-            )
+    cc_buckets = _bucket_values(complexities, _CC_BUCKETS, _CC_LIMITS)
+    cc_chart = ft.Column(
+        [
+            section_title(t("cc_distribution"), ""),
+            bar_chart([(k, v, _CC_COLORS[k]) for k, v in cc_buckets.items()]),
+        ],
+        spacing=8,
+    )
 
-            code_map = results.get("_code_map", {})
-            top_fns = sorted(functions, key=lambda f: f.complexity, reverse=True)[:15]
-            fn_tiles = [_build_fn_tile(fn, code_map) for fn in top_fns]
+    sz_buckets = _bucket_values(sizes, _SZ_BUCKETS, _SZ_LIMITS)
+    sz_chart = ft.Column(
+        [
+            section_title(t("size_distribution"), ""),
+            bar_chart(
+                [(f"{k} lines", v, _SZ_COLORS[k]) for k, v in sz_buckets.items()]
+            ),
+        ],
+        spacing=8,
+    )
 
-            return ft.Column(
-                [
-                    metrics,
-                    ft.Divider(color=TH.divider, height=20),
-                    cc_chart,
-                    ft.Divider(color=TH.divider, height=20),
-                    sz_chart,
-                    ft.Divider(color=TH.divider, height=20),
-                    section_title(t("most_complex"), ""),
-                    ft.ListView(
-                        controls=fn_tiles, expand=True, spacing=4, auto_scroll=False
-                    ),
-                ],
-                spacing=10,
-                expand=True,
-            )
+    code_map = results.get("_code_map", {})
+    top_fns = sorted(functions, key=lambda f: f.complexity, reverse=True)[:15]
+    fn_tiles = [_build_fn_tile(fn, code_map) for fn in top_fns]
+
+    return ft.Column(
+        [
+            metrics,
+            ft.Divider(color=TH.divider, height=20),
+            cc_chart,
+            ft.Divider(color=TH.divider, height=20),
+            sz_chart,
+            ft.Divider(color=TH.divider, height=20),
+            section_title(t("most_complex"), ""),
+            ft.ListView(controls=fn_tiles, expand=True, spacing=4, auto_scroll=False),
+        ],
+        spacing=10,
+        expand=True,
+    )

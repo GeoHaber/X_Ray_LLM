@@ -49,47 +49,48 @@ def _build_ui_health_tile(issue) -> ft.Container:
         bgcolor=TH.surface,
         border_radius=8,
         padding=12,
-        border=ft.border.only(left=ft.BorderSide(4, icon_color)),
+        border=ft.Border.only(left=ft.BorderSide(4, icon_color)),
     )
 
-    def _build_ui_health_tab(results):
-        """Render the UI Health tab (Analyzer #10)."""
-        health = results.get("ui_health")
-        issues = results.get("_ui_health_issues", [])
 
-        if not health or isinstance(health, dict) and health.get("error"):
-            return _empty_state("", "UI Health Analysis Failed or Skipped")
+def _build_ui_health_tab(results):
+    """Render the UI Health tab (Analyzer #10)."""
+    health = results.get("ui_health")
+    issues = results.get("_ui_health_issues", [])
 
-            if not issues:
-                return _empty_state(
-                    "",
-                    "No UI Health Issues Found",
-                    "All tested UI components are structurally sound and well-connected.",
-                )
+    if not health or isinstance(health, dict) and health.get("error"):
+        return _empty_state("", "UI Health Analysis Failed or Skipped")
 
-                list_view = ft.ListView(expand=True, spacing=8, padding=16)
+    if not issues:
+        return _empty_state(
+            "",
+            "No UI Health Issues Found",
+            "All tested UI components are structurally sound and well-connected.",
+        )
 
-                # Info banner
-                list_view.controls.append(
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Icon(ft.Icons.INFO_OUTLINE, color=TH.accent),
-                                ft.Text(
-                                    f"Found {len(issues)} structural/behavioral UI issue(s).",
-                                    color=TH.text,
-                                    weight=ft.FontWeight.W_500,
-                                ),
-                            ]
-                        ),
-                        bgcolor=ft.Colors.with_opacity(0.1, TH.accent),
-                        border_radius=8,
-                        padding=16,
-                        margin=ft.margin.only(bottom=8),
-                    )
-                )
+    list_view = ft.ListView(expand=True, spacing=8, padding=16)
 
-                for issue in issues:
-                    list_view.controls.append(_build_ui_health_tile(issue))
+    # Info banner
+    list_view.controls.append(
+        ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.INFO_OUTLINE, color=TH.accent),
+                    ft.Text(
+                        f"Found {len(issues)} structural/behavioral UI issue(s).",
+                        color=TH.text,
+                        weight=ft.FontWeight.W_500,
+                    ),
+                ]
+            ),
+            bgcolor=ft.Colors.with_opacity(0.1, TH.accent),
+            border_radius=8,
+            padding=16,
+            margin=ft.Margin.only(bottom=8),
+        )
+    )
 
-                    return list_view
+    for issue in issues:
+        list_view.controls.append(_build_ui_health_tile(issue))
+
+    return list_view

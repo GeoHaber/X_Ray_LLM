@@ -26,93 +26,82 @@ def _build_dup_group_tile(g, code_map):
                 border_radius=6,
             )
         )
-        for f in g.functions:
-            loc = f"{f.get('file', '?')}:{f.get('line', '?')}"
-            code = code_map.get(loc, code_map.get(f.get("key", ""), ""))
-            controls.append(
-                ft.Column(
-                    [
-                        ft.Text(
-                            f" {loc} - {f.get('name', '?')} ({f.get('size', '?')} lines)",
-                            size=SZ_BODY,
+    for f in g.functions:
+        loc = f"{f.get('file', '?')}:{f.get('line', '?')}"
+        code = code_map.get(loc, code_map.get(f.get("key", ""), ""))
+        controls.append(
+            ft.Column(
+                [
+                    ft.Text(
+                        f" {loc} - {f.get('name', '?')} ({f.get('size', '?')} lines)",
+                        size=SZ_BODY,
+                        font_family=MONO_FONT,
+                        color=TH.accent,
+                    ),
+                    ft.Container(
+                        content=ft.Text(
+                            code[:400] if code else "N/A",
                             font_family=MONO_FONT,
-                            color=TH.accent,
+                            size=SZ_SM,
+                            selectable=True,
+                            color=TH.dim,
+                            no_wrap=False,
                         ),
-                        ft.Container(
-                            content=ft.Text(
-                                code[:400] if code else "N/A",
-                                font_family=MONO_FONT,
-                                size=SZ_SM,
-                                selectable=True,
-                                color=TH.dim,
-                                no_wrap=False,
-                            ),
-                            bgcolor=TH.code_bg,
-                            border_radius=8,
-                            padding=10,
-                        )
-                        if code
-                        else ft.Container(),
-                    ],
-                    spacing=4,
-                )
-            )
-            return ft.ExpansionTile(
-                title=ft.Text(
-                    f"Group {g.group_id} - {g.similarity_type} ({sim_pct})", size=SZ_MD
-                ),
-                subtitle=ft.Text(func_names, size=SZ_SM, color=TH.muted),
-                controls=[
-                    ft.Container(content=ft.Column(controls, spacing=8), padding=12)
+                        bgcolor=TH.code_bg,
+                        border_radius=8,
+                        padding=10,
+                    )
+                    if code
+                    else ft.Container(),
                 ],
+                spacing=4,
             )
+        )
+    return ft.ExpansionTile(
+        title=ft.Text(
+            f"Group {g.group_id} - {g.similarity_type} ({sim_pct})", size=SZ_MD
+        ),
+        subtitle=ft.Text(func_names, size=SZ_SM, color=TH.muted),
+        controls=[ft.Container(content=ft.Column(controls, spacing=8), padding=12)],
+    )
 
-            def _build_duplicates_tab(results: Dict[str, Any]) -> ft.Control:
-                """Render the Duplicates analysis tab."""
-                summary = results.get("duplicates", {})
-                groups = results.get("_dup_groups", [])
-                code_map = results.get("_code_map", {})
 
-                if not groups:
-                    return _empty_result_box()
+def _build_duplicates_tab(results: Dict[str, Any]) -> ft.Control:
+    """Render the Duplicates analysis tab."""
+    summary = results.get("duplicates", {})
+    groups = results.get("_dup_groups", [])
+    code_map = results.get("_code_map", {})
 
-                    metrics = ft.Row(
-                        [
-                            metric_tile(
-                                "", summary.get("total_groups", 0), t("groups")
-                            ),
-                            metric_tile(
-                                "", summary.get("exact_duplicates", 0), t("exact")
-                            ),
-                            metric_tile(
-                                "", summary.get("near_duplicates", 0), t("near")
-                            ),
-                            metric_tile(
-                                "", summary.get("semantic_duplicates", 0), t("semantic")
-                            ),
-                        ],
-                        spacing=8,
-                    )
-                    group_tiles = [
-                        _build_dup_group_tile(g, code_map) for g in groups[:50]
-                    ]
+    if not groups:
+        return _empty_result_box()
 
-                    return ft.Column(
-                        [
-                            metrics,
-                            metric_tile(
-                                "-",
-                                summary.get("total_functions_involved", 0),
-                                t("involved"),
-                            ),
-                            ft.Divider(color=TH.divider, height=20),
-                            ft.ListView(
-                                controls=group_tiles,
-                                expand=True,
-                                spacing=4,
-                                auto_scroll=False,
-                            ),
-                        ],
-                        spacing=10,
-                        expand=True,
-                    )
+    metrics = ft.Row(
+        [
+            metric_tile("", summary.get("total_groups", 0), t("groups")),
+            metric_tile("", summary.get("exact_duplicates", 0), t("exact")),
+            metric_tile("", summary.get("near_duplicates", 0), t("near")),
+            metric_tile("", summary.get("semantic_duplicates", 0), t("semantic")),
+        ],
+        spacing=8,
+    )
+    group_tiles = [_build_dup_group_tile(g, code_map) for g in groups[:50]]
+
+    return ft.Column(
+        [
+            metrics,
+            metric_tile(
+                "-",
+                summary.get("total_functions_involved", 0),
+                t("involved"),
+            ),
+            ft.Divider(color=TH.divider, height=20),
+            ft.ListView(
+                controls=group_tiles,
+                expand=True,
+                spacing=4,
+                auto_scroll=False,
+            ),
+        ],
+        spacing=10,
+        expand=True,
+    )
