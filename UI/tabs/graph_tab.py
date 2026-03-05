@@ -42,25 +42,11 @@ def _layout_nodes_concentric(nodes: list):
     return x, y, groups
 
 
-def _generate_graph_html(graph: SmartGraph) -> str:
-    """Generate a self-contained HTML page with vis-network force graph."""
-    import json as _json
-
-    nodes_json = _json.dumps(graph.nodes)
-    edges_json = _json.dumps(graph.edges)
-    is_dark = TH.is_dark()
-    bg = "#0a0e14" if is_dark else "#f6f8fa"
-    text_color = "#e6edf3" if is_dark else "#1f2328"
-    border_color = "rgba(255,255,255,0.12)" if is_dark else "#d0d7de"
-    legend_bg = "rgba(20,24,32,0.85)" if is_dark else "rgba(255,255,255,0.9)"
-
-    return f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-<style>
-* {{ margin:0; padding:0; box-sizing:border-box; }}
+def _generate_graph_css(
+    bg: str, legend_bg: str, border_color: str, text_color: str
+) -> str:
+    """Return the CSS rules for the interactive graph HTML page."""
+    return f"""* {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{ background:{bg}; font-family:'Segoe UI',sans-serif; overflow:hidden; }}
 #graph {{ width:100vw; height:100vh; }}
 #legend {{
@@ -86,7 +72,30 @@ position:fixed; top:12px; left:12px; padding:8px 12px;
 background:{legend_bg}; border:1px solid {border_color};
 border-radius:8px; font-size:11px; color:{text_color};
 opacity:0.7; z-index:10;
-}}
+}}"""
+
+
+def _generate_graph_html(graph: SmartGraph) -> str:
+    """Generate a self-contained HTML page with vis-network force graph."""
+    import json as _json
+
+    nodes_json = _json.dumps(graph.nodes)
+    edges_json = _json.dumps(graph.edges)
+    is_dark = TH.is_dark()
+    bg = "#0a0e14" if is_dark else "#f6f8fa"
+    text_color = "#e6edf3" if is_dark else "#1f2328"
+    border_color = "rgba(255,255,255,0.12)" if is_dark else "#d0d7de"
+    legend_bg = "rgba(20,24,32,0.85)" if is_dark else "rgba(255,255,255,0.9)"
+
+    css = _generate_graph_css(bg, legend_bg, border_color, text_color)
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<style>
+{css}
 </style>
 </head>
 <body>

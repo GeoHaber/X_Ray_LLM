@@ -379,6 +379,41 @@ class PythonTestGenerator:
 
     # ── Smell regression tests ──
 
+    @staticmethod
+    def _gen_smell_test_lines(smell: SmellIssue, safe: str) -> list[str]:
+        """Return test source lines for a single smell regression case.
+
+        Returns an empty list if the smell category is not handled.
+        """
+        if smell.category == "long-function":
+            return [
+                f"def test_smell_regression_{safe}():",
+                f'    """Regression: {smell.name} in {smell.file_path} is {smell.metric_value} lines (limit ~60)."""',
+                f'    size = _count_lines("{smell.file_path}", "{smell.name}")',
+                f"    # Originally {smell.metric_value} lines — track if it grows or gets refactored",
+                f'    assert size > 0, "Function {smell.name} should still exist"',
+                "    # Uncomment to enforce size limit:",
+                f'    # assert size <= 60, f"{smell.name} is {{size}} lines — refactor needed"',
+                "",
+            ]
+        if smell.category == "god-class":
+            return [
+                f"def test_smell_regression_{safe}():",
+                f'    """Regression: {smell.name} in {smell.file_path} — god class ({smell.metric_value} methods)."""',
+                f'    source = Path("{smell.file_path}").read_text(encoding="utf-8")',
+                f'    assert "{smell.name}" in source, "Class should still exist"',
+                "",
+            ]
+        if smell.category in ("deep-nesting", "high-complexity"):
+            return [
+                f"def test_smell_regression_{safe}():",
+                f'    """Regression: {smell.name} — {smell.category} (metric={smell.metric_value})."""',
+                f'    source = Path("{smell.file_path}").read_text(encoding="utf-8")',
+                f'    assert "def {smell.name}" in source or "async def {smell.name}" in source',
+                "",
+            ]
+        return []
+
     def _gen_smell_regression(
         self,
         smells: List[SmellIssue],
@@ -415,7 +450,7 @@ class PythonTestGenerator:
         ]
 
         test_count = 0
-        seen = set()
+        seen: set[str] = set()
 
         for smell in critical:
             key = f"{smell.file_path}:{smell.name}:{smell.category}"
@@ -424,54 +459,9 @@ class PythonTestGenerator:
             seen.add(key)
 
             safe = _safe_identifier(f"{smell.name}_{smell.category}")
-
-            if smell.category == "long-function":
-                lines.append(f"def test_smell_regression_{safe}():")
-                lines.append(
-                    f'    """Regression: {smell.name} in {smell.file_path} is {smell.metric_value} lines (limit ~60)."""'
-                )
-                lines.append(
-                    f'    size = _count_lines("{smell.file_path}", "{smell.name}")'
-                )
-                lines.append(
-                    f"    # Originally {smell.metric_value} lines — track if it grows or gets refactored"
-                )
-                lines.append(
-                    f'    assert size > 0, "Function {smell.name} should still exist"'
-                )
-                lines.append("    # Uncomment to enforce size limit:")
-                lines.append(
-                    f'    # assert size <= 60, f"{smell.name} is {{size}} lines — refactor needed"'
-                )
-                lines.append("")
-                test_count += 1
-
-            elif smell.category == "god-class":
-                lines.append(f"def test_smell_regression_{safe}():")
-                lines.append(
-                    f'    """Regression: {smell.name} in {smell.file_path} — god class ({smell.metric_value} methods)."""'
-                )
-                lines.append(
-                    f'    source = Path("{smell.file_path}").read_text(encoding="utf-8")'
-                )
-                lines.append(
-                    f'    assert "{smell.name}" in source, "Class should still exist"'
-                )
-                lines.append("")
-                test_count += 1
-
-            elif smell.category in ("deep-nesting", "high-complexity"):
-                lines.append(f"def test_smell_regression_{safe}():")
-                lines.append(
-                    f'    """Regression: {smell.name} — {smell.category} (metric={smell.metric_value})."""'
-                )
-                lines.append(
-                    f'    source = Path("{smell.file_path}").read_text(encoding="utf-8")'
-                )
-                lines.append(
-                    f'    assert "def {smell.name}" in source or "async def {smell.name}" in source'
-                )
-                lines.append("")
+            test_lines = self._gen_smell_test_lines(smell, safe)
+            if test_lines:
+                lines.extend(test_lines)
                 test_count += 1
 
         if test_count == 0:
