@@ -688,7 +688,8 @@ def _run_rustify_exe(root: Path, args: argparse.Namespace) -> dict:
         for err in report.errors[:5]:
             print(f"    {err[:200]}")
 
-    return {"rustify_exe": report.to_dict()}
+    import dataclasses
+    return {"rustify_exe": dataclasses.asdict(report)}
 
 
 from dataclasses import dataclass  # noqa: E402
