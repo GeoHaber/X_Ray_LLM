@@ -2286,7 +2286,7 @@ def _build_auto_rustify_tab(results: Dict[str, Any], page: ft.Page) -> ft.Contro
         visible=False,
         min_lines=6,
         max_lines=20,
-        font_family=MONO_FONT,
+        text_style=ft.TextStyle(font_family=MONO_FONT),
         text_size=SZ_SM,
         bgcolor=TH.code_bg,
         border_color=ft.Colors.RED_400,
