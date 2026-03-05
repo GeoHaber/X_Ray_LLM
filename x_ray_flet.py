@@ -538,6 +538,20 @@ def _phase_ui_compat(root, exclude, results):
         results["ui_compat"] = {"error": str(exc)}
 
 
+def _phase_ui_health(root, exclude, results):
+    try:
+        from Analysis.ui_health import UIHealthAnalyzer
+
+        analyzer = UIHealthAnalyzer()
+        raw_issues = analyzer.analyze(root, exclude=exclude or None)
+        smell_issues = [i.to_smell() for i in raw_issues]
+        results["ui_health"] = analyzer.summary(raw=raw_issues)
+        results["_ui_health_issues"] = smell_issues
+        results["_ui_health_raw"] = raw_issues
+    except Exception as exc:
+        results["ui_health"] = {"error": str(exc)}
+
+
 def _make_parse_progress_cb(progress_cb, parse_t0):
     """Create a progress callback for the parse phase."""
     if not progress_cb:
@@ -620,8 +634,13 @@ def _run_flet_phases(
         ),
         (
             "ui_compat",
-            "Checking UI API compatibilityâ€¦",
+            "Checking UI API compatibility\u2026",
             lambda: _phase_ui_compat(ctx.root, ctx.exclude, results),
+        ),
+        (
+            "ui_health",
+            "Checking UI structural health\u2026",
+            lambda: _phase_ui_health(ctx.root, ctx.exclude, results),
         ),
     ]
     for mode_key, label, runner in _phases:
@@ -2217,6 +2236,81 @@ def _build_auto_rustify_tab(results: Dict[str, Any], page: ft.Page) -> ft.Contro
     )
 
 
+def _build_ui_health_tab(results):
+    """Render the UI Health tab (Analyzer #10)."""
+    health = results.get("ui_health")
+    issues = results.get("_ui_health_issues", [])
+
+    if not health or isinstance(health, dict) and health.get("error"):
+        return _empty_state("🩺", "UI Health Analysis Failed or Skipped")
+
+    if not issues:
+        return _empty_state(
+            "🩺",
+            "No UI Health Issues Found",
+            "All tested UI components are structurally sound and well-connected.",
+        )
+
+    list_view = ft.ListView(expand=True, spacing=8, padding=16)
+
+    # Info banner
+    list_view.controls.append(
+        ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.INFO_OUTLINE, color=TH.accent),
+                    ft.Text(
+                        f"Found {len(issues)} structural/behavioral UI issue(s).",
+                        color=TH.text,
+                        weight=ft.FontWeight.W_500,
+                    ),
+                ]
+            ),
+            bgcolor=ft.Colors.with_opacity(0.1, TH.accent),
+            border_radius=8,
+            padding=16,
+            margin=ft.margin.only(bottom=8),
+        )
+    )
+
+    for issue in issues:
+        icon_color = SEV_COLORS.get(issue.severity, TH.muted)
+        icon_name = SEV_ICONS.get(issue.severity, ft.Icons.ERROR)
+
+        tile = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(icon_name, color=icon_color, size=20),
+                            ft.Text(
+                                f"{issue.name}  \u2014  {issue.rule_code}",
+                                color=TH.text,
+                                weight=ft.FontWeight.BOLD,
+                            ),
+                            ft.Container(expand=True),
+                            ft.Text(f"{issue.file_path}:{issue.line}", color=TH.dim, size=SZ_SM),
+                        ]
+                    ),
+                    ft.Text(issue.message, color=TH.muted, size=SZ_MD),
+                    (
+                        ft.Text(f"💡 {issue.suggestion}", color=TH.accent, size=SZ_SM, italic=True)
+                        if issue.suggestion
+                        else ft.Container()
+                    ),
+                ],
+                spacing=4,
+            ),
+            bgcolor=TH.surface,
+            border_radius=8,
+            padding=12,
+            border=ft.Border.left(4, icon_color),
+        )
+        list_view.controls.append(tile)
+
+    return list_view
+
+
 def _build_ui_compat_issue_tile(r):
     """Build one expansion tile for a UI-compat issue."""
     icon = SEV_ICONS.get("critical", "ðŸ”´")
@@ -2357,9 +2451,9 @@ def _build_ui_compat_tab(results: Dict[str, Any]) -> ft.Control:
     )
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  ONBOARDING DIALOG
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 _ONBOARD_ICONS = ("ðŸ“‚", "ðŸ”", "âš¡", "ðŸ¦€", "ðŸš€")
 
@@ -2486,10 +2580,9 @@ def _show_onboarding(page: ft.Page):
     page.show_dialog(dlg)
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  EXTRACTED HELPERS FOR main()
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 def _build_grade_card(grade, narrow):
     """Build the grade display card for the dashboard header."""
@@ -2586,8 +2679,9 @@ _TAB_BUILDERS = [
     ("duplicates", "ðŸ“‹", "tab_duplicates", lambda r, _p: _build_duplicates_tab(r)),
     ("lint", "ðŸ§¹", "tab_lint", lambda r, p: _build_lint_tab(r, p)),
     ("security", "ðŸ”’", "tab_security", lambda r, _p: _build_security_tab(r)),
-    ("rustify", "ðŸ¦€", "tab_rustify", lambda r, _p: _build_rustify_tab(r)),
-    ("ui_compat", "ðŸ–¥ï¸", "tab_ui_compat", lambda r, _p: _build_ui_compat_tab(r)),
+    ("rustify", "🦀", "tab_rustify", lambda r, _p: _build_rustify_tab(r)),
+    ("ui_compat", "🖥️", "tab_ui_compat", lambda r, _p: _build_ui_compat_tab(r)),
+    ("ui_health", "🩺", "UI Health", lambda r, _p: _build_ui_health_tab(r)),
 ]
 
 
@@ -3449,6 +3543,14 @@ def _build_mode_checks(state):
                 fill_color=TH.accent,
                 check_color=ft.Colors.WHITE,
             ),
+            ft.Checkbox(
+                label="UI Health",
+                value=_m.get("ui_health", True),
+                on_change=on_mode,
+                data="ui_health",
+                fill_color=TH.accent,
+                check_color=ft.Colors.WHITE,
+            ),
         ],
         spacing=0,
     )
@@ -3612,6 +3714,7 @@ def _init_state(page):
                 "security": True,
                 "rustify": True,
                 "ui_compat": True,
+                "ui_health": True,
             },
             "thresholds": SMELL_THRESHOLDS.copy(),
         }
