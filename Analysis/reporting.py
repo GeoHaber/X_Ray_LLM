@@ -422,9 +422,7 @@ def print_library_report(suggestions: List[LibrarySuggestion], summary: Dict[str
         for f in s.functions[:3]:
             bridge.log(f"    - {f['file']}:{f['line']}")
         if len(s.functions) > 3:
-            print(f"    ... and {len(s.functions) - 3} more")
-        print("")
-            bridge.log(f"    ... and {len(s.functions)-3} more")
+            bridge.log(f"    ... and {len(s.functions) - 3} more")
         bridge.log("")
 
 

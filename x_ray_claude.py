@@ -48,10 +48,13 @@ from Core.scan_phases import (
     run_lint_phase,
     run_security_phase,
     run_rustify_scan,
+    run_web_smell_phase,
+    run_health_phase,
+    run_smell_fix_phase,
     collect_reports,
 )
 
-from Core.utils import setup_logger
+from Core.utils import setup_logger, check_trial_license as _check_trial_license
 
 setup_logger()  # configure logging once — no duplicate basicConfig
 

@@ -186,31 +186,6 @@ def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
                 category="long-function",
                 severity=Severity.CRITICAL,
                 name=func.name,
-    def _check_function(self, func: FunctionRecord):
-        """Dispatch all per-function smell checks."""
-        t = self.thresholds
-        self._check_long_function(func, t)
-        self._check_deep_nesting(func, t)
-        self._check_high_complexity(func, t)
-        self._check_too_many_params(func, t)
-        self._check_missing_docstring(func, t)
-        self._check_too_many_returns(func, t)
-        _check_boolean_blindness(func, self.smells)
-        self._check_too_many_branches(func, t)
-        _check_magic_numbers(func, self.smells,
-                             threshold=t.get("magic_number_min_count", 2))
-        _check_mutable_default_arg(func, self.smells)
-        _check_dead_code(func, self.smells)
-
-    # -- individual smell checks -------------------------------------------
-
-    def _check_long_function(self, func: FunctionRecord, t: dict):
-        """Flag functions exceeding the line-count threshold."""
-        if func.size_lines >= t["very_long_function"]:
-            self.smells.append(SmellIssue(
-                file_path=func.file_path, line=func.line_start,
-                end_line=func.line_end, category="long-function",
-                severity=Severity.CRITICAL, name=func.name,
                 metric_value=func.size_lines,
                 message=f"Function '{func.name}' is {func.size_lines} lines (limit: {t['very_long_function']})",
                 suggestion="Split into smaller focused functions. Extract logical blocks.",

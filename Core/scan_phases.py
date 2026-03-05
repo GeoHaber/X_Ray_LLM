@@ -231,8 +231,8 @@ def run_rustify_scan(root: Path, exclude=None) -> dict:
 
 def collect_reports(components: AnalysisComponents) -> dict:
     """Print all analysis reports, compute unified grade, return combined results."""
-    detector, finder, linter, lint_issues, sec_analyzer, sec_issues, \
-        web_detector, health_analyzer = components
+    detector, finder, fmt_analyzer, format_issues, linter, lint_issues, \
+        sec_analyzer, sec_issues, web_detector, health_analyzer = components
     results: dict = {}
 
     if detector:
