@@ -151,7 +151,7 @@ class TqdmBridge:
         self._desc_width = desc_width
         self._bar: Optional[object] = None
         try:
-            import tqdm as _tqdm  # noqa: F401
+            import tqdm as _tqdm  # noqa: F401  # pyright: ignore[reportUnusedImport]
 
             self._has_tqdm = True
         except ImportError:
@@ -215,12 +215,12 @@ class TqdmBridge:
 # Global accessor — single active bridge for the process
 # ---------------------------------------------------------------------------
 
-_BRIDGE: UIBridge = PrintBridge()
+_bridge_ref: list = [PrintBridge()]  # mutable container — avoids global keyword
 
 
 def get_bridge() -> UIBridge:
     """Return the currently active UI bridge."""
-    return _BRIDGE
+    return _bridge_ref[0]
 
 
 def set_bridge(bridge: UIBridge) -> None:
@@ -236,8 +236,7 @@ def set_bridge(bridge: UIBridge) -> None:
     bridge : UIBridge
         Any object that implements ``log``, ``status``, and ``progress``.
     """
-    global _BRIDGE
-    _BRIDGE = bridge
+    _bridge_ref[0] = bridge
 
 
 # ---------------------------------------------------------------------------
@@ -247,14 +246,14 @@ def set_bridge(bridge: UIBridge) -> None:
 
 def log(msg: str) -> None:
     """Shorthand: ``get_bridge().log(msg)``."""
-    _BRIDGE.log(msg)
+    _bridge_ref[0].log(msg)
 
 
 def status(label: str) -> None:
     """Shorthand: ``get_bridge().status(label)``."""
-    _BRIDGE.status(label)
+    _bridge_ref[0].status(label)
 
 
 def progress(done: int, total: int, label: str = "") -> None:
     """Shorthand: ``get_bridge().progress(done, total, label)``."""
-    _BRIDGE.progress(done, total, label)
+    _bridge_ref[0].progress(done, total, label)

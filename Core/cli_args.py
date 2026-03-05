@@ -72,6 +72,11 @@ def add_common_scan_args(parser: argparse.ArgumentParser) -> None:
         metavar="PREV_REPORT",
         help="Path to a previous JSON report; prints score delta after scan",
     )
+    parser.add_argument(
+        "--typecheck",
+        action="store_true",
+        help="Run Pyright type checker to catch type errors",
+    )
 
 
 def normalize_scan_args(
@@ -90,23 +95,12 @@ def normalize_scan_args(
         for f in (
             "smell",
             "duplicates",
-            "format",
-            "lint",
-            "security",
-            "rustify",
-            *extra_flags,
-        )
-    )
-    specific = any(
-        getattr(args, f, False)
-        for f in (
-            "smell",
-            "duplicates",
             "lint",
             "security",
             "rustify",
             "web",
             "health",
+            "typecheck",
             *extra_flags,
         )
     )
@@ -119,4 +113,5 @@ def normalize_scan_args(
             args.duplicates = True
             args.web = True
             args.health = True
+            args.typecheck = True
     return args

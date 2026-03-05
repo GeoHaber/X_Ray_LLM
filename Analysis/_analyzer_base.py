@@ -70,9 +70,10 @@ def _find_tool(tool_name: str) -> Optional[str]:
             ]
         )
     else:
-        # Dev mode: check .venv/Scripts
+        # Dev mode: check .venv bin directories (Windows and Unix)
         project = Path(__file__).resolve().parent.parent
         candidates.append(project / ".venv" / "Scripts" / f"{tool_name}.exe")
+        candidates.append(project / ".venv" / "bin" / tool_name)
 
     for p in candidates:
         if p.is_file():

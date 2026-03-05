@@ -1,11 +1,14 @@
 import sys
 import os
+import logging
 from pathlib import Path
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from Analysis.auto_rustify import transpile_module
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).parent.parent
 RUST_ROOT = PROJECT_ROOT / "X_Ray_Rust_Full"
@@ -19,7 +22,7 @@ FILES_TO_PORT = [
 
 
 def run_port():
-    print(f"Porting files to {SRC_DIR}...")
+    logger.info(f"Porting files to {SRC_DIR}...")
     SRC_DIR.mkdir(parents=True, exist_ok=True)
 
     # Create lib.rs content
@@ -28,10 +31,10 @@ def run_port():
     for rel_path in FILES_TO_PORT:
         py_path = PROJECT_ROOT / rel_path
         if not py_path.exists():
-            print(f"Skipping {rel_path} (not found)")
+            logger.info(f"Skipping {rel_path} (not found)")
             continue
 
-        print(f"Transpiling {rel_path}...")
+        logger.info(f"Transpiling {rel_path}...")
         code = py_path.read_text(encoding="utf-8")
         rust_code = transpile_module(code, pyo3=True)
 
@@ -62,7 +65,7 @@ def run_port():
     lib_rs_lines.append("}")
 
     (SRC_DIR / "lib.rs").write_text("\n".join(lib_rs_lines), encoding="utf-8")
-    print("Porting complete.")
+    logger.info("Porting complete.")
 
 
 if __name__ == "__main__":

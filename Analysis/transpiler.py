@@ -296,13 +296,13 @@ class RustEmitter:
 # --- AST VISITOR PIPELINE ---
 
 
-
 class _ExprHandlerMixin:
     """Mixin providing all AST expression → Rust translation handlers for IRBuilder.
 
     Extracted from IRBuilder to keep each class under 20 methods (god-class smell).
     All methods receive ``self`` as an IRBuilder instance at call-time.
     """
+
     def _expr_name_const(self, node) -> str:
         if isinstance(node, ast.Name):
             return safe_name(node.id)
@@ -788,6 +788,7 @@ class _StmtHandlerMixin:
 
     Extracted from IRBuilder to keep each class under 20 methods (god-class smell).
     """
+
     def _stmt_assign(self, stmt: ast.Assign) -> "RustNode | None":
         if not stmt.targets:
             return None
@@ -1011,7 +1012,6 @@ class IRBuilder(_ExprHandlerMixin, _StmtHandlerMixin, ast.NodeVisitor):
 
     # ── literal primitives ──────────────────────────────────────────────────
 
-
     # ── dispatch table ───────────────────────────────────────────────────────
     # Maps AST node type → handler. To support a new node type: one line here.
 
@@ -1068,7 +1068,6 @@ class IRBuilder(_ExprHandlerMixin, _StmtHandlerMixin, ast.NodeVisitor):
         return nodes
 
     # ── statement handlers ───────────────────────────────────────────────────
-
 
     # ── statement dispatch table ─────────────────────────────────────────────
 

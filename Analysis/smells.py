@@ -6,7 +6,7 @@ import asyncio
 from collections import Counter
 
 from Core.types import FunctionRecord, ClassRecord, SmellIssue, Severity
-from Core.config import SMELL_THRESHOLDS
+from Core.config import SMELL_THRESHOLDS, _BUILTIN_NAMES
 from Core.inference import LLMHelper, _llm_enrich_one
 from Core.utils import logger
 
@@ -19,12 +19,64 @@ _BOOL_PREFIXES = (
     "validate_",
     "contains_",
     "exists_",
+    "detect",
+    "match",
+    "need",
+    "support",
+    "available",
+    "passed",
+    "wait_for_",
+    "respond",
+    "start_",
+    "mutate",
+    "port_has_",
+    "get_",
+    "code_has_",
 )
 
 # Reddit/r/Python: Classes named Common, Utility, Utils, Helper often become god-class dumping grounds
 _UTILITY_CLASS_PATTERNS = ("common", "utility", "utils", "helper", "misc", "general")
 # Numeric literals that are never flagged as magic numbers
 _ALLOWED_MAGIC = frozenset({0, 1, -1, 2, 100})
+
+_TEST_FILE_INDICATORS = frozenset({"test_", "_test"})
+_BUILTIN_SHADOW_SKIP = frozenset({"_", "type", "input", "format"})
+# Files where print() is intentional: CLI scripts, reporting, and output bridges
+_PRINT_OK_PREFIXES = frozenset(
+    {"x_ray_", "scan_", "build_", "verify_", "find_", "run_", "_"}
+)
+_PRINT_OK_NAMES = frozenset(
+    {
+        "reporting.py",
+        "report.py",
+        "ui_bridge.py",
+        "benchmark.py",
+        "calibrate_fixtures.py",
+        "generate_golden.py",
+        "transpiler_legacy.py",
+    }
+)
+
+
+def _is_mojibake(s: str) -> bool:
+    """Return True if a string looks like cp1252/latin-1 double-encoded UTF-8.
+
+    The pattern: UTF-8 bytes for a non-Latin character (e.g. an emoji) were
+    mistakenly read as cp1252/latin-1 and then re-encoded as UTF-8, producing
+    a garbled sequence. Example: 📊 (F0 9F 93 8A) → read as cp1252 chars
+    ðŸ"Š → written back as UTF-8 C3B0 C5B8 E280 9C C5A0 → Python sees 'ðŸ"Š'.
+
+    Detection: encode the string as latin-1 then decode as UTF-8. If both
+    steps succeed AND the result contains codepoints above U+02FF (i.e. emoji,
+    symbols, CJK, etc.), the original string is corrupted mojibake.
+    """
+    if not any(0x80 <= ord(c) <= 0x02FF for c in s):
+        return False
+    try:
+        decoded = s.encode("latin-1").decode("utf-8")
+        return any(ord(c) > 0x02FF for c in decoded)
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return False
 
 
 def _check_magic_numbers(func: FunctionRecord, smells: list, threshold: int = 2):
@@ -70,28 +122,31 @@ def _check_mutable_default_arg(func: FunctionRecord, smells: list):
         tree = ast.parse(func.code)
     except Exception:
         return
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    if not tree.body:
+        return
+    # Access the outermost function node directly rather than using ast.walk,
+    # which does not guarantee visit order.
+    node = tree.body[0]
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return
+    for default in node.args.defaults + node.args.kw_defaults:
+        if default is None:
             continue
-        for default in node.args.defaults + node.args.kw_defaults:
-            if default is None:
-                continue
-            if isinstance(default, (ast.List, ast.Dict, ast.Set)):
-                smells.append(
-                    SmellIssue(
-                        file_path=func.file_path,
-                        line=func.line_start,
-                        end_line=func.line_end,
-                        category="mutable-default-arg",
-                        severity=Severity.WARNING,
-                        name=func.name,
-                        metric_value=0,
-                        message=f"Function '{func.name}' uses a mutable {type(default).__name__.lower()} as a default argument",
-                        suggestion="Use None as default and initialise inside the function body: `if arg is None: arg = []`.",
-                    )
+        if isinstance(default, (ast.List, ast.Dict, ast.Set)):
+            smells.append(
+                SmellIssue(
+                    file_path=func.file_path,
+                    line=func.line_start,
+                    end_line=func.line_end,
+                    category="mutable-default-arg",
+                    severity=Severity.WARNING,
+                    name=func.name,
+                    metric_value=0,
+                    message=f"Function '{func.name}' uses a mutable {type(default).__name__.lower()} as a default argument",
+                    suggestion="Use None as default and initialise inside the function body: `if arg is None: arg = []`.",
                 )
-                break  # one warning per function is enough
-        break  # only check the outermost function def
+            )
+            break  # one warning per function is enough
 
 
 def _check_dead_code(func: FunctionRecord, smells: list):
@@ -180,10 +235,12 @@ def _has_nested_comprehension(code: str) -> bool:
 
 def _check_boolean_blindness(func: FunctionRecord, smells: list):
     """Flag functions returning bool whose name doesn't indicate a question."""
+    # Strip leading underscores so _is_foo / __has_bar still match prefixes
+    bare = func.name.lstrip("_")
     if (
         func.return_type
         and "bool" in func.return_type.lower()
-        and not any(func.name.startswith(p) for p in _BOOL_PREFIXES)
+        and not any(bare.startswith(p) for p in _BOOL_PREFIXES)
     ):
         smells.append(
             SmellIssue(
@@ -400,33 +457,261 @@ def _check_function_style(func: FunctionRecord, t: dict, smells: list):
         )
 
 
+def _check_mojibake_strings(func: FunctionRecord, smells: list):
+    """Flag string literals that appear to be cp1252/latin-1 double-encoded UTF-8.
+
+    These 'mojibake' strings were typically created when a file was saved with
+    the wrong encoding: UTF-8 source bytes were misread as cp1252 then written
+    back as UTF-8, producing garbled characters in string literals.
+    """
+    try:
+        tree = ast.parse(func.code)
+    except Exception:
+        return
+    hits = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+            continue
+        if _is_mojibake(node.value):
+            abs_line = func.line_start + getattr(node, "lineno", 1) - 1
+            hits.append((abs_line, repr(node.value[:30])))
+    if not hits:
+        return
+    first_line, sample = hits[0]
+    smells.append(
+        SmellIssue(
+            file_path=func.file_path,
+            line=first_line,
+            end_line=func.line_end,
+            category="mojibake-literal",
+            severity=Severity.WARNING,
+            name=func.name,
+            metric_value=len(hits),
+            message=(
+                f"Function '{func.name}' contains {len(hits)} mojibake string "
+                f"literal(s) (cp1252/UTF-8 double-encoding). Example: {sample}"
+            ),
+            suggestion=(
+                "Re-save the source file as UTF-8 without BOM, or replace each "
+                "corrupted literal with the correct Unicode escape "
+                "(e.g. '\\U0001f4ca' for 📊)."
+            ),
+        )
+    )
+
+
+def _check_print_statement(func: FunctionRecord, smells: list):
+    """Flag print() calls in non-test, non-script library functions."""
+    fpath = func.file_path.replace("\\", "/")
+    base = fpath.split("/")[-1]
+    if "/tests/" in fpath or "/test/" in fpath:
+        return
+    if any(
+        base.startswith(p) or base.endswith(p + ".py") for p in _TEST_FILE_INDICATORS
+    ):
+        return
+    # Skip entry-point scripts and output modules where print() is intentional
+    if any(base.startswith(p) for p in _PRINT_OK_PREFIXES):
+        return
+    if base in _PRINT_OK_NAMES:
+        return
+    try:
+        tree = ast.parse(func.code)
+    except Exception:
+        return
+    hits = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "print"
+        ):
+            abs_line = func.line_start + getattr(node, "lineno", 1) - 1
+            hits.append(abs_line)
+    if hits:
+        smells.append(
+            SmellIssue(
+                file_path=func.file_path,
+                line=hits[0],
+                end_line=func.line_end,
+                category="print-statement",
+                severity=Severity.INFO,
+                name=func.name,
+                metric_value=len(hits),
+                message=f"Function '{func.name}' contains {len(hits)} print() call(s) \u2013 likely debug output",
+                suggestion="Replace with logger.debug() / logger.info(). Remove before production.",
+            )
+        )
+
+
+def _check_global_variable(func: FunctionRecord, smells: list):
+    """Flag use of the 'global' keyword — shared mutable state anti-pattern."""
+    try:
+        tree = ast.parse(func.code)
+    except Exception:
+        return
+    global_names: list = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Global):
+            global_names.extend(node.names)
+    if global_names:
+        names_str = ", ".join(global_names[:5])
+        smells.append(
+            SmellIssue(
+                file_path=func.file_path,
+                line=func.line_start,
+                end_line=func.line_end,
+                category="global-variable",
+                severity=Severity.WARNING,
+                name=func.name,
+                metric_value=len(global_names),
+                message=f"Function '{func.name}' uses global variable(s): {names_str}",
+                suggestion="Pass values as parameters and return results. Avoid shared mutable state for testability and thread safety.",
+            )
+        )
+
+
+def _lazy_import_ids(func_node: ast.AST) -> set:
+    """Return node ids of imports guarded by try/except ImportError."""
+    ids: set = set()
+    for node in func_node.body:
+        if not isinstance(node, ast.Try):
+            continue
+        for handler in node.handlers or []:
+            ht = handler.type
+            exc_names: set = set()
+            if isinstance(ht, ast.Name):
+                exc_names.add(ht.id)
+            elif isinstance(ht, ast.Tuple):
+                exc_names.update(getattr(e, "id", "") for e in ht.elts)
+            if exc_names & {"ImportError", "ModuleNotFoundError"}:
+                ids.update(
+                    id(n)
+                    for n in node.body
+                    if isinstance(n, (ast.Import, ast.ImportFrom))
+                )
+    return ids
+
+
+def _import_names(imports: list) -> str:
+    """Extract up to 3 module names from import nodes for messages."""
+    names: list = []
+    for n in imports[:5]:
+        if isinstance(n, ast.Import):
+            names.extend(alias.name for alias in n.names)
+        elif isinstance(n, ast.ImportFrom) and n.module:
+            names.append(n.module)
+    return ", ".join(names[:3])
+
+
+def _check_import_inside_function(func: FunctionRecord, smells: list):
+    """Flag import statements inside function bodies (hidden dependencies, performance)."""
+    fpath = func.file_path.replace("\\", "/")
+    base = fpath.split("/")[-1]
+    # Entry-point scripts and phase runners use deferred imports intentionally
+    if any(base.startswith(p) for p in _PRINT_OK_PREFIXES) or base == "scan_phases.py":
+        return
+    try:
+        tree = ast.parse(func.code)
+    except Exception:
+        return
+    if not tree.body:
+        return
+    func_node = tree.body[0]
+    if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return
+    imports = [n for n in func_node.body if isinstance(n, (ast.Import, ast.ImportFrom))]
+    # Also skip imports inside try/except ImportError (optional-dependency pattern)
+    lazy = _lazy_import_ids(func_node)
+    if lazy:
+        imports = [n for n in imports if id(n) not in lazy]
+    if not imports:
+        return
+    smells.append(
+        SmellIssue(
+            file_path=func.file_path,
+            line=func.line_start,
+            end_line=func.line_end,
+            category="import-inside-function",
+            severity=Severity.INFO,
+            name=func.name,
+            metric_value=len(imports),
+            message=f"Function '{func.name}' has {len(imports)} import(s) inside body: {_import_names(imports)}",
+            suggestion="Move imports to module top-level. Lazy imports are only justified for optional/heavy dependencies — add a comment explaining why.",
+        )
+    )
+
+
+def _check_shadowed_builtin(func: FunctionRecord, smells: list):
+    """Flag function parameters and local variables that shadow Python builtins."""
+    shadowed: set = set()
+    for param in func.parameters:
+        if param in _BUILTIN_NAMES and param not in _BUILTIN_SHADOW_SKIP:
+            shadowed.add(param)
+    try:
+        tree = ast.parse(func.code)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Name)
+                and isinstance(node.ctx, ast.Store)
+                and node.id in _BUILTIN_NAMES
+                and node.id not in _BUILTIN_SHADOW_SKIP
+            ):
+                shadowed.add(node.id)
+    except Exception:
+        pass
+    if shadowed:
+        names_str = ", ".join(sorted(shadowed)[:5])
+        smells.append(
+            SmellIssue(
+                file_path=func.file_path,
+                line=func.line_start,
+                end_line=func.line_end,
+                category="shadowed-builtin",
+                severity=Severity.WARNING,
+                name=func.name,
+                metric_value=len(shadowed),
+                message=f"Function '{func.name}' shadows built-in name(s): {names_str}",
+                suggestion="Rename to avoid shadowing builtins (e.g. use 'items_list' instead of 'list', 'type_name' instead of 'type').",
+            )
+        )
+
+
 def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
     """Run all per-function smell checks (extracted to reduce CodeSmellDetector size)."""
     _check_function_size(func, t, smells)
     _check_function_complexity(func, t, smells)
     _check_function_signature(func, t, smells)
     _check_function_style(func, t, smells)
-    _check_magic_numbers(func, smells, t.get("magic_number_min_count", 2))
+    _check_magic_numbers(func, smells, threshold=t.get("magic_number_min_count", 2))
     _check_mutable_default_arg(func, smells)
     _check_dead_code(func, smells)
+    _check_mojibake_strings(func, smells)
+    _check_print_statement(func, smells)
+    _check_global_variable(func, smells)
+    _check_import_inside_function(func, smells)
+    _check_shadowed_builtin(func, smells)
 
 
 def _run_class_checks(cls, t: dict, smells: list):
     """Run all per-class smell checks (extracted to reduce CodeSmellDetector size)."""
     if cls.method_count >= t["god_class"]:
-        smells.append(
-            SmellIssue(
-                file_path=cls.file_path,
-                line=cls.line_start,
-                end_line=cls.line_end,
-                category="god-class",
-                severity=Severity.CRITICAL,
-                name=cls.name,
-                metric_value=cls.method_count,
-                message=f"Class '{cls.name}' has {cls.method_count} methods (limit: {t['god_class']})",
-                suggestion="Split into smaller classes with single responsibility. Consider delegation or mixins.",
+        # Skip test classes (many test methods is expected) and Mixin classes
+        # (visitor-pattern mixins intentionally have one method per AST node type).
+        if not cls.name.startswith("Test") and not cls.name.endswith("Mixin"):
+            smells.append(
+                SmellIssue(
+                    file_path=cls.file_path,
+                    line=cls.line_start,
+                    end_line=cls.line_end,
+                    category="god-class",
+                    severity=Severity.CRITICAL,
+                    name=cls.name,
+                    metric_value=cls.method_count,
+                    message=f"Class '{cls.name}' has {cls.method_count} methods (limit: {t['god_class']})",
+                    suggestion="Split into smaller classes with single responsibility. Consider delegation or mixins.",
+                )
             )
-        )
     if cls.size_lines >= t["large_class"]:
         smells.append(
             SmellIssue(
@@ -556,8 +841,6 @@ class CodeSmellDetector:
             )
         )
         return self.smells
-
-    check = detect  # Legacy alias for tests
 
     def enrich_with_llm(self, llm: LLMHelper, max_calls: int = 20):
         """Send the worst smells to LLM for detailed analysis."""

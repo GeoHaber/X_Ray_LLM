@@ -1,0 +1,30 @@
+======================================================================
+CODE QUALITY GATE CHECK
+======================================================================
+
+[METRICS] Code Smells (by severity)
+  Critical: 3/20
+  Warning:  39/100
+  Total:    6915/200
+
+[METRICS] Code Smells (by category)
+  long-function:      8/25
+  complex-function:   1/30
+  deep-nesting:       6/15
+  god-class:          0/5
+  bare-except:        0/5
+  mutable-default:    0/10
+  too-many-params:    0/20
+
+[DUPLICATES] Detection Summary
+  Groups: 51/50
+  Exact: 7 | Structural: 7 | Near: 28 | Semantic: 9
+
+
+[FAIL] QUALITY GATE FAILED
+
+  CRITICAL: 6915 total smells (limit: 200)
+
+  Advisory warnings:
+    WARNING: 51 duplicate groups (limit: 50)
+======================================================================

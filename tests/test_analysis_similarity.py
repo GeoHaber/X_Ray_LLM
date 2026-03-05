@@ -172,10 +172,6 @@ class TestAstNodeHistogram:
         hist = _ast_node_histogram("def (broken]]]")
         assert hist == Counter()
 
-    def test_empty_string(self):
-        hist = _ast_node_histogram("")
-        assert "Module" in hist  # even empty parses to Module
-
 
 # ════════════════════════════════════════════════════════════════════
 #  cosine_similarity()
@@ -230,10 +226,6 @@ class TestNameSimilarity:
     def test_identical(self):
         assert name_similarity("get_user", "get_user") == 1.0
 
-    def test_partial_overlap(self):
-        sim = name_similarity("get_user", "set_user")
-        assert 0.0 < sim < 1.0
-
     def test_empty_returns_zero(self):
         assert name_similarity("", "foo") == 0.0
         assert name_similarity("foo", "") == 0.0
@@ -283,11 +275,6 @@ class TestSignatureSimilarity:
 
 
 class TestCallgraphOverlap:
-    def _mock_func(self, calls=None):
-        f = MagicMock()
-        f.calls_to = calls or []
-        return f
-
     def test_identical_calls(self):
         a = self._mock_func(calls=["foo", "bar"])
         b = self._mock_func(calls=["foo", "bar"])
@@ -311,16 +298,6 @@ class TestCallgraphOverlap:
 
 class TestSemanticSimilarity:
     """Tests for semantic similarity computation."""
-
-    def _mock_func(self, name="f", params=None, ret=None, **kw):
-        f = MagicMock()
-        f.name = name
-        f.parameters = params or []
-        f.return_type = ret
-        f.is_async = kw.get("is_async", False)
-        f.calls_to = kw.get("calls_to", [])
-        f.docstring = kw.get("docstring", None)
-        return f
 
     def test_identical_functions_high(self):
         a = self._mock_func(

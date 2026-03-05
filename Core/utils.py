@@ -104,9 +104,15 @@ def get_cpu_info() -> str:
 
 
 def url_responds(url: str, timeout: int = 2) -> bool:
-    """Return *True* if a GET request to *url* succeeds with HTTP 200."""
+    """Return *True* if a GET request to *url* succeeds with HTTP 200.
+
+    Only HTTPS URLs are accepted to prevent unencrypted network traffic.
+    """
     import urllib.request
 
+    if not url.startswith("https://"):
+        logger.warning("url_responds: only HTTPS URLs are supported (got %s)", url)
+        return False
     try:
         req = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310  # nosec B310
@@ -128,13 +134,12 @@ def find_free_port(preferred: int = 8666) -> int:
             return s.getsockname()[1]
 
 
-_verified_cache = False
+_verify_ref = [False]  # [bool] — mutable container avoids global keyword
 
 
 def verify_rust_environment():
     """Check if the environment matches the compiled extension expectations."""
-    global _verified_cache
-    if _verified_cache:
+    if _verify_ref[0]:
         return True
 
     os_name = platform.system().lower()
@@ -144,7 +149,7 @@ def verify_rust_environment():
     logger.info(f"Target OS: {get_os_info()} (os={os_name}, arch={arch})")
     logger.info(f"Target CPU: {get_cpu_info()}")
 
-    _verified_cache = True
+    _verify_ref[0] = True
     return True
 
 
@@ -153,22 +158,26 @@ def verify_rust_environment():
 
 def check_trial_license() -> bool:
     """Enforce trial license via x_ray_core. Returns True if allowed."""
+    from Core.ui_bridge import get_bridge
+
+    bridge = get_bridge()
     try:
         import x_ray_core
 
         remaining = x_ray_core.check_trial()
         max_runs = x_ray_core.trial_max_runs()
-        print(f"  \u26a1 Trial license: {remaining} of {max_runs} runs remaining")
+        bridge.log(f"  \u26a1 Trial license: {remaining} of {max_runs} runs remaining")
         if remaining <= 3:
-            print(
+            bridge.log(
                 f"  \u26a0  Only {remaining} runs left — contact developer for full license."
             )
-        print()
+        bridge.log("")
         return True
     except RuntimeError as exc:
-        print(f"  \u2716 {exc}")
-        print()
+        bridge.log(f"  \u2716 {exc}")
+        bridge.log("")
         return False
     except (ImportError, AttributeError):
         # x_ray_core not available or missing check_trial — skip trial check (dev mode)
+        logger.debug("x_ray_core not found; skipping trial license check (dev mode).")
         return True

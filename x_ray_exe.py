@@ -126,7 +126,7 @@ def _detect_rust_info() -> Dict[str, Any]:
         except Exception:
             info["rust_version"] = "unknown"
     try:
-        import x_ray_core  # noqa: F401
+        import x_ray_core  # noqa: F401  # pyright: ignore[reportUnusedImport]
 
         info["rust_acceleration"] = True
     except ImportError:
@@ -427,7 +427,7 @@ def _print_tool_status(tools: dict) -> None:
         status = f"OK ({path})" if path else "not found (skipped)"
         print(f"    {name:10s}  {status}")
     try:
-        import x_ray_core  # noqa: F401
+        import x_ray_core  # noqa: F401  # pyright: ignore[reportUnusedImport]
 
         print(f"    {'x_ray_core':10s}  OK (Rust acceleration)")
     except ImportError:

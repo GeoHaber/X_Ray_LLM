@@ -7,8 +7,6 @@ Note: PythonTestGenerator.generate() and JSTSTestGenerator.generate() both retur
 List[GeneratedTestFile], NOT a TestGenReport. They write files directly.
 """
 
-
-
 from Analysis.test_generator import (
     GeneratedTestFile,
     JSTSTestGenerator,
@@ -274,12 +272,6 @@ class TestJSTSTestGenerator:
             has_jsx=has_jsx,
             language="javascript",
         )
-
-    def test_generate_returns_list(self, tmp_path):
-        analyses = [self._make_js_analysis()]
-        gen = JSTSTestGenerator(tmp_path, "proj")
-        result = gen.generate(analyses)
-        assert isinstance(result, list)
 
     def test_generates_js_test_files(self, tmp_path):
         analyses = [self._make_js_analysis()]

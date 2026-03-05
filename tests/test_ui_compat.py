@@ -292,9 +292,6 @@ class TestFletCompatValidAdvanced:
     """Test valid Flet API calls for tabs, layout, and style utilities."""
 
     @pytest.fixture(autouse=True)
-    def _skip_no_flet(self):
-        pytest.importorskip("flet")
-
     def test_valid_tab_label_only(self, tmp_path):
         issues = _analyze_code(
             tmp_path,
@@ -397,9 +394,6 @@ class TestFletCompatInvalid:
     """Test invalid Flet API calls and edge cases."""
 
     @pytest.fixture(autouse=True)
-    def _skip_no_flet(self):
-        pytest.importorskip("flet")
-
     def test_expansion_tile_initially_expanded_invalid(self, tmp_path):
         """initially_expanded was renamed to expanded in newer Flet."""
         issues = _analyze_code(
@@ -538,9 +532,6 @@ class TestFletCompatInvalid:
 
 class TestSmellConversion:
     @pytest.fixture(autouse=True)
-    def _skip_no_flet(self):
-        pytest.importorskip("flet")
-
     def test_to_smell_fields(self, tmp_path):
         issues = _analyze_code(
             tmp_path,
@@ -579,9 +570,6 @@ class TestSmellConversion:
 
 class TestSummary:
     @pytest.fixture(autouse=True)
-    def _skip_no_flet(self):
-        pytest.importorskip("flet")
-
     def test_summary_structure(self, tmp_path):
         issues = _analyze_code(
             tmp_path,
@@ -625,9 +613,6 @@ class TestSummary:
 
 class TestTreeScan:
     @pytest.fixture(autouse=True)
-    def _skip_no_flet(self):
-        pytest.importorskip("flet")
-
     def test_analyze_tree(self, tmp_path):
         """Should recursively find issues across multiple files."""
         sub = tmp_path / "sub"
@@ -686,9 +671,6 @@ class TestSelfScan:
     """Run the analyzer on x_ray_flet.py and verify known bugs are detected."""
 
     @pytest.fixture(autouse=True)
-    def _skip_no_flet(self):
-        pytest.importorskip("flet")
-
     def test_xray_flet_known_issues(self):
         """After the tabs rewrite, x_ray_flet.py should have zero UI compat issues."""
         flet_path = Path(__file__).resolve().parent.parent / "x_ray_flet.py"

@@ -310,7 +310,7 @@ def scan_project(project_path: Path) -> Dict[str, Any]:
     exclude = list(THIRD_PARTY)
 
     try:
-        functions, classes, errors = scan_codebase(project_path, exclude=exclude)
+        functions, classes, _errors = scan_codebase(project_path, exclude=exclude)
     except Exception as e:
         return {
             "name": project_path.name,

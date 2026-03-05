@@ -42,12 +42,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from Core.types import FunctionRecord
 from Core.ui_bridge import get_bridge
 
-try:
-    from Analysis.tracer import TraceProfile
-except ImportError:
-    TraceProfile = None  # type: ignore[misc,assignment]
-
-
 # ── Side-effect indicators (heuristic AST scan) ─────────────────────────────
 
 _IMPURE_CALLS = frozenset(
@@ -449,17 +443,6 @@ class RustAdvisor:
     @staticmethod
     def print_candidates(candidates: List[RustCandidate], top_n: int = 20) -> None:
         """Print a ranked table of Rust candidates."""
-        print(f"\n{'=' * 72}")
-        print("  RUST CANDIDATE RANKING")
-        print(f"{'=' * 72}")
-        print(
-            f"  {'#':>3}  {'Score':>6}  {'Pure':>4}  {'CC':>3}  "
-            f"{'Lines':>5}  {'Calls':>6}  Function"
-        )
-        print(
-            f"  {'─' * 3}  {'─' * 6}  {'─' * 4}  {'─' * 3}  "
-            f"{'─' * 5}  {'─' * 6}  {'─' * 40}"
-        )
         bridge = get_bridge()
         bridge.log(f"\n{'=' * 72}")
         bridge.log("  RUST CANDIDATE RANKING")
@@ -479,18 +462,6 @@ class RustAdvisor:
             calls = str(c.call_count) if c.call_count else "  -"
             loc = f"{c.func.file_path}:{c.func.line_start}"
 
-            # 1. Print to stdout
-            print(
-                f"  {i:>3}  {c.score:>6.1f}  {pure_icon:>4}  "
-                f"{c.func.complexity:>3}  {c.func.size_lines:>5}  "
-                f"{calls:>6}  {c.func.name}"
-            )
-            print(
-                f"  {'':>3}  {'':>6}  {'':>4}  {'':>3}  "
-                f"{'':>5}  {'':>6}  {loc}  ({c.reason})"
-            )
-
-            # 2. Log to bridge
             bridge.log(
                 f"  {i:>3}  {c.score:>6.1f}  {pure_icon:>4}  "
                 f"{c.func.complexity:>3}  {c.func.size_lines:>5}  "
@@ -511,8 +482,6 @@ class RustAdvisor:
             )
 
         if footer_text:
-            print(footer_text)
             bridge.log(footer_text)
 
-        print(f"{'=' * 72}\n")
         bridge.log(f"{'=' * 72}\n")

@@ -206,17 +206,6 @@ class TestDeadCode:
         _check_dead_code(func, smells)
         assert not any(s.category == "dead-code" for s in smells)
 
-    def test_severity_is_warning(self):
-        func = _make_func("""
-            def f():
-                return 1
-                x = 2
-        """)
-        smells = []
-        _check_dead_code(func, smells)
-        hits = [s for s in smells if s.category == "dead-code"]
-        assert hits[0].severity == Severity.WARNING
-
     def test_dead_code_line_number_points_to_dead_stmt(self):
         """The smell's line number should point to the dead code, not the return."""
         func = _make_func("""

@@ -84,3 +84,10 @@ bandit_report*.json
 # Added by cleanup
 .ruff_cache/
 
+
+# Generated test artifacts (regeneratable by --gen-tests)
+_generated_tests/
+_gen_test_*.txt
+
+# Patch snapshots (regeneratable)
+snapshot.patch

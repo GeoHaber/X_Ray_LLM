@@ -79,11 +79,12 @@ python .github/scripts/check_quality.py x_ray_report.json
 
 | Path | Purpose |
 |------|---------|
-| `Analysis/` | Analyzers: format, lint, security, smells, duplicates, transpiler |
-| `Core/` | Types, config, scan phases, CLI args |
+| `Analysis/` | Analyzers: format, lint, security, smells, duplicates, typecheck, imports, health, transpiler |
+| `Core/` | Types, config, scan phases, CLI args, i18n, UI bridge |
 | `Lang/` | AST parser, tokenizer |
+| `UI/` | Flet GUI tab builders (shared theme, individual tab modules) |
 | `tests/` | Pytest suite |
-| `docs/` | All written documentation |
+| `docs/` | All written documentation (CHANGELOG, FEATURES, USAGE, etc.) |
 
 When adding a new analyzer or phase: add the module under `Analysis/`, register the phase in `Core/scan_phases.py`, and add tests under `tests/`.
 

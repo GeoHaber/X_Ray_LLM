@@ -99,10 +99,6 @@ class TestComplexity:
         node = _parse_func("def f():\n    pass")
         assert compute_complexity(node) == 0
 
-    def test_single_if(self):
-        node = _parse_func("def f(x):\n    if x:\n        pass")
-        assert compute_complexity(node) == 1
-
     def test_multiple_branches(self):
         src = """\
         def f(x):

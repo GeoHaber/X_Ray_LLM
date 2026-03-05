@@ -181,21 +181,21 @@ class ScanCache:
 
 
 # Module-level singleton — shared across imports in the same process.
-_global_cache: Optional[ScanCache] = None
+_cache_ref: list = [
+    None
+]  # [Optional[ScanCache]] — mutable container avoids global keyword
 _init_lock = threading.Lock()
 
 
 def get_cache(*, enabled: bool = True) -> ScanCache:
     """Return (or create) the process-wide ScanCache singleton."""
-    global _global_cache
     with _init_lock:
-        if _global_cache is None:
-            _global_cache = ScanCache(enabled=enabled)
-    return _global_cache
+        if _cache_ref[0] is None:
+            _cache_ref[0] = ScanCache(enabled=enabled)
+    return _cache_ref[0]
 
 
 def reset_cache() -> None:
     """Reset the global singleton (used in tests)."""
-    global _global_cache
     with _init_lock:
-        _global_cache = None
+        _cache_ref[0] = None

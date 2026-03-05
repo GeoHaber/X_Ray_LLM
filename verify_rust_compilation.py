@@ -79,7 +79,7 @@ def load_pairs(max_per_project: int = 0) -> List[Dict[str, Any]]:
         for p in pairs:
             by_project.setdefault(p["project"], []).append(p)
         selected = []
-        for proj, items in by_project.items():
+        for _proj, items in by_project.items():
             # Pick clean ones first
             clean = [i for i in items if i.get("clean")]
             selected.extend(clean[:max_per_project])

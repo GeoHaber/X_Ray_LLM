@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import ast
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -43,15 +43,21 @@ from Core.utils import logger
 # Shared rule codes and severities
 # ---------------------------------------------------------------------------
 
-_RULES: Dict[str, Tuple[Severity, str]] = {
-    "UH001": (Severity.WARNING,  "Dead widget — created but never added to the UI tree"),
-    "UH002": (Severity.WARNING,  "Always-invisible control — visible=False with no flip"),
-    "UH003": (Severity.WARNING,  "Interactive control has no event handler"),
-    "UH004": (Severity.INFO,     "Layout anti-pattern — expand=True inside fixed container"),
-    "UH005": (Severity.WARNING,  "React: list render missing 'key' prop"),
-    "UH006": (Severity.WARNING,  "React: useEffect missing dependency"),
-    "UH007": (Severity.INFO,     "Empty container — Column/Row/Stack has no children"),
-    "UH008": (Severity.INFO,     "Likely unclosed or mismatched JSX tag"),
+_RULES: Dict[str, Tuple[str, str]] = {
+    "UH001": (Severity.WARNING, "Dead widget — created but never added to the UI tree"),
+    "UH002": (
+        Severity.WARNING,
+        "Always-invisible control — visible=False with no flip",
+    ),
+    "UH003": (Severity.WARNING, "Interactive control has no event handler"),
+    "UH004": (
+        Severity.INFO,
+        "Layout anti-pattern — expand=True inside fixed container",
+    ),
+    "UH005": (Severity.WARNING, "React: list render missing 'key' prop"),
+    "UH006": (Severity.WARNING, "React: useEffect missing dependency"),
+    "UH007": (Severity.INFO, "Empty container — Column/Row/Stack has no children"),
+    "UH008": (Severity.INFO, "Likely unclosed or mismatched JSX tag"),
 }
 
 
@@ -59,21 +65,22 @@ _RULES: Dict[str, Tuple[Severity, str]] = {
 # Issue dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class UIHealthIssue:
     """One UI-health finding."""
 
-    rule_code: str          # e.g. "UH001"
+    rule_code: str  # e.g. "UH001"
     file_path: str
     line: int
     end_line: int
-    widget_name: str        # the variable / component name
-    detail: str             # human-readable extra context
+    widget_name: str  # the variable / component name
+    detail: str  # human-readable extra context
     suggestion: str = ""
 
     # computed from rule_code
     @property
-    def severity(self) -> Severity:
+    def severity(self) -> str:
         return _RULES.get(self.rule_code, (Severity.INFO, ""))[0]
 
     @property
@@ -104,35 +111,76 @@ class UIHealthIssue:
 # ---------------------------------------------------------------------------
 
 # Flet widget constructors that create visible controls
-_FLET_INTERACTIVE = frozenset({
-    "Button", "FilledButton", "ElevatedButton", "OutlinedButton",
-    "TextButton", "FloatingActionButton", "IconButton",
-    "Checkbox", "Switch", "Radio", "Slider",
-    "TextField", "Dropdown",
-    "GestureDetector", "InkWell",
-})
+_FLET_INTERACTIVE = frozenset(
+    {
+        "Button",
+        "FilledButton",
+        "ElevatedButton",
+        "OutlinedButton",
+        "TextButton",
+        "FloatingActionButton",
+        "IconButton",
+        "Checkbox",
+        "Switch",
+        "Radio",
+        "Slider",
+        "TextField",
+        "Dropdown",
+        "GestureDetector",
+        "InkWell",
+    }
+)
 
-_FLET_CONTAINERS = frozenset({
-    "Column", "Row", "Stack", "Container", "Card",
-    "ListView", "GridView", "ExpansionPanel",
-})
+_FLET_CONTAINERS = frozenset(
+    {
+        "Column",
+        "Row",
+        "Stack",
+        "Container",
+        "Card",
+        "ListView",
+        "GridView",
+        "ExpansionPanel",
+    }
+)
 
-_FLET_HANDLER_KWARGS = frozenset({
-    "on_click", "on_change", "on_select", "on_submit",
-    "on_tap", "on_long_press", "on_hover",
-})
+_FLET_HANDLER_KWARGS = frozenset(
+    {
+        "on_click",
+        "on_change",
+        "on_select",
+        "on_submit",
+        "on_tap",
+        "on_long_press",
+        "on_hover",
+    }
+)
 
 # Tkinter interactive widgets
-_TK_INTERACTIVE = frozenset({
-    "Button", "Checkbutton", "Radiobutton", "Scale",
-    "Entry", "Spinbox", "Combobox",
-})
+_TK_INTERACTIVE = frozenset(
+    {
+        "Button",
+        "Checkbutton",
+        "Radiobutton",
+        "Scale",
+        "Entry",
+        "Spinbox",
+        "Combobox",
+    }
+)
 
 # QtWidgets interactive (abbreviated)
-_QT_INTERACTIVE = frozenset({
-    "QPushButton", "QCheckBox", "QRadioButton", "QSlider",
-    "QLineEdit", "QComboBox", "QListWidget",
-})
+_QT_INTERACTIVE = frozenset(
+    {
+        "QPushButton",
+        "QCheckBox",
+        "QRadioButton",
+        "QSlider",
+        "QLineEdit",
+        "QComboBox",
+        "QListWidget",
+    }
+)
 
 
 def _kw_value(node: ast.Call, name: str) -> Optional[ast.expr]:
@@ -170,6 +218,7 @@ def _attr_name(node: ast.expr) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Python AST Visitor
 # ---------------------------------------------------------------------------
+
 
 class _PythonUIVisitor(ast.NodeVisitor):
     """
@@ -246,7 +295,9 @@ class _PythonUIVisitor(ast.NodeVisitor):
                             self._invisible_vars[varname] = (node.lineno, widget_name)
 
                         # UH003: interactive + no handler?
-                        if self._is_interactive(widget_name) and not self._has_event_handler(node.value):
+                        if self._is_interactive(
+                            widget_name
+                        ) and not self._has_event_handler(node.value):
                             self._no_handler.append((varname, node.lineno, widget_name))
 
                         # UH007: empty container?
@@ -254,22 +305,32 @@ class _PythonUIVisitor(ast.NodeVisitor):
                             controls_kw = _kw_value(node.value, "controls")
                             content_kw = _kw_value(node.value, "content")
                             has_children = (
-                                (isinstance(controls_kw, (ast.List, ast.Tuple)) and controls_kw.elts)
+                                (
+                                    isinstance(controls_kw, (ast.List, ast.Tuple))
+                                    and controls_kw.elts
+                                )
                                 or content_kw is not None
                                 or node.value.args  # positional content
                             )
                             if not has_children:
                                 # Only flag if controls_kw is explicitly empty list
-                                if isinstance(controls_kw, (ast.List, ast.Tuple)) and not controls_kw.elts:
-                                    self.issues.append(UIHealthIssue(
-                                        rule_code="UH007",
-                                        file_path=self.file_path,
-                                        line=node.lineno,
-                                        end_line=getattr(node, "end_lineno", node.lineno),
-                                        widget_name=varname,
-                                        detail=f"{widget_name}(controls=[]) — no children",
-                                        suggestion="Add child controls or populate them later.",
-                                    ))
+                                if (
+                                    isinstance(controls_kw, (ast.List, ast.Tuple))
+                                    and not controls_kw.elts
+                                ):
+                                    self.issues.append(
+                                        UIHealthIssue(
+                                            rule_code="UH007",
+                                            file_path=self.file_path,
+                                            line=node.lineno,
+                                            end_line=getattr(
+                                                node, "end_lineno", node.lineno
+                                            ),
+                                            widget_name=varname,
+                                            detail=f"{widget_name}(controls=[]) — no children",
+                                            suggestion="Add child controls or populate them later.",
+                                        )
+                                    )
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute):  # noqa: N802
@@ -330,15 +391,17 @@ class _PythonUIVisitor(ast.NodeVisitor):
             if isinstance(child, ast.Call):
                 if _is_true(_kw_value(child, "expand")):
                     child_name = _attr_name(child.func) or "widget"
-                    self.issues.append(UIHealthIssue(
-                        rule_code="UH004",
-                        file_path=self.file_path,
-                        line=child.lineno,
-                        end_line=getattr(child, "end_lineno", child.lineno),
-                        widget_name=child_name,
-                        detail=f"{child_name}(expand=True) inside fixed-dimension parent",
-                        suggestion="Remove expand=True or remove fixed width/height from parent.",
-                    ))
+                    self.issues.append(
+                        UIHealthIssue(
+                            rule_code="UH004",
+                            file_path=self.file_path,
+                            line=child.lineno,
+                            end_line=getattr(child, "end_lineno", child.lineno),
+                            widget_name=child_name,
+                            detail=f"{child_name}(expand=True) inside fixed-dimension parent",
+                            suggestion="Remove expand=True or remove fixed width/height from parent.",
+                        )
+                    )
 
     def visit_Name(self, node: ast.Name):  # noqa: N802
         """Track all Name references for dead widget detection."""
@@ -348,7 +411,10 @@ class _PythonUIVisitor(ast.NodeVisitor):
     # Also track x.controls = [a, b] style assignments
     def visit_Assign_attr(self, node: ast.Assign):
         for target in node.targets:
-            if isinstance(target, ast.Attribute) and target.attr in ("controls", "content"):
+            if isinstance(target, ast.Attribute) and target.attr in (
+                "controls",
+                "content",
+            ):
                 if isinstance(node.value, (ast.List, ast.Tuple)):
                     for elt in node.value.elts:
                         if isinstance(elt, ast.Name):
@@ -363,47 +429,62 @@ class _PythonUIVisitor(ast.NodeVisitor):
             # We use a conservative heuristic: not in _added_to_parent
             # and NOT a common return variable name.
             if varname not in self._added_to_parent and varname not in {
-                "sidebar", "layout", "modal", "dialog", "app", "page",
-                "tab", "panel", "content", "container", "view",
+                "sidebar",
+                "layout",
+                "modal",
+                "dialog",
+                "app",
+                "page",
+                "tab",
+                "panel",
+                "content",
+                "container",
+                "view",
             }:
                 # Extra check: how many times is the name referenced?
                 # We can't count without traversing again, so skip over
                 # single-char or very generic names
                 if len(varname) >= 3 and not varname.startswith("_"):
-                    self.issues.append(UIHealthIssue(
-                        rule_code="UH001",
-                        file_path=self.file_path,
-                        line=line,
-                        end_line=line,
-                        widget_name=varname,
-                        detail=f"{widget_type} '{varname}' never added to UI tree",
-                        suggestion=f"Add '{varname}' to a parent via page.add() or controls=[{varname}].",
-                    ))
+                    self.issues.append(
+                        UIHealthIssue(
+                            rule_code="UH001",
+                            file_path=self.file_path,
+                            line=line,
+                            end_line=line,
+                            widget_name=varname,
+                            detail=f"{widget_type} '{varname}' never added to UI tree",
+                            suggestion=f"Add '{varname}' to a parent via page.add() or controls=[{varname}].",
+                        )
+                    )
 
         # UH002: always-invisible (visible=False, never flipped)
         for varname, (line, widget_type) in self._invisible_vars.items():
             if varname not in self._flipped_visible:
-                self.issues.append(UIHealthIssue(
-                    rule_code="UH002",
+                self.issues.append(
+                    UIHealthIssue(
+                        rule_code="UH002",
+                        file_path=self.file_path,
+                        line=line,
+                        end_line=line,
+                        widget_name=varname,
+                        detail=f"{widget_type} '{varname}' has visible=False with no visible=True anywhere",
+                        suggestion="Set visible=True when the condition is met, or remove the control.",
+                    )
+                )
+
+        # UH003: interactive with no handler
+        for varname, line, widget_type in self._no_handler:
+            self.issues.append(
+                UIHealthIssue(
+                    rule_code="UH003",
                     file_path=self.file_path,
                     line=line,
                     end_line=line,
                     widget_name=varname,
-                    detail=f"{widget_type} '{varname}' has visible=False with no visible=True anywhere",
-                    suggestion="Set visible=True when the condition is met, or remove the control.",
-                ))
-
-        # UH003: interactive with no handler
-        for varname, line, widget_type in self._no_handler:
-            self.issues.append(UIHealthIssue(
-                rule_code="UH003",
-                file_path=self.file_path,
-                line=line,
-                end_line=line,
-                widget_name=varname,
-                detail=f"{widget_type} '{varname}' has no on_click/on_change/on_select handler",
-                suggestion=f"Add an event handler: {widget_type}(on_click=your_handler).",
-            ))
+                    detail=f"{widget_type} '{varname}' has no on_click/on_change/on_select handler",
+                    suggestion=f"Add an event handler: {widget_type}(on_click=your_handler).",
+                )
+            )
 
 
 def _walk_assigns_for_visible_flip(tree: ast.AST) -> Set[str]:
@@ -444,7 +525,6 @@ _JSX_SELF_CLOSE_RE = re.compile(r"<([A-Z]\w*|[a-z][\w.]*)\b[^>]*/\s*>")
 def _scan_jsx_file(src: str, file_path: str) -> List[UIHealthIssue]:
     """Regex-based heuristic scan of a JSX/TSX file."""
     issues: List[UIHealthIssue] = []
-    lines = src.splitlines()
 
     # UH005: .map() without key prop
     for m in _JSX_MAP_KEY_RE.finditer(src):
@@ -456,15 +536,17 @@ def _scan_jsx_file(src: str, file_path: str) -> List[UIHealthIssue]:
         snippet = src[snippet_start:snippet_end]
         if not _JSX_KEY_PROP_RE.search(snippet):
             component = m.group(1)
-            issues.append(UIHealthIssue(
-                rule_code="UH005",
-                file_path=file_path,
-                line=line_no,
-                end_line=line_no,
-                widget_name=component,
-                detail=f"<{component}> rendered in .map() without 'key' prop",
-                suggestion=f"Add key={{item.id}} or key={{index}} to <{component}>.",
-            ))
+            issues.append(
+                UIHealthIssue(
+                    rule_code="UH005",
+                    file_path=file_path,
+                    line=line_no,
+                    end_line=line_no,
+                    widget_name=component,
+                    detail=f"<{component}> rendered in .map() without 'key' prop",
+                    suggestion=f"Add key={{item.id}} or key={{index}} to <{component}>.",
+                )
+            )
 
     # UH006: useEffect with missing deps (simplified check)
     for m in _USE_EFFECT_RE.finditer(src):
@@ -474,29 +556,50 @@ def _scan_jsx_file(src: str, file_path: str) -> List[UIHealthIssue]:
 
         # Find identifiers in body that look like state/prop vars
         body_names = set(re.findall(r"\b([a-zA-Z_]\w*)\b", body))
-        declared_deps = set(re.findall(r"\b([a-zA-Z_]\w*)\b", deps_str)) if deps_str else set()
+        declared_deps = (
+            set(re.findall(r"\b([a-zA-Z_]\w*)\b", deps_str)) if deps_str else set()
+        )
 
         # Filter to likely state/prop vars (not keywords, not short names)
         _JS_KEYWORDS = {
-            "const", "let", "var", "if", "else", "return", "await",
-            "async", "function", "true", "false", "null", "undefined",
-            "new", "this", "typeof", "instanceof",
+            "const",
+            "let",
+            "var",
+            "if",
+            "else",
+            "return",
+            "await",
+            "async",
+            "function",
+            "true",
+            "false",
+            "null",
+            "undefined",
+            "new",
+            "this",
+            "typeof",
+            "instanceof",
         }
         candidates = {
-            n for n in body_names
+            n
+            for n in body_names
             if n not in _JS_KEYWORDS and len(n) > 2 and not n[0].isupper()
         }
-        missing = candidates - declared_deps - {"fetch", "console", "window", "document"}
+        missing = (
+            candidates - declared_deps - {"fetch", "console", "window", "document"}
+        )
         if missing and len(missing) <= 5:  # avoid false-positive spam
-            issues.append(UIHealthIssue(
-                rule_code="UH006",
-                file_path=file_path,
-                line=line_no,
-                end_line=line_no,
-                widget_name="useEffect",
-                detail=f"Possibly missing deps: {', '.join(sorted(missing))}",
-                suggestion="Add missing variables to the useEffect dependency array.",
-            ))
+            issues.append(
+                UIHealthIssue(
+                    rule_code="UH006",
+                    file_path=file_path,
+                    line=line_no,
+                    end_line=line_no,
+                    widget_name="useEffect",
+                    detail=f"Possibly missing deps: {', '.join(sorted(missing))}",
+                    suggestion="Add missing variables to the useEffect dependency array.",
+                )
+            )
 
     return issues
 
@@ -504,6 +607,7 @@ def _scan_jsx_file(src: str, file_path: str) -> List[UIHealthIssue]:
 # ---------------------------------------------------------------------------
 # Main analyzer class
 # ---------------------------------------------------------------------------
+
 
 class UIHealthAnalyzer:
     """
@@ -567,8 +671,14 @@ class UIHealthAnalyzer:
     # -- internals -----------------------------------------------------------
 
     _EXCLUDE_DEFAULT = {
-        ".venv", "venv", "__pycache__", ".git",
-        "node_modules", "target", "dist", "build",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".git",
+        "node_modules",
+        "target",
+        "dist",
+        "build",
     }
 
     def _analyze_tree(

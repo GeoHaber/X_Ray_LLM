@@ -276,28 +276,6 @@ _PENALTY_RULES: List[tuple] = [
         [],
     ),
     (
-        "smells",
-        "X-Ray Smells",
-        {"critical": 0.25, "warning": 0.05, "info": 0.01},
-        30,
-        [],
-    ),
-    ("duplicates", "X-Ray Duplicates", {}, 15, []),
-    (
-        "lint",
-        "Ruff Lint",
-        {"critical": 0.3, "warning": 0.05, "info": 0.005},
-        25,
-        ["fixable"],
-    ),
-    (
-        "security",
-        "Bandit Security",
-        {"critical": 1.5, "warning": 0.3, "info": 0.005},
-        30,
-        [],
-    ),
-    (
         "web",
         "Web Smells (JS/TS)",
         {"critical": 0.25, "warning": 0.05, "info": 0.01},
@@ -305,6 +283,20 @@ _PENALTY_RULES: List[tuple] = [
         [],
     ),
     ("health", "Project Health", {}, 10, []),
+    (
+        "imports",
+        "Import Health (X-Ray)",
+        {"warning": 0.15, "info": 0.005},
+        10,
+        [],
+    ),
+    (
+        "typecheck",
+        "Pyright Type Check",
+        {"critical": 0.3, "warning": 0.05, "info": 0.005},
+        20,
+        [],
+    ),
 ]
 
 
@@ -538,6 +530,80 @@ def print_health_report(report, summary: Dict[str, Any]):
         for f in report.files_created:
             bridge.log(f"    ✔ {f}")
     bridge.log("")
+
+
+def print_imports_report(issues: List[SmellIssue], summary: Dict[str, Any]):
+    """Print the ASCII import health report."""
+    bridge = get_bridge()
+    bridge.log(f"\n{SEP}")
+    bridge.log("IMPORT HEALTH REPORT (X-Ray)")
+    bridge.log(f"{SEP}")
+
+    if not issues:
+        bridge.log("  No import issues found. Clean imports.")
+        return
+
+    bridge.log(
+        f"  Total: {summary['total']} issues  "
+        f"Warning: {summary['warning']}  "
+        f"Info: {summary['info']}"
+    )
+    bridge.log("")
+
+    by_cat = summary.get("by_category", {})
+    if by_cat:
+        bridge.log("  By category:")
+        for cat, count in sorted(by_cat.items(), key=lambda x: -x[1]):
+            bridge.log(f"    {count:4d}  {cat}")
+        bridge.log("")
+
+    for s in issues[:20]:
+        sev = s.severity.upper() if isinstance(s.severity, str) else str(s.severity)
+        bridge.log(f"  [{sev:8s}] {s.file_path}:{s.line}  {s.message}")
+    if len(issues) > 20:
+        bridge.log(f"  ... and {len(issues) - 20} more (run full scan to see all)")
+    bridge.log("")
+
+
+def print_typecheck_report(issues: List[SmellIssue], summary: Dict[str, Any]):
+    """Print the ASCII type-check report (Pyright results)."""
+    bridge = get_bridge()
+    bridge.log(f"\n{SEP}")
+    bridge.log("TYPE CHECK REPORT (Pyright)")
+    bridge.log(f"{SEP}")
+
+    if not issues:
+        bridge.log("  No type errors found! Clean types.")
+        return
+
+    bridge.log(
+        f"  Total: {summary['total']} issues  "
+        f"Critical (errors): {summary['critical']}  "
+        f"Warning: {summary['warning']}  "
+        f"Info: {summary.get('info', 0)}"
+    )
+    bridge.log("")
+
+    by_rule = summary.get("by_rule", {})
+    if by_rule:
+        bridge.log("  Top Rules:")
+        for rule, count in sorted(by_rule.items(), key=lambda x: -x[1])[:10]:
+            bridge.log(f"    {count:4d}  {rule}")
+        bridge.log("")
+
+    worst = summary.get("worst_files", {})
+    if worst:
+        bridge.log("  Worst Files:")
+        for f, count in sorted(worst.items(), key=lambda x: -x[1])[:10]:
+            bridge.log(f"    {count:4d}  {f}")
+        bridge.log("")
+
+    critical = [i for i in issues if i.severity == Severity.CRITICAL]
+    if critical:
+        bridge.log("  Critical Type Errors:")
+        for s in critical[:20]:
+            bridge.log(f"    {s.file_path}:{s.line}  {s.message}")
+        bridge.log("")
 
 
 def _build_smell_summary(smells):

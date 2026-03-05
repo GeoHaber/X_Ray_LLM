@@ -67,7 +67,7 @@ def _compute_max_similarities(pairs):
 def _cluster_by_root(pairs, uf, max_sim):
     """Group function-records by union-find root."""
     clusters: Dict[str, List[Tuple[FunctionRecord, float]]] = defaultdict(list)
-    for f1, f2, sim in pairs:
+    for f1, f2, _sim in pairs:
         root = uf.find(f1.key)
         if not any(x[0].key == f1.key for x in clusters[root]):
             clusters[root].append((f1, max_sim[f1.key]))
@@ -79,7 +79,7 @@ def _cluster_by_root(pairs, uf, max_sim):
 def _collect_cluster_sims(pairs, uf):
     """Collect per-cluster pair-similarity lists."""
     cluster_pair_sims: Dict[str, List[float]] = defaultdict(list)
-    for f1, f2, sim in pairs:
+    for f1, _f2, sim in pairs:
         cluster_pair_sims[uf.find(f1.key)].append(sim)
     return cluster_pair_sims
 
@@ -105,7 +105,7 @@ async def _enrich_group_async(item, llm, sem):
     )
 
 
-def _compile_to_callable(func_record: FunctionRecord, safe: bool = False):
+def _compile_to_callable(func_record: FunctionRecord, safe: bool = True):
     """Compile a FunctionRecord's code string into a callable, or None on failure."""
     if safe:
         # In safe mode, we don't execute code strings.
@@ -176,8 +176,14 @@ class DuplicateFinder:
     NEAR_DUP_THRESHOLD = 0.80
     TOKEN_PREFILTER = 0.25
     SIZE_RATIO_MIN = 0.35  # skip if sizes wildly different
-    SEMANTIC_THRESHOLD = 0.50  # semantic similarity threshold
+    SEMANTIC_THRESHOLD = (
+        0.70  # semantic similarity threshold (0.50 was too loose — generated noise)
+    )
     SEMANTIC_MIN_LINES = 8  # min function size for semantic matching
+    # Looser token prefilter for the semantic stage; semantic matches may have
+    # low code overlap but shared vocabulary in names, docstrings, and call lists.
+    SEMANTIC_TOKEN_PREFILTER = 0.10
+    MAX_PREFILTER_PAIRS = 50_000  # cap O(N²) candidate explosion
 
     # Boilerplate to skip
     _BOILERPLATE = frozenset(
@@ -377,14 +383,19 @@ class DuplicateFinder:
         self, func_list: List[FunctionRecord], cross_file_only: bool
     ) -> List[Tuple[FunctionRecord, FunctionRecord, float]]:
         """Pre-filter function pairs by size ratio and token cosine."""
+        cap = self.MAX_PREFILTER_PAIRS
         candidates = []
+        capped = False
         for i, f1 in enumerate(func_list):
+            if capped:
+                break
             for f2 in func_list[i + 1 :]:
                 if cross_file_only and f1.file_path == f2.file_path:
                     continue
-                ratio = min(f1.size_lines, f2.size_lines) / max(
-                    f1.size_lines, f2.size_lines
-                )
+                max_lines = max(f1.size_lines, f2.size_lines)
+                if max_lines == 0:
+                    continue
+                ratio = min(f1.size_lines, f2.size_lines) / max_lines
                 if ratio < self.SIZE_RATIO_MIN:
                     continue
                 tok_sim = cosine_similarity(
@@ -393,6 +404,14 @@ class DuplicateFinder:
                 )
                 if tok_sim >= self.TOKEN_PREFILTER:
                     candidates.append((f1, f2, tok_sim))
+                    if len(candidates) >= cap:
+                        capped = True
+                        break
+        if capped:
+            logger.warning(
+                f"Duplicate pre-filter capped at {cap} pairs "
+                f"(input: {len(func_list)} functions)"
+            )
         return candidates
 
     def _stage_near_duplicates(
@@ -424,6 +443,13 @@ class DuplicateFinder:
             logger.info(
                 f"Duplicate pre-filter (Rust): {len(raw_candidates)} candidates"
             )
+            cap = self.MAX_PREFILTER_PAIRS
+            if len(raw_candidates) > cap:
+                logger.warning(
+                    f"Duplicate pre-filter capped at {cap} pairs "
+                    f"(was {len(raw_candidates)})"
+                )
+                raw_candidates = raw_candidates[:cap]
             # Resolve string keys back to FunctionRecord objects
             func_map = {f.key: f for f in func_list}
             candidates = [
@@ -435,11 +461,11 @@ class DuplicateFinder:
         else:
             candidates = self._prefilter_candidates(func_list, cross_file_only)
             logger.info(f"Duplicate pre-filter (Python): {len(candidates)} candidates")
-            near_pairs = [
-                (f1, f2, code_similarity(f1.code, f2.code))
-                for f1, f2, _ in candidates
-                if code_similarity(f1.code, f2.code) >= self.NEAR_DUP_THRESHOLD
-            ]
+            near_pairs = []
+            for f1, f2, _ in candidates:
+                sim = code_similarity(f1.code, f2.code)
+                if sim >= self.NEAR_DUP_THRESHOLD:
+                    near_pairs.append((f1, f2, sim))
 
         group_id = self._build_similarity_groups(
             near_pairs, group_id, "near", seen_keys
@@ -466,6 +492,13 @@ class DuplicateFinder:
         for i, f1 in enumerate(semantic_list):
             for f2 in semantic_list[i + 1 :]:
                 if cross_file_only and f1.file_path == f2.file_path:
+                    continue
+                # Token prefilter: skip if cosine similarity is too low
+                tok_sim = cosine_similarity(
+                    self._tokens.get(f1.key, Counter()),
+                    self._tokens.get(f2.key, Counter()),
+                )
+                if tok_sim < self.SEMANTIC_TOKEN_PREFILTER:
                     continue
                 sim = semantic_similarity(f1, f2)
                 if sim >= self.SEMANTIC_THRESHOLD:

@@ -12,9 +12,9 @@ from typing import List, Tuple
 
 from Core.types import FunctionRecord, ClassRecord
 from Analysis.ast_utils import (
-    ASTNormalizer,  # noqa: F401  re-export for backward compatibility
-    _compute_structure_hash,  # noqa: F401  re-export for backward compatibility
-    collect_py_files,  # noqa: F401  re-export for backward compatibility
+    ASTNormalizer,  # noqa: F401  # pyright: ignore[reportUnusedImport]  re-export
+    _compute_structure_hash,  # noqa: F401  # pyright: ignore[reportUnusedImport]  re-export
+    collect_py_files,  # noqa: F401  # pyright: ignore[reportUnusedImport]  re-export
     extract_functions_from_file,  # canonical extractor
 )
 

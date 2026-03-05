@@ -38,7 +38,7 @@ def main():
     report_path = Path(sys.argv[1])
 
     if not report_path.exists():
-        print(f"❌ Report not found: {report_path}")
+        print(f"[ERROR] Report not found: {report_path}")
         sys.exit(1)
 
     with open(report_path) as f:
@@ -67,12 +67,12 @@ def main():
         "CODE QUALITY GATE CHECK",
         "=" * 70,
         "",
-        "📊 Code Smells (by severity)",
+        "[METRICS] Code Smells (by severity)",
         f"  Critical: {critical_count}/{QUALITY_GATES['max_critical_smells']}",
         f"  Warning:  {warning_count}/{QUALITY_GATES['max_warning_smells']}",
         f"  Total:    {total_smells}/{QUALITY_GATES['max_total_smells']}",
         "",
-        "📊 Code Smells (by category)",
+        "[METRICS] Code Smells (by category)",
         f"  long-function:      {long_funcs}/{QUALITY_GATES['max_long_functions']}",
         f"  complex-function:   {complex_funcs}/{QUALITY_GATES['max_complex_functions']}",
         f"  deep-nesting:       {deep_nesting}/{QUALITY_GATES['max_deep_nesting']}",
@@ -81,7 +81,7 @@ def main():
         f"  mutable-default:    {mutable_default}/{QUALITY_GATES['max_mutable_default_arg']}",
         f"  too-many-params:    {too_many_params}/{QUALITY_GATES['max_too_many_params']}",
         "",
-        "🔄 Duplicates",
+        "[DUPLICATES] Detection Summary",
         f"  Groups: {dup_groups}/{QUALITY_GATES['max_duplicate_groups']}",
         f"  Exact: {duplicates.get('exact_duplicates', 0)} | "
         f"Structural: {duplicates.get('structural_duplicates', 0)} | "
@@ -145,7 +145,7 @@ def main():
     warning_failures = [f for f in failures if f.startswith("WARNING")]
 
     if critical_failures:
-        report_lines.append("🔴 QUALITY GATE FAILED")
+        report_lines.append("[FAIL] QUALITY GATE FAILED")
         report_lines.append("")
         for f in critical_failures:
             report_lines.append(f"  {f}")
@@ -155,18 +155,18 @@ def main():
             for f in warning_failures:
                 report_lines.append(f"    {f}")
     elif warning_failures:
-        report_lines.append("⚠️  QUALITY GATE PASSED (with advisory warnings)")
+        report_lines.append("[WARN] QUALITY GATE PASSED (with advisory warnings)")
         report_lines.append("")
         for f in warning_failures:
             report_lines.append(f"  {f}")
     else:
-        report_lines.append("✅ QUALITY GATE PASSED")
+        report_lines.append("[PASS] QUALITY GATE PASSED")
 
     report_lines.append("=" * 70)
 
     # Write to file
     log_path = Path("quality-check.log")
-    with open(log_path, "w") as f:
+    with open(log_path, "w", encoding="utf-8") as f:
         f.write("\n".join(report_lines))
 
     # Print to stdout

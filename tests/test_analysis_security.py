@@ -167,9 +167,6 @@ class TestSecuritySeverityMapping:
 class TestSecurityParsing:
     """Tests for security result parsing."""
 
-    def _mock_analyze(self, bandit_json: str) -> list:
-        return _sec_mock(bandit_json)
-
     def test_parses_sample_output(self):
         issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
         # B101 in test file is filtered out → 4 results
@@ -407,9 +404,6 @@ class TestSecurityLiveIntegration:
 
 class TestSecurityEdgeCases:
     """Tests for security edge case handling."""
-
-    def _mock_analyze(self, bandit_json: str) -> list:
-        return _sec_mock(bandit_json)
 
     def test_b101_in_non_test_file_is_kept(self):
         """B101 (assert-used) in a production file should NOT be filtered."""

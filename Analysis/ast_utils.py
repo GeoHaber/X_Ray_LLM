@@ -47,7 +47,7 @@ class ASTNormalizer(ast.NodeTransformer):
         self.generic_visit(node)
         return node
 
-    visit_AsyncFunctionDef = visit_FunctionDef
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
 
     def visit_Name(self, node):
         if not isinstance(node.ctx, (ast.Store, ast.Load)):

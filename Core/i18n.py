@@ -26,7 +26,7 @@ LOCALES: Dict[str, str] = {
     "de": "Deutsch",
 }
 
-_current_locale: str = "en"
+_locale_ref: list = ["en"]  # mutable container — avoids global keyword
 
 # ── String tables ────────────────────────────────────────────────────────────
 
@@ -734,14 +734,13 @@ _STRINGS: Dict[str, Dict[str, str]] = {
 
 def set_locale(locale: str) -> None:
     """Set the active locale (e.g. ``"en"``, ``"ro"``)."""
-    global _current_locale
     if locale in LOCALES:
-        _current_locale = locale
+        _locale_ref[0] = locale
 
 
 def get_locale() -> str:
     """Return the current locale code."""
-    return _current_locale
+    return _locale_ref[0]
 
 
 def t(key: str) -> str:
@@ -752,4 +751,4 @@ def t(key: str) -> str:
     entry = _STRINGS.get(key)
     if entry is None:
         return key  # no translation at all — return the key name
-    return entry.get(_current_locale, entry.get("en", key))
+    return entry.get(_locale_ref[0], entry.get("en", key))

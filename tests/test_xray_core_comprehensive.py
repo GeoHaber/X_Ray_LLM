@@ -9,7 +9,8 @@ try:
     import x_ray_core
 except ImportError:
     pytest.fail(
-        "Could not import x_ray_core extension. Run: maturin build --release in Core/x_ray_core/ and pip install the wheel.", pytrace=False
+        "Could not import x_ray_core extension. Run: maturin build --release in Core/x_ray_core/ and pip install the wheel.",
+        pytrace=False,
     )
 
 

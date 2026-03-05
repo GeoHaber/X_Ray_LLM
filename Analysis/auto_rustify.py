@@ -285,23 +285,27 @@ def _is_transpilable(func) -> bool:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+_PY_TO_RUST_TYPE = {
+    "int": "i64",
+    "float": "f64",
+    "bool": "bool",
+    "str": "String",
+    "list": "Vec<String>",
+    "dict": "HashMap<String, String>",
+    "None": "()",
+}
+
+
 def py_type_to_rust(py_type: str, py_default: str = "PyObject") -> str:
     """Convert a Python type annotation string to Rust type."""
     py_t = py_type.strip()
-    if py_t == "int":
-        return "i64"
-    if py_t == "float":
-        return "f64"
-    if py_t == "bool":
-        return "bool"
-    if py_t == "str":
-        return "String"
-    if py_t == "list" or py_t.startswith("List"):
+    direct = _PY_TO_RUST_TYPE.get(py_t)
+    if direct:
+        return direct
+    if py_t.startswith("List"):
         return "Vec<String>"
-    if py_t == "dict" or py_t.startswith("Dict"):
+    if py_t.startswith("Dict"):
         return "HashMap<String, String>"
-    if py_t == "None":
-        return "()"
     return py_default
 
 
@@ -1329,7 +1333,7 @@ def compile_crate(
         )
 
 
-def _parse_error_functions(stderr: str) -> List[str]:
+def _parse_error_functions(stderr: str) -> List[int]:
     """Extract function names that caused compilation errors."""
     # Rust errors reference line numbers; we find which `fn xxx(` is near
     bad_lines: set = set()
@@ -1411,7 +1415,7 @@ def compile_with_repair(
     src_file = "main.rs" if mode == "binary" else "lib.rs"
     src_path = project_dir / "src" / src_file
 
-    for attempt in range(max_retries):
+    for _attempt in range(max_retries):
         result = compile_crate(project_dir, system, mode=mode)
         if result.success:
             return result
@@ -1692,7 +1696,7 @@ class RustifyPipeline:
         if compile_res.success:
             phase.update(
                 artefact=compile_res.artefact_path,
-                duration_s=compile_res.duration_s,
+                duration_s=str(compile_res.duration_s),
                 rustflags=compile_res.rustflags,
             )
         else:
@@ -1770,7 +1774,7 @@ class RustifyPipeline:
         if self._progress_cb:
             self._progress_cb(frac, label)
 
-    def _parse_file_functions(self, filepath: str) -> List[FunctionRecord]:
+    def _parse_file_functions(self, filepath: Path) -> List[FunctionRecord]:
         """Parse functions from a single file, skipping large files."""
         try:
             line_count = (

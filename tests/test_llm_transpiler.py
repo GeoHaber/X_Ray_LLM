@@ -162,6 +162,14 @@ class FakeLLM:
 class TestLLMTranspiler:
     """Tests for the LLMTranspiler engine with mocked LLM."""
 
+    @pytest.fixture(autouse=False)
+    def _skip_if_no_rustc(self):
+        """Skip these tests if rustc isn't installed."""
+        import shutil
+
+        if shutil.which("rustc") is None:
+            pytest.skip("rustc not found")
+
     def _make_engine(self, responses, available=True, verify=False):
         engine = LLMTranspiler(max_retries=2, verify_compilation=verify)
         engine._llm = FakeLLM(responses=responses, available=available)
@@ -222,12 +230,6 @@ class TestLLMTranspiler:
         assert engine.stats["compile_fail"] == 0
 
     @pytest.fixture
-    def _skip_if_no_rustc(self):
-        import shutil
-
-        if shutil.which("rustc") is None:
-            pytest.skip("rustc not found")
-
     def test_compile_check_valid(self, _skip_if_no_rustc):
         """LLM returns valid Rust, compilation check passes."""
         engine = self._make_engine(

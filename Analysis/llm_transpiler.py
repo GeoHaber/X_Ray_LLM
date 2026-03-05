@@ -383,15 +383,16 @@ class LLMTranspiler:
 #  Singleton & Convenience API
 # ═══════════════════════════════════════════════════════════════════════════
 
-_default_engine: Optional[LLMTranspiler] = None
+_engine_ref: list = [
+    None
+]  # [Optional[LLMTranspiler]] — mutable container avoids global keyword
 
 
 def get_llm_transpiler() -> LLMTranspiler:
     """Return (or create) the default ``LLMTranspiler`` singleton."""
-    global _default_engine
-    if _default_engine is None:
-        _default_engine = LLMTranspiler()
-    return _default_engine
+    if _engine_ref[0] is None:
+        _engine_ref[0] = LLMTranspiler()
+    return _engine_ref[0]
 
 
 def get_cached_llm_transpiler() -> Optional[LLMTranspiler]:

@@ -25,7 +25,6 @@ import re
 import shutil
 import subprocess  # nosec B404
 import urllib.request
-import urllib.error
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -42,8 +41,8 @@ from typing import Any, Dict, List, Optional, Tuple
 # ═══════════════════════════════════════════════════════════════════════════
 
 try:
-    from _mothership.hardware_detection import detect_hardware  # noqa: F401
-    from _mothership.models import HardwareProfile  # noqa: F401
+    from _mothership.hardware_detection import detect_hardware  # noqa: F401  # pyright: ignore[reportAssignmentType]
+    from _mothership.models import HardwareProfile  # noqa: F401  # pyright: ignore[reportAssignmentType]
 except ImportError:
     # ── Minimal fallback when _mothership is not vendored yet ──────────
     @dataclass

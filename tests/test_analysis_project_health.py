@@ -14,8 +14,6 @@ Covers:
   - ProjectHealthAnalyzer.summary()
 """
 
-
-
 from Analysis.project_health import (
     HealthCheck,
     HealthReport,

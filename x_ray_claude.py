@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-X_RAY_Claude.py â€” Smart AI-Powered Code Analyzer (X-Ray 7.0)
+X_RAY_Claude.py — Smart AI-Powered Code Analyzer (X-Ray 7.0)
 =============================================================
 
 Universal code quality scanner combining:
@@ -27,6 +27,7 @@ Usage::
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import argparse
 import json
 import sys
@@ -35,11 +36,11 @@ import asyncio
 from pathlib import Path
 from typing import Any, List, Tuple
 
-from Core.config import BANNER
+from Core.config import BANNER, __version__
 from Core.inference import LLMHelper
 from Core.ui_bridge import get_bridge
 
-from Analysis.reporting import print_unified_grade  # noqa: F401 â€” used by external callers
+from Analysis.reporting import print_unified_grade  # noqa: F401  # pyright: ignore[reportUnusedImport]
 from Core.scan_phases import (
     scan_codebase,
     run_smell_phase,
@@ -47,21 +48,21 @@ from Core.scan_phases import (
     run_format_phase,
     run_lint_phase,
     run_security_phase,
+    run_typecheck_phase,
     run_rustify_scan,
     run_web_smell_phase,
     run_health_phase,
+    run_imports_phase,
     run_smell_fix_phase,
     collect_reports,
 )
 
-from Core.utils import setup_logger, check_trial_license as _check_trial_license
-
-setup_logger()  # configure logging once â€” no duplicate basicConfig
+from Core.utils import check_trial_license as _check_trial_license
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  Interactive TUI â€” responsive, screen-adaptive, with LLM settings
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ═══════════════════════════════════════════════════════════════════════════
+#  Interactive TUI — responsive, screen-adaptive, with LLM settings
+# ═══════════════════════════════════════════════════════════════════════════
 
 
 def _supports_interactive() -> bool:
@@ -141,23 +142,23 @@ def _make_key_reader():
 
 
 def _box_top(w: int) -> str:
-    return _ansi("1;36", "â•”" + "â•" * (w - 2) + "â•—")
+    return _ansi("1;36", "═”" + "═" * (w - 2) + "═—")
 
 
 def _box_mid(w: int) -> str:
-    return _ansi("1;36", "â• " + "â•" * (w - 2) + "â•£")
+    return _ansi("1;36", "═ " + "═" * (w - 2) + "═£")
 
 
 def _box_sep(w: int) -> str:
-    return _ansi("36", "â•Ÿ" + "â”€" * (w - 2) + "â•¢")
+    return _ansi("36", "═Ÿ" + "â”€" * (w - 2) + "═¢")
 
 
 def _box_bot(w: int) -> str:
-    return _ansi("1;36", "â•š" + "â•" * (w - 2) + "â•")
+    return _ansi("1;36", "═š" + "═" * (w - 2) + "═")
 
 
 def _box_line(w: int, text: str, align: str = "left") -> str:
-    """A line inside a box. `text` may contain ANSI â€” we strip for padding."""
+    """A line inside a box. `text` may contain ANSI — we strip for padding."""
     import re
 
     visible = len(re.sub(r"\033\[[0-9;]*m", "", text))
@@ -169,28 +170,28 @@ def _box_line(w: int, text: str, align: str = "left") -> str:
         pad_left = 0
         pad_right = max(0, inner - visible)
     return (
-        _ansi("36", "â•‘")
+        _ansi("36", "═‘")
         + " "
         + " " * pad_left
         + text
         + " " * pad_right
         + " "
-        + _ansi("36", "â•‘")
+        + _ansi("36", "═‘")
     )
 
 
 # â”€â”€ Scan option definitions â”€â”€
 
 _SCAN_OPTIONS = [
-    ("smell", "Code Smells", "ðŸ”¬", True, "AST-based structural analysis"),
-    ("duplicates", "Duplicates", "ðŸ”", False, "Find similar / copy-paste code"),
+    ("smell", "Code Smells", "🔬", True, "AST-based structural analysis"),
+    ("duplicates", "Duplicates", "🔍", False, "Find similar / copy-paste code"),
     ("format", "Format (Ruff)", "ðŸ“", True, "Code formatting check"),
     ("lint", "Lint (Ruff)", "âœï¸", True, "Style, imports, hygiene"),
     ("security", "Security (Bandit)", "ðŸ›¡ï¸", True, "Vulnerability scanner"),
-    ("rustify", "Rust Score", "ðŸ¦€", False, "Rank functions for Rust porting"),
+    ("rustify", "Rust Score", "🦀", False, "Rank functions for Rust porting"),
     (
         "rustify_exe",
-        "Rustify â†’ EXE",
+        "Rustify → EXE",
         "âš™ï¸",
         False,
         "Full transpile + compile pipeline",
@@ -213,7 +214,11 @@ def _load_llm_info():
 def _render_scan_page(box_w: int, wide: bool, selected: list, cursor: int) -> str:
     """Build the scan-option TUI panel."""
     lines = ["", "  " + _box_top(box_w)]
-    title = _ansi("1;97", "X-RAY 5.0") + "  " + _ansi("36", "Interactive Scanner")
+    title = (
+        _ansi("1;97", f"X-RAY {__version__}")
+        + "  "
+        + _ansi("36", "Interactive Scanner")
+    )
     lines.append("  " + _box_line(box_w, title, "center"))
     lines.append("  " + _box_mid(box_w))
     if wide:
@@ -231,9 +236,9 @@ def _render_scan_page(box_w: int, wide: bool, selected: list, cursor: int) -> st
         ctrl = _ansi("90", "â†‘â†“ Space Enter  s=settings  q=quit")
     lines.append("  " + _box_line(box_w, ctrl, "center"))
     lines.append("  " + _box_sep(box_w))
-    for i, (key, label, icon, default, desc) in enumerate(_SCAN_OPTIONS):
+    for i, (_key, label, icon, _default, desc) in enumerate(_SCAN_OPTIONS):
         mark = _ansi("1;32", "âœ“") if selected[i] else _ansi("90", "Â·")
-        arrow = _ansi("1;33", "â–º") + " " if i == cursor else "  "
+        arrow = _ansi("1;33", "■º") + " " if i == cursor else "  "
         text = (
             f"{arrow}[{mark}] {icon} {label:<22} {_ansi('90', desc)}"
             if wide
@@ -349,7 +354,6 @@ def _render_settings_page(box_w: int, wide: bool, mgr, hw, models) -> str:
 _SCAN_KEY_ACTIONS = {
     "up": lambda c, s: ((c - 1) % len(_SCAN_OPTIONS), s),
     "down": lambda c, s: ((c + 1) % len(_SCAN_OPTIONS), s),
-    "space": lambda c, s: (_toggle_at(c, s), s)[1:] and (c, s),
     "all": lambda c, s: (c, [True] * len(_SCAN_OPTIONS)),
     "none": lambda c, s: (c, [False] * len(_SCAN_OPTIONS)),
 }
@@ -388,7 +392,7 @@ def _interactive_menu() -> dict:
     """Responsive interactive TUI with scan options + LLM settings.
 
     Navigation:
-      â†‘â†“ move  |  Space toggle  |  Enter run  |  Tab â†’ LLM settings
+      â†‘â†“ move  |  Space toggle  |  Enter run  |  Tab → LLM settings
       a = all   |  n = none      |  s = settings  |  q = quit
     """
     cols, _rows = _term_size()
@@ -466,10 +470,10 @@ def _handle_llm_settings(args):
     print(mgr.format_model_recommendations())
     status = mgr.check_and_prompt()
     if status.get("needs_install"):
-        print("  ðŸ’¡ To install llama.cpp:")
+        print("  💡 To install llama.cpp:")
         print("     https://github.com/ggerganov/llama.cpp/releases")
     if status.get("needs_upgrade"):
-        print(f"  ðŸ’¡ Newer version available: {status['latest_version']}")
+        print(f"  💡 Newer version available: {status['latest_version']}")
     sys.exit(0)
 
 
@@ -486,7 +490,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--rustify-exe",
         action="store_true",
-        help="Full pipeline: scan â†’ optimize â†’ transpile â†’ compile to executable",
+        help="Full pipeline: scan → optimize → transpile → compile to executable",
     )
     parser.add_argument("--use-llm", action="store_true", help="Enable LLM enrichment")
     parser.add_argument(
@@ -561,7 +565,15 @@ def _run_duplicate_phase(args, functions):
     """Run duplicate detection if requested."""
     if not args.duplicates:
         return None
-    return run_duplicate_phase(functions)
+    # Exclude test files — test helpers naturally repeat patterns and inflating
+    # duplicate counts with test boilerplate gives a misleading quality signal.
+    prod_functions = [
+        f
+        for f in functions
+        if "tests/" not in f.file_path.replace("\\", "/")
+        and "test_" not in f.file_path.split("/")[-1].split("\\")[-1][:6]
+    ]
+    return run_duplicate_phase(prod_functions)
 
 
 def _run_format_phase(args, root):
@@ -596,7 +608,7 @@ def _run_web_phase(args, root):
     """Run JS/TS/React web smell detection if requested."""
     if not getattr(args, "web", False):
         return None
-    detector, smells = run_web_smell_phase(root, exclude=args.exclude)
+    detector, _smells = run_web_smell_phase(root, exclude=args.exclude)
     return detector
 
 
@@ -606,6 +618,20 @@ def _run_health_phase(args, root):
         return None
     auto_fix = getattr(args, "fix_smells", False)
     return run_health_phase(root, auto_fix=auto_fix)
+
+
+def _run_imports_phase(args, root):
+    """Run file-level import health analysis if requested."""
+    if not getattr(args, "smells", False) and not getattr(args, "full_scan", False):
+        return None, []
+    return run_imports_phase(root, exclude=getattr(args, "exclude", None))
+
+
+def _run_typecheck_phase(args, root):
+    """Run Pyright type checker if requested."""
+    if not getattr(args, "typecheck", False):
+        return None, []
+    return run_typecheck_phase(root, exclude=getattr(args, "exclude", None))
 
 
 def _run_fix_smells_phase(args, root):
@@ -635,20 +661,20 @@ def _run_rustify(root: Path, args: argparse.Namespace) -> dict:
 
 
 def _run_rustify_exe(root: Path, args: argparse.Namespace) -> dict:
-    """Full pipeline: scan â†’ optimize â†’ transpile â†’ compile â†’ verify.
+    """Full pipeline: scan → optimize → transpile → compile → verify.
 
     Produces a native Windows/Mac/Linux executable from the Python project.
     """
     from Analysis.auto_rustify import RustifyPipeline
 
-    print("\n  " + "â•" * 60)
-    print("  ðŸ”§ FULL RUSTIFY PIPELINE: Python â†’ Rust â†’ Executable")
-    print("  " + "â•" * 60)
+    print("\n  " + "═" * 60)
+    print("  🔍§ FULL RUSTIFY PIPELINE: Python → Rust → Executable")
+    print("  " + "═" * 60)
 
     def progress_cb(frac: float, label: str):
         bar_len = 30
         filled = int(bar_len * frac)
-        bar = "â–ˆ" * filled + "â–‘" * (bar_len - filled)
+        bar = "■ˆ" * filled + "■‘" * (bar_len - filled)
         print(f"\r  [{bar}] {frac * 100:5.1f}% {label:<40}", end="", flush=True)
 
     pipeline = RustifyPipeline(
@@ -674,14 +700,14 @@ def _run_rustify_exe(root: Path, args: argparse.Namespace) -> dict:
     for phase in report.phases:
         status = phase.get("status", "unknown")
         name = phase.get("name", "")
-        icon = "âœ…" if status == "ok" else "âŒ" if status == "failed" else "âš ï¸"
+        icon = "✅" if status == "ok" else "âŒ" if status == "failed" else "âš ï¸"
         print(f"  {icon} {name}: {status}")
         if "artefact" in phase and phase["artefact"]:
-            print(f"     â†’ Executable: {phase['artefact']}")
+            print(f"     → Executable: {phase['artefact']}")
 
     if report.compile_result and report.compile_result.success:
         exe = report.compile_result.artefact_path
-        print(f"\n  \033[1;32mâœ“ SUCCESS\033[0m â€” Executable built: {exe}")
+        print(f"\n  \033[1;32mâœ“ SUCCESS\033[0m — Executable built: {exe}")
         print(f"  Run it:  {exe} --help")
     elif report.errors:
         print("\n  \033[1;31mâœ— ERRORS:\033[0m")
@@ -689,10 +715,8 @@ def _run_rustify_exe(root: Path, args: argparse.Namespace) -> dict:
             print(f"    {err[:200]}")
 
     import dataclasses
+
     return {"rustify_exe": dataclasses.asdict(report)}
-
-
-from dataclasses import dataclass  # noqa: E402
 
 
 @dataclass
@@ -738,7 +762,7 @@ def _run_gen_tests_phase(ctx: GenTestContext):
 
     bridge = get_bridge()
     bridge.log(f"\n  {'=' * 60}")
-    bridge.log("  ðŸ§ª MONKEY TESTS GENERATED")
+    bridge.log("  🧪 MONKEY TESTS GENERATED")
     bridge.log(f"     Files: {len(test_report.files_created)}")
     bridge.log(f"     Tests: {test_report.total_tests}")
     bridge.log(f"     Languages: {', '.join(test_report.languages)}")
@@ -771,6 +795,11 @@ def _run_analysis_phases(
 
     web_detector = _run_web_phase(args, root)
     health_analyzer = _run_health_phase(args, root)
+    imports_analyzer, imports_issues = _run_imports_phase(args, root)
+    all_issues.extend(imports_issues)
+
+    tc_analyzer, tc_issues = _run_typecheck_phase(args, root)
+    all_issues.extend(tc_issues)
 
     return (
         all_issues,
@@ -784,6 +813,10 @@ def _run_analysis_phases(
         sec_issues,
         web_detector,
         health_analyzer,
+        imports_analyzer,
+        imports_issues,
+        tc_analyzer,
+        tc_issues,
     )
 
 
@@ -812,7 +845,7 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
         return _run_rustify(root, args)
 
     llm = _init_llm(args, root)
-    functions, classes, errors = _scan_codebase_phase(root, args)
+    functions, classes, _errors = _scan_codebase_phase(root, args)
 
     # â”€â”€ Synchronous Phases â”€â”€
     (
@@ -827,6 +860,10 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
         sec_issues,
         web_detector,
         health_analyzer,
+        imports_analyzer,
+        imports_issues,
+        tc_analyzer,
+        tc_issues,
     ) = _run_analysis_phases(args, root, functions, classes)
 
     # â”€â”€ Auto-fix smells (--fix-smells) â”€â”€
@@ -860,6 +897,12 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
             lint_issues,
             sec_analyzer,
             sec_issues,
+            web_detector=web_detector,
+            health_analyzer=health_analyzer,
+            imports_analyzer=imports_analyzer,
+            imports_issues=imports_issues,
+            typecheck_analyzer=tc_analyzer,
+            typecheck_issues=tc_issues,
         )
     )
 
@@ -886,9 +929,7 @@ async def main_async():
 
         prev_results = load_prev_results(compare_path)
         if prev_results is None:
-            print(
-                f"  [!] --compare: could not read '{compare_path}' â€” trend disabled"
-            )
+            print(f"  [!] --compare: could not read '{compare_path}' — trend disabled")
 
     results = await _run_full_scan(root, args)
 
@@ -904,9 +945,17 @@ async def main_async():
 
     # Save Report
     if args.report:
-        with open(args.report, "w", encoding="utf-8") as f:
+        report_path = Path(args.report).resolve()
+        # Warn if the resolved path escapes the working directory
+        try:
+            report_path.relative_to(Path.cwd())
+        except ValueError:
+            print(
+                f"  [!] Report path resolves outside the working directory: {report_path}"
+            )
+        with open(report_path, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)
-        print(f"\n  Report saved to {args.report}")
+        print(f"\n  Report saved to {report_path}")
 
 
 def main():

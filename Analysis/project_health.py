@@ -15,6 +15,9 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 from Core.types import SmellIssue, Severity
+from Analysis.reporting import (
+    _score_to_letter as _score_to_grade,
+)  # shared grade mapping
 
 logger = logging.getLogger("X_RAY_HEALTH")
 
@@ -66,30 +69,6 @@ class HealthReport:
             "console_logs_fixed": self.console_logs_fixed,
             "files_created": self.files_created,
         }
-
-
-_GRADE_THRESHOLDS = [
-    (97, "A+"),
-    (93, "A"),
-    (90, "A-"),
-    (87, "B+"),
-    (83, "B"),
-    (80, "B-"),
-    (77, "C+"),
-    (73, "C"),
-    (70, "C-"),
-    (67, "D+"),
-    (63, "D"),
-    (60, "D-"),
-]
-
-
-def _score_to_grade(score: int) -> str:
-    """Map 0-100 score to letter grade."""
-    for threshold, letter in _GRADE_THRESHOLDS:
-        if score >= threshold:
-            return letter
-    return "F"
 
 
 # ── Auto-fix helpers (module-level to keep ProjectHealthAnalyzer lean) ──

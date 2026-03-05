@@ -42,6 +42,10 @@ class AnalysisComponents(NamedTuple):
     sec_issues: _Any
     web_detector: _Any = None
     health_analyzer: _Any = None
+    imports_analyzer: _Any = None
+    imports_issues: _Any = None
+    typecheck_analyzer: _Any = None
+    typecheck_issues: _Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +70,9 @@ def scan_codebase(
     bridge = get_bridge()
     bridge.log(f"  Scanning {total} files using {os.cpu_count() or 4} threads...")
 
-    with concurrent.futures.ThreadPoolExecutor() as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(16, os.cpu_count() or 4)
+    ) as executor:
         futures = {
             executor.submit(extract_functions_from_file, f, root): f for f in py_files
         }
@@ -93,10 +99,34 @@ def scan_codebase(
 
 
 def run_smell_phase(functions, classes):
-    """Run AST smell detection. Returns (detector, smells)."""
+    """Run AST smell detection (smells + type coverage + dead functions).
+
+    Returns (detector, smells).
+    """
     detector = CodeSmellDetector()
     get_bridge().status("Analyzing Code Smells (X-Ray AST)...")
     smells = detector.detect(functions, classes)
+
+    # Tier 4: type hint coverage
+    try:
+        from Analysis.type_coverage import TypeCoverageAnalyzer
+
+        type_result = TypeCoverageAnalyzer().analyze(functions)
+        detector.smells.extend(type_result.get("smells", []))
+        smells = detector.smells
+    except Exception:
+        pass
+
+    # Tier 5: dead function detection
+    try:
+        from Analysis.dead_functions import DeadFunctionDetector
+
+        dead_smells = DeadFunctionDetector().detect(functions)
+        detector.smells.extend(dead_smells)
+        smells = detector.smells
+    except Exception:
+        pass
+
     return detector, smells
 
 
@@ -179,6 +209,28 @@ def run_health_phase(root: Path, auto_fix: bool = False):
     return analyzer
 
 
+def run_imports_phase(root: Path, exclude=None):
+    """Run file-level import health analysis. Returns (analyzer, issues)."""
+    from Analysis.imports import ImportAnalyzer
+
+    analyzer = ImportAnalyzer()
+    get_bridge().status("Checking Import Health (X-Ray)...")
+    issues = analyzer.analyze(root, exclude=exclude)
+    return analyzer, issues
+
+
+def run_typecheck_phase(root: Path, exclude=None):
+    """Run Pyright type checker. Returns (analyzer | None, issues)."""
+    from Analysis.typecheck import TypecheckAnalyzer
+
+    tc = TypecheckAnalyzer()
+    if tc.available:
+        get_bridge().status("Running Type Checker (Pyright)...")
+        return tc, tc.analyze(root, exclude=exclude)
+    get_bridge().log("  [!] Pyright not found -- skipping type check.")
+    return None, []
+
+
 def run_smell_fix_phase(root: Path, exclude=None):
     """Run the auto-fix smell engine. Returns SmellFixResult."""
     from Analysis.smell_fixer import SmellFixer
@@ -219,7 +271,7 @@ def run_rustify_scan(root: Path, exclude=None) -> dict:
     from Analysis.rust_advisor import RustAdvisor
 
     get_bridge().status("Scanning codebase for Rust candidates...")
-    functions, classes, errors = scan_codebase(root, exclude=exclude)
+    functions, _classes, _errors = scan_codebase(root, exclude=exclude)
     if not functions:
         get_bridge().log("  No functions found.")
         return {"rustify": {"candidates": []}}
@@ -295,6 +347,24 @@ def collect_reports(components: AnalysisComponents) -> dict:
 
         print_health_report(health_analyzer.report, summary)
         results["health"] = summary
+
+    imports_analyzer = components.imports_analyzer
+    imports_issues = components.imports_issues
+    if imports_analyzer and imports_issues is not None:
+        summary = imports_analyzer.summary(imports_issues)
+        from Analysis.reporting import print_imports_report
+
+        print_imports_report(imports_issues, summary)
+        results["imports"] = summary
+
+    tc_analyzer = components.typecheck_analyzer
+    tc_issues = components.typecheck_issues
+    if tc_analyzer and tc_issues is not None:
+        summary = tc_analyzer.summary(tc_issues)
+        from Analysis.reporting import print_typecheck_report
+
+        print_typecheck_report(tc_issues, summary)
+        results["typecheck"] = summary
 
     grade_info = print_unified_grade(results)
     results["grade"] = grade_info

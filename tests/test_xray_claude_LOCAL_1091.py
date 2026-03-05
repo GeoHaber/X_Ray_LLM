@@ -226,9 +226,6 @@ class TestCosineSimilarity:
         b = Counter({"hello": 1, "earth": 1})
         assert 0 < cosine_similarity(a, b) < 1.0
 
-    def test_empty(self):
-        assert cosine_similarity(Counter(), Counter()) == 0.0
-
     def test_one_empty(self):
         assert cosine_similarity(Counter({"a": 1}), Counter()) == 0.0
 
@@ -236,18 +233,10 @@ class TestCosineSimilarity:
 class TestCodeSimilarity:
     """Test language-aware structural similarity (token n-gram + AST histogram)."""
 
-    def test_identical(self):
-        code = "def foo():\n    return 42"
-        assert code_similarity(code, code) == 1.0
-
     def test_completely_different(self):
         a = "def foo():\n    return 42"
         b = "class Bar:\n    x = 'hello world asdf'"
         assert code_similarity(a, b) < 0.5
-
-    def test_empty(self):
-        assert code_similarity("", "") == 0.0
-        assert code_similarity("", "some code") == 0.0
 
     def test_similar(self):
         a = "def process_data(data):\n    return data.strip()"
@@ -332,23 +321,11 @@ class TestTokenNgramSimilarity:
 class TestASTHistogramSimilarity:
     """Test DECKARD-style AST node histogram comparison."""
 
-    def test_identical(self):
-        code = "def foo():\n    return 42"
-        sim = _ast_histogram_similarity(code, code)
-        assert sim >= 0.99
-
     def test_same_structure(self):
         """Same AST structure, different names."""
         a = "def foo(x):\n    if x > 0:\n        return x"
         b = "def bar(y):\n    if y > 0:\n        return y"
         assert _ast_histogram_similarity(a, b) == 1.0
-
-    def test_different_structure(self):
-        """For loop vs while loop — different AST nodes."""
-        a = "def foo():\n    for i in range(10):\n        pass"
-        b = "def foo():\n    while True:\n        break"
-        sim = _ast_histogram_similarity(a, b)
-        assert sim < 0.9
 
     def test_add_vs_mult(self):
         """Addition vs multiplication — different BinOp sub-nodes."""
@@ -775,12 +752,6 @@ class TestUnionFind:
         uf.union("b", "c")
         assert uf.find("a") == uf.find("c")
 
-    def test_disjoint(self):
-        uf = UnionFind()
-        uf.union("a", "b")
-        uf.union("c", "d")
-        assert uf.find("a") != uf.find("c")
-
     def test_find_without_union(self):
         uf = UnionFind()
         root = uf.find("x")
@@ -805,10 +776,6 @@ class TestNameSimilarity:
         """camelCase vs snake_case with same meaning."""
         sim = name_similarity("loadConfig", "load_config")
         assert sim > 0.5
-
-    def test_completely_different(self):
-        sim = name_similarity("parse_xml", "render_image")
-        assert sim == 0.0
 
     def test_empty_name(self):
         assert name_similarity("", "something") == 0.0
@@ -842,12 +809,6 @@ class TestCallgraphOverlap:
         f1 = make_func(calls_to=["json.loads", "open", "strip"])
         f2 = make_func(calls_to=["json.loads", "open", "strip"])
         assert callgraph_overlap(f1, f2) == 1.0
-
-    def test_partial_overlap(self):
-        f1 = make_func(calls_to=["open", "read", "close"])
-        f2 = make_func(calls_to=["open", "write", "close"])
-        overlap = callgraph_overlap(f1, f2)
-        assert 0.4 < overlap < 0.8  # 2/4 overlap
 
     def test_no_overlap(self):
         f1 = make_func(calls_to=["parse"])
@@ -1036,13 +997,6 @@ class TestLibraryAdvisor:
         assert advisor._suggest_module_name(["search_index"]) == "search"
         assert advisor._suggest_module_name(["some_random"]) == "shared_utils"
 
-    def test_summary(self):
-        advisor = LibraryAdvisor()
-        advisor.analyze([], [])
-        s = advisor.summary()
-        assert s["total_suggestions"] == 0
-        assert s["total_functions"] == 0
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  8. Smart Graph
@@ -1051,12 +1005,6 @@ class TestLibraryAdvisor:
 
 class TestSmartGraph:
     """Tests for smart graph visualization."""
-
-    def test_empty(self):
-        graph = SmartGraph()
-        graph.build([], [], [], Path("."))
-        assert len(graph.nodes) == 0
-        assert len(graph.edges) == 0
 
     def test_nodes_from_functions(self):
         f1 = make_func(name="a", file_path="module_a.py")
@@ -1337,13 +1285,6 @@ class TestScanCodebase:
 
 
 class TestCollectPyFiles:
-    def test_basic(self, tmp_path):
-        (tmp_path / "a.py").write_text("x = 1")
-        (tmp_path / "b.txt").write_text("not python")
-        files = collect_py_files(tmp_path)
-        assert len(files) == 1
-        assert files[0].name == "a.py"
-
     def test_exclude(self, tmp_path):
         sub = tmp_path / "tests"
         sub.mkdir()

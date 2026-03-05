@@ -258,13 +258,6 @@ class TestExpressions:
 class TestExpressionsAdvanced:
     """Test advanced Python expression transpilation (dict, set, in, ternary, lambda)."""
 
-    def _fn_body(self, python_body: str) -> str:
-        """Helper: wrap body in a function, transpile, return body lines."""
-        code = f"def test_fn():\n    {python_body}"
-        rust = transpile_function_code(code)
-        body = rust[rust.index("{") + 1 : rust.rindex("}")].strip()
-        return body
-
     def test_dict_literal(self):
         body = self._fn_body('x = {"a": 1}')
         assert "HashMap" in body or "hash_map" in body.lower() or ".into()" in body
@@ -301,11 +294,6 @@ class TestExpressionsAdvanced:
 
 class TestBuiltinRewrites:
     """Test that Python builtins are rewritten to Rust idioms."""
-
-    def _fn_body(self, python_body: str) -> str:
-        code = f"def test_fn():\n    {python_body}"
-        rust = transpile_function_code(code)
-        return rust[rust.index("{") + 1 : rust.rindex("}")].strip()
 
     def test_len(self):
         body = self._fn_body("return len(items)")
@@ -361,11 +349,6 @@ class TestBuiltinRewrites:
 class TestBuiltinRewritesAdvanced:
     """Test advanced Python builtin → Rust rewrites."""
 
-    def _fn_body(self, python_body: str) -> str:
-        code = f"def test_fn():\n    {python_body}"
-        rust = transpile_function_code(code)
-        return rust[rust.index("{") + 1 : rust.rindex("}")].strip()
-
     def test_sum(self):
         body = self._fn_body("return sum(items)")
         assert ".sum" in body
@@ -416,11 +399,6 @@ class TestBuiltinRewritesAdvanced:
 
 class TestMethodRewrites:
     """Test Python method → Rust method mapping."""
-
-    def _fn_body(self, python_body: str) -> str:
-        code = f"def test_fn():\n    {python_body}"
-        rust = transpile_function_code(code)
-        return rust[rust.index("{") + 1 : rust.rindex("}")].strip()
 
     def test_append_to_push(self):
         body = self._fn_body("items.append(x)")
@@ -625,11 +603,6 @@ class TestStatementsMisc:
 
 class TestComprehensions:
     """Test list/set/dict comprehensions."""
-
-    def _fn_body(self, python_body: str) -> str:
-        code = f"def test_fn():\n    {python_body}"
-        rust = transpile_function_code(code)
-        return rust[rust.index("{") + 1 : rust.rindex("}")].strip()
 
     def test_list_comprehension(self):
         body = self._fn_body("return [x * 2 for x in items]")
