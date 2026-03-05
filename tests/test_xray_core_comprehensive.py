@@ -6,10 +6,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from Core import x_ray_core
+    import x_ray_core
 except ImportError:
     pytest.fail(
-        "Could not import x_ray_core extension. Is it built and in path?", pytrace=False
+        "Could not import x_ray_core extension. Run: maturin build --release in Core/x_ray_core/ and pip install the wheel.", pytrace=False
     )
 
 

@@ -43,7 +43,6 @@ from Core.types import FunctionRecord
 from Analysis.rust_advisor import RustAdvisor, RustCandidate
 from Analysis.ast_utils import extract_functions_from_file, collect_py_files
 from Analysis.test_gen import TestGenerator
-from Analysis.transpiler import transpile_function_code
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1.  CPU / OS Detection
@@ -99,9 +98,9 @@ def detect_system() -> SystemProfile:
     if not rust_target:
         # Fallback: ask rustc
         try:
-            out = subprocess.check_output(["rustc", "-vV"], text=True, timeout=10)
             out = subprocess.check_output(  # nosec B607
-                ["rustc", "-vV"], text=True, timeout=10)
+                ["rustc", "-vV"], text=True, timeout=10
+            )
             m = re.search(r"host:\s+(\S+)", out)
             if m:
                 rust_target = m.group(1)
@@ -289,13 +288,20 @@ def _is_transpilable(func) -> bool:
 def py_type_to_rust(py_type: str, py_default: str = "PyObject") -> str:
     """Convert a Python type annotation string to Rust type."""
     py_t = py_type.strip()
-    if py_t == "int": return "i64"
-    if py_t == "float": return "f64"
-    if py_t == "bool": return "bool"
-    if py_t == "str": return "String"
-    if py_t == "list" or py_t.startswith("List"): return "Vec<String>"
-    if py_t == "dict" or py_t.startswith("Dict"): return "HashMap<String, String>"
-    if py_t == "None": return "()"
+    if py_t == "int":
+        return "i64"
+    if py_t == "float":
+        return "f64"
+    if py_t == "bool":
+        return "bool"
+    if py_t == "str":
+        return "String"
+    if py_t == "list" or py_t.startswith("List"):
+        return "Vec<String>"
+    if py_t == "dict" or py_t.startswith("Dict"):
+        return "HashMap<String, String>"
+    if py_t == "None":
+        return "()"
     return py_default
 
 
@@ -1022,14 +1028,13 @@ def _get_llm_engine():
 
 
 def _transpile_with_fallback(func: FunctionRecord, *, pyfunction: bool = True) -> str:
-def _transpile_with_fallback(func: FunctionRecord, *,
-                             pyfunction: bool = True) -> str:
     """AST transpile → if result has todo!(), try LLM fallback."""
     rust_code = transpile_function(func, pyfunction=pyfunction)
 
     if "todo!()" not in rust_code:
         return rust_code
     from Analysis.llm_transpiler import get_cached_llm_transpiler
+
     llm = get_cached_llm_transpiler()
     if llm is None:
         return rust_code
@@ -1141,15 +1146,15 @@ def _build_main_rs(candidates: List[RustCandidate], crate_name: str) -> str:
     sections.append(f"    pyo3::append_to_inittab!({crate_name});")
     sections.append("    pyo3::prepare_freethreaded_python();")
     sections.append("    Python::with_gil(|py| {")
-    sections.append("        let sys = py.import(\"sys\")?;")
-    sections.append("        let path_obj = sys.getattr(\"path\")?;")
+    sections.append('        let sys = py.import("sys")?;')
+    sections.append('        let path_obj = sys.getattr("path")?;')
     sections.append("        let path: &Bound<'_, PyList> = path_obj.downcast()?;")
     sections.append("        let current_dir = std::env::current_dir().unwrap();")
     sections.append("        path.insert(0, current_dir.to_str().unwrap())?;")
     sections.append("        let args: Vec<String> = std::env::args().collect();")
-    sections.append("        sys.setattr(\"argv\", args.into_py(py))?;")
-    sections.append("        let x_ray_exe = py.import(\"x_ray_exe\")?;")
-    sections.append("        x_ray_exe.call_method0(\"main\")?;")
+    sections.append('        sys.setattr("argv", args.into_py(py))?;')
+    sections.append('        let x_ray_exe = py.import("x_ray_exe")?;')
+    sections.append('        x_ray_exe.call_method0("main")?;')
     sections.append("        Ok(())")
     sections.append("    })")
     sections.append("}")
@@ -1268,20 +1273,16 @@ def _run_cargo_build(
     project_dir: Path, target: str, env: dict, timeout: int = 300
 ) -> subprocess.CompletedProcess:
     """Execute ``cargo build --release`` and return the CompletedProcess."""
-    cmd = ["cargo", "build", "--release"]
-    if target:
-        cmd.extend(["--target", target])
-    return subprocess.run(
+    cmd = ["cargo", "build", "--release", "--target", target]  # nosec B607
+    return subprocess.run(  # nosec B603
         cmd,
         cwd=str(project_dir),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
         env=env,
-    return subprocess.run(  # nosec B603
-        cmd, cwd=str(project_dir),
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        timeout=timeout, env=env,
     )
 
 
@@ -1399,13 +1400,8 @@ def compile_with_repair(
     system: SystemProfile,
     *,
     mode: str = "pyo3",
-    max_retries: int = 3,
+    max_retries: int = 20,
 ) -> CompileResult:
-def compile_with_repair(project_dir: Path,
-                        system: SystemProfile,
-                        *,
-                        mode: str = "pyo3",
-                        max_retries: int = 20) -> CompileResult:
     """Compile the crate, auto-fixing broken functions on failure.
 
     If compilation fails, identifies which functions have errors,
@@ -1572,48 +1568,10 @@ class RustifyConfig:
     """Configuration bundle for RustifyPipeline."""
 
     crate_name: str = "xray_rustified"
-    min_score: float = 5.0
-    max_candidates: int = 50
-    mode: str = "pyo3"
-    exclude_dirs: Optional[List[str]] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {
-            "system": self.system.to_dict(),
-            "scan_duration_s": self.scan_duration_s,
-            "candidates_total": self.candidates_total,
-            "candidates_selected": self.candidates_selected,
-            "test_gen_path": self.test_gen_path,
-            "verify_test_path": self.verify_test_path,
-            "cargo_project_path": self.cargo_project_path,
-            "errors": self.errors,
-            "phases": self.phases,
-        }
-        if self.compile_result:
-            d["compile"] = {
-                "success": self.compile_result.success,
-                "target": self.compile_result.target_triple,
-                "artefact": self.compile_result.artefact_path,
-                "duration_s": self.compile_result.duration_s,
-                "rustflags": self.compile_result.rustflags,
-            }
-        if self.verify_result:
-            d["verify"] = {
-                "success": self.verify_result.success,
-                "passed": self.verify_result.tests_passed,
-                "failed": self.verify_result.tests_failed,
-            }
-        return d
-
-
-@dataclass
-class RustifyConfig:
-    """Configuration bundle for RustifyPipeline."""
-    crate_name: str = "xray_rustified"
-    min_score: float = 5.0
-    max_candidates: int = 50
-    mode: str = "pyo3"
-    exclude_dirs: Optional[List[str]] = None
+    min_score: float = 3.0
+    max_candidates: int = 100
+    mode: str = "binary"
+    exclude_dirs: List[str] = field(default_factory=list)
 
 
 class RustifyPipeline:
@@ -1800,6 +1758,7 @@ class RustifyPipeline:
 
         except Exception as exc:
             import traceback
+
             trace_str = traceback.format_exc()
             report.errors.append(f"Pipeline error: {exc}\n{trace_str}")
 

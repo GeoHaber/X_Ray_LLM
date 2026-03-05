@@ -1,15 +1,15 @@
 """
 tests/test_scan_cache.py — Tests for Analysis/scan_cache.py (v6.0.0)
 """
-import json
+
 import time
-from pathlib import Path
 import pytest
 
 from Analysis.scan_cache import ScanCache, reset_cache, get_cache
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture()
 def tmp_cache(tmp_path):
@@ -29,6 +29,7 @@ def tmp_py_file(tmp_path):
 
 
 # ── basic put / get ──────────────────────────────────────────────────────────
+
 
 class TestScanCacheBasic:
     def test_miss_on_empty_cache(self, tmp_cache, tmp_py_file):
@@ -52,6 +53,7 @@ class TestScanCacheBasic:
 
 # ── invalidation ──────────────────────────────────────────────────────────────
 
+
 class TestScanCacheInvalidation:
     def test_invalidate_causes_miss(self, tmp_cache, tmp_py_file):
         tmp_cache.put(tmp_py_file, {"functions": [], "classes": [], "error": None})
@@ -74,6 +76,7 @@ class TestScanCacheInvalidation:
 
 
 # ── persistence ───────────────────────────────────────────────────────────────
+
 
 class TestScanCachePersistence:
     def test_save_creates_file(self, tmp_cache, tmp_py_file):
@@ -100,6 +103,7 @@ class TestScanCachePersistence:
 
 
 # ── global singleton ──────────────────────────────────────────────────────────
+
 
 class TestGlobalCache:
     def test_get_cache_returns_same_instance(self):

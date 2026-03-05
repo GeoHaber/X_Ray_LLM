@@ -78,8 +78,11 @@ def scan_codebase(
                 errors.append(f"{futures[future]}: {err}")
             done += 1
             if verbose and total > 20 and done % max(1, total // 10) == 0:
-                bridge.progress(done, total, futures[future].name
-                                if hasattr(futures[future], "name") else "")
+                bridge.progress(
+                    done,
+                    total,
+                    futures[future].name if hasattr(futures[future], "name") else "",
+                )
 
     return all_functions, all_classes, errors
 
@@ -144,6 +147,7 @@ def run_security_phase(root: Path, exclude=None):
 def run_ui_compat_phase(root: Path, exclude=None):
     """Run UI API compatibility check. Returns (analyzer | None, issues)."""
     from Analysis.ui_compat import UICompatAnalyzer
+
     analyzer = UICompatAnalyzer()
     get_bridge().status("Checking UI API Compatibility (X-Ray)...")
     raw_issues = analyzer.analyze(root, exclude=exclude)
@@ -158,6 +162,7 @@ def run_ui_compat_phase(root: Path, exclude=None):
 def run_web_smell_phase(root: Path, exclude=None):
     """Run JS/TS/React web smell detection. Returns (detector, smells)."""
     from Analysis.web_smells import WebSmellDetector
+
     detector = WebSmellDetector()
     get_bridge().status("Scanning JS/TS/React Code Smells (X-Ray Web)...")
     smells = detector.detect(root, exclude=exclude)
@@ -167,6 +172,7 @@ def run_web_smell_phase(root: Path, exclude=None):
 def run_health_phase(root: Path, auto_fix: bool = False):
     """Run project health/structural check. Returns analyzer with report."""
     from Analysis.project_health import ProjectHealthAnalyzer
+
     analyzer = ProjectHealthAnalyzer()
     get_bridge().status("Checking Project Health (X-Ray)...")
     analyzer.analyze(root, auto_fix=auto_fix)
@@ -176,17 +182,25 @@ def run_health_phase(root: Path, auto_fix: bool = False):
 def run_smell_fix_phase(root: Path, exclude=None):
     """Run the auto-fix smell engine. Returns SmellFixResult."""
     from Analysis.smell_fixer import SmellFixer
+
     fixer = SmellFixer()
     get_bridge().status("Auto-Fixing Code Smells (X-Ray)...")
     result = fixer.fix_all(root, exclude=exclude)
     return result
 
 
-def run_test_gen_phase(root: Path, functions=None, classes=None,
-                       smells=None, js_analyses=None, health_checks=None,
-                       output_dir=None):
+def run_test_gen_phase(
+    root: Path,
+    functions=None,
+    classes=None,
+    smells=None,
+    js_analyses=None,
+    health_checks=None,
+    output_dir=None,
+):
     """Generate monkey tests from analysis data. Returns TestGenReport."""
     from Analysis.test_generator import TestGeneratorEngine
+
     engine = TestGeneratorEngine(root)
     get_bridge().status("Generating Monkey Tests (X-Ray)...")
     report = engine.generate(
@@ -231,8 +245,16 @@ def run_rustify_scan(root: Path, exclude=None) -> dict:
 
 def collect_reports(components: AnalysisComponents) -> dict:
     """Print all analysis reports, compute unified grade, return combined results."""
-    detector, finder, fmt_analyzer, format_issues, linter, lint_issues, \
-        sec_analyzer, sec_issues, web_detector, health_analyzer = components
+    detector = components.detector
+    finder = components.finder
+    fmt_analyzer = components.format_analyzer
+    fmt_issues = components.format_issues
+    linter = components.linter
+    lint_issues = components.lint_issues
+    sec_analyzer = components.sec_analyzer
+    sec_issues = components.sec_issues
+    web_detector = components.web_detector
+    health_analyzer = components.health_analyzer
     results: dict = {}
 
     if detector:
@@ -263,12 +285,14 @@ def collect_reports(components: AnalysisComponents) -> dict:
     if web_detector:
         summary = web_detector.summary()
         from Analysis.reporting import print_web_report
+
         print_web_report(web_detector.smells, summary)
         results["web"] = summary
 
     if health_analyzer and health_analyzer.report:
         summary = health_analyzer.summary()
         from Analysis.reporting import print_health_report
+
         print_health_report(health_analyzer.report, summary)
         results["health"] = summary
 

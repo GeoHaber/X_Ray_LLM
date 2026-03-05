@@ -143,9 +143,7 @@ class TestRustAdvisorScoring:
         """Async functions get penalized."""
         advisor = RustAdvisor()
         sync_fn = _rf(name="sync_fn", complexity=5, size_lines=10)
-        async_fn = _rf(
-            name="async_fn", complexity=5, size_lines=10, is_async=True
-        )
+        async_fn = _rf(name="async_fn", complexity=5, size_lines=10, is_async=True)
         candidates = advisor.score([sync_fn, async_fn])
         sync_c = next(c for c in candidates if c.func.name == "sync_fn")
         async_c = next(c for c in candidates if c.func.name == "async_fn")

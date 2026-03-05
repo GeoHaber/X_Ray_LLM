@@ -1,5 +1,7 @@
 """Auto-generated: verify Rust DLL outputs match Python goldens."""
-import json, pathlib, pytest
+import json
+import pathlib
+import pytest
 
 try:
     import x_ray_rustified

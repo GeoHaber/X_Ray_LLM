@@ -1,15 +1,13 @@
-
-
 __version__ = "7.0.0"
 
 # Safe separator: always ASCII dash — renders correctly on every terminal/console
 SEP = "-"
 
 BANNER = f"""
-{'='*64}
+{"=" * 64}
   X-RAY Claude v{__version__} — Universal Code Quality Scanner
   Python + JS/TS/React | AST Smells | Ruff | Bandit | Health
-{'='*64}
+{"=" * 64}
 """
 
 # Thresholds (tunable)
@@ -24,10 +22,10 @@ SMELL_THRESHOLDS = {
     "god_class": 15,  # methods
     "large_class": 500,  # lines
     "missing_docstring_size": 15,  # only flag if function > N lines
-    "too_many_returns": 5,      # return statements
-    "too_many_branches": 8,     # if/elif branches
+    "too_many_returns": 5,  # return statements
+    "too_many_branches": 8,  # if/elif branches
     # ── new in v6.0.0 ────────────────────────────────────────────────────
-    "magic_number_min_count": 2,   # flag if ≥ N distinct magic numbers in a function
+    "magic_number_min_count": 2,  # flag if ≥ N distinct magic numbers in a function
 }
 
 # LLM Settings (Centralized — overridden by xray_settings.json if present)
@@ -63,18 +61,42 @@ def load_llm_config():
     except Exception:  # nosec B110
         pass  # settings file doesn't exist yet — use defaults
 
-_ALWAYS_SKIP = frozenset({
-    ".git", ".hg", ".svn", "__pycache__", ".mypy_cache", ".pytest_cache",
-    ".tox", ".nox", ".eggs", "node_modules",
-    "venv", ".venv", "env", ".env",
-    "site-packages", "dist-packages",
-    "dist", "Lib",
-    "_archive", "_Old", "_old", "_bin",
-    "_scratch", ".github",
-    "portable", "target",
-    "build_exe", "build_web",
-    "X_Ray_Desktop", "X_Ray_Standalone", "X_Ray_Rust_Full",
-})
+
+_ALWAYS_SKIP = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".tox",
+        ".nox",
+        ".eggs",
+        "node_modules",
+        "venv",
+        ".venv",
+        "env",
+        ".env",
+        "site-packages",
+        "dist-packages",
+        "dist",
+        "Lib",
+        "_archive",
+        "_Old",
+        "_old",
+        "_bin",
+        "_scratch",
+        ".github",
+        "portable",
+        "target",
+        "build_exe",
+        "build_web",
+        "X_Ray_Desktop",
+        "X_Ray_Standalone",
+        "X_Ray_Rust_Full",
+    }
+)
 
 import builtins as _builtins_mod  # noqa: E402
 

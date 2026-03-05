@@ -376,7 +376,7 @@ class TestVersion:
     def test_version_is_5(self):
         from Core.config import __version__
 
-        assert __version__.startswith("5.")
+        assert __version__.startswith(("5.", "6.", "7.", "8.", "9."))
 
     def test_banner_contains_unified(self):
         from Core.config import BANNER

@@ -13,7 +13,6 @@ Verifies that:
 from __future__ import annotations
 
 import sys
-import importlib
 from unittest.mock import patch
 
 import pytest
@@ -35,6 +34,7 @@ from Core.ui_bridge import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def restore_bridge():
     """Restore the original bridge after each test."""
@@ -46,6 +46,7 @@ def restore_bridge():
 # ---------------------------------------------------------------------------
 # Protocol conformance
 # ---------------------------------------------------------------------------
+
 
 class TestProtocolConformance:
     """All built-in bridges must satisfy the UIBridge Protocol."""
@@ -61,10 +62,16 @@ class TestProtocolConformance:
 
     def test_custom_bridge_satisfies_protocol(self):
         """A custom implementation must satisfy the Protocol."""
+
         class MyBridge:
-            def log(self, msg: str) -> None: pass
-            def status(self, label: str) -> None: pass
-            def progress(self, done: int, total: int, label: str = "") -> None: pass
+            def log(self, msg: str) -> None:
+                pass
+
+            def status(self, label: str) -> None:
+                pass
+
+            def progress(self, done: int, total: int, label: str = "") -> None:
+                pass
 
         assert isinstance(MyBridge(), UIBridge)
 
@@ -73,8 +80,8 @@ class TestProtocolConformance:
 # PrintBridge
 # ---------------------------------------------------------------------------
 
-class TestPrintBridge:
 
+class TestPrintBridge:
     def test_log_outputs_to_stdout(self, capsys):
         b = PrintBridge()
         b.log("Hello, World!")
@@ -109,8 +116,8 @@ class TestPrintBridge:
 # NullBridge
 # ---------------------------------------------------------------------------
 
-class TestNullBridge:
 
+class TestNullBridge:
     def test_log_produces_no_output(self, capsys):
         b = NullBridge()
         b.log("secret message")
@@ -133,8 +140,8 @@ class TestNullBridge:
 # set_bridge / get_bridge
 # ---------------------------------------------------------------------------
 
-class TestGlobalAccessor:
 
+class TestGlobalAccessor:
     def test_default_bridge_is_print_bridge(self):
         # After restore_bridge restores original, it should be PrintBridge
         b = get_bridge()
@@ -168,15 +175,14 @@ class TestGlobalAccessor:
 # TqdmBridge
 # ---------------------------------------------------------------------------
 
-class TestTqdmBridge:
 
+class TestTqdmBridge:
     def test_log_falls_back_to_print_when_no_tqdm(self, capsys):
         """When tqdm is not installed, TqdmBridge should still log."""
         with patch.dict(sys.modules, {"tqdm": None}):
             b = TqdmBridge()
             b.log("fallback message")
-        captured = capsys.readouterr()
-        # Either tqdm caught it, or fallback printed it — no crash either way
+        capsys.readouterr()  # consume output without asserting (implementation detail)
         # We only require no exception; output behaviour is implementation detail
 
     def test_tqdm_bridge_progress_no_crash(self):
@@ -198,6 +204,7 @@ class TestTqdmBridge:
 # ---------------------------------------------------------------------------
 # Swappability demo
 # ---------------------------------------------------------------------------
+
 
 class TestSwappability:
     """Demonstrates the key design goal: swap bridge without changing callers."""
@@ -223,14 +230,18 @@ class TestSwappability:
 
     def test_custom_collecting_bridge(self):
         """A custom bridge can collect messages for assertions."""
+
         class CollectorBridge:
             def __init__(self):
                 self.logs = []
                 self.statuses = []
+
             def log(self, msg: str) -> None:
                 self.logs.append(msg)
+
             def status(self, label: str) -> None:
                 self.statuses.append(label)
+
             def progress(self, done: int, total: int, label: str = "") -> None:
                 pass
 
@@ -239,4 +250,4 @@ class TestSwappability:
         self._run_simulation()
 
         assert any("Analyzing Code Smells" in s for s in collector.statuses)
-        assert any("Found 3 issues" in l for l in collector.logs)
+        assert any("Found 3 issues" in log_entry for log_entry in collector.logs)

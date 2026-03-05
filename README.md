@@ -1,201 +1,246 @@
-# X-Ray — AI-Powered Universal Code Quality Scanner & Rust Accelerator
+# X-Ray — Code Quality Scanner & Rust Accelerator
 
-**Version 7.0.0** · Python 3.10+ · 905+ tests · Python + JS/TS/React · 5 languages · MIT License
+> **Scan it · Grade it · Fix it · Rustify it**
 
-X-Ray *diagnoses* problems in Python codebases, then helps you *cure* them — including transpiling performance-critical functions to Rust.
+X-Ray is a desktop-first, native **code quality platform** that *diagnoses* problems in Python, JavaScript, TypeScript, and React codebases — then helps you *cure* them. It detects code smells, finds duplicates, runs lint and security audits, and can automatically transpile performance-critical Python functions into Rust.
+
+**One command. One score. A+ or fix it.**
 
 ---
 
-X-Ray is a **universal code quality platform** that *diagnoses* problems in
-**Python, JavaScript, TypeScript, and React** codebases, then helps you *cure*
-them — including auto-fixing smells, generating test suites, and transpiling
-performance-critical Python functions to Rust.
+## What X-Ray Does
 
-| Phase | Tools |
-|-------|-------|
-| **Diagnose** | Code smells · Duplicates · Ruff lint · Bandit security · Ruff format · Library advisor · Smart graph |
-| **Cure** | Rust advisor · AST transpiler · Optional Rust core (10–50× speedup) |
+```
+Your Code  →  X-Ray  →  Grade A–F  →  Actionable Issues  →  One-Click Fixes
+                                                          →  Auto-Generated Tests
+                                                          →  Rust Transpiled Functions
+```
 
-**Output:** Single grade (A+ → F) + JSON report + interactive graph.
-
-| Feature | Details |
+| Phase | What Happens |
 |---|---|
-| 9 Analyzers | Code Smells · Duplicates · Ruff Lint · Bandit Security · **Web Smells** · **Project Health** · Rust Advisor · UI Compat · **Test Generator** |
-| **JS/TS/React** | Full analysis of `.js`, `.ts`, `.jsx`, `.tsx` files — imports, functions, React components, 142 package mappings in 15 categories |
-| Unified Grade | Single A+ → F score (0–100) combining all tools |
-| Desktop GUI | Flet (Flutter engine), light/dark mode, 9 dashboard tabs |
-| 5 Languages | English · Română · Español · Français · Deutsch |
-| **Test Generator** | Auto-generates pytest (Python) or Vitest/Jest (JS/TS) test suites from scan data — import smoke, function, class, smell regression, structure tests |
-| **Auto-Fix** | `--fix-smells` removes console.log, debug prints, creates missing project files |
-| Rust Transpiler | AST-based, 19 module handlers, 54.7 % coverage across 14 projects |
-| LLM Fallback | Local LLM fills `todo!()` stubs, validates with `rustc --check` |
-| **UIBridge** | Swappable output layer — Flet, tqdm, Streamlit, NiceGUI, tests all use one bridge |
-| 905+ Tests | Smoke, unit, integration, parity, fuzz, transpilation, bridge |
-| Zero Core Deps | Core analyzers use only Python stdlib |
+| 🔍 **Diagnose** | Detects 15+ code smells, finds duplicate logic, flags lint violations, spots security vulnerabilities, checks UI framework compatibility |
+| 📊 **Grade** | Combines all findings into a single **A+ → F score** (0–100 scale) with a breakdown of what's hurting you |
+| 🛠️ **Fix** | One-click Ruff auto-fix for lint, auto-generates a pytest test suite, suggests library consolidations |
+| 🦀 **Rustify** | Scores every function for Rust portability, transpiles pure-Python logic to Rust, compiles with Cargo, builds a `.exe` |
 
 ---
 
-## Quick Start
+## Launch the Desktop GUI
 
 ```bash
 git clone https://github.com/GeoHaber/X_Ray.git
 cd X_Ray
-pip install -r requirements.txt   # optional; core works with stdlib only
+pip install -r requirements.txt
 
-### Standalone EXE (share with friends)
-
-X-Ray ships as a portable `.exe` — no Python install required.
-Double-click to launch the interactive wizard:
-
-1. **Folder picker** — native Windows dialog to choose the project to scan
-2. **Scan mode menu** — 7 options from quick lint to full scan + rustify
-3. **Report prompt** — save JSON, print summary, or both
-
-Build it yourself:
-```bash
-pip install pyinstaller
-python -m PyInstaller x_ray.spec --noconfirm
-# Output: dist/x_ray/x_ray.exe (~64 MB, includes ruff, bandit, tkinter, Rust core)
+python x_ray_flet.py          # native desktop window  (Flutter engine)
+flet run --web x_ray_flet.py  # same UI, opens in browser
 ```
 
-The `.exe` includes a **hardware-locked trial system** (10 runs per machine):
-- Machine fingerprint → AES-256-GCM encrypted counter → HMAC-SHA256 integrity
-- All crypto runs in compiled Rust (`x_ray_core.pyd`) — no Python-side secrets
-- Counter stored at `%APPDATA%\x_ray\.xrl` (84 bytes, binary)
-- Each new machine gets a fresh 10 runs, no server needed
+The GUI opens a modern dark-mode dashboard with:
 
-CLI mode also works: `x_ray.exe --path C:\project --full-scan`
+- **Sidebar** — folder picker, recent-paths history, analyzer toggles, ⚡ Scan button
+- **Dashboard tabs** — Smells · Duplicates · Lint · Security · Rustify · Heatmap · Complexity · Graph · Auto-Rustify · UI Compat
+- **Export bar** — 📥 JSON report · 📥 Markdown report · 🧪 Generate Tests
+- **Theme toggle** — Dark / Light  |  **5 languages** — EN · RO · ES · FR · DE
 
-### CLI
+---
+
+## CLI Usage
 
 ```bash
-# Default scan (smells + lint + security)
+# Quick scan (smells + lint + security)
 python x_ray_claude.py --path /your/project
 
-# Full scan with unified grade (includes web smells + health checks)
+# Full scan — all 9 analyzers, grade, report
 python x_ray_claude.py --full-scan --path /your/project
 
-# Save JSON report
+# Save a JSON report
 python x_ray_claude.py --full-scan --report results.json --path /your/project
 
-# Scan a JS/TS/React project
-python x_ray_claude.py --full-scan --path /your/react-app
-
-# Auto-generate test suite from scan data
+# Auto-generate a pytest test suite from scan data
 python x_ray_claude.py --full-scan --gen-tests --path /your/project
 
-# Auto-fix code smells (console.log, debug prints, missing files)
-python x_ray_claude.py --full-scan --fix-smells --path /your/project
-
-# Rank functions for Rust porting
+# Score functions for Rust and show candidates
 python x_ray_claude.py --rustify --path /your/project
+
+# Full Rust pipeline: scan → transpile → compile → .exe
+python x_ray_claude.py --rustify-exe --path /your/project
+
+# Interactive HTML dependency graph
+python x_ray_claude.py --graph --path /your/project
 ```
 
 <details>
-<summary>CLI flags</summary>
+<summary>All CLI flags</summary>
 
 | Flag | Description |
-|------|-------------|
-| `--path PATH` | Directory to scan |
+|---|---|
+| `--path PATH` | Directory to scan (required) |
+| `--full-scan` | Enable all analyzers |
 | `--smell` | Code smells only |
 | `--duplicates` | Find similar functions |
-| `--lint` | Ruff linter only |
-| `--security` | Bandit only |
-| `--full-scan` | All analyzers |
-| `--rustify` | Score for Rust porting |
-| `--report FILE` | Save JSON |
-| `--graph` | Interactive HTML graph |
+| `--lint` | Ruff linter |
+| `--security` | Bandit security audit |
+| `--rustify` | Score functions for Rust |
+| `--rustify-exe` | Full pipeline to compiled `.exe` |
+| `--gen-tests` | Auto-generate pytest test files |
+| `--graph` | Interactive HTML call graph |
+| `--report FILE` | Save results to JSON |
+| `--compare FILE` | Diff against a previous report |
+| `--fail-on GRADE` | Exit non-zero if grade is below threshold (CI use) |
 
 </details>
 
 ---
 
-## Grading Formula
+## The Grading Formula
 
-The unified score is `100 − penalties`:
+Score = **100 − penalties** (capped per analyzer):
 
-| Tool | Penalty Weights | Cap |
+| Analyzer | Penalty per Issue | Max Penalty |
 |---|---|---|
-| Smells | critical × 0.25 + warning × 0.05 + info × 0.01 | 30 |
-| Duplicates | groups × 0.1 | 15 |
-| Lint | critical × 0.3 + warning × 0.05 + info × 0.005 | 25 |
-| Security | critical × 1.5 + warning × 0.3 + info × 0.005 | 30 |
+| Code Smells | critical ×0.25 · warning ×0.05 · info ×0.01 | 30 pts |
+| Duplicates | per group ×0.1 | 15 pts |
+| Lint | critical ×0.3 · warning ×0.05 · info ×0.005 | 25 pts |
+| Security | critical ×1.5 · warning ×0.3 · info ×0.005 | 30 pts |
 
-| Grade | Score |
+| Grade | Score Range |
 |---|---|
-| A+ | ≥ 97 |
-| A | ≥ 93 |
-| A− | ≥ 90 |
-| B+ | ≥ 87 |
-| B | ≥ 83 |
-| B− | ≥ 80 |
-| C | ≥ 70 |
-| D | ≥ 60 |
-| F | < 60 |
+| **A+** | 97–100 |
+| **A** | 93–96 |
+| **A−** | 90–92 |
+| **B+** | 87–89 |
+| **B** | 83–86 |
+| **B−** | 80–82 |
+| **C** | 70–79 |
+| **D** | 60–69 |
+| **F** | < 60 |
+
+---
+
+## The 9 Analyzers
+
+| # | Analyzer | Finds |
+|---|---|---|
+| 1 | **Code Smells** | God functions, boolean blindness, magic numbers, too-many-params, deep nesting, missing type hints |
+| 2 | **Duplicates** | Near-identical logic across files (AST + token fingerprinting) |
+| 3 | **Ruff Lint** | 800+ Python lint rules, with one-click auto-fix |
+| 4 | **Bandit Security** | Hardcoded secrets, unsafe subprocess calls, SQL injection patterns |
+| 5 | **Rust Advisor** | Scores every function 0–30 for Rust portability (pure, no I/O, type-safe) |
+| 6 | **Heatmap** | Files ranked by total issue density — shows your worst files at a glance |
+| 7 | **Complexity** | Cyclomatic complexity and function-size distribution charts |
+| 8 | **UI Compat** | Detects invalid Flet API usage — wrong kwargs, deprecated patterns |
+| 9 | **Test Generator** | Emits pytest smoke, callable, regression, and structure tests from AST data |
+
+**JS/TS/React support:** Full analysis of `.js`, `.ts`, `.jsx`, `.tsx` files — imports, functions, React components, 142 npm package mappings in 15 categories.
 
 ---
 
 ## Rust Acceleration
 
-**Transpiler** (`Analysis/transpiler.py`) — AST-based Python → Rust, 19 stdlib module handlers. Escape hatch: `todo!()` stubs filled by LLM.
+X-Ray has two Rust integration points:
 
-**Optional Rust core** (`x_ray_core.pyd`) — 10–50× speedup on similarity/duplicate hot-paths. Build:
-```bash
-cd Core/x_ray_core && pip install maturin && maturin develop --release
+### 1. Auto-Rustify Pipeline (`--rustify-exe`)
 ```
-Rust is optional — pure-Python fallbacks always available.
+Your Python  →  Score  →  Transpile (AST)  →  Cargo compile  →  x_ray_rustified.exe
+```
+- Scans all functions, scores each for portability
+- Selects top 30 candidates (score ≥ 3.0)
+- Generates Rust source with full type inference
+- Compiles with `cargo build --release`  
+- LLM fills `todo!()` stubs where transpiler needs help
 
-| Stage | Transpilable | Rate |
-|---|---|---|
-| Pre-Tier 3 | 4,322 / 14,044 | 30.8 % |
-| Post-Tier 3 + Threshold Tuning | 7,485 / 14,064 | 53.2 % |
-| Post-Round 2 Fixes | 7,694 (6,917 clean compile) | 54.7 % |
-
-## Tests
+### 2. Rust Core (`Core/x_ray_core/`)
+An optional compiled Rust extension (`x_ray_core.pyd`) that speeds up the duplicate-detection hot-path by **10–50×** using Minhash, n-gram fingerprints, and parallel Rayon processing.
 
 ```bash
-pip install pytest
-python -m pytest tests/ -q --tb=short
+# Build and install the Rust core extension
+cd Core/x_ray_core
+maturin build --release --out dist
+pip install dist/x_ray_core-*.whl
+```
+
+> Rust is always **optional** — pure-Python fallbacks are always available.
+
+---
+
+## Project Layout
+
+```
+X_Ray/
+├── x_ray_claude.py        ← Main CLI entry point
+├── x_ray_flet.py          ← Desktop GUI (Flet / Flutter engine)
+├── x_ray_flet.spec        ← PyInstaller spec for building .exe
+├── Core/
+│   ├── types.py           ← Shared data classes (FunctionRecord, etc.)
+│   ├── config.py          ← Thresholds, version, settings
+│   ├── scan_phases.py     ← Phase orchestration
+│   ├── ui_bridge.py       ← Swappable output layer (Flet / tqdm / tests)
+│   ├── i18n.py            ← 5-language strings
+│   └── x_ray_core/        ← Optional Rust extension (Cargo project)
+├── Analysis/
+│   ├── smells.py          ← Code smell detector
+│   ├── duplicates.py      ← Duplicate finder
+│   ├── rust_advisor.py    ← Rust portability scorer
+│   ├── auto_rustify.py    ← Full Rust transpile + compile pipeline
+│   ├── smart_graph.py     ← Call graph builder
+│   ├── ui_compat.py       ← UI framework compatibility checker
+│   └── NexusMode/         ← LLM orchestration agents
+├── Lang/
+│   └── transpiler/        ← Python → Rust AST transpiler
+└── tests/                 ← 4,800+ test cases
+    └── xray_generated/    ← Auto-generated tests (from --gen-tests)
 ```
 
 ---
 
-## Structure
+## Running the Tests
 
-| Path | Purpose |
-|------|---------|
-| `x_ray_claude.py` | Main CLI |
-| `x_ray_flet.py` | Desktop GUI |
-| `x_ray_web.py` | Streamlit web UI |
-| `Analysis/` | Analyzers (smells, duplicates, lint, security, transpiler) |
-| `Core/` | Types, config, scan phases, Rust core |
-| `Lang/` | Python AST parser, tokenizer |
-| `tests/` | Test suite |
+```bash
+pytest tests/ -q                  # full suite (~50 s)
+pytest tests/ -q -x               # stop on first failure
+pytest tests/test_xray_claude.py  # core unit tests only
+```
+
+**Current status:** 4,880 passing · 14 skipped · 0 failing
 
 ---
 
-## Env Vars
+## Building the Standalone `.exe`
+
+X-Ray ships as a portable Windows executable — no Python install required.
+
+```bash
+pip install pyinstaller
+python -m PyInstaller x_ray.spec --noconfirm
+# Output: dist/x_ray/x_ray.exe
+```
+
+The `.exe` includes a **hardware-locked trial** (10 free runs per machine):
+- Machine fingerprint → AES-256-GCM encrypted counter → HMAC-SHA256 integrity
+- All crypto runs inside `x_ray_core.pyd` (compiled Rust) — no Python-side secrets
+
+---
+
+## Environment Variables
 
 | Variable | Effect |
-|----------|--------|
-| `X_RAY_DISABLE_RUST=1` | Skip Rust core (pure-Python only) |
-| `X_RAY_LLM_URL` | Override LLM endpoint |
+|---|---|
+| `X_RAY_DISABLE_RUST=1` | Skip Rust core, use pure-Python fallbacks |
+| `X_RAY_LLM_URL` | Override the local LLM endpoint URL |
 
 ---
 
-## Docs
+## Reference Docs
 
-| Doc | Description |
-|-----|-------------|
-| [CLAUDE.md](CLAUDE.md) | Project context for AI assistants & developers |
-| [docs/USAGE.md](docs/USAGE.md) | CLI options, smell categories, programmatic API |
-| [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md) | Branch strategy, CI, code standards, review checklist |
-| [.claude/README.md](.claude/README.md) | SDLC agents & commands (from Full-SDLC Multi-Agent article) |
-| [docs/CI_CD_SETUP.md](docs/CI_CD_SETUP.md) | GitHub Actions, quality gates |
-| [SECURITY.md](SECURITY.md) | Dependency and code security |
-
-**Contributing:** See [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md). Fork → `ruff check .` && `ruff format --check .` && `pytest tests/ -q` → PR.
+| Doc | Purpose |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | Project context for AI assistants and developers |
+| [CHANGELOG.md](CHANGELOG.md) | Full version history |
+| [FEATURES.md](FEATURES.md) | Feature-to-test registry |
+| [SECURITY.md](SECURITY.md) | Security policy and known exceptions |
+| [docs/USAGE.md](docs/USAGE.md) | Full CLI reference and smell catalog |
 
 ---
 
-*Scan it · Grade it · Rustify it*
+*Built with Python · Flet · Rust · ❤️*

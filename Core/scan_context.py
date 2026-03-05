@@ -41,13 +41,17 @@ from Analysis.auto_rustify import (
 
 # ── Rust sketch helpers ──────────────────────────────────────────────────────
 
+
 def _parse_sketch_params(func: "FunctionRecord") -> List[str]:
     """Parse Python parameters into Rust parameter strings."""
     try:
         tree = ast.parse(func.code)
         func_node = next(
-            (n for n in ast.walk(tree)
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
+            (
+                n
+                for n in ast.walk(tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ),
             None,
         )
         if func_node is None:
@@ -56,8 +60,11 @@ def _parse_sketch_params(func: "FunctionRecord") -> List[str]:
         for arg in func_node.args.args:
             if arg.arg == "self":
                 continue
-            rust_type = (_py_type_to_rust(ast.unparse(arg.annotation))
-                         if arg.annotation else "PyObject")
+            rust_type = (
+                _py_type_to_rust(ast.unparse(arg.annotation))
+                if arg.annotation
+                else "PyObject"
+            )
             params.append(f"{arg.arg}: {rust_type}")
         return params
     except Exception:  # nosec B110
@@ -69,8 +76,11 @@ def _translate_sketch_body(func: "FunctionRecord") -> List[str]:
     try:
         tree = ast.parse(func.code)
         func_node = next(
-            (n for n in ast.walk(tree)
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
+            (
+                n
+                for n in ast.walk(tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ),
             None,
         )
         if func_node is not None:
@@ -102,6 +112,7 @@ def _generate_rust_sketch(func: "FunctionRecord") -> str:
 
 # ── Duplicate merge / unify helpers ─────────────────────────────────────────
 
+
 def _extract_params_from_code(code: str) -> Optional[List[str]]:
     """Parse code and extract parameter list from the first function."""
     try:
@@ -126,12 +137,12 @@ def _extract_func_codes(
     names: List[str] = []
     params_sets: List[List[str]] = []
     for f in funcs_data:
-        loc  = f"{f.get('file', '?')}:{f.get('line', '?')}"
-        code = code_map.get(loc, code_map.get(f.get('key', ''), ''))
+        loc = f"{f.get('file', '?')}:{f.get('line', '?')}"
+        code = code_map.get(loc, code_map.get(f.get("key", ""), ""))
         if not code:
             continue
         codes.append(code)
-        names.append(f.get('name', 'unknown'))
+        names.append(f.get("name", "unknown"))
         params = _extract_params_from_code(code)
         if params is not None:
             params_sets.append(params)
@@ -220,13 +231,16 @@ def _unparse_func_node(
     lines = []
     for d in node.decorator_list:
         lines.append(f"@{ast.unparse(d)}")
-    kw  = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+    kw = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
     ret = f" -> {ast.unparse(node.returns)}" if node.returns else ""
     lines.append(f"{kw} {unified_name}({', '.join(all_params)}){ret}:")
     lines.extend(_build_unified_docstring(names, doc_parts))
     body = node.body
-    if (body and isinstance(body[0], ast.Expr)
-            and isinstance(body[0].value, (ast.Constant, ast.Str))):
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, (ast.Constant, ast.Str))
+    ):
         body = body[1:]
     for b_node in body:
         lines.extend(f"    {bl}" for bl in ast.unparse(b_node).split("\n"))
@@ -242,26 +256,30 @@ def _generate_unified_function(
     if not codes:
         return "# No source code available for merging"
 
-    base_idx     = max(range(len(codes)), key=lambda i: len(codes[i]))
-    base_code    = codes[base_idx]
-    base_name    = names[base_idx]
+    base_idx = max(range(len(codes)), key=lambda i: len(codes[i]))
+    base_code = codes[base_idx]
+    base_name = names[base_idx]
     unified_name = _unified_func_name(names)
-    all_params   = _merge_param_lists(params_sets)
-    doc_parts    = _collect_docstrings(codes)
+    all_params = _merge_param_lists(params_sets)
+    doc_parts = _collect_docstrings(codes)
 
     lines = _build_unified_header(funcs_data, names)
 
     try:
         tree = ast.parse(textwrap.dedent(base_code))
         func_node = next(
-            (n for n in ast.walk(tree)
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))),
+            (
+                n
+                for n in ast.walk(tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ),
             None,
         )
         if func_node is None:
             raise ValueError("No function node")
         lines.extend(
-            _unparse_func_node(func_node, unified_name, all_params, names, doc_parts))
+            _unparse_func_node(func_node, unified_name, all_params, names, doc_parts)
+        )
     except Exception:  # nosec B110
         lines.append(base_code.replace(base_name, unified_name, 1))
 
@@ -269,6 +287,7 @@ def _generate_unified_function(
 
 
 # ── Scan helpers ─────────────────────────────────────────────────────────────
+
 
 def scan_codebase(
     root: Path,
@@ -285,8 +304,7 @@ def scan_codebase(
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(extract_functions_from_file, f, root): f
-            for f in py_files
+            executor.submit(extract_functions_from_file, f, root): f for f in py_files
         }
         for future in concurrent.futures.as_completed(futures):
             funcs, clses, err = future.result()
@@ -311,11 +329,12 @@ ScanContext = namedtuple("ScanContext", "root exclude thresholds functions class
 
 # ── Phase runners ────────────────────────────────────────────────────────────
 
+
 def run_phase_smells(ctx: ScanContext, results: Dict[str, Any]) -> None:
     """Run code-smell detection phase."""
     detector = CodeSmellDetector(thresholds=ctx.thresholds)
     smells = detector.detect(ctx.functions, ctx.classes)
-    results["smells"]        = detector.summary()
+    results["smells"] = detector.summary()
     results["_smell_issues"] = smells
 
 
@@ -323,16 +342,17 @@ def run_phase_duplicates(ctx: ScanContext, results: Dict[str, Any]) -> None:
     """Run duplicate-detection phase."""
     finder = DuplicateFinder()
     finder.find(ctx.functions)
-    results["duplicates"]  = finder.summary()
+    results["duplicates"] = finder.summary()
     results["_dup_groups"] = finder.groups
 
 
 def run_phase_lint(ctx: ScanContext, results: Dict[str, Any]) -> None:
     """Run Ruff lint phase."""
     from Core.scan_phases import run_lint_phase
+
     linter, lint_issues = run_lint_phase(ctx.root, exclude=ctx.exclude or None)
     if linter is not None:
-        results["lint"]         = linter.summary(lint_issues)
+        results["lint"] = linter.summary(lint_issues)
         results["_lint_issues"] = lint_issues
     else:
         results["lint"] = {"error": "Ruff not installed (pip install ruff)"}
@@ -341,9 +361,10 @@ def run_phase_lint(ctx: ScanContext, results: Dict[str, Any]) -> None:
 def run_phase_security(ctx: ScanContext, results: Dict[str, Any]) -> None:
     """Run Bandit security phase."""
     from Core.scan_phases import run_security_phase
+
     sec, sec_issues = run_security_phase(ctx.root, exclude=ctx.exclude or None)
     if sec is not None:
-        results["security"]    = sec.summary(sec_issues)
+        results["security"] = sec.summary(sec_issues)
         results["_sec_issues"] = sec_issues
     else:
         results["security"] = {"error": "Bandit not installed (pip install bandit)"}
@@ -351,34 +372,93 @@ def run_phase_security(ctx: ScanContext, results: Dict[str, Any]) -> None:
 
 def run_phase_rustify(ctx: ScanContext, results: Dict[str, Any]) -> None:
     """Score functions for Rust transpilation."""
-    advisor    = RustAdvisor()
+    advisor = RustAdvisor()
     candidates = advisor.score(ctx.functions)
     results["rustify"] = {
         "total_scored": len(candidates),
-        "pure_count":   sum(1 for c in candidates if c.is_pure),
-        "top_score":    candidates[0].score if candidates else 0,
+        "pure_count": sum(1 for c in candidates if c.is_pure),
+        "top_score": candidates[0].score if candidates else 0,
     }
     results["_rust_candidates"] = candidates
 
 
 # Keep old names for backward compat (drop-in aliases)
-_run_phase_smells     = run_phase_smells
+_run_phase_smells = run_phase_smells
 _run_phase_duplicates = run_phase_duplicates
-_run_phase_lint       = run_phase_lint
-_run_phase_security   = run_phase_security
-_run_phase_rustify    = run_phase_rustify
+_run_phase_lint = run_phase_lint
+_run_phase_security = run_phase_security
+_run_phase_rustify = run_phase_rustify
 
 
 PHASE_RUNNERS: Dict[str, tuple[str, Callable]] = {
-    "smells":     ("Detecting code smells",   run_phase_smells),
-    "duplicates": ("Finding duplicates",       run_phase_duplicates),
-    "lint":       ("Running Ruff lint",        run_phase_lint),
-    "security":   ("Running Bandit security",  run_phase_security),
-    "rustify":    ("Scoring Rust candidates",  run_phase_rustify),
+    "smells": ("Detecting code smells", run_phase_smells),
+    "duplicates": ("Finding duplicates", run_phase_duplicates),
+    "lint": ("Running Ruff lint", run_phase_lint),
+    "security": ("Running Bandit security", run_phase_security),
+    "rustify": ("Scoring Rust candidates", run_phase_rustify),
 }
 
 # Backward-compat alias
 _PHASE_RUNNERS = PHASE_RUNNERS
+
+
+def _run_ast_parsing(
+    root: Path,
+    exclude: List[str],
+    progress_cb: Optional[Callable],
+    pw: float,
+    pi: int,
+) -> tuple[List[FunctionRecord], List[ClassRecord], List[str], int]:
+    """Helper to run the AST parse phase with progress tracking."""
+
+    def _prog(label: str, sub: float = 1.0) -> None:
+        if progress_cb:
+            progress_cb(min((pi + sub) * pw, 1.0), label)
+
+    _prog("Parsing source files", 0.0)
+
+    def on_file(d, t, _p):
+        _prog(f"Parsing {_p}", d / t)
+
+    functions, classes, errors, file_count = scan_codebase(
+        root, exclude, on_file=on_file
+    )
+    _prog("AST parse complete")
+    return functions, classes, errors, file_count
+
+
+def _run_io_phases(
+    ctx: ScanContext,
+    io_phases: List[str],
+    progress_cb: Optional[Callable],
+    pw: float,
+    pi: int,
+) -> tuple[
+    Dict[str, concurrent.futures.Future],
+    Optional[concurrent.futures.ThreadPoolExecutor],
+]:
+    """Helper to start parallel IO phases."""
+    io_futures: Dict[str, concurrent.futures.Future] = {}
+    _io_executor = None
+
+    if not io_phases:
+        return io_futures, _io_executor
+
+    def _prog(label: str, sub: float = 1.0) -> None:
+        if progress_cb:
+            progress_cb(min((pi + sub) * pw, 1.0), label)
+
+    _prog("Starting lint/security (parallel)", 0.0)
+    _io_executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(len(io_phases), 2)
+    )
+    for key in io_phases:
+        _label, runner = PHASE_RUNNERS[key]
+        _r: Dict[str, Any] = {}
+        io_futures[key] = _io_executor.submit(runner, ctx, _r)
+        io_futures[key]._phase_results = _r  # type: ignore[attr-defined]
+
+    return io_futures, _io_executor
 
 
 def run_scan(
@@ -388,23 +468,15 @@ def run_scan(
     thresholds: Dict[str, int],
     progress_cb: Optional[Callable] = None,
 ) -> Dict[str, Any]:
-    """Run selected scan phases and return results dict.
-
-    *progress_cb(fraction, phase_label)* is called to report 0.0-1.0
-    progress and the name of the current phase.
-
-    v6.0.0: Lint and Security phases are run in a ThreadPoolExecutor
-    concurrently with the AST-based analyses so their subprocess time does
-    not add to the critical path.
-    """
+    """Run selected scan phases and return results dict."""
     results: Dict[str, Any] = {"meta": {}}
     t0 = time.time()
 
     need_ast = modes.get("smells") or modes.get("duplicates") or modes.get("rustify")
-    io_phases  = [k for k in ("lint", "security") if modes.get(k)]  # subprocess-based
+    io_phases = [k for k in ("lint", "security") if modes.get(k)]
     ast_phases = [k for k in ("smells", "duplicates", "rustify") if modes.get(k)]
-    active = io_phases + ast_phases
-    n_phases = (1 if need_ast else 0) + len(active) + 1
+
+    n_phases = (1 if need_ast else 0) + len(io_phases + ast_phases) + 1
     pw = 1.0 / max(n_phases, 1)
     pi = 0
 
@@ -413,47 +485,36 @@ def run_scan(
             progress_cb(min((pi + sub) * pw, 1.0), label)
 
     functions: List[FunctionRecord] = []
-    classes:   List[ClassRecord]    = []
-    errors:    List[str]            = []
+    classes: List[ClassRecord] = []
+    errors: List[str] = []
     file_count = 0
 
     if need_ast:
-        _prog("Parsing source files", 0.0)
-        functions, classes, errors, file_count = scan_codebase(
-            root, exclude,
-            on_file=lambda d, t, _p: _prog(f"Parsing {d}/{t}", d / t))
-        _prog("AST parse complete")
+        functions, classes, errors, file_count = _run_ast_parsing(
+            root, exclude, progress_cb, pw, pi
+        )
         pi += 1
 
     results["meta"].update(
-        files=file_count, functions=len(functions),
-        classes=len(classes), errors=len(errors),
+        files=file_count,
+        functions=len(functions),
+        classes=len(classes),
+        errors=len(errors),
         error_list=errors[:20],
     )
 
     if need_ast:
-        code_map: Dict[str, str] = {}
+        code_map = {}
         for fn in functions:
             code_map[f"{fn.file_path}:{fn.line_start}"] = fn.code
-            code_map[fn.key]                            = fn.code
-        results["_code_map"]  = code_map
+            code_map[fn.key] = fn.code
+        results["_code_map"] = code_map
         results["_functions"] = functions
 
     ctx = ScanContext(root, exclude, thresholds, functions, classes)
 
     # ── parallel IO-bound phases (lint + security) ────────────────────────
-    io_futures: Dict[str, concurrent.futures.Future] = {}
-    if io_phases:
-        _prog("Starting lint/security (parallel)", 0.0)
-        _io_executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=min(len(io_phases), 2))
-        for key in io_phases:
-            _label, runner = PHASE_RUNNERS[key]
-            # We pass a local results dict per phase; merge after join
-            _r: Dict[str, Any] = {}
-            io_futures[key] = _io_executor.submit(runner, ctx, _r)
-            # Keep a reference to the per-phase dict via the future
-            io_futures[key]._phase_results = _r  # type: ignore[attr-defined]
+    io_futures, _io_executor = _run_io_phases(ctx, io_phases, progress_cb, pw, pi)
 
     # ── AST-based phases (run while IO phases run) ────────────────────────
     for key in ast_phases:
@@ -464,22 +525,22 @@ def run_scan(
         pi += 1
 
     # ── join IO phases ────────────────────────────────────────────────────
-    if io_futures:
+    if io_futures and _io_executor:
         for key, fut in io_futures.items():
             try:
-                fut.result(timeout=360)      # propagate exceptions
+                fut.result(timeout=360)
             except Exception:
                 pass
             results.update(fut._phase_results)  # type: ignore[attr-defined]
             pi += 1
         _io_executor.shutdown(wait=False)
 
-    results["grade"]          = compute_grade(results)
+    results["grade"] = compute_grade(results)
     results["meta"]["duration"] = round(time.time() - t0, 2)
 
-    # ── flush the parse cache to disk (best effort) ───────────────────────
     try:
         from Analysis.scan_cache import get_cache
+
         get_cache().save()
     except Exception:
         pass

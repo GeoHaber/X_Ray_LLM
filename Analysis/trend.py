@@ -15,6 +15,7 @@ Usage::
     # delta = {"grade": {"score": -2.1, "letter": "B→B-"},
     #          "smells": {"total": +3, "critical": -1}, ...}
 """
+
 from __future__ import annotations
 
 import json
@@ -90,11 +91,11 @@ def _grade_delta(prev: Dict, curr: Dict) -> Dict[str, Any]:
 
 
 _CATEGORY_HANDLERS = {
-    "smells":     _smells_delta,
+    "smells": _smells_delta,
     "duplicates": _duplicates_delta,
-    "lint":       _lint_security_delta,
-    "security":   _lint_security_delta,
-    "grade":      _grade_delta,
+    "lint": _lint_security_delta,
+    "security": _lint_security_delta,
+    "grade": _grade_delta,
 }
 
 

@@ -23,13 +23,9 @@ def get_cc(node):
     """Get cyclomatic complexity of a function."""
     cc = 1
     for n in ast.walk(node):
-        if isinstance(n, (ast.If, ast.IfExp)):
+        if isinstance(n, (ast.If, ast.IfExp, ast.For, ast.While, ast.ExceptHandler)):
             cc += 1
-        elif isinstance(n, (ast.For, ast.While)):
-            cc += 1
-        elif isinstance(n, ast.ExceptHandler):
-            cc += 1
-        elif isinstance(n, ast.BoolOp):
+        if isinstance(n, ast.BoolOp):
             cc += len(n.values) - 1
     return cc
 

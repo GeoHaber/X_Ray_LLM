@@ -453,7 +453,8 @@ def _get_runtime_version(path: str) -> str:
     """Get llama.cpp version string."""
     try:
         result = subprocess.run(  # nosec B603
-            [path, "--version"], capture_output=True, text=True, timeout=10)
+            [path, "--version"], capture_output=True, text=True, timeout=10
+        )
         text = result.stdout + result.stderr
         m = re.search(r"b(\d{3,5})", text)
         if m:
@@ -476,7 +477,8 @@ def _detect_backend(path: str) -> str:
     """Heuristic: check which backend the llama.cpp binary uses."""
     try:
         result = subprocess.run(  # nosec B603
-            [path, "--version"], capture_output=True, text=True, timeout=10)
+            [path, "--version"], capture_output=True, text=True, timeout=10
+        )
         text = (result.stdout + result.stderr).lower()
         for keyword, backend in _BACKEND_KEYWORDS:
             if keyword in text:
@@ -782,8 +784,11 @@ class LLMManager:
             return False
         try:
             cmd = self._build_server_cmd(model_path, port)
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL,  # nosec B603
-                             stderr=subprocess.DEVNULL)
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,  # nosec B603
+                stderr=subprocess.DEVNULL,
+            )
             return True
         except Exception:
             return False

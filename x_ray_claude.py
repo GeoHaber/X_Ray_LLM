@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-X_RAY_Claude.py — Smart AI-Powered Code Analyzer (X-Ray 7.0)
+X_RAY_Claude.py â€” Smart AI-Powered Code Analyzer (X-Ray 7.0)
 =============================================================
 
 Universal code quality scanner combining:
@@ -33,13 +33,13 @@ import sys
 import time
 import asyncio
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 from Core.config import BANNER
 from Core.inference import LLMHelper
 from Core.ui_bridge import get_bridge
 
-from Analysis.reporting import print_unified_grade  # noqa: F401 — used by external callers
+from Analysis.reporting import print_unified_grade  # noqa: F401 â€” used by external callers
 from Core.scan_phases import (
     scan_codebase,
     run_smell_phase,
@@ -56,12 +56,12 @@ from Core.scan_phases import (
 
 from Core.utils import setup_logger, check_trial_license as _check_trial_license
 
-setup_logger()  # configure logging once — no duplicate basicConfig
+setup_logger()  # configure logging once â€” no duplicate basicConfig
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  Interactive TUI — responsive, screen-adaptive, with LLM settings
-# ═══════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+#  Interactive TUI â€” responsive, screen-adaptive, with LLM settings
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 
 def _supports_interactive() -> bool:
@@ -86,7 +86,7 @@ def _ansi(code: str, text: str) -> str:
     return f"\033[{code}m{text}\033[0m"
 
 
-# ── Platform-specific raw key reader ──
+# â”€â”€ Platform-specific raw key reader â”€â”€
 
 _KEY_CHAR_MAP = {
     " ": "space",
@@ -137,27 +137,27 @@ def _make_key_reader():
     return _read_key_win32 if sys.platform == "win32" else _read_key_unix
 
 
-# ── Box-drawing helpers (adapt to screen width) ──
+# â”€â”€ Box-drawing helpers (adapt to screen width) â”€â”€
 
 
 def _box_top(w: int) -> str:
-    return _ansi("1;36", "╔" + "═" * (w - 2) + "╗")
+    return _ansi("1;36", "â•”" + "â•" * (w - 2) + "â•—")
 
 
 def _box_mid(w: int) -> str:
-    return _ansi("1;36", "╠" + "═" * (w - 2) + "╣")
+    return _ansi("1;36", "â• " + "â•" * (w - 2) + "â•£")
 
 
 def _box_sep(w: int) -> str:
-    return _ansi("36", "╟" + "─" * (w - 2) + "╢")
+    return _ansi("36", "â•Ÿ" + "â”€" * (w - 2) + "â•¢")
 
 
 def _box_bot(w: int) -> str:
-    return _ansi("1;36", "╚" + "═" * (w - 2) + "╝")
+    return _ansi("1;36", "â•š" + "â•" * (w - 2) + "â•")
 
 
 def _box_line(w: int, text: str, align: str = "left") -> str:
-    """A line inside a box. `text` may contain ANSI — we strip for padding."""
+    """A line inside a box. `text` may contain ANSI â€” we strip for padding."""
     import re
 
     visible = len(re.sub(r"\033\[[0-9;]*m", "", text))
@@ -169,26 +169,32 @@ def _box_line(w: int, text: str, align: str = "left") -> str:
         pad_left = 0
         pad_right = max(0, inner - visible)
     return (
-        _ansi("36", "║")
+        _ansi("36", "â•‘")
         + " "
         + " " * pad_left
         + text
         + " " * pad_right
         + " "
-        + _ansi("36", "║")
+        + _ansi("36", "â•‘")
     )
 
 
-# ── Scan option definitions ──
+# â”€â”€ Scan option definitions â”€â”€
 
 _SCAN_OPTIONS = [
-    ("smell", "Code Smells", "🔬", True, "AST-based structural analysis"),
-    ("duplicates", "Duplicates", "🔁", False, "Find similar / copy-paste code"),
-    ("format", "Format (Ruff)", "📐", True, "Code formatting check"),
-    ("lint", "Lint (Ruff)", "✏️", True, "Style, imports, hygiene"),
-    ("security", "Security (Bandit)", "🛡️", True, "Vulnerability scanner"),
-    ("rustify", "Rust Score", "🦀", False, "Rank functions for Rust porting"),
-    ("rustify_exe", "Rustify → EXE", "⚙️", False, "Full transpile + compile pipeline"),
+    ("smell", "Code Smells", "ðŸ”¬", True, "AST-based structural analysis"),
+    ("duplicates", "Duplicates", "ðŸ”", False, "Find similar / copy-paste code"),
+    ("format", "Format (Ruff)", "ðŸ“", True, "Code formatting check"),
+    ("lint", "Lint (Ruff)", "âœï¸", True, "Style, imports, hygiene"),
+    ("security", "Security (Bandit)", "ðŸ›¡ï¸", True, "Vulnerability scanner"),
+    ("rustify", "Rust Score", "ðŸ¦€", False, "Rank functions for Rust porting"),
+    (
+        "rustify_exe",
+        "Rustify â†’ EXE",
+        "âš™ï¸",
+        False,
+        "Full transpile + compile pipeline",
+    ),
 ]
 
 
@@ -212,7 +218,7 @@ def _render_scan_page(box_w: int, wide: bool, selected: list, cursor: int) -> st
     lines.append("  " + _box_mid(box_w))
     if wide:
         ctrl = (
-            _ansi("90", "↑↓")
+            _ansi("90", "â†‘â†“")
             + " move  "
             + _ansi("90", "Space")
             + " toggle  "
@@ -222,12 +228,12 @@ def _render_scan_page(box_w: int, wide: bool, selected: list, cursor: int) -> st
             + " LLM settings"
         )
     else:
-        ctrl = _ansi("90", "↑↓ Space Enter  s=settings  q=quit")
+        ctrl = _ansi("90", "â†‘â†“ Space Enter  s=settings  q=quit")
     lines.append("  " + _box_line(box_w, ctrl, "center"))
     lines.append("  " + _box_sep(box_w))
     for i, (key, label, icon, default, desc) in enumerate(_SCAN_OPTIONS):
-        mark = _ansi("1;32", "✓") if selected[i] else _ansi("90", "·")
-        arrow = _ansi("1;33", "►") + " " if i == cursor else "  "
+        mark = _ansi("1;32", "âœ“") if selected[i] else _ansi("90", "Â·")
+        arrow = _ansi("1;33", "â–º") + " " if i == cursor else "  "
         text = (
             f"{arrow}[{mark}] {icon} {label:<22} {_ansi('90', desc)}"
             if wide
@@ -259,7 +265,7 @@ def _render_hw_section(box_w: int, hw) -> List[str]:
     """Hardware profile lines for the settings panel."""
     if not hw:
         return ["  " + _box_line(box_w, _ansi("33", "  detecting hardware..."))]
-    avx = _ansi("32", "AVX2 ✓") if hw.avx2 else _ansi("90", "AVX2 ✗")
+    avx = _ansi("32", "AVX2 âœ“") if hw.avx2 else _ansi("90", "AVX2 âœ—")
     gpu = hw.gpu_name if hw.gpu_name != "none" else _ansi("90", "no GPU detected")
     return [
         "  " + _box_line(box_w, _ansi("1;97", "System Profile")),
@@ -279,7 +285,7 @@ def _render_runtime_section(box_w: int, mgr) -> List[str]:
     rt = mgr.runtime
     lines = ["  " + _box_line(box_w, _ansi("1;97", "llama.cpp Runtime"))]
     if rt.installed:
-        status = _ansi("32", "✓ installed") + f"  {rt.version}  [{rt.backend}]"
+        status = _ansi("32", "âœ“ installed") + f"  {rt.version}  [{rt.backend}]"
         srv = (
             _ansi("32", f"running :{rt.server_port}")
             if rt.server_running
@@ -288,7 +294,7 @@ def _render_runtime_section(box_w: int, mgr) -> List[str]:
         lines.append("  " + _box_line(box_w, f"  Status: {status}"))
         lines.append("  " + _box_line(box_w, f"  Server: {srv}"))
     else:
-        lines.append("  " + _box_line(box_w, _ansi("33", "  ⚠ llama.cpp not found")))
+        lines.append("  " + _box_line(box_w, _ansi("33", "  âš  llama.cpp not found")))
         lines.append(
             "  "
             + _box_line(box_w, _ansi("90", "  Install: github.com/ggerganov/llama.cpp"))
@@ -305,7 +311,7 @@ def _render_model_section(box_w: int, wide: bool, models) -> List[str]:
         )
         return lines
     for i, m in enumerate(models[:4], 1):
-        tag = _ansi("1;33", " ★ BEST") if i == 1 else ""
+        tag = _ansi("1;33", " â˜… BEST") if i == 1 else ""
         lines.append(
             "  "
             + _box_line(
@@ -382,7 +388,7 @@ def _interactive_menu() -> dict:
     """Responsive interactive TUI with scan options + LLM settings.
 
     Navigation:
-      ↑↓ move  |  Space toggle  |  Enter run  |  Tab → LLM settings
+      â†‘â†“ move  |  Space toggle  |  Enter run  |  Tab â†’ LLM settings
       a = all   |  n = none      |  s = settings  |  q = quit
     """
     cols, _rows = _term_size()
@@ -460,10 +466,10 @@ def _handle_llm_settings(args):
     print(mgr.format_model_recommendations())
     status = mgr.check_and_prompt()
     if status.get("needs_install"):
-        print("  💡 To install llama.cpp:")
+        print("  ðŸ’¡ To install llama.cpp:")
         print("     https://github.com/ggerganov/llama.cpp/releases")
     if status.get("needs_upgrade"):
-        print(f"  💡 Newer version available: {status['latest_version']}")
+        print(f"  ðŸ’¡ Newer version available: {status['latest_version']}")
     sys.exit(0)
 
 
@@ -480,7 +486,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--rustify-exe",
         action="store_true",
-        help="Full pipeline: scan → optimize → transpile → compile to executable",
+        help="Full pipeline: scan â†’ optimize â†’ transpile â†’ compile to executable",
     )
     parser.add_argument("--use-llm", action="store_true", help="Enable LLM enrichment")
     parser.add_argument(
@@ -573,9 +579,9 @@ def _run_lint_phase(args, root):
     if getattr(args, "fix", False) and linter is not None:
         n_fixed = linter.fix(root, exclude=args.exclude)
         if n_fixed:
-            print(f"  ✔ Ruff auto-fix applied {n_fixed} issue(s)")
+            print(f"  âœ” Ruff auto-fix applied {n_fixed} issue(s)")
         else:
-            print("  ℹ No auto-fixable Ruff issues found")
+            print("  â„¹ No auto-fixable Ruff issues found")
     return linter, issues
 
 
@@ -609,15 +615,17 @@ def _run_fix_smells_phase(args, root):
     result = run_smell_fix_phase(root, exclude=args.exclude)
     bridge = get_bridge()
     if result.fixes_applied:
-        bridge.log(f"\n  ✔ Auto-Fix Applied: {result.fixes_applied} fix(es)")
+        bridge.log(f"\n  âœ” Auto-Fix Applied: {result.fixes_applied} fix(es)")
         if result.console_logs_commented:
-            bridge.log(f"    - {result.console_logs_commented} console.log(s) commented out")
+            bridge.log(
+                f"    - {result.console_logs_commented} console.log(s) commented out"
+            )
         if result.prints_commented:
             bridge.log(f"    - {result.prints_commented} debug print(s) commented out")
         if result.project_files_created:
             bridge.log(f"    - Created: {', '.join(result.project_files_created)}")
     else:
-        bridge.log("  ℹ No auto-fixable smells found")
+        bridge.log("  â„¹ No auto-fixable smells found")
     return result
 
 
@@ -627,20 +635,20 @@ def _run_rustify(root: Path, args: argparse.Namespace) -> dict:
 
 
 def _run_rustify_exe(root: Path, args: argparse.Namespace) -> dict:
-    """Full pipeline: scan → optimize → transpile → compile → verify.
+    """Full pipeline: scan â†’ optimize â†’ transpile â†’ compile â†’ verify.
 
     Produces a native Windows/Mac/Linux executable from the Python project.
     """
     from Analysis.auto_rustify import RustifyPipeline
 
-    print("\n  " + "═" * 60)
-    print("  🔧 FULL RUSTIFY PIPELINE: Python → Rust → Executable")
-    print("  " + "═" * 60)
+    print("\n  " + "â•" * 60)
+    print("  ðŸ”§ FULL RUSTIFY PIPELINE: Python â†’ Rust â†’ Executable")
+    print("  " + "â•" * 60)
 
     def progress_cb(frac: float, label: str):
         bar_len = 30
         filled = int(bar_len * frac)
-        bar = "█" * filled + "░" * (bar_len - filled)
+        bar = "â–ˆ" * filled + "â–‘" * (bar_len - filled)
         print(f"\r  [{bar}] {frac * 100:5.1f}% {label:<40}", end="", flush=True)
 
     pipeline = RustifyPipeline(
@@ -655,48 +663,96 @@ def _run_rustify_exe(root: Path, args: argparse.Namespace) -> dict:
     print()  # newline after progress bar
 
     # Print results
-    print(f"\n  ── Pipeline Results {'─' * 39}")
+    print(f"\n  â”€â”€ Pipeline Results {'â”€' * 39}")
     print(f"  System:     {report.system.os_name} {report.system.arch}")
     print(f"  Target:     {report.system.rust_target}")
     print(
         f"  Scanned:    {report.candidates_total} functions in {report.scan_duration_s}s"
     )
-    print(f"  Selected:   {report.candidates_selected} candidates (score ≥ 3.0)")
+    print(f"  Selected:   {report.candidates_selected} candidates (score â‰¥ 3.0)")
 
     for phase in report.phases:
         status = phase.get("status", "unknown")
         name = phase.get("name", "")
-        icon = "✅" if status == "ok" else "❌" if status == "failed" else "⚠️"
+        icon = "âœ…" if status == "ok" else "âŒ" if status == "failed" else "âš ï¸"
         print(f"  {icon} {name}: {status}")
         if "artefact" in phase and phase["artefact"]:
-            print(f"     → Executable: {phase['artefact']}")
+            print(f"     â†’ Executable: {phase['artefact']}")
 
     if report.compile_result and report.compile_result.success:
         exe = report.compile_result.artefact_path
-        print(f"\n  \033[1;32m✓ SUCCESS\033[0m — Executable built: {exe}")
+        print(f"\n  \033[1;32mâœ“ SUCCESS\033[0m â€” Executable built: {exe}")
         print(f"  Run it:  {exe} --help")
     elif report.errors:
-        print("\n  \033[1;31m✗ ERRORS:\033[0m")
+        print("\n  \033[1;31mâœ— ERRORS:\033[0m")
         for err in report.errors[:5]:
             print(f"    {err[:200]}")
 
-    return {"rustify_exe": report.to_dict()}
+    import dataclasses
+    return {"rustify_exe": dataclasses.asdict(report)}
+
+
+from dataclasses import dataclass  # noqa: E402
+
+
+@dataclass
+class GenTestContext:
+    args: argparse.Namespace
+    root: Path
+    functions: list
+    classes: list
+    all_issues: list
+    web_detector: Any
+    health_analyzer: Any
+
+
+def _run_gen_tests_phase(ctx: GenTestContext):
+    """Run AI test generation phase if requested."""
+    if not getattr(ctx.args, "gen_tests", False):
+        return
+
+    from Core.scan_phases import run_test_gen_phase
+
+    # Collect JS analyses from web_detector if present
+    js_analyses = None
+    if ctx.web_detector and hasattr(ctx.web_detector, "_analyses"):
+        js_analyses = ctx.web_detector._analyses
+    health_checks = None
+    if (
+        ctx.health_analyzer
+        and hasattr(ctx.health_analyzer, "report")
+        and ctx.health_analyzer.report
+    ):
+        health_checks = ctx.health_analyzer.report.checks
+    test_output = Path(getattr(ctx.args, "test_output", ".")).resolve()
+
+    test_report = run_test_gen_phase(
+        ctx.root,
+        functions=ctx.functions,
+        classes=ctx.classes,
+        smells=ctx.all_issues,
+        js_analyses=js_analyses,
+        health_checks=health_checks,
+        output_dir=test_output,
+    )
+
+    bridge = get_bridge()
+    bridge.log(f"\n  {'=' * 60}")
+    bridge.log("  ðŸ§ª MONKEY TESTS GENERATED")
+    bridge.log(f"     Files: {len(test_report.files_created)}")
+    bridge.log(f"     Tests: {test_report.total_tests}")
+    bridge.log(f"     Languages: {', '.join(test_report.languages)}")
+    bridge.log(f"     Output: {test_output}")
+    bridge.log(f"  {'=' * 60}")
 
 
 # collect_reports imported from Core.scan_phases
 
 
-async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
-    """Execute all requested scan phases and return the results dict."""
-    # ── Rustify modes ──
-    if args.rustify_exe:
-        return _run_rustify_exe(root, args)
-    if args.rustify:
-        return _run_rustify(root, args)
-
-    llm = _init_llm(args, root)
-    functions, classes, errors = _scan_codebase_phase(root, args)
-
+def _run_analysis_phases(
+    args: argparse.Namespace, root: Path, functions: list, classes: list
+):
+    """Run all primary synchronous analysis phases."""
     all_issues = []
 
     detector, smells = _run_smell_phase(args, functions, classes)
@@ -713,53 +769,84 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
     sec_analyzer, sec_issues = _run_security_phase(args, root)
     all_issues.extend(sec_issues)
 
-    # ── New v7.0 phases ──
     web_detector = _run_web_phase(args, root)
     health_analyzer = _run_health_phase(args, root)
 
-    # ── Auto-fix smells (--fix-smells) ──
+    return (
+        all_issues,
+        detector,
+        finder,
+        fmt_analyzer,
+        format_issues,
+        linter,
+        lint_issues,
+        sec_analyzer,
+        sec_issues,
+        web_detector,
+        health_analyzer,
+    )
+
+
+async def _run_async_enrichment(llm, detector, finder, functions):
+    """Run asynchronous LLM enrichment for smells and duplicates."""
+    if not llm or not (detector or finder):
+        return
+
+    tasks = []
+    if detector:
+        tasks.append(detector.enrich_with_llm_async(llm))
+    if finder:
+        from Analysis.duplicates import enrich_with_llm_async as _dup_enrich
+
+        tasks.append(_dup_enrich(finder, llm, functions))
+    if tasks:
+        await asyncio.gather(*tasks)
+
+
+async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
+    """Execute all requested scan phases and return the results dict."""
+    # â”€â”€ Rustify modes â”€â”€
+    if args.rustify_exe:
+        return _run_rustify_exe(root, args)
+    if args.rustify:
+        return _run_rustify(root, args)
+
+    llm = _init_llm(args, root)
+    functions, classes, errors = _scan_codebase_phase(root, args)
+
+    # â”€â”€ Synchronous Phases â”€â”€
+    (
+        all_issues,
+        detector,
+        finder,
+        fmt_analyzer,
+        format_issues,
+        linter,
+        lint_issues,
+        sec_analyzer,
+        sec_issues,
+        web_detector,
+        health_analyzer,
+    ) = _run_analysis_phases(args, root, functions, classes)
+
+    # â”€â”€ Auto-fix smells (--fix-smells) â”€â”€
     _run_fix_smells_phase(args, root)
 
-    # ── Test generation (--gen-tests) ──
-    if getattr(args, "gen_tests", False):
-        from Core.scan_phases import run_test_gen_phase
-        # Collect JS analyses from web_detector if present
-        js_analyses = None
-        if web_detector and hasattr(web_detector, "_analyses"):
-            js_analyses = web_detector._analyses
-        health_checks = None
-        if health_analyzer and hasattr(health_analyzer, "report") and health_analyzer.report:
-            health_checks = health_analyzer.report.checks
-        test_output = Path(getattr(args, "test_output", ".")).resolve()
-        test_report = run_test_gen_phase(
-            root,
+    # â”€â”€ Test generation (--gen-tests) â”€â”€
+    _run_gen_tests_phase(
+        GenTestContext(
+            args=args,
+            root=root,
             functions=functions,
             classes=classes,
-            smells=all_issues,
-            js_analyses=js_analyses,
-            health_checks=health_checks,
-            output_dir=test_output,
+            all_issues=all_issues,
+            web_detector=web_detector,
+            health_analyzer=health_analyzer,
         )
-        bridge = get_bridge()
-        bridge.log(f"\n  {'='*60}")
-        bridge.log(f"  🧪 MONKEY TESTS GENERATED")
-        bridge.log(f"     Files: {len(test_report.files_created)}")
-        bridge.log(f"     Tests: {test_report.total_tests}")
-        bridge.log(f"     Languages: {', '.join(test_report.languages)}")
-        bridge.log(f"     Output: {test_output}")
-        bridge.log(f"  {'='*60}")
+    )
 
-    # ── Async LLM Enrichment (Parallel) ──
-    if llm and (detector or finder):
-        tasks = []
-        if detector:
-            tasks.append(detector.enrich_with_llm_async(llm))
-        if finder:
-            from Analysis.duplicates import enrich_with_llm_async as _dup_enrich
-
-            tasks.append(_dup_enrich(finder, llm, functions))
-        if tasks:
-            await asyncio.gather(*tasks)
+    # â”€â”€ Async LLM Enrichment (Parallel) â”€â”€
+    await _run_async_enrichment(llm, detector, finder, functions)
 
     from Core.scan_phases import AnalysisComponents
 
@@ -796,16 +883,19 @@ async def main_async():
     compare_path = getattr(args, "compare", None)
     if compare_path:
         from Analysis.trend import load_prev_results
+
         prev_results = load_prev_results(compare_path)
         if prev_results is None:
-            print(f"  [!] --compare: could not read '{compare_path}' — trend disabled")
+            print(
+                f"  [!] --compare: could not read '{compare_path}' â€” trend disabled"
+            )
 
     results = await _run_full_scan(root, args)
 
     # Print trend delta if available (injected into print_unified_grade via results key)
     if prev_results and "grade" in results:
-        from Analysis.reporting import print_unified_grade as _pug
         from Analysis.trend import compare_scans, format_grade_delta
+
         delta = compare_scans(prev_results, results)
         delta_line = format_grade_delta(delta)
         if delta_line:

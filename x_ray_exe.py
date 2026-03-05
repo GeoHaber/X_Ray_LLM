@@ -44,7 +44,7 @@ from typing import Dict, Any, Optional
 # ---------------------------------------------------------------------------
 # Fix for PyInstaller frozen bundles: ensure our package root is on sys.path
 # ---------------------------------------------------------------------------
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     _BUNDLE_DIR = Path(sys._MEIPASS)
     _EXE_DIR = Path(sys.executable).parent
     # Add the bundle dir so our Core/Analysis/Lang packages are importable
@@ -76,10 +76,10 @@ from Core.utils import check_trial_license as _check_trial_license
 # ---------------------------------------------------------------------------
 
 _EXE_BANNER = f"""
-{'='*66}
+{"=" * 66}
   X-RAY v{__version__} — Standalone Code Quality Scanner (.exe)
   AST Smells + Ruff Lint + Bandit Security + Rust Advisor
-{'='*66}
+{"=" * 66}
 """
 
 # ---------------------------------------------------------------------------
@@ -87,6 +87,7 @@ _EXE_BANNER = f"""
 # ---------------------------------------------------------------------------
 
 from Core.utils import setup_logger  # noqa: E402
+
 log = setup_logger("x_ray_exe")
 
 
@@ -94,16 +95,19 @@ log = setup_logger("x_ray_exe")
 # Hardware detection
 # ---------------------------------------------------------------------------
 
+
 def _wmic_value(query: str, field: str) -> Optional[str]:
     """Run a wmic query and return the value for *field*, or None."""
     try:
         result = subprocess.run(  # nosec B603
             ["wmic"] + query.split() + ["/value"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
-        for line in result.stdout.strip().split('\n'):
+        for line in result.stdout.strip().split("\n"):
             if line.startswith(f"{field}="):
-                return line.split('=', 1)[1].strip()
+                return line.split("=", 1)[1].strip()
     except Exception:  # nosec B110
         pass
     return None
@@ -116,14 +120,14 @@ def _detect_rust_info() -> Dict[str, Any]:
     if info["rust_available"]:
         try:
             result = subprocess.run(  # nosec B607
-                ["rustc", "--version"],
-                capture_output=True, text=True, timeout=5
+                ["rustc", "--version"], capture_output=True, text=True, timeout=5
             )
             info["rust_version"] = result.stdout.strip()
         except Exception:
             info["rust_version"] = "unknown"
     try:
         import x_ray_core  # noqa: F401
+
         info["rust_acceleration"] = True
     except ImportError:
         info["rust_acceleration"] = False
@@ -148,7 +152,9 @@ def detect_hardware() -> Dict[str, Any]:
     info.setdefault("processor", info.get("cpu_brand", "Unknown"))
     info.setdefault("cpu_name", info.get("cpu_brand", info.get("processor", "")))
     info.setdefault("cpu_count_logical", info.get("cpu_cores", os.cpu_count() or 1))
-    info.setdefault("cpu_count_physical", info.get("cpu_cores", info["cpu_count_logical"]))
+    info.setdefault(
+        "cpu_count_physical", info.get("cpu_cores", info["cpu_count_logical"])
+    )
 
     # Rust environment (x_ray_exe specific)
     info.update(_detect_rust_info())
@@ -158,21 +164,25 @@ def detect_hardware() -> Dict[str, Any]:
 
 def print_hardware(hw: Dict[str, Any]) -> None:
     """Pretty-print hardware information."""
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print("  SYSTEM HARDWARE PROFILE")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     print(f"  OS:           {hw['os']} {hw.get('os_release', '')} ({hw['machine']})")
     print(f"  CPU:          {hw.get('cpu_name', hw['processor'])}")
-    print(f"  Cores:        {hw.get('cpu_count_physical', '?')} physical, "
-          f"{hw['cpu_count_logical']} logical")
-    if hw.get('ram_gb') and hw['ram_gb'] != 'unknown':
+    print(
+        f"  Cores:        {hw.get('cpu_count_physical', '?')} physical, "
+        f"{hw['cpu_count_logical']} logical"
+    )
+    if hw.get("ram_gb") and hw["ram_gb"] != "unknown":
         print(f"  RAM:          {hw['ram_gb']} GB")
-    if hw.get('rust_available'):
+    if hw.get("rust_available"):
         print(f"  Rust:         {hw.get('rust_version', 'available')}")
     else:
         print("  Rust:         not installed")
-    print(f"  Accelerator:  {'x_ray_core (Rust)' if hw.get('rust_acceleration') else 'Pure Python'}")
-    print(f"{'='*50}\n")
+    print(
+        f"  Accelerator:  {'x_ray_core (Rust)' if hw.get('rust_acceleration') else 'Pure Python'}"
+    )
+    print(f"{'=' * 50}\n")
 
 
 # ---------------------------------------------------------------------------
@@ -196,15 +206,22 @@ def check_tools() -> Dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
+def _is_interactive_console() -> bool:
+    """Return True if running in an interactive console (not piped/redirected)."""
+    return hasattr(sys.stdin, "isatty") and sys.stdin.isatty()
+
+
 # ---------------------------------------------------------------------------
 # Interactive Mode — folder picker, scan menu, report prompt
 # ---------------------------------------------------------------------------
+
 
 def _pick_folder() -> Optional[str]:
     """Open a Windows folder-picker dialog. Returns path or None."""
     try:
         import tkinter as tk
         from tkinter import filedialog
+
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
@@ -219,9 +236,9 @@ def _pick_folder() -> Optional[str]:
 
 def _step_pick_folder() -> str:
     """Interactive step 1: pick the folder to scan."""
-    print(f"\n{'─'*50}")
+    print(f"\n{'─' * 50}")
     print("  WELCOME TO X-RAY!")
-    print(f"{'─'*50}")
+    print(f"{'─' * 50}")
     print()
     print("  Let's scan your code! First, pick a folder...")
     print()
@@ -240,7 +257,13 @@ def _step_pick_folder() -> str:
 
 
 _SCAN_FLAG_MAP = {
-    "1": {"smell": True, "lint": True, "security": True, "duplicates": True, "full_scan": True},
+    "1": {
+        "smell": True,
+        "lint": True,
+        "security": True,
+        "duplicates": True,
+        "full_scan": True,
+    },
     "2": {"smell": True, "lint": True, "security": True},
     "3": {"smell": True},
     "4": {"lint": True},
@@ -250,18 +273,25 @@ _SCAN_FLAG_MAP = {
 }
 
 _SCAN_MODE_NAMES = {
-    "1": "Full Scan", "2": "Quick Scan", "3": "Code Smells",
-    "4": "Lint", "5": "Security", "6": "Duplicates", "7": "Rust Advisor",
+    "1": "Full Scan",
+    "2": "Quick Scan",
+    "3": "Code Smells",
+    "4": "Lint",
+    "5": "Security",
+    "6": "Duplicates",
+    "7": "Rust Advisor",
 }
 
 
 def _step_choose_mode(args: argparse.Namespace) -> str:
     """Interactive step 2: choose scan mode."""
-    print(f"{'─'*50}")
+    print(f"{'─' * 50}")
     print("  WHAT DO YOU WANT TO SCAN?")
-    print(f"{'─'*50}")
+    print(f"{'─' * 50}")
     print()
-    print("  [1]  Full Scan          — Smells + Lint + Security + Duplicates (recommended)")
+    print(
+        "  [1]  Full Scan          — Smells + Lint + Security + Duplicates (recommended)"
+    )
     print("  [2]  Quick Scan         — Smells + Lint + Security  (faster)")
     print("  [3]  Code Smells only   — Function length, complexity, nesting")
     print("  [4]  Lint only          — Ruff code style & errors")
@@ -281,9 +311,9 @@ def _step_choose_mode(args: argparse.Namespace) -> str:
 
 def _step_report_option(args: argparse.Namespace) -> None:
     """Interactive step 3: choose report save option."""
-    print(f"{'─'*50}")
+    print(f"{'─' * 50}")
     print("  SAVE A JSON REPORT?")
-    print(f"{'─'*50}")
+    print(f"{'─' * 50}")
     print()
     print("  [1]  Yes — save next to the scanned folder")
     print("  [2]  Yes — let me choose where")
@@ -302,9 +332,9 @@ def _step_report_option(args: argparse.Namespace) -> None:
         print("  ✓ No report — results on screen only")
 
     print()
-    print(f"{'─'*50}")
+    print(f"{'─' * 50}")
     print("  Starting scan...")
-    print(f"{'─'*50}")
+    print(f"{'─' * 50}")
     print()
 
 
@@ -313,6 +343,7 @@ def _save_report_dialog(folder: str) -> Optional[str]:
     try:
         import tkinter as tk
         from tkinter import filedialog
+
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
@@ -337,9 +368,17 @@ def _interactive_menu() -> argparse.Namespace:
     folder = _step_pick_folder()
 
     args = argparse.Namespace(
-        path=folder, smell=False, duplicates=False, lint=False,
-        security=False, full_scan=False, rustify=False,
-        report=None, exclude=None, hw=False, verbose=False,
+        path=folder,
+        smell=False,
+        duplicates=False,
+        lint=False,
+        security=False,
+        full_scan=False,
+        rustify=False,
+        report=None,
+        exclude=None,
+        hw=False,
+        verbose=False,
     )
 
     _step_choose_mode(args)
@@ -358,6 +397,7 @@ def _needs_interactive() -> bool:
 # ---------------------------------------------------------------------------
 # Main orchestration
 # ---------------------------------------------------------------------------
+
 
 def _parse_args() -> argparse.Namespace:
     """Parse and normalise CLI arguments."""
@@ -388,6 +428,7 @@ def _print_tool_status(tools: dict) -> None:
         print(f"    {name:10s}  {status}")
     try:
         import x_ray_core  # noqa: F401
+
         print(f"    {'x_ray_core':10s}  OK (Rust acceleration)")
     except ImportError:
         print(f"    {'x_ray_core':10s}  not available (using pure Python)")
@@ -410,7 +451,8 @@ def _run_scan_phases(args, root: Path):
 
     if args.smell or args.duplicates:
         functions, classes, errors = scan_codebase(
-            root, exclude=args.exclude, verbose=args.verbose)
+            root, exclude=args.exclude, verbose=args.verbose
+        )
         print(f"  Found {len(functions)} functions, {len(classes)} classes")
         if errors:
             print(f"  ({len(errors)} parse errors)")
@@ -454,15 +496,13 @@ def _run_scan_phases(args, root: Path):
     )
 
 
-def main():
-    """Main entry point for x_ray.exe."""
+def _init_exe_scan():
+    """Handle CLI/interactive setup, hardware detection, target logic."""
     print(_EXE_BANNER)
 
-    # --- Trial license gate ---
     if not _check_trial_license():
         sys.exit(1)
 
-    # --- Interactive or CLI mode ---
     if _needs_interactive():
         args = _interactive_menu()
     else:
@@ -471,10 +511,19 @@ def main():
     hw = detect_hardware()
     print_hardware(hw)
     if args.hw:
-        return
+        return args, hw, None
 
     _print_tool_status(check_tools())
     root = _resolve_target(args)
+    return args, hw, root
+
+
+def main():
+    """Main entry point for x_ray.exe."""
+    args, hw, root = _init_exe_scan()
+
+    if args.hw:
+        return
 
     # Rustify mode — separate workflow
     if args.rustify:
@@ -522,9 +571,9 @@ def main():
             json.dump(results, f, indent=2, default=str)
         print(f"  Report saved to {args.report}")
 
-    print(f"\n{'='*66}")
+    print(f"\n{'=' * 66}")
     print("  X-Ray scan complete.")
-    print(f"{'='*66}\n")
+    print(f"{'=' * 66}\n")
 
 
 if __name__ == "__main__":
@@ -535,9 +584,10 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"\n  FATAL ERROR: {exc}")
         import traceback
+
         traceback.print_exc()
     finally:
         # Keep the window open when double-clicked from Explorer
-        if getattr(sys, 'frozen', False) and _is_interactive_console():
+        if getattr(sys, "frozen", False) and _is_interactive_console():
             print()
             input("  Press Enter to exit...")

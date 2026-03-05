@@ -412,12 +412,18 @@ class DuplicateFinder:
         ]
 
         if _HAS_RUST:
+            # Shift the O(N^2) load to Rust
             # Returns (key1, key2, token_sim) — string keys, not objects
             raw_candidates = _rust_core.prefilter_parallel(
-                func_list, self._tokens, cross_file_only,
-                self.SIZE_RATIO_MIN, self.TOKEN_PREFILTER
+                func_list,
+                self._tokens,
+                cross_file_only,
+                self.SIZE_RATIO_MIN,
+                self.TOKEN_PREFILTER,
             )
-            logger.info(f"Duplicate pre-filter (Rust): {len(raw_candidates)} candidates")
+            logger.info(
+                f"Duplicate pre-filter (Rust): {len(raw_candidates)} candidates"
+            )
             # Resolve string keys back to FunctionRecord objects
             func_map = {f.key: f for f in func_list}
             candidates = [

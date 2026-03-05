@@ -1,0 +1,365 @@
+"""Auto-generated monkey tests for _generated_tests/tests/test_xray_tests_test_lang_ast.py by X-Ray v7.0.
+
+Tests function signatures, edge cases, and class instantiation.
+"""
+
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_flat_function_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_flat_function_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_flat_function_is_callable
+    assert callable(test_tests_test_lang_ast_test_flat_function_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_single_if_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_single_if_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_single_if_is_callable
+    assert callable(test_tests_test_lang_ast_test_single_if_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_nested_if_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_nested_if_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_nested_if_is_callable
+    assert callable(test_tests_test_lang_ast_test_nested_if_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_triple_nesting_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_triple_nesting_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_triple_nesting_is_callable
+    assert callable(test_tests_test_lang_ast_test_triple_nesting_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_try_except_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_try_except_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_try_except_is_callable
+    assert callable(test_tests_test_lang_ast_test_try_except_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_with_statement_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_with_statement_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_with_statement_is_callable
+    assert callable(test_tests_test_lang_ast_test_with_statement_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_empty_function_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_empty_function_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_empty_function_is_callable
+    assert callable(test_tests_test_lang_ast_test_empty_function_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_single_if_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_single_if_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_single_if_is_callable
+    assert callable(test_tests_test_lang_ast_test_single_if_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_multiple_branches_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_multiple_branches_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_multiple_branches_is_callable
+    assert callable(test_tests_test_lang_ast_test_multiple_branches_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_comprehension_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_comprehension_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_comprehension_is_callable
+    assert callable(test_tests_test_lang_ast_test_comprehension_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_boolop_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_boolop_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_boolop_is_callable
+    assert callable(test_tests_test_lang_ast_test_boolop_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_assert_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_assert_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_assert_is_callable
+    assert callable(test_tests_test_lang_ast_test_assert_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_renames_function_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_renames_function_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_renames_function_is_callable
+    assert callable(test_tests_test_lang_ast_test_renames_function_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_renames_args_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_renames_args_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_renames_args_is_callable
+    assert callable(test_tests_test_lang_ast_test_renames_args_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_preserves_self_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_preserves_self_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_preserves_self_is_callable
+    assert callable(test_tests_test_lang_ast_test_preserves_self_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_strips_docstring_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_strips_docstring_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_strips_docstring_is_callable
+    assert callable(test_tests_test_lang_ast_test_strips_docstring_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_equivalent_functions_produce_same_dump_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_equivalent_functions_produce_same_dump_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_equivalent_functions_produce_same_dump_is_callable
+    assert callable(test_tests_test_lang_ast_test_equivalent_functions_produce_same_dump_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_different_structure_produces_different_dump_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_different_structure_produces_different_dump_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_different_structure_produces_different_dump_is_callable
+    assert callable(test_tests_test_lang_ast_test_different_structure_produces_different_dump_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_returns_hex_string_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_returns_hex_string_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_returns_hex_string_is_callable
+    assert callable(test_tests_test_lang_ast_test_returns_hex_string_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_same_structure_same_hash_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_same_structure_same_hash_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_same_structure_same_hash_is_callable
+    assert callable(test_tests_test_lang_ast_test_same_structure_same_hash_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_different_structure_different_hash_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_different_structure_different_hash_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_different_structure_different_hash_is_callable
+    assert callable(test_tests_test_lang_ast_test_different_structure_different_hash_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_python_fallback_when_rust_disabled_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_python_fallback_when_rust_disabled_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_python_fallback_when_rust_disabled_is_callable
+    assert callable(test_tests_test_lang_ast_test_python_fallback_when_rust_disabled_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_exception_returns_empty_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_exception_returns_empty_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_exception_returns_empty_is_callable
+    assert callable(test_tests_test_lang_ast_test_exception_returns_empty_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_simple_file_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_simple_file_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_simple_file_is_callable
+    assert callable(test_tests_test_lang_ast_test_simple_file_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_simple_file_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_simple_file_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_simple_file_none_args
+    assert callable(test_tests_test_lang_ast_test_simple_file_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_class_extraction_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_class_extraction_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_class_extraction_is_callable
+    assert callable(test_tests_test_lang_ast_test_class_extraction_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_class_extraction_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_class_extraction_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_class_extraction_none_args
+    assert callable(test_tests_test_lang_ast_test_class_extraction_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_async_function_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_async_function_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_async_function_is_callable
+    assert callable(test_tests_test_lang_ast_test_async_function_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_async_function_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_async_function_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_async_function_none_args
+    assert callable(test_tests_test_lang_ast_test_async_function_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_syntax_error_returns_error_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_syntax_error_returns_error_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_syntax_error_returns_error_is_callable
+    assert callable(test_tests_test_lang_ast_test_syntax_error_returns_error_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_syntax_error_returns_error_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_syntax_error_returns_error_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_syntax_error_returns_error_none_args
+    assert callable(test_tests_test_lang_ast_test_syntax_error_returns_error_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_missing_file_returns_error_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_missing_file_returns_error_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_missing_file_returns_error_is_callable
+    assert callable(test_tests_test_lang_ast_test_missing_file_returns_error_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_missing_file_returns_error_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_missing_file_returns_error_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_missing_file_returns_error_none_args
+    assert callable(test_tests_test_lang_ast_test_missing_file_returns_error_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_decorated_function_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_decorated_function_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_decorated_function_is_callable
+    assert callable(test_tests_test_lang_ast_test_decorated_function_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_decorated_function_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_decorated_function_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_decorated_function_none_args
+    assert callable(test_tests_test_lang_ast_test_decorated_function_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_calls_to_extracted_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_calls_to_extracted_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_calls_to_extracted_is_callable
+    assert callable(test_tests_test_lang_ast_test_calls_to_extracted_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_calls_to_extracted_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_calls_to_extracted_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_calls_to_extracted_none_args
+    assert callable(test_tests_test_lang_ast_test_calls_to_extracted_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_relative_path_forward_slashes_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_relative_path_forward_slashes_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_relative_path_forward_slashes_is_callable
+    assert callable(test_tests_test_lang_ast_test_relative_path_forward_slashes_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_relative_path_forward_slashes_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_relative_path_forward_slashes_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_relative_path_forward_slashes_none_args
+    assert callable(test_tests_test_lang_ast_test_relative_path_forward_slashes_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_finds_py_files_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_finds_py_files_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_finds_py_files_is_callable
+    assert callable(test_tests_test_lang_ast_test_finds_py_files_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_finds_py_files_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_finds_py_files_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_finds_py_files_none_args
+    assert callable(test_tests_test_lang_ast_test_finds_py_files_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_skips_pycache_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_skips_pycache_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_skips_pycache_is_callable
+    assert callable(test_tests_test_lang_ast_test_skips_pycache_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_skips_pycache_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_skips_pycache_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_skips_pycache_none_args
+    assert callable(test_tests_test_lang_ast_test_skips_pycache_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_skips_venv_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_skips_venv_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_skips_venv_is_callable
+    assert callable(test_tests_test_lang_ast_test_skips_venv_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_skips_venv_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_skips_venv_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_skips_venv_none_args
+    assert callable(test_tests_test_lang_ast_test_skips_venv_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_exclude_filter_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_exclude_filter_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_exclude_filter_is_callable
+    assert callable(test_tests_test_lang_ast_test_exclude_filter_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_exclude_filter_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_exclude_filter_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_exclude_filter_none_args
+    assert callable(test_tests_test_lang_ast_test_exclude_filter_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_include_filter_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_include_filter_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_include_filter_is_callable
+    assert callable(test_tests_test_lang_ast_test_include_filter_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_include_filter_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_include_filter_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_include_filter_none_args
+    assert callable(test_tests_test_lang_ast_test_include_filter_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_skips_egg_info_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_skips_egg_info_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_skips_egg_info_is_callable
+    assert callable(test_tests_test_lang_ast_test_skips_egg_info_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_skips_egg_info_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_skips_egg_info_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_skips_egg_info_none_args
+    assert callable(test_tests_test_lang_ast_test_skips_egg_info_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_scans_multiple_files_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_scans_multiple_files_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_scans_multiple_files_is_callable
+    assert callable(test_tests_test_lang_ast_test_scans_multiple_files_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_scans_multiple_files_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_scans_multiple_files_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_scans_multiple_files_none_args
+    assert callable(test_tests_test_lang_ast_test_scans_multiple_files_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_collects_errors_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_collects_errors_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_collects_errors_is_callable
+    assert callable(test_tests_test_lang_ast_test_collects_errors_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_collects_errors_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_collects_errors_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_collects_errors_none_args
+    assert callable(test_tests_test_lang_ast_test_collects_errors_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_empty_directory_is_callable_is_callable():
+    """Verify test_tests_test_lang_ast_test_empty_directory_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_empty_directory_is_callable
+    assert callable(test_tests_test_lang_ast_test_empty_directory_is_callable)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_test_empty_directory_none_args_is_callable():
+    """Verify test_tests_test_lang_ast_test_empty_directory_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_test_empty_directory_none_args
+    assert callable(test_tests_test_lang_ast_test_empty_directory_none_args)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestNestingDepth_is_class_is_callable():
+    """Verify test_tests_test_lang_ast_TestNestingDepth_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestNestingDepth_is_class
+    assert callable(test_tests_test_lang_ast_TestNestingDepth_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestNestingDepth_has_methods_is_callable():
+    """Verify test_tests_test_lang_ast_TestNestingDepth_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestNestingDepth_has_methods
+    assert callable(test_tests_test_lang_ast_TestNestingDepth_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestComplexity_is_class_is_callable():
+    """Verify test_tests_test_lang_ast_TestComplexity_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestComplexity_is_class
+    assert callable(test_tests_test_lang_ast_TestComplexity_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestComplexity_has_methods_is_callable():
+    """Verify test_tests_test_lang_ast_TestComplexity_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestComplexity_has_methods
+    assert callable(test_tests_test_lang_ast_TestComplexity_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestASTNormalizer_is_class_is_callable():
+    """Verify test_tests_test_lang_ast_TestASTNormalizer_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestASTNormalizer_is_class
+    assert callable(test_tests_test_lang_ast_TestASTNormalizer_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestASTNormalizer_has_methods_is_callable():
+    """Verify test_tests_test_lang_ast_TestASTNormalizer_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestASTNormalizer_has_methods
+    assert callable(test_tests_test_lang_ast_TestASTNormalizer_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestStructureHash_is_class_is_callable():
+    """Verify test_tests_test_lang_ast_TestStructureHash_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestStructureHash_is_class
+    assert callable(test_tests_test_lang_ast_TestStructureHash_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestStructureHash_has_methods_is_callable():
+    """Verify test_tests_test_lang_ast_TestStructureHash_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestStructureHash_has_methods
+    assert callable(test_tests_test_lang_ast_TestStructureHash_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestExtractFunctions_is_class_is_callable():
+    """Verify test_tests_test_lang_ast_TestExtractFunctions_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestExtractFunctions_is_class
+    assert callable(test_tests_test_lang_ast_TestExtractFunctions_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestExtractFunctions_has_methods_is_callable():
+    """Verify test_tests_test_lang_ast_TestExtractFunctions_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestExtractFunctions_has_methods
+    assert callable(test_tests_test_lang_ast_TestExtractFunctions_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestCollectPyFiles_is_class_is_callable():
+    """Verify test_tests_test_lang_ast_TestCollectPyFiles_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestCollectPyFiles_is_class
+    assert callable(test_tests_test_lang_ast_TestCollectPyFiles_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestCollectPyFiles_has_methods_is_callable():
+    """Verify test_tests_test_lang_ast_TestCollectPyFiles_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestCollectPyFiles_has_methods
+    assert callable(test_tests_test_lang_ast_TestCollectPyFiles_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestScanCodebase_is_class_is_callable():
+    """Verify test_tests_test_lang_ast_TestScanCodebase_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestScanCodebase_is_class
+    assert callable(test_tests_test_lang_ast_TestScanCodebase_is_class)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestScanCodebase_has_methods_is_callable():
+    """Verify test_tests_test_lang_ast_TestScanCodebase_has_methods exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestScanCodebase_has_methods
+    assert callable(test_tests_test_lang_ast_TestScanCodebase_has_methods)
+
+def test__generated_tests_tests_test_xray_tests_test_lang_ast_test_tests_test_lang_ast_TestScanCodebase_has_docstring_is_callable():
+    """Verify test_tests_test_lang_ast_TestScanCodebase_has_docstring exists and is callable."""
+    from _generated_tests.tests.test_xray_tests_test_lang_ast import test_tests_test_lang_ast_TestScanCodebase_has_docstring
+    assert callable(test_tests_test_lang_ast_TestScanCodebase_has_docstring)

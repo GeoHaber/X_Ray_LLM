@@ -10,6 +10,7 @@ generates a real Cargo project, runs `cargo check`, and reports:
 
 This is the REAL test — not "does it look right" but "does rustc accept it".
 """
+
 from __future__ import annotations
 
 import json
@@ -90,7 +91,7 @@ def load_pairs(max_per_project: int = 0) -> List[Dict[str, Any]]:
 
 def sanitize_fn_name(name: str, index: int) -> str:
     """Make a unique, valid Rust function name."""
-    safe = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+    safe = re.sub(r"[^a-zA-Z0-9_]", "_", name)
     if safe and safe[0].isdigit():
         safe = f"fn_{safe}"
     if not safe:
@@ -114,7 +115,7 @@ def generate_crate(pairs: List[Dict], batch_size: int = 200) -> List[Path]:
     # Split into modules to avoid a single huge file
     modules = []
     for batch_idx in range(0, len(pairs), batch_size):
-        batch = pairs[batch_idx:batch_idx + batch_size]
+        batch = pairs[batch_idx : batch_idx + batch_size]
         mod_name = f"batch_{batch_idx // batch_size}"
         modules.append(mod_name)
 
@@ -129,14 +130,16 @@ def generate_crate(pairs: List[Dict], batch_size: int = 200) -> List[Path]:
 
             # Replace the function name in the Rust code to avoid conflicts
             rust_code = re.sub(
-                r'^((?:async\s+)?fn\s+)\w+(\s*\()',
-                f'\\1{unique_name}\\2',
+                r"^((?:async\s+)?fn\s+)\w+(\s*\()",
+                f"\\1{unique_name}\\2",
                 rust_code,
                 count=1,
                 flags=re.MULTILINE,
             )
 
-            lines.append(f"// [{batch_idx + i}] {pair.get('name', '?')} from {pair.get('project', '?')}/{Path(pair.get('file', '?')).name}")
+            lines.append(
+                f"// [{batch_idx + i}] {pair.get('name', '?')} from {pair.get('project', '?')}/{Path(pair.get('file', '?')).name}"
+            )
             lines.append(rust_code)
             lines.append("")
 
@@ -171,15 +174,16 @@ def parse_errors(stderr: str) -> List[Dict[str, str]]:
     # Short format: src\batch_0.rs:42:5: error[E0425]: message
     # or:           src\batch_0.rs:42:5: error: message
     for m in re.finditer(
-        r'(src[\\/]\w+\.rs):(\d+):\d+:\s*(error(?:\[E\d+\])?):\s*(.+)',
-        stderr
+        r"(src[\\/]\w+\.rs):(\d+):\d+:\s*(error(?:\[E\d+\])?):\s*(.+)", stderr
     ):
-        errors.append({
-            "file": m.group(1).replace("\\", "/"),
-            "line": int(m.group(2)),
-            "code": m.group(3),
-            "message": m.group(4).strip(),
-        })
+        errors.append(
+            {
+                "file": m.group(1).replace("\\", "/"),
+                "line": int(m.group(2)),
+                "code": m.group(3),
+                "message": m.group(4).strip(),
+            }
+        )
     return errors
 
 
@@ -189,34 +193,37 @@ def _find_owning_function(src_file: Path, err_line: int) -> str:
         return "unknown"
     src_lines = src_file.read_text(encoding="utf-8").splitlines()
     for i in range(min(err_line - 1, len(src_lines) - 1), -1, -1):
-        m = re.match(r'// \[(\d+)\] (.+?) from (.+)', src_lines[i])
+        m = re.match(r"// \[(\d+)\] (.+?) from (.+)", src_lines[i])
         if m:
             return f"{m.group(2)} ({m.group(3)})"
     return "unknown"
 
 
-def map_errors_to_functions(errors: List[Dict], pairs: List[Dict],
-                            batch_size: int = 200) -> Dict[str, Any]:
+def map_errors_to_functions(
+    errors: List[Dict], pairs: List[Dict], batch_size: int = 200
+) -> Dict[str, Any]:
     """Map compiler errors back to the original Python functions."""
     error_to_functions: Dict[str, List[str]] = {}
     error_code_counts: Counter = Counter()
 
     for err in errors:
-        file_match = re.match(r'src/batch_(\d+)\.rs', err["file"])
+        file_match = re.match(r"src/batch_(\d+)\.rs", err["file"])
         if not file_match:
             continue
 
-        func_name = _find_owning_function(
-            CRATE_DIR / err["file"], err["line"])
+        func_name = _find_owning_function(CRATE_DIR / err["file"], err["line"])
         error_code_counts[err["code"]] += 1
         short_msg = err["message"][:80]
         error_to_functions.setdefault(short_msg, []).append(func_name)
 
     return {
         "error_code_counts": dict(error_code_counts.most_common()),
-        "error_messages": {k: v[:3] for k, v in
-                          sorted(error_to_functions.items(),
-                                 key=lambda x: -len(x[1]))[:30]},
+        "error_messages": {
+            k: v[:3]
+            for k, v in sorted(error_to_functions.items(), key=lambda x: -len(x[1]))[
+                :30
+            ]
+        },
         "total_unique_errors": len(error_to_functions),
     }
 
@@ -224,13 +231,13 @@ def map_errors_to_functions(errors: List[Dict], pairs: List[Dict],
 def _print_compile_results(pairs, errors, modules, analysis):
     """Print the compilation results summary."""
     total_lines = sum(
-        f.read_text(encoding="utf-8").count("\n")
-        for f in modules if f.exists())
+        f.read_text(encoding="utf-8").count("\n") for f in modules if f.exists()
+    )
     error_locs = len(set((e["file"], e["line"]) for e in errors))
 
-    print(f"\n  {'='*60}")
+    print(f"\n  {'=' * 60}")
     print("  COMPILATION RESULTS")
-    print(f"  {'='*60}")
+    print(f"  {'=' * 60}")
     print(f"  Total functions:  {len(pairs)}")
     print(f"  Total errors:     {len(errors)}")
     print(f"  Total Rust lines: {total_lines:,}")
@@ -251,8 +258,10 @@ def _print_compile_results(pairs, errors, modules, analysis):
 def _save_compile_report(pairs, errors, total_lines, error_locs, analysis):
     """Write compile report JSON + print cargo summary."""
     report = {
-        "total_functions": len(pairs), "total_errors": len(errors),
-        "total_lines": total_lines, "error_locations": error_locs,
+        "total_functions": len(pairs),
+        "total_errors": len(errors),
+        "total_lines": total_lines,
+        "error_locations": error_locs,
         "error_code_counts": analysis["error_code_counts"],
         "error_messages": dict(analysis["error_messages"]),
         "raw_errors": errors[:200],
@@ -270,8 +279,10 @@ def main():
 
     print("\n  Loading transpiled pairs...")
     pairs = load_pairs()
-    print(f"  Loaded {len(pairs)} clean pairs from "
-          f"{len(set(p['project'] for p in pairs))} projects")
+    print(
+        f"  Loaded {len(pairs)} clean pairs from "
+        f"{len(set(p['project'] for p in pairs))} projects"
+    )
 
     print("\n  Generating Cargo crate...")
     modules = generate_crate(pairs)
@@ -290,12 +301,14 @@ def main():
     errors = parse_errors(stderr)
     print(f"\n  Found {len(errors)} compilation errors")
     analysis = map_errors_to_functions(errors, pairs)
-    total_lines, error_locs = _print_compile_results(
-        pairs, errors, modules, analysis)
+    total_lines, error_locs = _print_compile_results(pairs, errors, modules, analysis)
     _save_compile_report(pairs, errors, total_lines, error_locs, analysis)
 
-    summary_lines = [ln for ln in stderr.strip().splitlines()
-                     if "error" in ln.lower() and "generated" in ln.lower()]
+    summary_lines = [
+        ln
+        for ln in stderr.strip().splitlines()
+        if "error" in ln.lower() and "generated" in ln.lower()
+    ]
     if summary_lines:
         print(f"\n  Cargo summary: {summary_lines[-1].strip()}")
 

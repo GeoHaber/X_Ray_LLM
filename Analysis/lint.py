@@ -54,7 +54,6 @@ class LintAnalyzer(BaseStaticAnalyzer):
 
     def _build_command(self, root: Path, exclude: Optional[List[str]]) -> List[str]:
         """Assemble the ruff CLI command list."""
-        from Analysis._analyzer_base import _merged_excludes
         cmd = [
             self._tool_path,
             "check",
@@ -62,7 +61,27 @@ class LintAnalyzer(BaseStaticAnalyzer):
             "--output-format=json",
             "--no-fix",
         ]
-        for pat in _merged_excludes(exclude):
+        auto_exclude = [
+            ".venv",
+            "venv",
+            ".env",
+            "__pycache__",
+            "node_modules",
+            ".git",
+            "target",
+            ".mypy_cache",
+            ".pytest_cache",
+            "dist",
+            "build",
+            ".eggs",
+            "*.egg-info",
+            "_scratch",
+            ".github",
+        ]
+        all_exclude = list(auto_exclude)
+        if exclude:
+            all_exclude.extend(exclude)
+        for pat in all_exclude:
             cmd.extend(["--exclude", pat])
         cmd.extend(self.extra_args)
         return cmd
@@ -125,16 +144,20 @@ class LintAnalyzer(BaseStaticAnalyzer):
             return 0
         import subprocess
         from Analysis._analyzer_base import _merged_excludes
+
         cmd = [self._tool_path, "check", "--fix", str(root)]
         for pat in _merged_excludes(exclude):
             cmd.extend(["--exclude", pat])
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True,
+                cmd,
+                capture_output=True,
+                text=True,
                 timeout=self.TOOL_TIMEOUT,
             )
             # ruff prints "Fixed N errors." on stderr when --fix applied changes
             import re
+
             match = re.search(r"Fixed (\d+) error", result.stderr + result.stdout)
             return int(match.group(1)) if match else 0
         except Exception:

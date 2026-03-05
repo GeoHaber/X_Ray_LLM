@@ -33,6 +33,7 @@ from Core.types import SmellIssue, Severity
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _write_py(tmp_path: Path, code: str, name: str = "test_app.py") -> Path:
     """Write *code* to a temp .py file and return its path."""
     p = tmp_path / name
@@ -40,8 +41,7 @@ def _write_py(tmp_path: Path, code: str, name: str = "test_app.py") -> Path:
     return p
 
 
-def _analyze_code(tmp_path: Path, code: str,
-                  extra_modules=None) -> List[UICompatIssue]:
+def _analyze_code(tmp_path: Path, code: str, extra_modules=None) -> List[UICompatIssue]:
     """Shortcut: write code, analyze, return issues."""
     p = _write_py(tmp_path, code)
     analyzer = UICompatAnalyzer(extra_modules=extra_modules or set())
@@ -51,6 +51,7 @@ def _analyze_code(tmp_path: Path, code: str,
 # ---------------------------------------------------------------------------
 # Unit tests — helpers
 # ---------------------------------------------------------------------------
+
 
 class TestEditDistance:
     def test_identical(self):
@@ -101,21 +102,25 @@ class TestTopParams:
 # Unit tests — alias extraction
 # ---------------------------------------------------------------------------
 
+
 class TestExtractAliases:
     def test_import_as(self):
         import ast
+
         tree = ast.parse("import flet as ft")
         aliases = _extract_aliases(tree)
         assert aliases == {"ft": "flet"}
 
     def test_import_plain(self):
         import ast
+
         tree = ast.parse("import tkinter")
         aliases = _extract_aliases(tree)
         assert aliases == {"tkinter": "tkinter"}
 
     def test_multiple_imports(self):
         import ast
+
         tree = ast.parse("import flet as ft\nimport tkinter as tk")
         aliases = _extract_aliases(tree)
         assert aliases["ft"] == "flet"
@@ -123,6 +128,7 @@ class TestExtractAliases:
 
     def test_no_ui_import(self):
         import ast
+
         tree = ast.parse("import os\nimport json")
         aliases = _extract_aliases(tree)
         assert "os" in aliases
@@ -133,9 +139,11 @@ class TestExtractAliases:
 # Unit tests — call visitor
 # ---------------------------------------------------------------------------
 
+
 class TestUICallVisitor:
     def test_simple_call(self):
         import ast
+
         code = "ft.Text('hello', size=14)"
         tree = ast.parse(code)
         v = _UICallVisitor({"ft": "flet"}, "test.py")
@@ -149,6 +157,7 @@ class TestUICallVisitor:
 
     def test_nested_attr(self):
         import ast
+
         code = "ft.Padding.symmetric(vertical=10)"
         tree = ast.parse(code)
         v = _UICallVisitor({"ft": "flet"}, "test.py")
@@ -162,6 +171,7 @@ class TestUICallVisitor:
 
     def test_ignores_non_ui(self):
         import ast
+
         code = "os.path.join('a', 'b')"
         tree = ast.parse(code)
         v = _UICallVisitor({"ft": "flet"}, "test.py")
@@ -170,6 +180,7 @@ class TestUICallVisitor:
 
     def test_multiple_kwargs(self):
         import ast
+
         code = "ft.Container(content=x, bgcolor='red', padding=10)"
         tree = ast.parse(code)
         v = _UICallVisitor({"ft": "flet"}, "test.py")
@@ -182,6 +193,7 @@ class TestUICallVisitor:
 # Integration — real Flet validation
 # ---------------------------------------------------------------------------
 
+
 class TestFletCompatValid:
     """Test valid Flet API calls for basic widgets."""
 
@@ -190,65 +202,89 @@ class TestFletCompatValid:
         pytest.importorskip("flet")
 
     def test_valid_text_call(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             t = ft.Text("hello", size=14, color="white", weight=ft.FontWeight.BOLD)
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_container_call(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             c = ft.Container(content=ft.Text("x"), bgcolor="red",
                              padding=10, border_radius=8)
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_column_row(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             col = ft.Column(controls=[], spacing=10, expand=True)
             row = ft.Row(controls=[], spacing=5, alignment=ft.MainAxisAlignment.CENTER)
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_button(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             b = ft.Button("Click", on_click=lambda e: None,
                           bgcolor="blue", color="white")
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_snackbar(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             s = ft.SnackBar(content=ft.Text("msg"), open=True)
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_dropdown(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             d = ft.Dropdown(value="a", options=[])
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_checkbox(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             c = ft.Checkbox(label="opt", value=True,
                             fill_color="blue", check_color="white")
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_alertdialog(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             d = ft.AlertDialog(
                 modal=True, title=ft.Text("T"),
                 content=ft.Text("C"), actions=[])
-        """)
+        """,
+        )
         assert len(issues) == 0
 
 
@@ -260,14 +296,19 @@ class TestFletCompatValidAdvanced:
         pytest.importorskip("flet")
 
     def test_valid_tab_label_only(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             t = ft.Tab(label="Hello", icon="icon")
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_tabbar(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             tb = ft.TabBar(
                 tabs=[ft.Tab(label="A")],
@@ -275,11 +316,14 @@ class TestFletCompatValidAdvanced:
                 indicator_color="blue",
                 divider_color="grey",
             )
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_tabs_new_api(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             tabs = ft.Tabs(
                 content=ft.Row([ft.Tab(label="A")]),
@@ -287,47 +331,63 @@ class TestFletCompatValidAdvanced:
                 selected_index=0,
                 animation_duration=300,
             )
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_expansion_tile(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             e = ft.ExpansionTile(
                 title=ft.Text("T"),
                 controls=[ft.Text("body")],
                 expanded=False)
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_navigation_drawer(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             d = ft.NavigationDrawer(
                 controls=[ft.Text("x")],
                 selected_index=0)
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_padding_symmetric(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             p = ft.Padding.symmetric(vertical=10, horizontal=5)
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_border_only(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             b = ft.Border.only(left=ft.BorderSide(2, "red"))
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_valid_colors_with_opacity(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             c = ft.Colors.with_opacity(0.15, "red")
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     # ── INVALID calls — must be caught ────────────────────────────────
@@ -342,36 +402,47 @@ class TestFletCompatInvalid:
 
     def test_expansion_tile_initially_expanded_invalid(self, tmp_path):
         """initially_expanded was renamed to expanded in newer Flet."""
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             e = ft.ExpansionTile(
                 title=ft.Text("T"),
                 initially_expanded=False)
-        """)
+        """,
+        )
         assert len(issues) == 1
         assert issues[0].bad_kwarg == "initially_expanded"
 
     def test_tab_content_invalid(self, tmp_path):
         """ft.Tab does NOT accept content= in new Flet."""
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             t = ft.Tab(label="X", content=ft.Text("body"))
-        """)
+        """,
+        )
         assert len(issues) == 1
         assert issues[0].bad_kwarg == "content"
 
     def test_tab_text_invalid(self, tmp_path):
         """ft.Tab uses 'label', not 'text'."""
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             t = ft.Tab(text="X")
-        """)
+        """,
+        )
         assert len(issues) == 1
         assert issues[0].bad_kwarg == "text"
 
     def test_tabs_old_api_invalid(self, tmp_path):
         """ft.Tabs does NOT accept tabs=, label_color=, etc."""
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             tabs = ft.Tabs(
                 tabs=[ft.Tab(label="A")],
@@ -379,7 +450,8 @@ class TestFletCompatInvalid:
                 indicator_color="blue",
                 divider_color="grey",
             )
-        """)
+        """,
+        )
         bad = {i.bad_kwarg for i in issues}
         assert "tabs" in bad
         assert "label_color" in bad
@@ -388,42 +460,54 @@ class TestFletCompatInvalid:
 
     def test_tabs_unselected_label_color_invalid(self, tmp_path):
         """ft.Tabs does NOT accept unselected_label_color."""
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             tabs = ft.Tabs(
                 content=ft.Row([]),
                 length=1,
                 unselected_label_color="grey",
             )
-        """)
+        """,
+        )
         assert any(i.bad_kwarg == "unselected_label_color" for i in issues)
 
     def test_multiple_bad_kwargs_one_call(self, tmp_path):
         """Multiple bad kwargs in a single call should each be reported."""
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             tabs = ft.Tabs(tabs=[], label_color="w",
                            unselected_label_color="g",
                            indicator_color="b", divider_color="d")
-        """)
+        """,
+        )
         assert len(issues) == 5
 
     # ── Edge cases ────────────────────────────────────────────────────
 
     def test_no_kwargs_ok(self, tmp_path):
         """Positional-only calls should not trigger issues."""
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             t = ft.Text("hello")
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_non_ui_module_ignored(self, tmp_path):
         """Calls to non-UI modules should be ignored."""
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import os
             os.path.join('a', 'b')
-        """)
+        """,
+        )
         assert len(issues) == 0
 
     def test_syntax_error_file_skipped(self, tmp_path):
@@ -436,10 +520,14 @@ class TestFletCompatInvalid:
 
     def test_missing_module_skipped(self, tmp_path):
         """If the module can't be imported, skip gracefully."""
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import nonexistent_ui_lib as nui
             nui.Widget(bad_param=True)
-        """, extra_modules={"nonexistent_ui_lib"})
+        """,
+            extra_modules={"nonexistent_ui_lib"},
+        )
         assert len(issues) == 0
 
 
@@ -447,17 +535,20 @@ class TestFletCompatInvalid:
 # Integration — SmellIssue conversion
 # ---------------------------------------------------------------------------
 
-class TestSmellConversion:
 
+class TestSmellConversion:
     @pytest.fixture(autouse=True)
     def _skip_no_flet(self):
         pytest.importorskip("flet")
 
     def test_to_smell_fields(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             t = ft.Tab(label="X", content=ft.Text("body"))
-        """)
+        """,
+        )
         assert len(issues) == 1
         smell = issues[0].to_smell()
         assert isinstance(smell, SmellIssue)
@@ -469,10 +560,13 @@ class TestSmellConversion:
         assert "flet.Tab" in smell.name
 
     def test_suggestion_present(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             t = ft.Tab(text="X")
-        """)
+        """,
+        )
         smell = issues[0].to_smell()
         # Should suggest something useful
         assert len(smell.suggestion) > 0
@@ -482,18 +576,21 @@ class TestSmellConversion:
 # Summary / Reporting
 # ---------------------------------------------------------------------------
 
-class TestSummary:
 
+class TestSummary:
     @pytest.fixture(autouse=True)
     def _skip_no_flet(self):
         pytest.importorskip("flet")
 
     def test_summary_structure(self, tmp_path):
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             ft.Tab(label="A", content=ft.Text("x"))
             ft.Tabs(tabs=[], label_color="w")
-        """)
+        """,
+        )
         analyzer = UICompatAnalyzer()
         summary = analyzer.summary(raw=issues)
         assert "total" in summary
@@ -509,10 +606,13 @@ class TestSummary:
         out = capsys.readouterr().out
         assert "compatible" in out.lower() or "✅" in out
 
-        issues = _analyze_code(tmp_path, """
+        issues = _analyze_code(
+            tmp_path,
+            """
             import flet as ft
             ft.Tab(content=ft.Text("x"))
-        """)
+        """,
+        )
         analyzer.print_report(issues)
         out = capsys.readouterr().out
         assert "content" in out
@@ -522,8 +622,8 @@ class TestSummary:
 # Full-tree scan
 # ---------------------------------------------------------------------------
 
-class TestTreeScan:
 
+class TestTreeScan:
     @pytest.fixture(autouse=True)
     def _skip_no_flet(self):
         pytest.importorskip("flet")
@@ -532,14 +632,22 @@ class TestTreeScan:
         """Should recursively find issues across multiple files."""
         sub = tmp_path / "sub"
         sub.mkdir()
-        _write_py(tmp_path, """
+        _write_py(
+            tmp_path,
+            """
             import flet as ft
             ft.Tab(content=ft.Text("a"))
-        """, "app1.py")
-        _write_py(sub, """
+        """,
+            "app1.py",
+        )
+        _write_py(
+            sub,
+            """
             import flet as ft
             ft.Tabs(tabs=[], label_color="w")
-        """, "app2.py")
+        """,
+            "app2.py",
+        )
         analyzer = UICompatAnalyzer()
         issues = analyzer.analyze_tree(tmp_path)
         assert len(issues) >= 3  # 1 from app1 + 2 from app2
@@ -548,14 +656,22 @@ class TestTreeScan:
         """Excluded dirs should be skipped."""
         venv = tmp_path / ".venv"
         venv.mkdir()
-        _write_py(venv, """
+        _write_py(
+            venv,
+            """
             import flet as ft
             ft.Tab(content=ft.Text("a"))
-        """, "hidden.py")
-        _write_py(tmp_path, """
+        """,
+            "hidden.py",
+        )
+        _write_py(
+            tmp_path,
+            """
             import flet as ft
             ft.Text("clean", size=14)
-        """, "clean.py")
+        """,
+            "clean.py",
+        )
         analyzer = UICompatAnalyzer()
         issues = analyzer.analyze_tree(tmp_path)
         assert len(issues) == 0  # .venv excluded, clean.py is clean
@@ -564,6 +680,7 @@ class TestTreeScan:
 # ---------------------------------------------------------------------------
 # Self-scan — run on our own codebase
 # ---------------------------------------------------------------------------
+
 
 class TestSelfScan:
     """Run the analyzer on x_ray_flet.py and verify known bugs are detected."""
@@ -581,6 +698,8 @@ class TestSelfScan:
         issues = analyzer.analyze(flet_path)
         assert len(issues) == 0, (
             f"Expected 0 UI compat issues in x_ray_flet.py but found {len(issues)}:\n"
-            + "\n".join(f"  L{i.call.line}: {i.bad_kwarg} in {i.call.resolved_name}"
-                        for i in issues)
+            + "\n".join(
+                f"  L{i.call.line}: {i.bad_kwarg} in {i.call.resolved_name}"
+                for i in issues
+            )
         )

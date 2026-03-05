@@ -1,9 +1,9 @@
 """
 tests/test_trend.py — Tests for Analysis/trend.py (v6.0.0)
 """
+
 import json
 import pytest
-from pathlib import Path
 
 from Analysis.trend import (
     compare_scans,
@@ -13,6 +13,7 @@ from Analysis.trend import (
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture()
 def prev_scan():
@@ -38,6 +39,7 @@ def curr_scan():
 
 # ── compare_scans ──────────────────────────────────────────────────────────────
 
+
 class TestCompareScans:
     def test_returns_empty_when_prev_none(self, curr_scan):
         assert compare_scans(None, curr_scan) == {}
@@ -62,7 +64,7 @@ class TestCompareScans:
 
     def test_smells_delta_negative_means_improvement(self, prev_scan, curr_scan):
         delta = compare_scans(prev_scan, curr_scan)
-        assert delta["smells"]["total"] == -3   # 10 → 7
+        assert delta["smells"]["total"] == -3  # 10 → 7
         assert delta["smells"]["critical"] == -1  # 2 → 1
 
     def test_duplicate_delta(self, prev_scan, curr_scan):
@@ -85,6 +87,7 @@ class TestCompareScans:
 
 
 # ── format_grade_delta ──────────────────────────────────────────────────────
+
 
 class TestFormatGradeDelta:
     def test_positive_shows_up_arrow(self, prev_scan, curr_scan):
@@ -114,6 +117,7 @@ class TestFormatGradeDelta:
 
 
 # ── load_prev_results ──────────────────────────────────────────────────────
+
 
 class TestLoadPrevResults:
     def test_loads_valid_json(self, tmp_path, prev_scan):

@@ -8,8 +8,7 @@ from Core.types import (
     LibrarySuggestion,
     Severity,
 )
-from typing import List, Dict, Any, NamedTuple, Optional
-from Core.types import FunctionRecord, ClassRecord, SmellIssue, DuplicateGroup, LibrarySuggestion, Severity
+from typing import Optional
 from Core.config import __version__, SEP
 from Core.ui_bridge import get_bridge
 
@@ -81,7 +80,9 @@ def print_duplicates(duplicates: List[DuplicateGroup], summary: Dict[str, Any]):
         print(
             f"Group {g.group_id} ({g.similarity_type}, avg sim: {g.avg_similarity:.2f})"
         )
-        bridge.log(f"Group {g.group_id} ({g.similarity_type}, avg sim: {g.avg_similarity:.2f})")
+        bridge.log(
+            f"Group {g.group_id} ({g.similarity_type}, avg sim: {g.avg_similarity:.2f})"
+        )
         for f in g.functions:
             bridge.log(f"  - {f['file']}:{f['line']} ({f['name']})")
         bridge.log("")
@@ -131,11 +132,14 @@ def print_lint_report(issues: List[SmellIssue], summary: Dict[str, Any]):
     print("")
 
     print("  Top Rules:")
-    bridge.log(f"  Total: {summary['total']} issues "
-               f"({summary.get('fixable', 0)} auto-fixable)")
-    bridge.log(f"  Critical: {summary['critical']}  "
-               f"Warning: {summary['warning']}  "
-               f"Info: {summary.get('info', 0)}")
+    bridge.log(
+        f"  Total: {summary['total']} issues ({summary.get('fixable', 0)} auto-fixable)"
+    )
+    bridge.log(
+        f"  Critical: {summary['critical']}  "
+        f"Warning: {summary['warning']}  "
+        f"Info: {summary.get('info', 0)}"
+    )
     bridge.log("")
 
     bridge.log("  Top Rules:")
@@ -183,9 +187,11 @@ def print_security_report(issues: List[SmellIssue], summary: Dict[str, Any]):
     )
     print("")
     bridge.log(f"  Total: {summary['total']} issues")
-    bridge.log(f"  Critical (HIGH): {summary['critical']}  "
-               f"Warning (MEDIUM): {summary['warning']}  "
-               f"Info (LOW): {summary.get('info', 0)}")
+    bridge.log(
+        f"  Critical (HIGH): {summary['critical']}  "
+        f"Warning (MEDIUM): {summary['warning']}  "
+        f"Info (LOW): {summary.get('info', 0)}"
+    )
     bridge.log("")
 
     _print_issues_by_severity(issues, Severity.CRITICAL, "HIGH Severity")
@@ -269,12 +275,36 @@ _PENALTY_RULES: List[tuple] = [
         30,
         [],
     ),
-    ("smells",     "X-Ray Smells",    {"critical": 0.25,  "warning": 0.05, "info": 0.01},  30, []),
-    ("duplicates", "X-Ray Duplicates", {},  15, []),
-    ("lint",       "Ruff Lint",       {"critical": 0.3,   "warning": 0.05, "info": 0.005}, 25, ["fixable"]),
-    ("security",   "Bandit Security", {"critical": 1.5,   "warning": 0.3,  "info": 0.005}, 30, []),
-    ("web",        "Web Smells (JS/TS)", {"critical": 0.25, "warning": 0.05, "info": 0.01}, 20, []),
-    ("health",     "Project Health",  {},  10, []),
+    (
+        "smells",
+        "X-Ray Smells",
+        {"critical": 0.25, "warning": 0.05, "info": 0.01},
+        30,
+        [],
+    ),
+    ("duplicates", "X-Ray Duplicates", {}, 15, []),
+    (
+        "lint",
+        "Ruff Lint",
+        {"critical": 0.3, "warning": 0.05, "info": 0.005},
+        25,
+        ["fixable"],
+    ),
+    (
+        "security",
+        "Bandit Security",
+        {"critical": 1.5, "warning": 0.3, "info": 0.005},
+        30,
+        [],
+    ),
+    (
+        "web",
+        "Web Smells (JS/TS)",
+        {"critical": 0.25, "warning": 0.05, "info": 0.01},
+        20,
+        [],
+    ),
+    ("health", "Project Health", {}, 10, []),
 ]
 
 
@@ -297,9 +327,11 @@ def _calc_category_penalty(data: Dict[str, Any], key: str) -> tuple:
             health_score = data.get("health_score", 100)
             checks_failed = data.get("checks_total", 0) - data.get("checks_passed", 0)
             penalty = min(checks_failed * 1.0, cap)
-            return penalty, {"penalty": round(penalty, 1),
-                             "health_score": health_score,
-                             "checks_failed": checks_failed}
+            return penalty, {
+                "penalty": round(penalty, 1),
+                "health_score": health_score,
+                "checks_failed": checks_failed,
+            }
         counts = {k: data.get(k, 0) for k in weights}
         penalty = sum(counts[k] * w for k, w in weights.items())
         penalty = min(penalty, cap)
@@ -349,8 +381,9 @@ def compute_grade(results: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def print_unified_grade(results: Dict[str, Any],
-                        prev_results: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def print_unified_grade(
+    results: Dict[str, Any], prev_results: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     Calculate and print a unified code quality grade based on all scanners.
 
@@ -371,9 +404,9 @@ def print_unified_grade(results: Dict[str, Any],
     print("  UNIFIED CODE QUALITY GRADE")
     print(f"{'=' * 64}")
     bridge = get_bridge()
-    bridge.log(f"\n{'='*64}")
+    bridge.log(f"\n{'=' * 64}")
     bridge.log("  UNIFIED CODE QUALITY GRADE")
-    bridge.log(f"{'='*64}")
+    bridge.log(f"{'=' * 64}")
 
     grade_info = compute_grade(results)
 
@@ -384,6 +417,7 @@ def print_unified_grade(results: Dict[str, Any],
     if prev_results:
         try:
             from Analysis.trend import compare_scans, format_grade_delta
+
             delta = compare_scans(prev_results, results)
             delta_line = format_grade_delta(delta)
             if delta_line:
@@ -395,7 +429,7 @@ def print_unified_grade(results: Dict[str, Any],
     bridge.log("")
     _print_breakdown(grade_info["breakdown"])
     print(f"\n{'=' * 64}\n")
-    bridge.log(f"\n{'='*64}\n")
+    bridge.log(f"\n{'=' * 64}\n")
 
     return grade_info
 
@@ -441,10 +475,12 @@ def print_web_report(issues: List[SmellIssue], summary: Dict[str, Any]):
     bridge.log(f"  Functions found: {summary.get('total_functions', 0)}")
     bridge.log(f"  React components: {summary.get('react_components', 0)}")
     bridge.log(f"  Console.log calls: {summary.get('console_logs_total', 0)}")
-    bridge.log(f"  Total issues: {summary['total']} "
-               f"({summary['critical']} critical, "
-               f"{summary['warning']} warning, "
-               f"{summary.get('info', 0)} info)")
+    bridge.log(
+        f"  Total issues: {summary['total']} "
+        f"({summary['critical']} critical, "
+        f"{summary['warning']} warning, "
+        f"{summary.get('info', 0)} info)"
+    )
     bridge.log("")
 
     # Package categories
@@ -485,8 +521,10 @@ def print_health_report(report, summary: Dict[str, Any]):
     bridge.log(f"{SEP}")
 
     bridge.log(f"  Health Score: {report.score}/100  Grade: {report.grade}")
-    bridge.log(f"  Checks: {summary.get('checks_passed', 0)}/"
-               f"{summary.get('checks_total', 0)} passed")
+    bridge.log(
+        f"  Checks: {summary.get('checks_passed', 0)}/"
+        f"{summary.get('checks_total', 0)} passed"
+    )
     bridge.log("")
 
     for check in report.checks:
@@ -496,7 +534,7 @@ def print_health_report(report, summary: Dict[str, Any]):
             bridge.log(f"     → {check.detail}")
 
     if report.files_created:
-        bridge.log(f"\n  Auto-Created Files:")
+        bridge.log("\n  Auto-Created Files:")
         for f in report.files_created:
             bridge.log(f"    ✔ {f}")
     bridge.log("")

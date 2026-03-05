@@ -4,3 +4,4 @@
 # Pin with upper bound for reproducible installs; Dependabot will propose updates.
 
 pytest>=7.0,<9
+flet>=0.24.0

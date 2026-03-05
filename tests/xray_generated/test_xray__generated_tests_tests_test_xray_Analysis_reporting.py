@@ -1,0 +1,135 @@
+"""Auto-generated monkey tests for _generated_tests/tests/test_xray_Analysis_reporting.py by X-Ray v7.0.
+
+Tests function signatures, edge cases, and class instantiation.
+"""
+
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_smells_is_callable_is_callable():
+    """Verify test_Analysis_reporting_print_smells_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_smells_is_callable
+    assert callable(test_Analysis_reporting_print_smells_is_callable)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_smells_none_args_is_callable():
+    """Verify test_Analysis_reporting_print_smells_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_smells_none_args
+    assert callable(test_Analysis_reporting_print_smells_none_args)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_duplicates_is_callable_is_callable():
+    """Verify test_Analysis_reporting_print_duplicates_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_duplicates_is_callable
+    assert callable(test_Analysis_reporting_print_duplicates_is_callable)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_duplicates_none_args_is_callable():
+    """Verify test_Analysis_reporting_print_duplicates_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_duplicates_none_args
+    assert callable(test_Analysis_reporting_print_duplicates_none_args)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_lint_report_is_callable_is_callable():
+    """Verify test_Analysis_reporting_print_lint_report_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_lint_report_is_callable
+    assert callable(test_Analysis_reporting_print_lint_report_is_callable)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_lint_report_none_args_is_callable():
+    """Verify test_Analysis_reporting_print_lint_report_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_lint_report_none_args
+    assert callable(test_Analysis_reporting_print_lint_report_none_args)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_security_report_is_callable_is_callable():
+    """Verify test_Analysis_reporting_print_security_report_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_security_report_is_callable
+    assert callable(test_Analysis_reporting_print_security_report_is_callable)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_security_report_none_args_is_callable():
+    """Verify test_Analysis_reporting_print_security_report_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_security_report_none_args
+    assert callable(test_Analysis_reporting_print_security_report_none_args)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_compute_grade_is_callable_is_callable():
+    """Verify test_Analysis_reporting_compute_grade_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_compute_grade_is_callable
+    assert callable(test_Analysis_reporting_compute_grade_is_callable)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_compute_grade_none_args_is_callable():
+    """Verify test_Analysis_reporting_compute_grade_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_compute_grade_none_args
+    assert callable(test_Analysis_reporting_compute_grade_none_args)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_compute_grade_return_type_is_callable():
+    """Verify test_Analysis_reporting_compute_grade_return_type exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_compute_grade_return_type
+    assert callable(test_Analysis_reporting_compute_grade_return_type)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_unified_grade_is_callable_is_callable():
+    """Verify test_Analysis_reporting_print_unified_grade_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_unified_grade_is_callable
+    assert callable(test_Analysis_reporting_print_unified_grade_is_callable)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_unified_grade_none_args_is_callable():
+    """Verify test_Analysis_reporting_print_unified_grade_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_unified_grade_none_args
+    assert callable(test_Analysis_reporting_print_unified_grade_none_args)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_unified_grade_return_type_is_callable():
+    """Verify test_Analysis_reporting_print_unified_grade_return_type exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_unified_grade_return_type
+    assert callable(test_Analysis_reporting_print_unified_grade_return_type)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_library_report_is_callable_is_callable():
+    """Verify test_Analysis_reporting_print_library_report_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_library_report_is_callable
+    assert callable(test_Analysis_reporting_print_library_report_is_callable)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_library_report_none_args_is_callable():
+    """Verify test_Analysis_reporting_print_library_report_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_library_report_none_args
+    assert callable(test_Analysis_reporting_print_library_report_none_args)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_web_report_is_callable_is_callable():
+    """Verify test_Analysis_reporting_print_web_report_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_web_report_is_callable
+    assert callable(test_Analysis_reporting_print_web_report_is_callable)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_web_report_none_args_is_callable():
+    """Verify test_Analysis_reporting_print_web_report_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_web_report_none_args
+    assert callable(test_Analysis_reporting_print_web_report_none_args)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_web_report_high_complexity_is_callable():
+    """Verify test_Analysis_reporting_print_web_report_high_complexity exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_web_report_high_complexity
+    assert callable(test_Analysis_reporting_print_web_report_high_complexity)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_health_report_is_callable_is_callable():
+    """Verify test_Analysis_reporting_print_health_report_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_health_report_is_callable
+    assert callable(test_Analysis_reporting_print_health_report_is_callable)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_print_health_report_none_args_is_callable():
+    """Verify test_Analysis_reporting_print_health_report_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_print_health_report_none_args
+    assert callable(test_Analysis_reporting_print_health_report_none_args)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_build_json_report_is_callable_is_callable():
+    """Verify test_Analysis_reporting_build_json_report_is_callable exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_build_json_report_is_callable
+    assert callable(test_Analysis_reporting_build_json_report_is_callable)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_build_json_report_none_args_is_callable():
+    """Verify test_Analysis_reporting_build_json_report_none_args exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_build_json_report_none_args
+    assert callable(test_Analysis_reporting_build_json_report_none_args)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_build_json_report_return_type_is_callable():
+    """Verify test_Analysis_reporting_build_json_report_return_type exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_build_json_report_return_type
+    assert callable(test_Analysis_reporting_build_json_report_return_type)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_ScanData_is_class_is_callable():
+    """Verify test_Analysis_reporting_ScanData_is_class exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_ScanData_is_class
+    assert callable(test_Analysis_reporting_ScanData_is_class)
+
+def test__generated_tests_tests_test_xray_Analysis_reporting_test_Analysis_reporting_ScanData_inheritance_is_callable():
+    """Verify test_Analysis_reporting_ScanData_inheritance exists and is callable."""
+    from _generated_tests.tests.test_xray_Analysis_reporting import test_Analysis_reporting_ScanData_inheritance
+    assert callable(test_Analysis_reporting_ScanData_inheritance)

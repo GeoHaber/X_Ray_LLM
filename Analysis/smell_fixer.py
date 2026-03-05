@@ -17,7 +17,6 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from Core.types import SmellIssue, Severity
 from Core.config import _ALWAYS_SKIP
 from Lang.js_ts_analyzer import WEB_EXTENSIONS
 
@@ -62,11 +61,14 @@ class SmellFixer:
         self.dry_run = dry_run
         self.result = SmellFixResult()
 
-    def fix_all(self, root: Path,
-                exclude: Optional[List[str]] = None,
-                fix_console: bool = True,
-                fix_prints: bool = True,
-                fix_project: bool = True) -> SmellFixResult:
+    def fix_all(
+        self,
+        root: Path,
+        exclude: Optional[List[str]] = None,
+        fix_console: bool = True,
+        fix_prints: bool = True,
+        fix_project: bool = True,
+    ) -> SmellFixResult:
         """Run all auto-fix passes on the project.
 
         Parameters
@@ -102,8 +104,7 @@ class SmellFixer:
         re.MULTILINE,
     )
 
-    def _fix_console_logs(self, root: Path,
-                          exclude: Optional[List[str]]) -> None:
+    def _fix_console_logs(self, root: Path, exclude: Optional[List[str]]) -> None:
         """Comment out console.log and friends in JS/TS files."""
         for fpath in self._walk_files(root, WEB_EXTENSIONS, exclude):
             try:
@@ -142,18 +143,25 @@ class SmellFixer:
     # ── Debug print() commenting (Python) ───────────────────────────────
 
     _RE_DEBUG_PRINT = re.compile(
-        r'^(\s*)(print\s*\(.+\))\s*$',
+        r"^(\s*)(print\s*\(.+\))\s*$",
         re.MULTILINE,
     )
 
     # Patterns that indicate a print is functional, not debug
-    _FUNCTIONAL_PRINT_HINTS = frozenset({
-        "usage", "help", "version", "error:", "warning:",
-        "banner", "header", "report",
-    })
+    _FUNCTIONAL_PRINT_HINTS = frozenset(
+        {
+            "usage",
+            "help",
+            "version",
+            "error:",
+            "warning:",
+            "banner",
+            "header",
+            "report",
+        }
+    )
 
-    def _fix_debug_prints(self, root: Path,
-                          exclude: Optional[List[str]]) -> None:
+    def _fix_debug_prints(self, root: Path, exclude: Optional[List[str]]) -> None:
         """Comment out likely debug print() statements in Python files."""
         py_ext = frozenset({".py"})
         for fpath in self._walk_files(root, py_ext, exclude):
@@ -188,7 +196,7 @@ class SmellFixer:
             lower = statement.lower()
 
             # Skip if already commented
-            stripped = content[:m.start()].rsplit("\n", 1)[-1] if m.start() > 0 else ""
+            stripped = content[: m.start()].rsplit("\n", 1)[-1] if m.start() > 0 else ""
             if "#" in stripped:
                 return m.group(0)
 
@@ -197,12 +205,21 @@ class SmellFixer:
                 return m.group(0)
 
             # Only comment obvious debug prints
-            is_debug = any(kw in lower for kw in (
-                "debug", "todo", "fixme", "hack", "xxx",
-                "print(f\"", "print(f'", "print(f\"{",
-            ))
+            is_debug = any(
+                kw in lower
+                for kw in (
+                    "debug",
+                    "todo",
+                    "fixme",
+                    "hack",
+                    "xxx",
+                    'print(f"',
+                    "print(f'",
+                    'print(f"{',
+                )
+            )
             # Also flag bare variable prints: print(variable_name)
-            inner_match = re.match(r'print\s*\(\s*(\w+)\s*\)', statement)
+            inner_match = re.match(r"print\s*\(\s*(\w+)\s*\)", statement)
             if inner_match and not is_debug:
                 var = inner_match.group(1)
                 if var not in ("help", "usage", "version"):
@@ -231,15 +248,17 @@ class SmellFixer:
     # ── File walking utility ────────────────────────────────────────────
 
     @staticmethod
-    def _walk_files(root: Path, extensions: frozenset,
-                    exclude: Optional[List[str]] = None):
+    def _walk_files(
+        root: Path, extensions: frozenset, exclude: Optional[List[str]] = None
+    ):
         """Yield files matching *extensions* under *root*, respecting excludes."""
         exclude = exclude or []
         skip = _ALWAYS_SKIP | {"node_modules", "dist", "build", ".next"}
         for dirpath, dirnames, filenames in os.walk(root):
             rel = os.path.relpath(dirpath, root)
             dirnames[:] = [
-                d for d in dirnames
+                d
+                for d in dirnames
                 if d not in skip
                 and not d.endswith(".egg-info")
                 and not any(

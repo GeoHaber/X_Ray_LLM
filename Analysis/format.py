@@ -26,8 +26,16 @@ from Core.types import SmellIssue, Severity
 from Analysis._analyzer_base import _find_tool
 
 _DEFAULT_EXCLUDE = [
-    ".venv", "venv", ".env", "__pycache__", "node_modules",
-    ".git", "target", "dist", "build", "_scratch",
+    ".venv",
+    "venv",
+    ".env",
+    "__pycache__",
+    "node_modules",
+    ".git",
+    "target",
+    "dist",
+    "build",
+    "_scratch",
 ]
 
 
@@ -48,7 +56,7 @@ def _parse_format_output(lines: List[str], root: Path) -> List[SmellIssue]:
         s = line.strip()
         if not s.startswith(prefix) or not s.endswith(".py"):
             continue
-        raw_path = s[len(prefix):].strip()
+        raw_path = s[len(prefix) :].strip()
         try:
             rel_path = str((root / raw_path).resolve().relative_to(root_res)).replace(
                 "\\", "/"
