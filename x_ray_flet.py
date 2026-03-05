@@ -2377,7 +2377,7 @@ def _build_ui_health_tab(results):
             bgcolor=ft.Colors.with_opacity(0.1, TH.accent),
             border_radius=8,
             padding=16,
-            margin=ft.margin.only(bottom=8),
+            margin=ft.Margin.only(bottom=8),
         )
     )
 
@@ -2783,11 +2783,14 @@ def _build_penalty_chips(breakdown):
         p = d.get("penalty", 0)
         if p > 0:
             chips.append(
-                ft.Chip(
-                    label=ft.Text(
+                ft.Container(
+                    content=ft.Text(
                         f"{labels_map.get(k, k)} -{p:.0f}", size=SZ_SM, color=TH.text
                     ),
                     bgcolor=TH.chip,
+                    border_radius=16,
+                    padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+                    border=ft.Border.all(1, TH.border),
                 )
             )
     return chips
@@ -2806,7 +2809,6 @@ _TAB_BUILDERS = [
 
 def _build_result_tabs(results, page):
     """Build the tab bar and tab panels for the results dashboard."""
-    tab_labels = []
     tab_panels = []
     tab_names = []
 
@@ -2814,7 +2816,6 @@ def _build_result_tabs(results, page):
         data = results.get(key)
         if data and not (isinstance(data, dict) and data.get("error")):
             tab_names.append(t(label_key))
-            tab_labels.append(ft.Tab(label=t(label_key)))
             tab_panels.append(builder(results, page))
 
     has_issues = (
@@ -2823,43 +2824,65 @@ def _build_result_tabs(results, page):
         or results.get("_sec_issues")
     )
     if has_issues:
-        tab_labels.append(ft.Tab(label=t("tab_heatmap")))
+        tab_names.append(t("tab_heatmap"))
         tab_panels.append(_build_heatmap_tab(results))
     if results.get("_functions"):
-        tab_labels.append(ft.Tab(label=t("tab_complexity")))
+        tab_names.append(t("tab_complexity"))
         tab_panels.append(_build_complexity_tab(results))
-        tab_labels.append(ft.Tab(label="Graph"))
+        tab_names.append("Graph")
         tab_panels.append(_build_graph_tab(results, page))
-        tab_labels.append(ft.Tab(label=t("tab_auto_rustify")))
+        tab_names.append(t("tab_auto_rustify"))
         tab_panels.append(_build_auto_rustify_tab(results, page))
-        tab_labels.append(ft.Tab(label="Nexus Mode"))
+        tab_names.append("Nexus Mode")
         tab_panels.append(_build_nexus_tab(results, page))
 
     panel_container = ft.Column(
-        [tab_panels[0]] if tab_panels else [], expand=True, spacing=0
+        [tab_panels[0]] if tab_panels else [], spacing=0, expand=True
     )
 
-    def _on_tab_change(e):
-        idx = e.control.selected_index
-        if 0 <= idx < len(tab_panels):
-            panel_container.controls = [tab_panels[idx]]
-            page.update()
+    selected = [0]
 
-    if not tab_labels:
+    def _on_pill_click(idx):
+        def handler(e):
+            selected[0] = idx
+            panel_container.controls = [tab_panels[idx]]
+            # Update pill styles
+            for i, pill in enumerate(pill_row.controls):
+                is_sel = i == idx
+                pill.bgcolor = TH.accent if is_sel else TH.card
+                pill.content.color = ft.Colors.WHITE if is_sel else TH.dim
+            page.update()
+        return handler
+
+    pills = []
+    for i, name in enumerate(tab_names):
+        is_sel = i == 0
+        pill = ft.Container(
+            content=ft.Text(
+                name,
+                size=SZ_SM,
+                weight=ft.FontWeight.BOLD if is_sel else ft.FontWeight.NORMAL,
+                color=ft.Colors.WHITE if is_sel else TH.dim,
+            ),
+            bgcolor=TH.accent if is_sel else TH.card,
+            border_radius=20,
+            padding=ft.Padding.symmetric(horizontal=14, vertical=6),
+            on_click=_on_pill_click(i),
+            animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+        )
+        pills.append(pill)
+
+    pill_row = ft.Row(pills, spacing=6, scroll=ft.ScrollMode.AUTO)
+
+    if not tab_names:
         return ft.Container()
     return ft.Column(
         [
-            ft.Tabs(
-                content=ft.Row(tab_labels),
-                length=len(tab_labels),
-                selected_index=0,
-                animation_duration=300,
-                on_change=_on_tab_change,
-            ),
+            pill_row,
             panel_container,
         ],
         expand=True,
-        spacing=0,
+        spacing=8,
     )
 
 
@@ -2956,7 +2979,7 @@ def _build_export_bar(page, state, results):
                     ),
                 ],
                 spacing=12,
-                wrap=True,
+                scroll=ft.ScrollMode.AUTO,
             ),
             gen_test_status,
         ],
@@ -2996,8 +3019,7 @@ def _build_main_dashboard(page, state, main_content, results):
             ),
         ],
         spacing=8,
-        expand=True,
-        wrap=True,
+        scroll=ft.ScrollMode.AUTO,
     )
 
     penalty_chips = _build_penalty_chips(grade.get("breakdown", {}))
@@ -3008,7 +3030,7 @@ def _build_main_dashboard(page, state, main_content, results):
                 grade_card,
                 stats,
                 (
-                    ft.Row(penalty_chips, spacing=6, wrap=True)
+                    ft.Row(penalty_chips, spacing=6, scroll=ft.ScrollMode.AUTO)
                     if penalty_chips
                     else ft.Container()
                 ),
@@ -3024,7 +3046,7 @@ def _build_main_dashboard(page, state, main_content, results):
                     [
                         stats,
                         (
-                            ft.Row(penalty_chips, spacing=6)
+                            ft.Row(penalty_chips, spacing=6, scroll=ft.ScrollMode.AUTO)
                             if penalty_chips
                             else ft.Container()
                         ),
@@ -3033,7 +3055,6 @@ def _build_main_dashboard(page, state, main_content, results):
                     spacing=10,
                 ),
             ],
-            expand=True,
             spacing=20,
             vertical_alignment=ft.CrossAxisAlignment.START,
         )
@@ -3041,23 +3062,32 @@ def _build_main_dashboard(page, state, main_content, results):
     result_tabs = _build_result_tabs(results, page)
     export_bar = _build_export_bar(page, state, results)
 
+    # Switch main_content from scroll mode to expand mode for the dashboard.
+    # Tab panels handle their own internal scrolling via ListView.
+    main_content.scroll = None
     main_content.controls = [
-        ft.Container(
+        ft.Container(  # header block — natural height
             content=ft.Column(
                 [
                     header,
-                    ft.Divider(color=TH.divider, height=30),
-                    result_tabs,
-                    ft.Divider(color=TH.divider, height=20),
-                    export_bar,
+                    ft.Divider(color=TH.divider, height=1),
                 ],
                 spacing=10,
-                expand=True,
             ),
-            padding=30,
-            expand=True,
+            padding=ft.Padding.only(left=30, right=30, top=30, bottom=10),
             bgcolor=TH.bg,
-        )
+        ),
+        ft.Container(  # tab block — expands to fill remaining space
+            content=result_tabs,
+            expand=True,
+            padding=ft.Padding.symmetric(horizontal=30),
+            bgcolor=TH.bg,
+        ),
+        ft.Container(  # export bar — natural height at bottom
+            content=export_bar,
+            padding=ft.Padding.only(left=30, right=30, bottom=20, top=10),
+            bgcolor=TH.bg,
+        ),
     ]
     page.update()
 
@@ -3229,10 +3259,11 @@ def _build_main_landing(page, main_content):
             for ic, lbl in _FEATURE_CHIPS
         ],
         spacing=6,
-        wrap=True,
+        scroll=ft.ScrollMode.AUTO,
         alignment=ft.MainAxisAlignment.CENTER,
     )
 
+    main_content.scroll = ft.ScrollMode.AUTO
     main_content.controls = [
         ft.Container(
             content=ft.Column(
@@ -3772,6 +3803,7 @@ def _setup_page(page):
     page.window.height = 880
     page.padding = 0
     page.spacing = 0
+    page.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
     # Register emoji font so Flutter renders emoji correctly on Windows
     _emoji_font_path = "C:/Windows/Fonts/seguiemj.ttf"  # Segoe UI Emoji
     page.fonts = {
@@ -4003,7 +4035,12 @@ def _build_main_ui(page: ft.Page, state: dict, path_text, pick_directory, apply_
     """Build the top-level Flet UI layout and wire up scan events."""
     mode_checks = _build_mode_checks(state)
     theme_icon, lang_dd = _build_theme_lang_controls(page, main)
-    main_content = ft.Column([], expand=True, scroll=ft.ScrollMode.AUTO)
+    main_content = ft.Column(
+        [],
+        expand=True,
+        scroll=ft.ScrollMode.AUTO,
+        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+    )
 
     sidebar_status = ft.Container(content=None)
     state["_sidebar_status"] = sidebar_status
