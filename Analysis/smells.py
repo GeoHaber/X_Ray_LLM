@@ -406,7 +406,7 @@ def _run_function_checks(func: FunctionRecord, t: dict, smells: list):
     _check_function_complexity(func, t, smells)
     _check_function_signature(func, t, smells)
     _check_function_style(func, t, smells)
-    _check_magic_numbers(func, smells)
+    _check_magic_numbers(func, smells, t.get("magic_number_min_count", 2))
     _check_mutable_default_arg(func, smells)
     _check_dead_code(func, smells)
 

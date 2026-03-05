@@ -98,7 +98,6 @@ def detect_system() -> SystemProfile:
     if not rust_target:
         # Fallback: ask rustc
         try:
-            out = subprocess.check_output(["rustc", "-vV"], text=True, timeout=10)
             out = subprocess.check_output(  # nosec B607
                 ["rustc", "-vV"], text=True, timeout=10
             )
