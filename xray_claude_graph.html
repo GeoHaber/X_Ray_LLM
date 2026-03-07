@@ -2,140 +2,247 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>X-RAY Claude v4.0.0 — Smart Code Graph</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>X-RAY Claude v4.0.0 — X_Ray</title>
 <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+  :root {
+    --bg:       #0d1117;
+    --bg2:      #161b22;
+    --bg3:      #21262d;
+    --border:   #30363d;
+    --accent:   #58a6ff;
+    --accent2:  #79c0ff;
+    --text:     #c9d1d9;
+    --text-dim: #8b949e;
+    --crit:     #f85149;
+    --warn:     #d29922;
+    --ok:       #3fb950;
+    --dup-near: #e67e22;
+    --radius:   8px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:var(--bg); color:var(--text);
+    font-family:'Segoe UI',system-ui,sans-serif; overflow:hidden;
+  }
 
   /* ── Header ── */
   #header {
-    height: 52px; padding: 0 20px; background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
-    display: flex; justify-content: space-between; align-items: center;
-    box-shadow: 0 2px 10px rgba(0,0,0,.5); z-index: 100; position: relative;
+    height:56px; padding:0 20px;
+    background:var(--bg2);
+    border-bottom:1px solid var(--border);
+    display:flex; justify-content:space-between; align-items:center;
+    position:relative; z-index:100;
   }
-  #header h1 { font-size: 17px; color: #00d4ff; white-space: nowrap; }
-  .tab-bar { display: flex; gap: 6px; }
+  #header h1 { font-size:15px; color:var(--accent); white-space:nowrap; font-weight:600; }
+  #header h1 small { color:var(--text-dim); font-weight:400; font-size:12px; }
+
+  /* ── Tab bar ── */
+  .tab-bar { display:flex; gap:4px; }
   .tab-btn {
-    padding: 6px 16px; background: rgba(255,255,255,.08); border: none;
-    color: #ccc; cursor: pointer; border-radius: 5px; font-size: 13px; font-weight: 500;
-    transition: .2s;
+    padding:6px 14px; background:transparent; border:1px solid transparent;
+    color:var(--text-dim); cursor:pointer; border-radius:6px; font-size:13px;
+    transition:all .15s; outline:none;
   }
-  .tab-btn:hover { background: rgba(255,255,255,.18); color: #fff; }
-  .tab-btn.active { background: #00d4ff; color: #000; }
+  .tab-btn:hover { background:var(--bg3); color:var(--text); border-color:var(--border); }
+  .tab-btn.active { background:var(--accent); color:#000; font-weight:600; border-color:var(--accent); }
+  .tab-btn .kbd-hint {
+    display:inline-block; margin-left:5px; padding:0 4px;
+    background:rgba(0,0,0,.35); border-radius:3px; font-size:10px; font-weight:700;
+  }
+
+  /* header right cluster */
+  .hdr-right { display:flex; gap:8px; align-items:center; }
+  .hdr-btn {
+    padding:5px 11px; background:var(--bg3); border:1px solid var(--border);
+    color:var(--text-dim); cursor:pointer; border-radius:6px; font-size:12px;
+    transition:all .15s;
+  }
+  .hdr-btn:hover { color:var(--text); border-color:var(--accent); }
 
   /* ── Panels ── */
-  .panel { display: none; width: 100%; height: calc(100vh - 52px); }
-  .panel.active { display: flex; }
+  .panel { display:none; width:100%; height:calc(100vh - 56px); }
+  .panel.active { display:flex; }
 
   /* Graph panel */
-  #panel-graph { position: relative; }
-  #graph { width: 100%; height: 100%; }
+  #panel-graph { position:relative; }
+  #graph { width:100%; height:100%; }
   .graph-legend {
-    position: absolute; bottom: 16px; right: 16px;
-    background: rgba(0,0,0,.82); padding: 12px 16px; border-radius: 8px;
-    font-size: 12px; line-height: 1.8;
+    position:absolute; bottom:16px; right:16px;
+    background:rgba(13,17,23,.92); border:1px solid var(--border);
+    padding:12px 16px; border-radius:var(--radius); font-size:12px; line-height:2;
   }
-  .ldot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+  .ldot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:7px; vertical-align:middle; }
+  #graph-search {
+    position:absolute; top:12px; left:50%; transform:translateX(-50%);
+    background:var(--bg2); border:1px solid var(--border); border-radius:20px;
+    padding:6px 16px; color:var(--text); font-size:13px; width:280px; outline:none;
+    transition:border-color .15s;
+  }
+  #graph-search:focus { border-color:var(--accent); }
 
-  /* List panels (duplicates + smells) */
-  .list-panel { flex-direction: column; overflow: hidden; }
-  .list-panel .toolbar {
-    padding: 10px 20px; background: #16213e; display: flex; gap: 12px; align-items: center;
-    flex-shrink: 0;
+  /* ── List panels ── */
+  .list-panel { flex-direction:column; overflow:hidden; }
+  .toolbar {
+    padding:10px 20px; background:var(--bg2); border-bottom:1px solid var(--border);
+    display:flex; gap:10px; align-items:center; flex-shrink:0;
   }
   .search-input {
-    flex: 1; max-width: 500px; padding: 8px 12px; background: rgba(255,255,255,.08);
-    border: 1px solid #333; border-radius: 5px; color: #fff; font-size: 13px;
+    flex:1; max-width:480px; padding:7px 12px;
+    background:var(--bg3); border:1px solid var(--border);
+    border-radius:6px; color:var(--text); font-size:13px; outline:none;
+    transition:border-color .15s;
   }
-  .search-input:focus { outline: none; border-color: #00d4ff; }
+  .search-input:focus { border-color:var(--accent); }
+  .toolbar-right { margin-left:auto; display:flex; gap:6px; }
   .stat-chip {
-    padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+    padding:3px 9px; border-radius:10px; font-size:11px; font-weight:700;
+    cursor:pointer; transition:opacity .15s;
   }
-  .stat-chip.exact { background: #e74c3c; }
-  .stat-chip.near { background: #e67e22; }
-  .stat-chip.crit { background: #e74c3c; }
-  .stat-chip.warn { background: #f39c12; color: #111; }
-  .stat-chip.info { background: #2ecc71; color: #111; }
+  .stat-chip:hover { opacity:.8; }
+  .stat-chip.exact { background:var(--crit); }
+  .stat-chip.near  { background:var(--dup-near); }
+  .stat-chip.crit  { background:var(--crit); }
+  .stat-chip.warn  { background:var(--warn); color:#111; }
+  .stat-chip.info  { background:var(--ok);  color:#111; }
+  .stat-chip.inactive { opacity:.4; }
 
-  .list-scroll { flex: 1; overflow-y: auto; padding: 0 20px 20px 20px; }
+  .list-scroll { flex:1; overflow-y:auto; padding:0 20px 20px; scroll-behavior:smooth; }
+  .empty-state {
+    padding:60px 0; text-align:center; color:var(--text-dim); font-size:14px;
+  }
+  .empty-state .empty-icon { font-size:40px; display:block; margin-bottom:10px; }
 
-  /* Duplicate group cards */
+  /* ── Duplicate group cards ── */
   .dup-group {
-    margin: 12px 0; background: rgba(255,255,255,.04); border-radius: 8px;
-    border-left: 4px solid #e74c3c; overflow: hidden;
+    margin:10px 0; background:var(--bg2); border-radius:var(--radius);
+    border:1px solid var(--border); border-left:4px solid var(--crit); overflow:hidden;
+    transition:border-color .15s;
   }
-  .dup-group.near { border-left-color: #e67e22; }
+  .dup-group:hover { border-color:var(--accent); border-left-color:var(--crit); }
+  .dup-group.near  { border-left-color:var(--dup-near); }
+  .dup-group.near:hover { border-left-color:var(--dup-near); }
   .dup-group-header {
-    padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;
-    cursor: pointer; user-select: none;
+    padding:10px 14px; display:flex; justify-content:space-between; align-items:center;
+    cursor:pointer; user-select:none;
   }
-  .dup-group-header:hover { background: rgba(255,255,255,.04); }
-  .dup-type { font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
-  .dup-type.exact { color: #e74c3c; }
-  .dup-type.near { color: #e67e22; }
-  .dup-sim { color: #aaa; font-size: 12px; }
-  .dup-funcs { padding: 0 14px 10px 14px; }
+  .dup-group-header:hover { background:rgba(255,255,255,.03); }
+  .dup-type { font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:.8px; }
+  .dup-type.exact { color:var(--crit); }
+  .dup-type.near  { color:var(--dup-near); }
+  .dup-sim { color:var(--text-dim); font-size:12px; }
+  .dup-body { padding:0 14px 10px; display:none; }
+  .dup-body.open { display:block; }
   .dup-func {
-    display: flex; gap: 10px; padding: 4px 0; font-size: 13px; align-items: baseline;
+    display:flex; gap:10px; padding:5px 0; font-size:13px; align-items:center;
+    border-bottom:1px solid var(--border);
   }
-  .func-name { font-family: 'Cascadia Code', 'Fira Code', monospace; color: #00d4ff; font-weight: 600; min-width: 200px; }
-  .func-file { color: #888; font-size: 12px; }
-  .dup-merge { padding: 6px 14px 10px 14px; font-size: 12px; color: #f39c12; font-style: italic; }
+  .dup-func:last-child { border-bottom:none; }
+  .func-name {
+    font-family:'Cascadia Code','Fira Code',monospace; color:var(--accent2);
+    font-weight:600; min-width:180px;
+  }
+  .func-file { color:var(--text-dim); font-size:12px; flex:1; }
+  .copy-btn {
+    padding:2px 7px; background:var(--bg3); border:1px solid var(--border);
+    color:var(--text-dim); cursor:pointer; border-radius:4px; font-size:10px;
+    transition:all .1s; flex-shrink:0;
+  }
+  .copy-btn:hover { color:var(--accent); border-color:var(--accent); }
+  .dup-merge {
+    padding:8px 14px; font-size:12px; color:var(--warn); font-style:italic;
+    background:rgba(210,153,34,.06); border-top:1px solid var(--border);
+  }
 
-  /* Smell table */
-  .smell-table { width: 100%; border-collapse: collapse; }
+  /* ── Smells table ── */
+  .smell-table { width:100%; border-collapse:collapse; }
   .smell-table th {
-    position: sticky; top: 0; background: #16213e; padding: 10px 12px;
-    text-align: left; font-size: 12px; font-weight: 600; cursor: pointer; user-select: none;
-    border-bottom: 2px solid #0f3460;
+    position:sticky; top:0; background:var(--bg2); padding:9px 12px;
+    text-align:left; font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.5px; cursor:pointer; user-select:none;
+    border-bottom:2px solid var(--border); color:var(--text-dim);
   }
-  .smell-table th:hover { background: #1a4d7a; }
-  .smell-table td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.06); }
-  .smell-table tr:hover { background: rgba(0,212,255,.08); }
+  .smell-table th:hover { color:var(--text); }
+  .smell-table th.sort-asc::after  { content:' ↑'; color:var(--accent); }
+  .smell-table th.sort-desc::after { content:' ↓'; color:var(--accent); }
+  .smell-table td { padding:8px 12px; font-size:13px; border-bottom:1px solid rgba(48,54,61,.8); vertical-align:top; }
+  .smell-table tr:hover td { background:rgba(88,166,255,.05); }
   .sev-badge {
-    display: inline-block; padding: 2px 8px; border-radius: 10px;
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    display:inline-block; padding:2px 7px; border-radius:8px;
+    font-size:10px; font-weight:700; text-transform:uppercase; white-space:nowrap;
   }
-  .sev-badge.critical { background: #e74c3c; }
-  .sev-badge.warning { background: #f39c12; color: #111; }
-  .sev-badge.info { background: #2ecc71; color: #111; }
-  .cat-cell { font-family: monospace; color: #00d4ff; }
-  .msg-cell { color: #aaa; font-size: 12px; max-width: 350px; }
+  .sev-badge.critical { background:var(--crit); }
+  .sev-badge.warning  { background:var(--warn); color:#111; }
+  .sev-badge.info     { background:var(--ok);   color:#111; }
+  .cat-cell  { font-family:monospace; color:var(--accent); font-size:12px; }
+  .name-cell { font-weight:600; }
+  .file-cell { color:var(--text-dim); font-size:12px; }
+  .msg-cell  { color:var(--text-dim); font-size:12px; max-width:320px; }
+  .sug-cell  { color:#79c0ff; font-size:11px; font-style:italic; max-width:300px; }
+
+  /* Export bar */
+  .export-bar {
+    padding:6px 20px; background:var(--bg2); border-top:1px solid var(--border);
+    display:flex; gap:8px; align-items:center; font-size:12px; color:var(--text-dim);
+    flex-shrink:0;
+  }
+  .export-btn {
+    padding:4px 10px; background:var(--bg3); border:1px solid var(--border);
+    color:var(--text-dim); cursor:pointer; border-radius:5px; font-size:11px; transition:all .15s;
+  }
+  .export-btn:hover { color:var(--accent); border-color:var(--accent); }
+
+  /* Toast notification */
+  #toast {
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(60px);
+    background:var(--bg3); border:1px solid var(--accent); color:var(--text);
+    padding:8px 18px; border-radius:20px; font-size:13px;
+    transition:transform .25s ease; z-index:9999; pointer-events:none;
+  }
+  #toast.show { transform:translateX(-50%) translateY(0); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--text-dim); }
 </style>
 </head>
 <body>
 
 <div id="header">
-  <h1>&#x1F50D; X-RAY Claude v4.0.0 — X_Ray</h1>
+  <h1>&#x1F50D; X-RAY Claude <small>v4.0.0</small> &mdash; X_Ray</h1>
   <div class="tab-bar">
-    <button class="tab-btn active" onclick="showTab('graph')">&#x1F30D; Graph</button>
-    <button class="tab-btn" onclick="showTab('dups')">&#x1F534; Duplicates</button>
-    <button class="tab-btn" onclick="showTab('smells')">&#x1F9EA; Smells</button>
+    <button class="tab-btn active" onclick="showTab('graph')"  title="Press 1">&#x1F30D; Graph<span class="kbd-hint">1</span></button>
+    <button class="tab-btn"        onclick="showTab('dups')"   title="Press 2">&#x1F534; Duplicates<span class="kbd-hint">2</span></button>
+    <button class="tab-btn"        onclick="showTab('smells')" title="Press 3">&#x1F9EA; Smells<span class="kbd-hint">3</span></button>
+  </div>
+  <div class="hdr-right">
+    <button class="hdr-btn" onclick="fitGraph()">&#x1F4CF; Fit</button>
+    <button class="hdr-btn" onclick="exportCSV()">&#x2B07; CSV</button>
   </div>
 </div>
 
 <!-- ── Graph Panel ── -->
-<div id="panel-graph" class="panel active" style="flex-direction: column;">
-  <div class="toolbar" style="background: rgba(0,0,0,0.5); padding: 5px 20px;">
-    <input class="search-input" id="graphSearch" placeholder="&#x1F50D; Filter graph by file name..." oninput="filterGraph()">
-  </div>
-  <div id="graph" style="flex:1;"></div>
+<div id="panel-graph" class="panel active">
+  <div id="graph"></div>
+  <input id="graph-search" placeholder="&#x1F50D; Highlight file..." oninput="highlightNode(this.value)">
   <div class="graph-legend">
-    <div><span class="ldot" style="background:#2ecc71"></span>Healthy (0)</div>
-    <div><span class="ldot" style="background:#f39c12"></span>Warnings (0)</div>
-    <div><span class="ldot" style="background:#e74c3c"></span>Critical (2)</div>
-    <div style="margin-top:6px;color:#e67e22;font-size:11px">--- Duplicate links (0)</div>
-    <div style="margin-top:8px;color:#666;font-size:11px">Scroll to zoom &middot; Drag to pan</div>
+    <div><span class="ldot" style="background:var(--ok)"></span>Healthy (93)</div>
+    <div><span class="ldot" style="background:var(--warn)"></span>Warnings (28)</div>
+    <div><span class="ldot" style="background:var(--crit)"></span>Critical (8)</div>
+    <div style="margin-top:6px;color:var(--dup-near);font-size:11px">&#x2015; Duplicate links (26)</div>
+    <div style="margin-top:8px;color:var(--text-dim);font-size:11px">Scroll=zoom &nbsp;&middot;&nbsp; Drag=pan &nbsp;&middot;&nbsp; Click=select</div>
   </div>
 </div>
 
 <!-- ── Duplicates Panel ── -->
 <div id="panel-dups" class="panel list-panel">
   <div class="toolbar">
-    <input class="search-input" id="dupSearch" placeholder="&#x1F50D; Search function name or file..." oninput="filterDups()">
-    <span class="stat-chip exact" id="dupExactChip"></span>
-    <span class="stat-chip near" id="dupNearChip"></span>
+    <input class="search-input" id="dupSearch" placeholder="&#x1F50D; Search function or file..." oninput="debounceDups()">
+    <span class="stat-chip exact" id="dupExactChip" onclick="toggleDupFilter('exact')" title="Toggle exact"></span>
+    <span class="stat-chip near"  id="dupNearChip"  onclick="toggleDupFilter('near')"  title="Toggle near"></span>
   </div>
   <div class="list-scroll" id="dupList"></div>
 </div>
@@ -143,126 +250,1695 @@
 <!-- ── Smells Panel ── -->
 <div id="panel-smells" class="panel list-panel">
   <div class="toolbar">
-    <input class="search-input" id="smellSearch" placeholder="&#x1F50D; Search name, file, category..." oninput="filterSmells()">
-    <span class="stat-chip crit" id="smCritChip"></span>
-    <span class="stat-chip warn" id="smWarnChip"></span>
-    <span class="stat-chip info" id="smInfoChip"></span>
+    <input class="search-input" id="smellSearch" placeholder="&#x1F50D; Search name, file, category..." oninput="debounceSmells()">
+    <span class="stat-chip crit" id="smCritChip" onclick="toggleSmellFilter('critical')" title="Toggle critical"></span>
+    <span class="stat-chip warn" id="smWarnChip" onclick="toggleSmellFilter('warning')"  title="Toggle warnings"></span>
+    <span class="stat-chip info" id="smInfoChip" onclick="toggleSmellFilter('info')"     title="Toggle info"></span>
   </div>
   <div class="list-scroll" id="smellList">
     <table class="smell-table">
       <thead><tr>
-        <th onclick="sortSmells(0)">Sev</th>
-        <th onclick="sortSmells(1)">Category</th>
-        <th onclick="sortSmells(2)">Name</th>
-        <th onclick="sortSmells(3)">File</th>
-        <th onclick="sortSmells(4)">Line</th>
-        <th onclick="sortSmells(5)">Issue</th>
+        <th id="th0" onclick="sortSmells(0)">Sev</th>
+        <th id="th1" onclick="sortSmells(1)">Category</th>
+        <th id="th2" onclick="sortSmells(2)">Name</th>
+        <th id="th3" onclick="sortSmells(3)">File</th>
+        <th id="th4" onclick="sortSmells(4)">Line</th>
+        <th id="th5" onclick="sortSmells(5)">Issue</th>
+        <th id="th6" onclick="sortSmells(6)">Fix</th>
       </tr></thead>
       <tbody id="smellBody"></tbody>
     </table>
   </div>
+  <div class="export-bar">
+    <span>&#x1F4CA; 245 issues</span>
+    <button class="export-btn" onclick="exportSmellsCSV()">&#x2B07; Export CSV</button>
+    <button class="export-btn" onclick="copySmellsJSON()">&#x1F4CB; Copy JSON</button>
+  </div>
 </div>
 
+<div id="toast"></div>
+
 <script>
-// ── Data ──
+// ═══════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════
 const nodesData = [
   {
     "id": 1,
-    "label": "test_xray_claude.py",
-    "title": "<b>tests/test_xray_claude.py</b><br/>Functions: 115<br/><br/><b>Issues:</b><br/>  \ud83d\udd34 god-class: TestCodeSmellDetectorFunctions<br/>  \ud83d\udfe1 too-many-params: _make_func<br/>  \ud83d\udfe1 too-many-params: _make_class<br/>  \ud83d\udfe1 high-complexity: test_extract_from_temp_file<br/>  \ud83d\udfe1 long-function: test_end_to_end<br/>  ...+15 more",
+    "label": "check_quality.py",
+    "title": "<b>.github/scripts/check_quality.py</b><br/>Functions: 1<br/><br/><b>Issues:</b><br/>  \ud83d\udd34 very-long-function: main<br/>  \ud83d\udd34 very-high-complexity: main<br/>  \ud83d\udfe2 missing-docstring: main",
     "color": "#e74c3c",
     "shape": "dot",
-    "size": 40,
+    "size": 10,
     "health": "critical",
-    "full_path": "tests/test_xray_claude.py"
+    "full_path": ".github/scripts/check_quality.py"
   },
   {
     "id": 2,
-    "label": "x_ray_claude.py",
-    "title": "<b>x_ray_claude.py</b><br/>Functions: 55<br/><br/><b>Issues:</b><br/>  \ud83d\udd34 very-deep-nesting: _extract_functions_from_file<br/>  \ud83d\udd34 very-high-complexity: _extract_functions_from_file<br/>  \ud83d\udd34 very-long-function: find<br/>  \ud83d\udd34 very-high-complexity: find<br/>  \ud83d\udd34 very-long-function: write_html<br/>  ...+41 more",
+    "label": "validate_flet_api.py",
+    "title": "<b>.github/scripts/validate_flet_api.py</b><br/>Functions: 3<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: check_file<br/>  \ud83d\udfe1 high-complexity: check_file",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 10,
+    "health": "warning",
+    "full_path": ".github/scripts/validate_flet_api.py"
+  },
+  {
+    "id": 3,
+    "label": "adapters.py",
+    "title": "<b>Analysis/NexusMode/adapters.py</b><br/>Functions: 6<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-docstring: transpile<br/>  \ud83d\udfe2 missing-docstring: transpile",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 18,
+    "health": "healthy",
+    "full_path": "Analysis/NexusMode/adapters.py"
+  },
+  {
+    "id": 4,
+    "label": "orchestrator.py",
+    "title": "<b>Analysis/NexusMode/orchestrator.py</b><br/>Functions: 10<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 deep-nesting: identify_targets<br/>  \ud83d\udfe1 high-complexity: identify_targets<br/>  \ud83d\udfe1 deep-nesting: verify_and_build<br/>  \ud83d\udfe2 missing-docstring: identify_targets<br/>  \ud83d\udfe2 dataclass-candidate: TranslatorBridge<br/>  ...+2 more",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 30,
+    "health": "warning",
+    "full_path": "Analysis/NexusMode/orchestrator.py"
+  },
+  {
+    "id": 5,
+    "label": "_analyzer_base.py",
+    "title": "<b>Analysis/_analyzer_base.py</b><br/>Functions: 13<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: available",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 39,
+    "health": "healthy",
+    "full_path": "Analysis/_analyzer_base.py"
+  },
+  {
+    "id": 6,
+    "label": "ast_utils.py",
+    "title": "<b>Analysis/ast_utils.py</b><br/>Functions: 18<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 high-complexity: extract_functions_from_file<br/>  \ud83d\udfe2 missing-docstring: visit_FunctionDef<br/>  \ud83d\udfe2 missing-docstring: visit_Name<br/>  \ud83d\udfe2 boolean-blindness: _should_prune_dir<br/>  \ud83d\udfe2 boolean-blindness: _matches_include_filter<br/>  ...+1 more",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "Analysis/ast_utils.py"
+  },
+  {
+    "id": 7,
+    "label": "auto_rustify.py",
+    "title": "<b>Analysis/auto_rustify.py</b><br/>Functions: 70<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: _build_main_rs<br/>  \ud83d\udfe2 boolean-blindness: _code_has_blockers<br/>  \ud83d\udfe2 boolean-blindness: _has_name_blocker<br/>  \ud83d\udfe2 boolean-blindness: _has_code_pattern_blocker<br/>  \ud83d\udfe2 boolean-blindness: _is_transpilable<br/>  ...+1 more",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "Analysis/auto_rustify.py"
+  },
+  {
+    "id": 8,
+    "label": "dead_functions.py",
+    "title": "<b>Analysis/dead_functions.py</b><br/>Functions: 1<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: detect<br/>  \ud83d\udfe1 deep-nesting: detect<br/>  \ud83d\udfe1 high-complexity: detect",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 10,
+    "health": "warning",
+    "full_path": "Analysis/dead_functions.py"
+  },
+  {
+    "id": 9,
+    "label": "duplicates.py",
+    "title": "<b>Analysis/duplicates.py</b><br/>Functions: 28<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 deep-nesting: _prefilter_candidates<br/>  \ud83d\udfe1 high-complexity: _prefilter_candidates<br/>  \ud83d\udfe2 dataclass-candidate: UnionFind<br/>  \ud83d\udfe2 boolean-blindness: _is_valid_group",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "Analysis/duplicates.py"
+  },
+  {
+    "id": 10,
+    "label": "format.py",
+    "title": "<b>Analysis/format.py</b><br/>Functions: 6<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: available",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 18,
+    "health": "healthy",
+    "full_path": "Analysis/format.py"
+  },
+  {
+    "id": 11,
+    "label": "imports.py",
+    "title": "<b>Analysis/imports.py</b><br/>Functions: 8<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: _has_dunder_all",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 24,
+    "health": "healthy",
+    "full_path": "Analysis/imports.py"
+  },
+  {
+    "id": 12,
+    "label": "library_advisor.py",
+    "title": "<b>Analysis/library_advisor.py</b><br/>Functions: 8<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: _is_dunder<br/>  \ud83d\udfe2 boolean-blindness: _is_cross_file_candidate",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 24,
+    "health": "healthy",
+    "full_path": "Analysis/library_advisor.py"
+  },
+  {
+    "id": 13,
+    "label": "lint.py",
+    "title": "<b>Analysis/lint.py</b><br/>Functions: 5",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 15,
+    "health": "healthy",
+    "full_path": "Analysis/lint.py"
+  },
+  {
+    "id": 14,
+    "label": "llm_transpiler.py",
+    "title": "<b>Analysis/llm_transpiler.py</b><br/>Functions: 17<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: _check_rust_compiles<br/>  \ud83d\udfe2 boolean-blindness: available",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "Analysis/llm_transpiler.py"
+  },
+  {
+    "id": 15,
+    "label": "port_project.py",
+    "title": "<b>Analysis/port_project.py</b><br/>Functions: 1<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-docstring: run_port",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "Analysis/port_project.py"
+  },
+  {
+    "id": 16,
+    "label": "project_health.py",
+    "title": "<b>Analysis/project_health.py</b><br/>Functions: 17<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: analyze",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "Analysis/project_health.py"
+  },
+  {
+    "id": 17,
+    "label": "reporting.py",
+    "title": "<b>Analysis/reporting.py</b><br/>Functions: 20<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 high-complexity: print_web_report",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "Analysis/reporting.py"
+  },
+  {
+    "id": 18,
+    "label": "rust_advisor.py",
+    "title": "<b>Analysis/rust_advisor.py</b><br/>Functions: 17<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: _mutates_attribute<br/>  \ud83d\udfe2 boolean-blindness: _is_impure_call<br/>  \ud83d\udfe2 boolean-blindness: _is_impure_node<br/>  \ud83d\udfe2 boolean-blindness: _detect_purity",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "Analysis/rust_advisor.py"
+  },
+  {
+    "id": 19,
+    "label": "scan_cache.py",
+    "title": "<b>Analysis/scan_cache.py</b><br/>Functions: 12",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 36,
+    "health": "healthy",
+    "full_path": "Analysis/scan_cache.py"
+  },
+  {
+    "id": 20,
+    "label": "security.py",
+    "title": "<b>Analysis/security.py</b><br/>Functions: 13<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 too-many-params: _make_secret_issue",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 39,
+    "health": "warning",
+    "full_path": "Analysis/security.py"
+  },
+  {
+    "id": 21,
+    "label": "semantic_fuzzer.py",
+    "title": "<b>Analysis/semantic_fuzzer.py</b><br/>Functions: 6",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 18,
+    "health": "healthy",
+    "full_path": "Analysis/semantic_fuzzer.py"
+  },
+  {
+    "id": 22,
+    "label": "similarity.py",
+    "title": "<b>Analysis/similarity.py</b><br/>Functions: 12",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 36,
+    "health": "healthy",
+    "full_path": "Analysis/similarity.py"
+  },
+  {
+    "id": 23,
+    "label": "smart_graph.py",
+    "title": "<b>Analysis/smart_graph.py</b><br/>Functions: 6",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 18,
+    "health": "healthy",
+    "full_path": "Analysis/smart_graph.py"
+  },
+  {
+    "id": 24,
+    "label": "smell_fixer.py",
+    "title": "<b>Analysis/smell_fixer.py</b><br/>Functions: 10<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 dataclass-candidate: SmellFixResult",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 30,
+    "health": "healthy",
+    "full_path": "Analysis/smell_fixer.py"
+  },
+  {
+    "id": 25,
+    "label": "smells.py",
+    "title": "<b>Analysis/smells.py</b><br/>Functions: 27<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 high-complexity: _check_magic_numbers<br/>  \ud83d\udfe1 long-function: _check_function_complexity<br/>  \ud83d\udfe1 high-complexity: _check_print_statement<br/>  \ud83d\udfe1 deep-nesting: _lazy_import_ids<br/>  \ud83d\udfe1 high-complexity: _check_import_inside_function<br/>  ...+5 more",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "Analysis/smells.py"
+  },
+  {
+    "id": 26,
+    "label": "test_gen.py",
+    "title": "<b>Analysis/test_gen.py</b><br/>Functions: 8",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 24,
+    "health": "healthy",
+    "full_path": "Analysis/test_gen.py"
+  },
+  {
+    "id": 27,
+    "label": "test_generator.py",
+    "title": "<b>Analysis/test_generator.py</b><br/>Functions: 23<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: _gen_function_test_cases<br/>  \ud83d\udfe1 long-function: _gen_class_test_cases<br/>  \ud83d\udfe1 long-function: _gen_structure_tests<br/>  \ud83d\udfe1 long-function: _gen_module_tests<br/>  \ud83d\udfe1 high-complexity: _gen_module_tests<br/>  ...+6 more",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "Analysis/test_generator.py"
+  },
+  {
+    "id": 28,
+    "label": "tracer.py",
+    "title": "<b>Analysis/tracer.py</b><br/>Functions: 13",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 39,
+    "health": "healthy",
+    "full_path": "Analysis/tracer.py"
+  },
+  {
+    "id": 29,
+    "label": "transpiler.py",
+    "title": "<b>Analysis/transpiler.py</b><br/>Functions: 87<br/><br/><b>Issues:</b><br/>  \ud83d\udd34 god-class: _ExprHandlerMixin<br/>  \ud83d\udd34 god-class: _StmtHandlerMixin<br/>  \ud83d\udfe1 high-complexity: _expr_call_attr<br/>  \ud83d\udfe1 deep-nesting: _stmt_assign<br/>  \ud83d\udfe1 deep-nesting: _wrap_returns_in_some<br/>  ...+5 more",
     "color": "#e74c3c",
     "shape": "dot",
     "size": 40,
     "health": "critical",
+    "full_path": "Analysis/transpiler.py"
+  },
+  {
+    "id": 30,
+    "label": "transpiler_legacy.py",
+    "title": "<b>Analysis/transpiler_legacy.py</b><br/>Functions: 143<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: _call_os_path<br/>  \ud83d\udfe2 boolean-blindness: _is_comment_expr<br/>  \ud83d\udfe2 boolean-blindness: _is_plain_int<br/>  \ud83d\udfe2 boolean-blindness: _is_float_context",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "Analysis/transpiler_legacy.py"
+  },
+  {
+    "id": 31,
+    "label": "trend.py",
+    "title": "<b>Analysis/trend.py</b><br/>Functions: 9",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 27,
+    "health": "healthy",
+    "full_path": "Analysis/trend.py"
+  },
+  {
+    "id": 32,
+    "label": "type_coverage.py",
+    "title": "<b>Analysis/type_coverage.py</b><br/>Functions: 5<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 high-complexity: _annotated_param_count<br/>  \ud83d\udfe1 long-function: analyze<br/>  \ud83d\udfe2 boolean-blindness: _is_test_function<br/>  \ud83d\udfe2 boolean-blindness: _has_return_annotation",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 15,
+    "health": "warning",
+    "full_path": "Analysis/type_coverage.py"
+  },
+  {
+    "id": 33,
+    "label": "typecheck.py",
+    "title": "<b>Analysis/typecheck.py</b><br/>Functions: 4",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 12,
+    "health": "healthy",
+    "full_path": "Analysis/typecheck.py"
+  },
+  {
+    "id": 34,
+    "label": "ui_compat.py",
+    "title": "<b>Analysis/ui_compat.py</b><br/>Functions: 23<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: _get_accepted_params<br/>  \ud83d\udfe2 missing-docstring: visit_Call",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "Analysis/ui_compat.py"
+  },
+  {
+    "id": 35,
+    "label": "ui_health.py",
+    "title": "<b>Analysis/ui_health.py</b><br/>Functions: 33<br/><br/><b>Issues:</b><br/>  \ud83d\udd34 god-class: _PythonUIVisitor<br/>  \ud83d\udfe1 deep-nesting: visit_Assign<br/>  \ud83d\udfe1 deep-nesting: _collect_parent_names<br/>  \ud83d\udfe1 deep-nesting: visit_Assign_attr<br/>  \ud83d\udfe1 long-function: _finalize<br/>  ...+9 more",
+    "color": "#e74c3c",
+    "shape": "dot",
+    "size": 40,
+    "health": "critical",
+    "full_path": "Analysis/ui_health.py"
+  },
+  {
+    "id": 36,
+    "label": "web_smells.py",
+    "title": "<b>Analysis/web_smells.py</b><br/>Functions: 18<br/><br/><b>Issues:</b><br/>  \ud83d\udd34 god-class: WebSmellDetector<br/>  \ud83d\udfe2 boolean-blindness: _should_prune_web_dir",
+    "color": "#e74c3c",
+    "shape": "dot",
+    "size": 40,
+    "health": "critical",
+    "full_path": "Analysis/web_smells.py"
+  },
+  {
+    "id": 37,
+    "label": "ast_helpers.py",
+    "title": "<b>Core/ast_helpers.py</b><br/>Functions: 2",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "Core/ast_helpers.py"
+  },
+  {
+    "id": 38,
+    "label": "cli_args.py",
+    "title": "<b>Core/cli_args.py</b><br/>Functions: 2<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: add_common_scan_args",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 10,
+    "health": "warning",
+    "full_path": "Core/cli_args.py"
+  },
+  {
+    "id": 39,
+    "label": "config.py",
+    "title": "<b>Core/config.py</b><br/>Functions: 1",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "Core/config.py"
+  },
+  {
+    "id": 40,
+    "label": "i18n.py",
+    "title": "<b>Core/i18n.py</b><br/>Functions: 3",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "Core/i18n.py"
+  },
+  {
+    "id": 41,
+    "label": "inference.py",
+    "title": "<b>Core/inference.py</b><br/>Functions: 11<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: available",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 33,
+    "health": "healthy",
+    "full_path": "Core/inference.py"
+  },
+  {
+    "id": 42,
+    "label": "llm_manager.py",
+    "title": "<b>Core/llm_manager.py</b><br/>Functions: 21<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: _port_has_health<br/>  \ud83d\udfe2 boolean-blindness: _check_server_running<br/>  \ud83d\udfe2 boolean-blindness: start_server",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "Core/llm_manager.py"
+  },
+  {
+    "id": 43,
+    "label": "scan_context.py",
+    "title": "<b>Core/scan_context.py</b><br/>Functions: 22<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: run_scan<br/>  \ud83d\udfe1 deep-nesting: run_scan<br/>  \ud83d\udfe1 high-complexity: run_scan",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "Core/scan_context.py"
+  },
+  {
+    "id": 44,
+    "label": "scan_phases.py",
+    "title": "<b>Core/scan_phases.py</b><br/>Functions: 15<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 too-many-params: run_test_gen_phase<br/>  \ud83d\udfe1 long-function: collect_reports<br/>  \ud83d\udfe1 high-complexity: collect_reports",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "Core/scan_phases.py"
+  },
+  {
+    "id": 45,
+    "label": "types.py",
+    "title": "<b>Core/types.py</b><br/>Functions: 4",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 12,
+    "health": "healthy",
+    "full_path": "Core/types.py"
+  },
+  {
+    "id": 46,
+    "label": "ui_bridge.py",
+    "title": "<b>Core/ui_bridge.py</b><br/>Functions: 19<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 high-complexity: progress<br/>  \ud83d\udfe2 missing-docstring: progress",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "Core/ui_bridge.py"
+  },
+  {
+    "id": 47,
+    "label": "utils.py",
+    "title": "<b>Core/utils.py</b><br/>Functions: 12<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: supports_unicode<br/>  \ud83d\udfe2 boolean-blindness: url_responds",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 36,
+    "health": "healthy",
+    "full_path": "Core/utils.py"
+  },
+  {
+    "id": 48,
+    "label": "js_ts_analyzer.py",
+    "title": "<b>Lang/js_ts_analyzer.py</b><br/>Functions: 16<br/><br/><b>Issues:</b><br/>  \ud83d\udd34 very-deep-nesting: _scan_braces_in_line<br/>  \ud83d\udfe1 deep-nesting: _count_nesting<br/>  \ud83d\udfe1 high-complexity: _extract_imports",
+    "color": "#e74c3c",
+    "shape": "dot",
+    "size": 40,
+    "health": "critical",
+    "full_path": "Lang/js_ts_analyzer.py"
+  },
+  {
+    "id": 49,
+    "label": "python_ast.py",
+    "title": "<b>Lang/python_ast.py</b><br/>Functions: 1",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "Lang/python_ast.py"
+  },
+  {
+    "id": 50,
+    "label": "tokenizer.py",
+    "title": "<b>Lang/tokenizer.py</b><br/>Functions: 3",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "Lang/tokenizer.py"
+  },
+  {
+    "id": 51,
+    "label": "auto_rustify_tab.py",
+    "title": "<b>UI/tabs/auto_rustify_tab.py</b><br/>Functions: 4<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 deep-nesting: _run_rustify_pipeline<br/>  \ud83d\udfe1 high-complexity: _run_rustify_pipeline<br/>  \ud83d\udfe1 long-function: _build_auto_rustify_tab",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 12,
+    "health": "warning",
+    "full_path": "UI/tabs/auto_rustify_tab.py"
+  },
+  {
+    "id": 52,
+    "label": "complexity_tab.py",
+    "title": "<b>UI/tabs/complexity_tab.py</b><br/>Functions: 2<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: _build_complexity_tab",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 10,
+    "health": "warning",
+    "full_path": "UI/tabs/complexity_tab.py"
+  },
+  {
+    "id": 53,
+    "label": "duplicates_tab.py",
+    "title": "<b>UI/tabs/duplicates_tab.py</b><br/>Functions: 2",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "UI/tabs/duplicates_tab.py"
+  },
+  {
+    "id": 54,
+    "label": "graph_tab.py",
+    "title": "<b>UI/tabs/graph_tab.py</b><br/>Functions: 8<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: _generate_graph_html<br/>  \ud83d\udfe1 long-function: _build_graph_canvas<br/>  \ud83d\udfe1 long-function: _build_graph_tab",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 24,
+    "health": "warning",
+    "full_path": "UI/tabs/graph_tab.py"
+  },
+  {
+    "id": 55,
+    "label": "heatmap_tab.py",
+    "title": "<b>UI/tabs/heatmap_tab.py</b><br/>Functions: 3",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "UI/tabs/heatmap_tab.py"
+  },
+  {
+    "id": 56,
+    "label": "lint_tab.py",
+    "title": "<b>UI/tabs/lint_tab.py</b><br/>Functions: 3<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: _build_lint_tab",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 10,
+    "health": "warning",
+    "full_path": "UI/tabs/lint_tab.py"
+  },
+  {
+    "id": 57,
+    "label": "nexus_tab.py",
+    "title": "<b>UI/tabs/nexus_tab.py</b><br/>Functions: 2<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: _run_nexus_pipeline",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 10,
+    "health": "warning",
+    "full_path": "UI/tabs/nexus_tab.py"
+  },
+  {
+    "id": 58,
+    "label": "rustify_tab.py",
+    "title": "<b>UI/tabs/rustify_tab.py</b><br/>Functions: 4",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 12,
+    "health": "healthy",
+    "full_path": "UI/tabs/rustify_tab.py"
+  },
+  {
+    "id": 59,
+    "label": "security_tab.py",
+    "title": "<b>UI/tabs/security_tab.py</b><br/>Functions: 1<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: _build_security_tab",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 10,
+    "health": "warning",
+    "full_path": "UI/tabs/security_tab.py"
+  },
+  {
+    "id": 60,
+    "label": "shared.py",
+    "title": "<b>UI/tabs/shared.py</b><br/>Functions: 20",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "UI/tabs/shared.py"
+  },
+  {
+    "id": 61,
+    "label": "smells_tab.py",
+    "title": "<b>UI/tabs/smells_tab.py</b><br/>Functions: 1<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: _build_smells_tab",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 10,
+    "health": "warning",
+    "full_path": "UI/tabs/smells_tab.py"
+  },
+  {
+    "id": 62,
+    "label": "ui_compat_tab.py",
+    "title": "<b>UI/tabs/ui_compat_tab.py</b><br/>Functions: 3<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: _build_ui_compat_tab",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 10,
+    "health": "warning",
+    "full_path": "UI/tabs/ui_compat_tab.py"
+  },
+  {
+    "id": 63,
+    "label": "ui_health_tab.py",
+    "title": "<b>UI/tabs/ui_health_tab.py</b><br/>Functions: 2",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "UI/tabs/ui_health_tab.py"
+  },
+  {
+    "id": 64,
+    "label": "hardware_detection.py",
+    "title": "<b>_mothership/hardware_detection.py</b><br/>Functions: 20<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: _detect_avx",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "_mothership/hardware_detection.py"
+  },
+  {
+    "id": 65,
+    "label": "models.py",
+    "title": "<b>_mothership/models.py</b><br/>Functions: 10",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 30,
+    "health": "healthy",
+    "full_path": "_mothership/models.py"
+  },
+  {
+    "id": 66,
+    "label": "settings_service.py",
+    "title": "<b>_mothership/settings_service.py</b><br/>Functions: 6",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 18,
+    "health": "healthy",
+    "full_path": "_mothership/settings_service.py"
+  },
+  {
+    "id": 67,
+    "label": "test_golden_capture.py",
+    "title": "<b>_rustified/test_golden_capture.py</b><br/>Functions: 43",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "_rustified/test_golden_capture.py"
+  },
+  {
+    "id": 68,
+    "label": "test_rust_verify.py",
+    "title": "<b>_rustified/test_rust_verify.py</b><br/>Functions: 43",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "_rustified/test_rust_verify.py"
+  },
+  {
+    "id": 69,
+    "label": "build_rustified_exe.py",
+    "title": "<b>build_rustified_exe.py</b><br/>Functions: 1<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-docstring: main",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "build_rustified_exe.py"
+  },
+  {
+    "id": 70,
+    "label": "find_crits.py",
+    "title": "<b>find_crits.py</b><br/>Functions: 3",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "find_crits.py"
+  },
+  {
+    "id": 71,
+    "label": "run_nexus_on_transpiler.py",
+    "title": "<b>run_nexus_on_transpiler.py</b><br/>Functions: 1<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-docstring: main",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "run_nexus_on_transpiler.py"
+  },
+  {
+    "id": 72,
+    "label": "scan_all_rustify.py",
+    "title": "<b>scan_all_rustify.py</b><br/>Functions: 20<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: scan_project<br/>  \ud83d\udfe2 boolean-blindness: _is_third_party<br/>  \ud83d\udfe2 missing-docstring: main",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "scan_all_rustify.py"
+  },
+  {
+    "id": 73,
+    "label": "conftest.py",
+    "title": "<b>tests/conftest.py</b><br/>Functions: 2",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "tests/conftest.py"
+  },
+  {
+    "id": 74,
+    "label": "conftest_analyzers.py",
+    "title": "<b>tests/conftest_analyzers.py</b><br/>Functions: 8",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 24,
+    "health": "healthy",
+    "full_path": "tests/conftest_analyzers.py"
+  },
+  {
+    "id": 75,
+    "label": "bad_code_sample.py",
+    "title": "<b>tests/fixtures/bad_code_sample.py</b><br/>Functions: 6",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 18,
+    "health": "healthy",
+    "full_path": "tests/fixtures/bad_code_sample.py"
+  },
+  {
+    "id": 76,
+    "label": "harness_common.py",
+    "title": "<b>tests/harness_common.py</b><br/>Functions: 2",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "tests/harness_common.py"
+  },
+  {
+    "id": 77,
+    "label": "harness_generative.py",
+    "title": "<b>tests/harness_generative.py</b><br/>Functions: 4",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 12,
+    "health": "healthy",
+    "full_path": "tests/harness_generative.py"
+  },
+  {
+    "id": 78,
+    "label": "harness_generative_parity.py",
+    "title": "<b>tests/harness_generative_parity.py</b><br/>Functions: 3<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 dataclass-candidate: ScanPhaseSimulator",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "tests/harness_generative_parity.py"
+  },
+  {
+    "id": 79,
+    "label": "harness_transpilation.py",
+    "title": "<b>tests/harness_transpilation.py</b><br/>Functions: 4",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 12,
+    "health": "healthy",
+    "full_path": "tests/harness_transpilation.py"
+  },
+  {
+    "id": 80,
+    "label": "benchmark.py",
+    "title": "<b>tests/rust_harness/benchmark.py</b><br/>Functions: 22",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/rust_harness/benchmark.py"
+  },
+  {
+    "id": 81,
+    "label": "calibrate_fixtures.py",
+    "title": "<b>tests/rust_harness/calibrate_fixtures.py</b><br/>Functions: 12",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 36,
+    "health": "healthy",
+    "full_path": "tests/rust_harness/calibrate_fixtures.py"
+  },
+  {
+    "id": 82,
+    "label": "clean_code.py",
+    "title": "<b>tests/rust_harness/fixtures/clean_code.py</b><br/>Functions: 7<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 dataclass-candidate: Point",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 21,
+    "health": "healthy",
+    "full_path": "tests/rust_harness/fixtures/clean_code.py"
+  },
+  {
+    "id": 83,
+    "label": "edge_cases.py",
+    "title": "<b>tests/rust_harness/fixtures/edge_cases.py</b><br/>Functions: 9<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 dataclass-candidate: Animal",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 27,
+    "health": "healthy",
+    "full_path": "tests/rust_harness/fixtures/edge_cases.py"
+  },
+  {
+    "id": 84,
+    "label": "smell_factory.py",
+    "title": "<b>tests/rust_harness/fixtures/smell_factory.py</b><br/>Functions: 36<br/><br/><b>Issues:</b><br/>  \ud83d\udd34 very-long-function: very_long_function<br/>  \ud83d\udd34 very-deep-nesting: very_deeply_nested<br/>  \ud83d\udd34 god-class: GodClass<br/>  \ud83d\udfe1 long-function: long_function<br/>  \ud83d\udfe1 deep-nesting: deeply_nested<br/>  ...+8 more",
+    "color": "#e74c3c",
+    "shape": "dot",
+    "size": 40,
+    "health": "critical",
+    "full_path": "tests/rust_harness/fixtures/smell_factory.py"
+  },
+  {
+    "id": 85,
+    "label": "generate_golden.py",
+    "title": "<b>tests/rust_harness/generate_golden.py</b><br/>Functions: 8",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 24,
+    "health": "healthy",
+    "full_path": "tests/rust_harness/generate_golden.py"
+  },
+  {
+    "id": 86,
+    "label": "verify_rust.py",
+    "title": "<b>tests/rust_harness/verify_rust.py</b><br/>Functions: 23<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: passed",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/rust_harness/verify_rust.py"
+  },
+  {
+    "id": 87,
+    "label": "shared_tokenize_tests.py",
+    "title": "<b>tests/shared_tokenize_tests.py</b><br/>Functions: 4",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 12,
+    "health": "healthy",
+    "full_path": "tests/shared_tokenize_tests.py"
+  },
+  {
+    "id": 88,
+    "label": "strict_parity_suite.py",
+    "title": "<b>tests/strict_parity_suite.py</b><br/>Functions: 4",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 12,
+    "health": "healthy",
+    "full_path": "tests/strict_parity_suite.py"
+  },
+  {
+    "id": 89,
+    "label": "test_analysis_duplicates.py",
+    "title": "<b>tests/test_analysis_duplicates.py</b><br/>Functions: 14<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-docstring: test_no_duplicates<br/>  \ud83d\udfe2 missing-class-docstring: TestStructuralDuplicates<br/>  \ud83d\udfe2 missing-docstring: test_structural_match<br/>  \ud83d\udfe2 missing-docstring: test_structural_empty_hash_skipped<br/>  \ud83d\udfe2 missing-docstring: test_groups_get_incrementing_ids",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_analysis_duplicates.py"
+  },
+  {
+    "id": 90,
+    "label": "test_analysis_lint.py",
+    "title": "<b>tests/test_analysis_lint.py</b><br/>Functions: 33",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_analysis_lint.py"
+  },
+  {
+    "id": 91,
+    "label": "test_analysis_project_health.py",
+    "title": "<b>tests/test_analysis_project_health.py</b><br/>Functions: 37<br/><br/><b>Issues:</b><br/>  \ud83d\udd34 god-class: TestProjectHealthAnalyzerAnalyze",
+    "color": "#e74c3c",
+    "shape": "dot",
+    "size": 40,
+    "health": "critical",
+    "full_path": "tests/test_analysis_project_health.py"
+  },
+  {
+    "id": 92,
+    "label": "test_analysis_rustadvisor.py",
+    "title": "<b>tests/test_analysis_rustadvisor.py</b><br/>Functions: 26",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_analysis_rustadvisor.py"
+  },
+  {
+    "id": 93,
+    "label": "test_analysis_security.py",
+    "title": "<b>tests/test_analysis_security.py</b><br/>Functions: 36",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_analysis_security.py"
+  },
+  {
+    "id": 94,
+    "label": "test_analysis_similarity.py",
+    "title": "<b>tests/test_analysis_similarity.py</b><br/>Functions: 41<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-docstring: test_identical_functions_high<br/>  \ud83d\udfe2 missing-docstring: test_completely_different_low",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_analysis_similarity.py"
+  },
+  {
+    "id": 95,
+    "label": "test_analysis_smell_fixer.py",
+    "title": "<b>tests/test_analysis_smell_fixer.py</b><br/>Functions: 24<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-class-docstring: TestCommentConsoleLines<br/>  \ud83d\udfe2 missing-class-docstring: TestFileLevel<br/>  \ud83d\udfe2 missing-docstring: test_fix_js_console_logs<br/>  \ud83d\udfe2 missing-docstring: test_fix_python_debug_prints<br/>  \ud83d\udfe2 missing-class-docstring: TestFixAll",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_analysis_smell_fixer.py"
+  },
+  {
+    "id": 96,
+    "label": "test_analysis_smells.py",
+    "title": "<b>tests/test_analysis_smells.py</b><br/>Functions: 38",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_analysis_smells.py"
+  },
+  {
+    "id": 97,
+    "label": "test_analysis_test_generator.py",
+    "title": "<b>tests/test_analysis_test_generator.py</b><br/>Functions: 36<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-class-docstring: TestPythonTestGenerator<br/>  \ud83d\udfe2 missing-class-docstring: TestJSTSTestGenerator",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_analysis_test_generator.py"
+  },
+  {
+    "id": 98,
+    "label": "test_analysis_testgen.py",
+    "title": "<b>tests/test_analysis_testgen.py</b><br/>Functions: 18",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_analysis_testgen.py"
+  },
+  {
+    "id": 99,
+    "label": "test_analysis_tracer.py",
+    "title": "<b>tests/test_analysis_tracer.py</b><br/>Functions: 38",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_analysis_tracer.py"
+  },
+  {
+    "id": 100,
+    "label": "test_analysis_web_smells.py",
+    "title": "<b>tests/test_analysis_web_smells.py</b><br/>Functions: 24<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-class-docstring: TestMakeWebSmell<br/>  \ud83d\udfe2 missing-class-docstring: TestWebSmellDetectorDetect<br/>  \ud83d\udfe2 missing-docstring: test_tsx_file_analyzed<br/>  \ud83d\udfe2 missing-docstring: test_async_no_catch_flagged",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_analysis_web_smells.py"
+  },
+  {
+    "id": 101,
+    "label": "test_core_inference.py",
+    "title": "<b>tests/test_core_inference.py</b><br/>Functions: 14",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_core_inference.py"
+  },
+  {
+    "id": 102,
+    "label": "test_core_types.py",
+    "title": "<b>tests/test_core_types.py</b><br/>Functions: 25",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_core_types.py"
+  },
+  {
+    "id": 103,
+    "label": "test_core_utils.py",
+    "title": "<b>tests/test_core_utils.py</b><br/>Functions: 10",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 30,
+    "health": "healthy",
+    "full_path": "tests/test_core_utils.py"
+  },
+  {
+    "id": 104,
+    "label": "test_lang_ast.py",
+    "title": "<b>tests/test_lang_ast.py</b><br/>Functions: 40<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-docstring: test_strips_docstring",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_lang_ast.py"
+  },
+  {
+    "id": 105,
+    "label": "test_lang_js_ts_analyzer.py",
+    "title": "<b>tests/test_lang_js_ts_analyzer.py</b><br/>Functions: 56<br/><br/><b>Issues:</b><br/>  \ud83d\udd34 god-class: TestAnalyzeJsFile<br/>  \ud83d\udfe2 missing-class-docstring: TestJSFunction<br/>  \ud83d\udfe2 missing-docstring: test_location_string<br/>  \ud83d\udfe2 missing-docstring: test_defaults<br/>  \ud83d\udfe2 missing-class-docstring: TestExtractImports<br/>  ...+9 more",
+    "color": "#e74c3c",
+    "shape": "dot",
+    "size": 40,
+    "health": "critical",
+    "full_path": "tests/test_lang_js_ts_analyzer.py"
+  },
+  {
+    "id": 106,
+    "label": "test_lang_tokenizer.py",
+    "title": "<b>tests/test_lang_tokenizer.py</b><br/>Functions: 19",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_lang_tokenizer.py"
+  },
+  {
+    "id": 107,
+    "label": "test_llm_transpiler.py",
+    "title": "<b>tests/test_llm_transpiler.py</b><br/>Functions: 38<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 dataclass-candidate: FakeLLM<br/>  \ud83d\udfe2 missing-docstring: test_recommend_includes_transpiler_models",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_llm_transpiler.py"
+  },
+  {
+    "id": 108,
+    "label": "test_manual_async.py",
+    "title": "<b>tests/test_manual_async.py</b><br/>Functions: 1",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "tests/test_manual_async.py"
+  },
+  {
+    "id": 109,
+    "label": "test_monkey_torture.py",
+    "title": "<b>tests/test_monkey_torture.py</b><br/>Functions: 6",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 18,
+    "health": "healthy",
+    "full_path": "tests/test_monkey_torture.py"
+  },
+  {
+    "id": 110,
+    "label": "test_parity_py_vs_rust.py",
+    "title": "<b>tests/test_parity_py_vs_rust.py</b><br/>Functions: 15<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: _rust_exe_available",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_parity_py_vs_rust.py"
+  },
+  {
+    "id": 111,
+    "label": "test_phase1_modularization.py",
+    "title": "<b>tests/test_phase1_modularization.py</b><br/>Functions: 8",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 24,
+    "health": "healthy",
+    "full_path": "tests/test_phase1_modularization.py"
+  },
+  {
+    "id": 112,
+    "label": "test_scan_cache.py",
+    "title": "<b>tests/test_scan_cache.py</b><br/>Functions: 14",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_scan_cache.py"
+  },
+  {
+    "id": 113,
+    "label": "test_semantic_fuzzer.py",
+    "title": "<b>tests/test_semantic_fuzzer.py</b><br/>Functions: 13<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-class-docstring: TestSemanticFuzzer",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 39,
+    "health": "healthy",
+    "full_path": "tests/test_semantic_fuzzer.py"
+  },
+  {
+    "id": 114,
+    "label": "test_smells_new.py",
+    "title": "<b>tests/test_smells_new.py</b><br/>Functions: 21<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-class-docstring: TestMagicNumber<br/>  \ud83d\udfe2 missing-class-docstring: TestMutableDefaultArg<br/>  \ud83d\udfe2 missing-class-docstring: TestDeadCode<br/>  \ud83d\udfe2 missing-class-docstring: TestSmellDetectorIntegration",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_smells_new.py"
+  },
+  {
+    "id": 115,
+    "label": "test_transpiler.py",
+    "title": "<b>tests/test_transpiler.py</b><br/>Functions: 146<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: _rustc_available<br/>  \ud83d\udfe2 missing-docstring: test_try_except_becomes_comment",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_transpiler.py"
+  },
+  {
+    "id": 116,
+    "label": "test_trend.py",
+    "title": "<b>tests/test_trend.py</b><br/>Functions: 20<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-class-docstring: TestCompareScans",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_trend.py"
+  },
+  {
+    "id": 117,
+    "label": "test_ui_bridge.py",
+    "title": "<b>tests/test_ui_bridge.py</b><br/>Functions: 25",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_ui_bridge.py"
+  },
+  {
+    "id": 118,
+    "label": "test_ui_compat.py",
+    "title": "<b>tests/test_ui_compat.py</b><br/>Functions: 54<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-class-docstring: TestUICallVisitor<br/>  \ud83d\udfe2 missing-class-docstring: TestSmellConversion<br/>  \ud83d\udfe2 missing-docstring: test_to_smell_fields<br/>  \ud83d\udfe2 missing-class-docstring: TestSummary<br/>  \ud83d\udfe2 missing-docstring: test_summary_structure<br/>  ...+1 more",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_ui_compat.py"
+  },
+  {
+    "id": 119,
+    "label": "test_unified_integration.py",
+    "title": "<b>tests/test_unified_integration.py</b><br/>Functions: 26<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-docstring: test_print_lint_report_empty<br/>  \ud83d\udfe2 missing-docstring: test_print_lint_report_with_data<br/>  \ud83d\udfe2 missing-docstring: test_print_security_report_empty<br/>  \ud83d\udfe2 missing-docstring: test_print_security_report_with_data<br/>  \ud83d\udfe2 missing-docstring: test_print_unified_grade_with_all_data",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_unified_integration.py"
+  },
+  {
+    "id": 120,
+    "label": "test_xray_UI_tabs_shared.py",
+    "title": "<b>tests/test_xray_UI_tabs_shared.py</b><br/>Functions: 18",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_xray_UI_tabs_shared.py"
+  },
+  {
+    "id": 121,
+    "label": "test_xray_claude.py",
+    "title": "<b>tests/test_xray_claude.py</b><br/>Functions: 153<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-docstring: test_boolean_blindness_not_flagged_good_name<br/>  \ud83d\udfe2 missing-class-docstring: TestSemanticSimilarity<br/>  \ud83d\udfe2 missing-docstring: test_health_coloring_yellow<br/>  \ud83d\udfe2 missing-docstring: test_health_coloring_red<br/>  \ud83d\udfe2 missing-docstring: test_duplicate_edges<br/>  ...+4 more",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_xray_claude.py"
+  },
+  {
+    "id": 122,
+    "label": "test_xray_core_comprehensive.py",
+    "title": "<b>tests/test_xray_core_comprehensive.py</b><br/>Functions: 15",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "tests/test_xray_core_comprehensive.py"
+  },
+  {
+    "id": 123,
+    "label": "verify_integration.py",
+    "title": "<b>tests/verify_integration.py</b><br/>Functions: 1",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "tests/verify_integration.py"
+  },
+  {
+    "id": 124,
+    "label": "verify_parity.py",
+    "title": "<b>tests/verify_parity.py</b><br/>Functions: 2",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "tests/verify_parity.py"
+  },
+  {
+    "id": 125,
+    "label": "verify_rust_ast.py",
+    "title": "<b>tests/verify_rust_ast.py</b><br/>Functions: 2",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 10,
+    "health": "healthy",
+    "full_path": "tests/verify_rust_ast.py"
+  },
+  {
+    "id": 126,
+    "label": "verify_rust_compilation.py",
+    "title": "<b>verify_rust_compilation.py</b><br/>Functions: 10<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 missing-docstring: main",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 30,
+    "health": "healthy",
+    "full_path": "verify_rust_compilation.py"
+  },
+  {
+    "id": 127,
+    "label": "x_ray_claude.py",
+    "title": "<b>x_ray_claude.py</b><br/>Functions: 46<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 long-function: _run_full_scan<br/>  \ud83d\udfe1 high-complexity: main_async<br/>  \ud83d\udfe2 boolean-blindness: _supports_interactive",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
     "full_path": "x_ray_claude.py"
+  },
+  {
+    "id": 128,
+    "label": "x_ray_exe.py",
+    "title": "<b>x_ray_exe.py</b><br/>Functions: 19<br/><br/><b>Issues:</b><br/>  \ud83d\udfe2 boolean-blindness: _is_interactive_console<br/>  \ud83d\udfe2 boolean-blindness: _needs_interactive",
+    "color": "#2ecc71",
+    "shape": "dot",
+    "size": 40,
+    "health": "healthy",
+    "full_path": "x_ray_exe.py"
+  },
+  {
+    "id": 129,
+    "label": "x_ray_flet.py",
+    "title": "<b>x_ray_flet.py</b><br/>Functions: 57<br/><br/><b>Issues:</b><br/>  \ud83d\udfe1 deep-nesting: _run_flet_phases<br/>  \ud83d\udfe1 long-function: _show_onboarding<br/>  \ud83d\udfe1 long-function: _build_grade_card<br/>  \ud83d\udfe1 long-function: _build_result_tabs<br/>  \ud83d\udfe1 high-complexity: _build_result_tabs<br/>  ...+10 more",
+    "color": "#f39c12",
+    "shape": "dot",
+    "size": 40,
+    "health": "warning",
+    "full_path": "x_ray_flet.py"
   }
 ];
-const edgesData = [];
-const dupData   = [];
-const smellData = [{"sev": "critical", "cat": "god-class", "name": "TestCodeSmellDetectorFunctions", "file": "tests/test_xray_claude.py", "line": 259, "msg": "Class 'TestCodeSmellDetectorFunctions' has 18 methods (limit: 15)", "sug": "Split into smaller classes with single responsibility. Consider delegation or mixins."}, {"sev": "critical", "cat": "very-deep-nesting", "name": "_extract_functions_from_file", "file": "x_ray_claude.py", "line": 318, "msg": "Function '_extract_functions_from_file' has nesting depth 6 (limit: 6)", "sug": "Use early returns, guard clauses, or extract nested blocks."}, {"sev": "critical", "cat": "very-high-complexity", "name": "_extract_functions_from_file", "file": "x_ray_claude.py", "line": 318, "msg": "Function '_extract_functions_from_file' has cyclomatic complexity 24 (limit: 20)", "sug": "Decompose into smaller, single-responsibility functions."}, {"sev": "critical", "cat": "very-long-function", "name": "find", "file": "x_ray_claude.py", "line": 966, "msg": "Function 'find' is 135 lines (limit: 120)", "sug": "Split into smaller focused functions. Extract logical blocks."}, {"sev": "critical", "cat": "very-high-complexity", "name": "find", "file": "x_ray_claude.py", "line": 966, "msg": "Function 'find' has cyclomatic complexity 37 (limit: 20)", "sug": "Decompose into smaller, single-responsibility functions."}, {"sev": "critical", "cat": "very-long-function", "name": "write_html", "file": "x_ray_claude.py", "line": 1432, "msg": "Function 'write_html' is 335 lines (limit: 120)", "sug": "Split into smaller focused functions. Extract logical blocks."}, {"sev": "critical", "cat": "very-long-function", "name": "main", "file": "x_ray_claude.py", "line": 2033, "msg": "Function 'main' is 187 lines (limit: 120)", "sug": "Split into smaller focused functions. Extract logical blocks."}, {"sev": "critical", "cat": "very-deep-nesting", "name": "main", "file": "x_ray_claude.py", "line": 2033, "msg": "Function 'main' has nesting depth 6 (limit: 6)", "sug": "Use early returns, guard clauses, or extract nested blocks."}, {"sev": "critical", "cat": "very-high-complexity", "name": "main", "file": "x_ray_claude.py", "line": 2033, "msg": "Function 'main' has cyclomatic complexity 41 (limit: 20)", "sug": "Decompose into smaller, single-responsibility functions."}, {"sev": "warning", "cat": "too-many-params", "name": "_make_func", "file": "tests/test_xray_claude.py", "line": 55, "msg": "Function '_make_func' has 13 parameters (limit: 6)", "sug": "Group related parameters into a dataclass or config object."}, {"sev": "warning", "cat": "too-many-params", "name": "_make_class", "file": "tests/test_xray_claude.py", "line": 83, "msg": "Function '_make_class' has 9 parameters (limit: 6)", "sug": "Group related parameters into a dataclass or config object."}, {"sev": "warning", "cat": "high-complexity", "name": "test_extract_from_temp_file", "file": "tests/test_xray_claude.py", "line": 743, "msg": "Function 'test_extract_from_temp_file' has cyclomatic complexity 12 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "test_end_to_end", "file": "tests/test_xray_claude.py", "line": 991, "msg": "Function 'test_end_to_end' is 89 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "test_end_to_end", "file": "tests/test_xray_claude.py", "line": 991, "msg": "Function 'test_end_to_end' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "deep-nesting", "name": "_parse_gitignore", "file": "x_ray_claude.py", "line": 240, "msg": "Function '_parse_gitignore' has nesting depth 5 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "collect_py_files", "file": "x_ray_claude.py", "line": 256, "msg": "Function 'collect_py_files' has cyclomatic complexity 13 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "_extract_functions_from_file", "file": "x_ray_claude.py", "line": 318, "msg": "Function '_extract_functions_from_file' is 87 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "scan_codebase", "file": "x_ray_claude.py", "line": 463, "msg": "Function 'scan_codebase' has nesting depth 5 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "long-function", "name": "_check_function", "file": "x_ray_claude.py", "line": 690, "msg": "Function '_check_function' is 112 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_check_function", "file": "x_ray_claude.py", "line": 690, "msg": "Function '_check_function' has cyclomatic complexity 13 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "analyze", "file": "x_ray_claude.py", "line": 1177, "msg": "Function 'analyze' is 88 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "analyze", "file": "x_ray_claude.py", "line": 1177, "msg": "Function 'analyze' has cyclomatic complexity 19 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "build", "file": "x_ray_claude.py", "line": 1351, "msg": "Function 'build' is 80 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "build", "file": "x_ray_claude.py", "line": 1351, "msg": "Function 'build' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "build", "file": "x_ray_claude.py", "line": 1351, "msg": "Function 'build' has cyclomatic complexity 19 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "deep-nesting", "name": "print_smell_report", "file": "x_ray_claude.py", "line": 1773, "msg": "Function 'print_smell_report' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "print_smell_report", "file": "x_ray_claude.py", "line": 1773, "msg": "Function 'print_smell_report' has cyclomatic complexity 13 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "build_json_report", "file": "x_ray_claude.py", "line": 1896, "msg": "Function 'build_json_report' is 70 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "build_json_report", "file": "x_ray_claude.py", "line": 1896, "msg": "Function 'build_json_report' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "too-many-params", "name": "build_json_report", "file": "x_ray_claude.py", "line": 1896, "msg": "Function 'build_json_report' has 7 parameters (limit: 6)", "sug": "Group related parameters into a dataclass or config object."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestDuplicateFinder", "file": "tests/test_xray_claude.py", "line": 470, "msg": "Class 'TestDuplicateFinder' (114 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_exact_duplicates", "file": "tests/test_xray_claude.py", "line": 481, "msg": "Function 'test_exact_duplicates' (15 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestLibraryAdvisor", "file": "tests/test_xray_claude.py", "line": 590, "msg": "Class 'TestLibraryAdvisor' (56 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_suggestion_from_duplicate_group", "file": "tests/test_xray_claude.py", "line": 596, "msg": "Function 'test_suggestion_from_duplicate_group' (18 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestSmartGraph", "file": "tests/test_xray_claude.py", "line": 652, "msg": "Class 'TestSmartGraph' (84 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestASTExtraction", "file": "tests/test_xray_claude.py", "line": 742, "msg": "Class 'TestASTExtraction' (94 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_extract_from_temp_file", "file": "tests/test_xray_claude.py", "line": 743, "msg": "Function 'test_extract_from_temp_file' (40 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_nesting_depth_calculation", "file": "tests/test_xray_claude.py", "line": 801, "msg": "Function 'test_nesting_depth_calculation' (15 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_complexity_calculation", "file": "tests/test_xray_claude.py", "line": 817, "msg": "Function 'test_complexity_calculation' (19 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestReportPrinting", "file": "tests/test_xray_claude.py", "line": 898, "msg": "Class 'TestReportPrinting' (35 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestJSONReport", "file": "tests/test_xray_claude.py", "line": 939, "msg": "Class 'TestJSONReport' (45 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestFullPipeline", "file": "tests/test_xray_claude.py", "line": 990, "msg": "Class 'TestFullPipeline' (90 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestEdgeCases", "file": "tests/test_xray_claude.py", "line": 1086, "msg": "Class 'TestEdgeCases' (93 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_decorators_extracted", "file": "tests/test_xray_claude.py", "line": 1164, "msg": "Function 'test_decorators_extracted' (15 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "boolean-blindness", "name": "_supports_unicode", "file": "x_ray_claude.py", "line": 60, "msg": "Function '_supports_unicode' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "missing-return-type", "name": "_walk", "file": "x_ray_claude.py", "line": 292, "msg": "Function '_walk' (11 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "get_cached_records", "file": "x_ray_claude.py", "line": 439, "msg": "Function 'get_cached_records' (14 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "boolean-blindness", "name": "available", "file": "x_ray_claude.py", "line": 573, "msg": "Function 'available' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "missing-return-type", "name": "_ensure_loaded", "file": "x_ray_claude.py", "line": 584, "msg": "Function '_ensure_loaded' (27 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "_check_function", "file": "x_ray_claude.py", "line": 690, "msg": "Function '_check_function' (112 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "_check_class", "file": "x_ray_claude.py", "line": 803, "msg": "Function '_check_class' (48 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "_check_security", "file": "x_ray_claude.py", "line": 852, "msg": "Function '_check_security' (24 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "_check_typing", "file": "x_ray_claude.py", "line": 877, "msg": "Function '_check_typing' (13 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "enrich_with_llm", "file": "x_ray_claude.py", "line": 891, "msg": "Function 'enrich_with_llm' (27 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "enrich_with_llm", "file": "x_ray_claude.py", "line": 1102, "msg": "Function 'enrich_with_llm' (38 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "enrich_with_llm", "file": "x_ray_claude.py", "line": 1266, "msg": "Function 'enrich_with_llm' (38 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "dataclass-candidate", "name": "SmartGraph", "file": "x_ray_claude.py", "line": 1336, "msg": "Class 'SmartGraph' has only 3 methods \u2014 consider @dataclass", "sug": "If this class mainly holds data, convert to @dataclass for less boilerplate."}, {"sev": "info", "cat": "missing-return-type", "name": "build", "file": "x_ray_claude.py", "line": 1351, "msg": "Function 'build' (80 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "write_html", "file": "x_ray_claude.py", "line": 1432, "msg": "Function 'write_html' (335 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "print_smell_report", "file": "x_ray_claude.py", "line": 1773, "msg": "Function 'print_smell_report' (51 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "print_duplicate_report", "file": "x_ray_claude.py", "line": 1826, "msg": "Function 'print_duplicate_report' (32 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-return-type", "name": "print_library_report", "file": "x_ray_claude.py", "line": 1860, "msg": "Function 'print_library_report' (30 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-docstring", "name": "parse_args", "file": "x_ray_claude.py", "line": 1972, "msg": "Function 'parse_args' (55 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-return-type", "name": "parse_args", "file": "x_ray_claude.py", "line": 1972, "msg": "Function 'parse_args' (55 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}, {"sev": "info", "cat": "missing-docstring", "name": "main", "file": "x_ray_claude.py", "line": 2033, "msg": "Function 'main' (187 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-return-type", "name": "main", "file": "x_ray_claude.py", "line": 2033, "msg": "Function 'main' (187 lines) is missing a return type hint", "sug": "Add a -> Type annotation to improve maintainability."}];
+const edgesData = [
+  {
+    "from": 100,
+    "to": 95,
+    "label": "100%",
+    "color": "#e74c3c",
+    "dashes": false,
+    "title": "Duplicate: _write, _write"
+  },
+  {
+    "from": 106,
+    "to": 94,
+    "label": "100%",
+    "color": "#e74c3c",
+    "dashes": false,
+    "title": "Duplicate: test_empty_string, test_empty_string"
+  },
+  {
+    "from": 106,
+    "to": 94,
+    "label": "100%",
+    "color": "#e74c3c",
+    "dashes": false,
+    "title": "Duplicate: test_snake_case, test_snake_case"
+  },
+  {
+    "from": 106,
+    "to": 94,
+    "label": "100%",
+    "color": "#e74c3c",
+    "dashes": false,
+    "title": "Duplicate: test_camel_case, test_camel_case"
+  },
+  {
+    "from": 34,
+    "to": 35,
+    "label": "99%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: analyze_to_smells, analyze_to_smells"
+  },
+  {
+    "from": 121,
+    "to": 102,
+    "label": "94%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_defaults, test_duplicate_group_merge_suggestion_default"
+  },
+  {
+    "from": 43,
+    "to": 129,
+    "label": "93%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: _phase_rustify, run_phase_rustify"
+  },
+  {
+    "from": 90,
+    "to": 93,
+    "label": "92%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_summary_structure, test_summary_structure"
+  },
+  {
+    "from": 34,
+    "to": 35,
+    "label": "90%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: analyze, analyze"
+  },
+  {
+    "from": 81,
+    "to": 110,
+    "label": "90%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: classify_margin_py, classify_margin"
+  },
+  {
+    "from": 90,
+    "to": 93,
+    "label": "89%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_summary_fixable_count, test_summary_confidence_breakdown"
+  },
+  {
+    "from": 43,
+    "to": 129,
+    "label": "89%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: _phase_duplicates, run_phase_duplicates"
+  },
+  {
+    "from": 121,
+    "to": 104,
+    "label": "89%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_exclude_filter, test_exclude"
+  },
+  {
+    "from": 90,
+    "to": 93,
+    "label": "88%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_relative_paths, test_relative_paths"
+  },
+  {
+    "from": 7,
+    "to": 30,
+    "label": "88%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: _tb_expr, _stmt_expr"
+  },
+  {
+    "from": 121,
+    "to": 106,
+    "label": "87%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_preserves_keywords, test_special_chars_stripped, test_snake_case"
+  },
+  {
+    "from": 121,
+    "to": 94,
+    "label": "87%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_preserves_keywords, test_special_chars_stripped, test_snake_case"
+  },
+  {
+    "from": 106,
+    "to": 94,
+    "label": "87%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_preserves_keywords, test_special_chars_stripped, test_snake_case"
+  },
+  {
+    "from": 11,
+    "to": 25,
+    "label": "87%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: summary, summary"
+  },
+  {
+    "from": 121,
+    "to": 102,
+    "label": "86%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_fields, test_basic"
+  },
+  {
+    "from": 7,
+    "to": 43,
+    "label": "86%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: _transpile_function_body, _translate_sketch_body"
+  },
+  {
+    "from": 43,
+    "to": 129,
+    "label": "85%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: _phase_security, run_phase_security"
+  },
+  {
+    "from": 121,
+    "to": 119,
+    "label": "85%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_default_source_is_xray, test_smell_issue_all_fields"
+  },
+  {
+    "from": 121,
+    "to": 100,
+    "label": "84%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_summary_empty, test_summary_before_detect, test_summary_empty"
+  },
+  {
+    "from": 121,
+    "to": 96,
+    "label": "84%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_summary_empty, test_summary_before_detect, test_summary_empty"
+  },
+  {
+    "from": 100,
+    "to": 96,
+    "label": "84%",
+    "color": "#e67e22",
+    "dashes": true,
+    "title": "Duplicate: test_summary_empty, test_summary_before_detect, test_summary_empty"
+  }
+];
+const dupData   = [{"id": 0, "type": "exact", "sim": 100, "funcs": [{"name": "_write", "file": "tests/test_analysis_smell_fixer.py", "line": 14}, {"name": "_write", "file": "tests/test_analysis_web_smells.py", "line": 28}], "merge": ""}, {"id": 1, "type": "exact", "sim": 100, "funcs": [{"name": "test_empty_string", "file": "tests/test_analysis_similarity.py", "line": 40}, {"name": "test_empty_string", "file": "tests/test_lang_tokenizer.py", "line": 25}], "merge": ""}, {"id": 2, "type": "exact", "sim": 100, "funcs": [{"name": "test_snake_case", "file": "tests/test_analysis_similarity.py", "line": 43}, {"name": "test_snake_case", "file": "tests/test_lang_tokenizer.py", "line": 28}], "merge": ""}, {"id": 3, "type": "exact", "sim": 100, "funcs": [{"name": "test_camel_case", "file": "tests/test_analysis_similarity.py", "line": 46}, {"name": "test_camel_case", "file": "tests/test_lang_tokenizer.py", "line": 31}], "merge": ""}, {"id": 11, "type": "near", "sim": 99, "funcs": [{"name": "analyze_to_smells", "file": "Analysis/ui_compat.py", "line": 372}, {"name": "analyze_to_smells", "file": "Analysis/ui_health.py", "line": 633}], "merge": ""}, {"id": 18, "type": "near", "sim": 94, "funcs": [{"name": "test_defaults", "file": "tests/test_core_types.py", "line": 163}, {"name": "test_duplicate_group_merge_suggestion_default", "file": "tests/test_xray_claude.py", "line": 1575}], "merge": ""}, {"id": 8, "type": "near", "sim": 93, "funcs": [{"name": "_phase_rustify", "file": "x_ray_flet.py", "line": 287}, {"name": "run_phase_rustify", "file": "Core/scan_context.py", "line": 373}], "merge": ""}, {"id": 16, "type": "near", "sim": 92, "funcs": [{"name": "test_summary_structure", "file": "tests/test_analysis_lint.py", "line": 301}, {"name": "test_summary_structure", "file": "tests/test_analysis_security.py", "line": 380}], "merge": ""}, {"id": 10, "type": "near", "sim": 90, "funcs": [{"name": "analyze", "file": "Analysis/ui_compat.py", "line": 330}, {"name": "analyze", "file": "Analysis/ui_health.py", "line": 625}], "merge": ""}, {"id": 20, "type": "near", "sim": 90, "funcs": [{"name": "classify_margin_py", "file": "tests/test_parity_py_vs_rust.py", "line": 61}, {"name": "classify_margin", "file": "tests/rust_harness/calibrate_fixtures.py", "line": 152}], "merge": ""}, {"id": 15, "type": "near", "sim": 89, "funcs": [{"name": "test_summary_fixable_count", "file": "tests/test_analysis_lint.py", "line": 233}, {"name": "test_summary_confidence_breakdown", "file": "tests/test_analysis_security.py", "line": 271}], "merge": ""}, {"id": 6, "type": "near", "sim": 89, "funcs": [{"name": "_phase_duplicates", "file": "x_ray_flet.py", "line": 252}, {"name": "run_phase_duplicates", "file": "Core/scan_context.py", "line": 341}], "merge": ""}, {"id": 19, "type": "near", "sim": 89, "funcs": [{"name": "test_exclude_filter", "file": "tests/test_lang_ast.py", "line": 367}, {"name": "test_exclude", "file": "tests/test_xray_claude.py", "line": 1288}], "merge": ""}, {"id": 14, "type": "near", "sim": 88, "funcs": [{"name": "test_relative_paths", "file": "tests/test_analysis_lint.py", "line": 181}, {"name": "test_relative_paths", "file": "tests/test_analysis_security.py", "line": 198}], "merge": ""}, {"id": 4, "type": "near", "sim": 88, "funcs": [{"name": "_tb_expr", "file": "Analysis/auto_rustify.py", "line": 449}, {"name": "_stmt_expr", "file": "Analysis/transpiler_legacy.py", "line": 1988}], "merge": ""}, {"id": 13, "type": "near", "sim": 87, "funcs": [{"name": "test_preserves_keywords", "file": "tests/test_analysis_similarity.py", "line": 94}, {"name": "test_special_chars_stripped", "file": "tests/test_lang_tokenizer.py", "line": 44}, {"name": "test_snake_case", "file": "tests/test_xray_claude.py", "line": 175}, {"name": "test_camel_case", "file": "tests/test_xray_claude.py", "line": 181}, {"name": "test_mixed_input", "file": "tests/test_lang_tokenizer.py", "line": 60}], "merge": ""}, {"id": 9, "type": "near", "sim": 87, "funcs": [{"name": "summary", "file": "Analysis/smells.py", "line": 897}, {"name": "summary", "file": "Analysis/imports.py", "line": 65}], "merge": ""}, {"id": 17, "type": "near", "sim": 86, "funcs": [{"name": "test_fields", "file": "tests/test_core_types.py", "line": 105}, {"name": "test_basic", "file": "tests/test_xray_claude.py", "line": 149}], "merge": ""}, {"id": 5, "type": "near", "sim": 86, "funcs": [{"name": "_transpile_function_body", "file": "Analysis/auto_rustify.py", "line": 783}, {"name": "_translate_sketch_body", "file": "Core/scan_context.py", "line": 74}], "merge": ""}, {"id": 7, "type": "near", "sim": 85, "funcs": [{"name": "_phase_security", "file": "x_ray_flet.py", "line": 273}, {"name": "run_phase_security", "file": "Core/scan_context.py", "line": 361}], "merge": ""}, {"id": 21, "type": "near", "sim": 85, "funcs": [{"name": "test_default_source_is_xray", "file": "tests/test_unified_integration.py", "line": 44}, {"name": "test_smell_issue_all_fields", "file": "tests/test_xray_claude.py", "line": 1559}], "merge": ""}, {"id": 12, "type": "near", "sim": 84, "funcs": [{"name": "test_summary_empty", "file": "tests/test_analysis_smells.py", "line": 362}, {"name": "test_summary_before_detect", "file": "tests/test_analysis_web_smells.py", "line": 235}, {"name": "test_summary_empty", "file": "tests/test_xray_claude.py", "line": 582}], "merge": ""}];
+const smellData = [{"sev": "critical", "cat": "very-long-function", "name": "main", "file": ".github/scripts/check_quality.py", "line": 33, "msg": "Function 'main' is 144 lines (limit: 120)", "sug": "Split into smaller focused functions. Extract logical blocks."}, {"sev": "critical", "cat": "very-high-complexity", "name": "main", "file": ".github/scripts/check_quality.py", "line": 33, "msg": "Function 'main' has cyclomatic complexity 22 (limit: 20)", "sug": "Decompose into smaller, single-responsibility functions."}, {"sev": "critical", "cat": "god-class", "name": "_ExprHandlerMixin", "file": "Analysis/transpiler.py", "line": 299, "msg": "Class '_ExprHandlerMixin' has 33 methods (limit: 15)", "sug": "Split into smaller classes with single responsibility. Consider delegation or mixins."}, {"sev": "critical", "cat": "god-class", "name": "_StmtHandlerMixin", "file": "Analysis/transpiler.py", "line": 786, "msg": "Class '_StmtHandlerMixin' has 22 methods (limit: 15)", "sug": "Split into smaller classes with single responsibility. Consider delegation or mixins."}, {"sev": "critical", "cat": "god-class", "name": "_PythonUIVisitor", "file": "Analysis/ui_health.py", "line": 223, "msg": "Class '_PythonUIVisitor' has 15 methods (limit: 15)", "sug": "Split into smaller classes with single responsibility. Consider delegation or mixins."}, {"sev": "critical", "cat": "god-class", "name": "WebSmellDetector", "file": "Analysis/web_smells.py", "line": 76, "msg": "Class 'WebSmellDetector' has 15 methods (limit: 15)", "sug": "Split into smaller classes with single responsibility. Consider delegation or mixins."}, {"sev": "critical", "cat": "very-deep-nesting", "name": "_scan_braces_in_line", "file": "Lang/js_ts_analyzer.py", "line": 216, "msg": "Function '_scan_braces_in_line' has nesting depth 6 (limit: 6)", "sug": "Use early returns, guard clauses, or extract nested blocks."}, {"sev": "critical", "cat": "very-long-function", "name": "very_long_function", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 84, "msg": "Function 'very_long_function' is 127 lines (limit: 120)", "sug": "Split into smaller focused functions. Extract logical blocks."}, {"sev": "critical", "cat": "very-deep-nesting", "name": "very_deeply_nested", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 226, "msg": "Function 'very_deeply_nested' has nesting depth 8 (limit: 6)", "sug": "Use early returns, guard clauses, or extract nested blocks."}, {"sev": "critical", "cat": "god-class", "name": "GodClass", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 340, "msg": "Class 'GodClass' has 17 methods (limit: 15)", "sug": "Split into smaller classes with single responsibility. Consider delegation or mixins."}, {"sev": "critical", "cat": "god-class", "name": "TestProjectHealthAnalyzerAnalyze", "file": "tests/test_analysis_project_health.py", "line": 141, "msg": "Class 'TestProjectHealthAnalyzerAnalyze' has 15 methods (limit: 15)", "sug": "Split into smaller classes with single responsibility. Consider delegation or mixins."}, {"sev": "critical", "cat": "god-class", "name": "TestAnalyzeJsFile", "file": "tests/test_lang_js_ts_analyzer.py", "line": 259, "msg": "Class 'TestAnalyzeJsFile' has 16 methods (limit: 15)", "sug": "Split into smaller classes with single responsibility. Consider delegation or mixins."}, {"sev": "warning", "cat": "long-function", "name": "check_file", "file": ".github/scripts/validate_flet_api.py", "line": 50, "msg": "Function 'check_file' is 71 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "check_file", "file": ".github/scripts/validate_flet_api.py", "line": 50, "msg": "Function 'check_file' has cyclomatic complexity 16 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "deep-nesting", "name": "identify_targets", "file": "Analysis/NexusMode/orchestrator.py", "line": 67, "msg": "Function 'identify_targets' has nesting depth 5 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "identify_targets", "file": "Analysis/NexusMode/orchestrator.py", "line": 67, "msg": "Function 'identify_targets' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "deep-nesting", "name": "verify_and_build", "file": "Analysis/NexusMode/orchestrator.py", "line": 279, "msg": "Function 'verify_and_build' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "extract_functions_from_file", "file": "Analysis/ast_utils.py", "line": 127, "msg": "Function 'extract_functions_from_file' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "_build_main_rs", "file": "Analysis/auto_rustify.py", "line": 1096, "msg": "Function '_build_main_rs' is 72 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "detect", "file": "Analysis/dead_functions.py", "line": 49, "msg": "Function 'detect' is 62 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "detect", "file": "Analysis/dead_functions.py", "line": 49, "msg": "Function 'detect' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "detect", "file": "Analysis/dead_functions.py", "line": 49, "msg": "Function 'detect' has cyclomatic complexity 14 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "deep-nesting", "name": "_prefilter_candidates", "file": "Analysis/duplicates.py", "line": 382, "msg": "Function '_prefilter_candidates' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_prefilter_candidates", "file": "Analysis/duplicates.py", "line": 382, "msg": "Function '_prefilter_candidates' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "analyze", "file": "Analysis/project_health.py", "line": 196, "msg": "Function 'analyze' is 68 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "print_web_report", "file": "Analysis/reporting.py", "line": 455, "msg": "Function 'print_web_report' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "too-many-params", "name": "_make_secret_issue", "file": "Analysis/security.py", "line": 125, "msg": "Function '_make_secret_issue' has 7 parameters (limit: 6)", "sug": "Group related parameters into a dataclass or config object."}, {"sev": "warning", "cat": "high-complexity", "name": "_check_magic_numbers", "file": "Analysis/smells.py", "line": 82, "msg": "Function '_check_magic_numbers' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "_check_function_complexity", "file": "Analysis/smells.py", "line": 291, "msg": "Function '_check_function_complexity' is 71 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_check_print_statement", "file": "Analysis/smells.py", "line": 503, "msg": "Function '_check_print_statement' has cyclomatic complexity 14 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "deep-nesting", "name": "_lazy_import_ids", "file": "Analysis/smells.py", "line": 574, "msg": "Function '_lazy_import_ids' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_check_import_inside_function", "file": "Analysis/smells.py", "line": 607, "msg": "Function '_check_import_inside_function' has cyclomatic complexity 11 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "_run_class_checks", "file": "Analysis/smells.py", "line": 696, "msg": "Function '_run_class_checks' is 93 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_run_class_checks", "file": "Analysis/smells.py", "line": 696, "msg": "Function '_run_class_checks' has cyclomatic complexity 14 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "_gen_function_test_cases", "file": "Analysis/test_generator.py", "line": 191, "msg": "Function '_gen_function_test_cases' is 77 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_gen_class_test_cases", "file": "Analysis/test_generator.py", "line": 269, "msg": "Function '_gen_class_test_cases' is 62 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_gen_structure_tests", "file": "Analysis/test_generator.py", "line": 479, "msg": "Function '_gen_structure_tests' is 70 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_gen_module_tests", "file": "Analysis/test_generator.py", "line": 643, "msg": "Function '_gen_module_tests' is 81 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_gen_module_tests", "file": "Analysis/test_generator.py", "line": 643, "msg": "Function '_gen_module_tests' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "deep-nesting", "name": "detect_project_type", "file": "Analysis/test_generator.py", "line": 845, "msg": "Function 'detect_project_type' has nesting depth 5 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "detect_project_type", "file": "Analysis/test_generator.py", "line": 845, "msg": "Function 'detect_project_type' has cyclomatic complexity 13 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "generate", "file": "Analysis/test_generator.py", "line": 887, "msg": "Function 'generate' is 74 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "generate", "file": "Analysis/test_generator.py", "line": 887, "msg": "Function 'generate' has cyclomatic complexity 14 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "too-many-params", "name": "generate", "file": "Analysis/test_generator.py", "line": 887, "msg": "Function 'generate' has 6 parameters (limit: 6)", "sug": "Group related parameters into a dataclass or config object."}, {"sev": "warning", "cat": "high-complexity", "name": "_expr_call_attr", "file": "Analysis/transpiler.py", "line": 497, "msg": "Function '_expr_call_attr' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "deep-nesting", "name": "_stmt_assign", "file": "Analysis/transpiler.py", "line": 792, "msg": "Function '_stmt_assign' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "_wrap_returns_in_some", "file": "Analysis/transpiler.py", "line": 1100, "msg": "Function '_wrap_returns_in_some' has nesting depth 5 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "long-function", "name": "_call_os_path", "file": "Analysis/transpiler_legacy.py", "line": 1133, "msg": "Function '_call_os_path' is 66 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_annotated_param_count", "file": "Analysis/type_coverage.py", "line": 42, "msg": "Function '_annotated_param_count' has cyclomatic complexity 11 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "analyze", "file": "Analysis/type_coverage.py", "line": 77, "msg": "Function 'analyze' is 81 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "visit_Assign", "file": "Analysis/ui_health.py", "line": 308, "msg": "Function 'visit_Assign' has nesting depth 5 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "_collect_parent_names", "file": "Analysis/ui_health.py", "line": 351, "msg": "Function '_collect_parent_names' has nesting depth 5 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "visit_Assign_attr", "file": "Analysis/ui_health.py", "line": 412, "msg": "Function 'visit_Assign_attr' has nesting depth 5 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "long-function", "name": "_finalize", "file": "Analysis/ui_health.py", "line": 423, "msg": "Function '_finalize' is 65 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "_walk_assigns_for_visible_flip", "file": "Analysis/ui_health.py", "line": 490, "msg": "Function '_walk_assigns_for_visible_flip' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "long-function", "name": "_scan_jsx_file", "file": "Analysis/ui_health.py", "line": 525, "msg": "Function '_scan_jsx_file' is 80 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "_analyze_tree", "file": "Analysis/ui_health.py", "line": 684, "msg": "Function '_analyze_tree' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "long-function", "name": "add_common_scan_args", "file": "Core/cli_args.py", "line": 13, "msg": "Function 'add_common_scan_args' is 67 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "run_scan", "file": "Core/scan_context.py", "line": 464, "msg": "Function 'run_scan' is 85 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "run_scan", "file": "Core/scan_context.py", "line": 464, "msg": "Function 'run_scan' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "run_scan", "file": "Core/scan_context.py", "line": 464, "msg": "Function 'run_scan' has cyclomatic complexity 15 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "too-many-params", "name": "run_test_gen_phase", "file": "Core/scan_phases.py", "line": 244, "msg": "Function 'run_test_gen_phase' has 7 parameters (limit: 6)", "sug": "Group related parameters into a dataclass or config object."}, {"sev": "warning", "cat": "long-function", "name": "collect_reports", "file": "Core/scan_phases.py", "line": 298, "msg": "Function 'collect_reports' is 74 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "collect_reports", "file": "Core/scan_phases.py", "line": 298, "msg": "Function 'collect_reports' has cyclomatic complexity 15 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "high-complexity", "name": "progress", "file": "Core/ui_bridge.py", "line": 180, "msg": "Function 'progress' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "deep-nesting", "name": "_count_nesting", "file": "Lang/js_ts_analyzer.py", "line": 246, "msg": "Function '_count_nesting' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_extract_imports", "file": "Lang/js_ts_analyzer.py", "line": 364, "msg": "Function '_extract_imports' has cyclomatic complexity 11 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "deep-nesting", "name": "_run_rustify_pipeline", "file": "UI/tabs/auto_rustify_tab.py", "line": 29, "msg": "Function '_run_rustify_pipeline' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_run_rustify_pipeline", "file": "UI/tabs/auto_rustify_tab.py", "line": 29, "msg": "Function '_run_rustify_pipeline' has cyclomatic complexity 14 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "_build_auto_rustify_tab", "file": "UI/tabs/auto_rustify_tab.py", "line": 120, "msg": "Function '_build_auto_rustify_tab' is 61 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_complexity_tab", "file": "UI/tabs/complexity_tab.py", "line": 74, "msg": "Function '_build_complexity_tab' is 64 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_generate_graph_html", "file": "UI/tabs/graph_tab.py", "line": 78, "msg": "Function '_generate_graph_html' is 90 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_graph_canvas", "file": "UI/tabs/graph_tab.py", "line": 170, "msg": "Function '_build_graph_canvas' is 79 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_graph_tab", "file": "UI/tabs/graph_tab.py", "line": 341, "msg": "Function '_build_graph_tab' is 61 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_lint_tab", "file": "UI/tabs/lint_tab.py", "line": 104, "msg": "Function '_build_lint_tab' is 73 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_run_nexus_pipeline", "file": "UI/tabs/nexus_tab.py", "line": 17, "msg": "Function '_run_nexus_pipeline' is 61 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_security_tab", "file": "UI/tabs/security_tab.py", "line": 17, "msg": "Function '_build_security_tab' is 93 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_smells_tab", "file": "UI/tabs/smells_tab.py", "line": 14, "msg": "Function '_build_smells_tab' is 60 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_ui_compat_tab", "file": "UI/tabs/ui_compat_tab.py", "line": 82, "msg": "Function '_build_ui_compat_tab' is 87 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "scan_project", "file": "scan_all_rustify.py", "line": 307, "msg": "Function 'scan_project' is 62 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "long_function", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 8, "msg": "Function 'long_function' is 73 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "deeply_nested", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 214, "msg": "Function 'deeply_nested' has nesting depth 5 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "high-complexity", "name": "high_complexity_func", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 242, "msg": "Function 'high_complexity_func' has cyclomatic complexity 11 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "too-many-params", "name": "too_many_params", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 269, "msg": "Function 'too_many_params' has 7 parameters (limit: 6)", "sug": "Group related parameters into a dataclass or config object."}, {"sev": "warning", "cat": "long-function", "name": "_run_full_scan", "file": "x_ray_claude.py", "line": 839, "msg": "Function '_run_full_scan' is 69 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "main_async", "file": "x_ray_claude.py", "line": 910, "msg": "Function 'main_async' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "deep-nesting", "name": "_run_flet_phases", "file": "x_ray_flet.py", "line": 452, "msg": "Function '_run_flet_phases' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "long-function", "name": "_show_onboarding", "file": "x_ray_flet.py", "line": 604, "msg": "Function '_show_onboarding' is 73 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_grade_card", "file": "x_ray_flet.py", "line": 684, "msg": "Function '_build_grade_card' is 65 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_result_tabs", "file": "x_ray_flet.py", "line": 792, "msg": "Function '_build_result_tabs' is 78 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_build_result_tabs", "file": "x_ray_flet.py", "line": 792, "msg": "Function '_build_result_tabs' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "_build_export_bar", "file": "x_ray_flet.py", "line": 872, "msg": "Function '_build_export_bar' is 99 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_build_export_bar", "file": "x_ray_flet.py", "line": 872, "msg": "Function '_build_export_bar' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "_build_main_dashboard", "file": "x_ray_flet.py", "line": 1010, "msg": "Function '_build_main_dashboard' is 70 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_main_landing", "file": "x_ray_flet.py", "line": 1212, "msg": "Function '_build_main_landing' is 66 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "deep-nesting", "name": "_build_phase_row", "file": "x_ray_flet.py", "line": 1280, "msg": "Function '_build_phase_row' has nesting depth 4 (limit: 4)", "sug": "Flatten with early returns or extract helper functions."}, {"sev": "warning", "cat": "long-function", "name": "_start_scan_handler", "file": "x_ray_flet.py", "line": 1444, "msg": "Function '_start_scan_handler' is 72 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "high-complexity", "name": "_start_scan_handler", "file": "x_ray_flet.py", "line": 1444, "msg": "Function '_start_scan_handler' has cyclomatic complexity 10 (limit: 10)", "sug": "Simplify branching logic. Consider lookup tables or strategy pattern."}, {"sev": "warning", "cat": "long-function", "name": "_build_app_sidebar", "file": "x_ray_flet.py", "line": 1589, "msg": "Function '_build_app_sidebar' is 69 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_mode_checks", "file": "x_ray_flet.py", "line": 1660, "msg": "Function '_build_mode_checks' is 73 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "warning", "cat": "long-function", "name": "_build_main_ui", "file": "x_ray_flet.py", "line": 2021, "msg": "Function '_build_main_ui' is 63 lines (limit: 60)", "sug": "Consider splitting into smaller functions."}, {"sev": "info", "cat": "missing-docstring", "name": "main", "file": ".github/scripts/check_quality.py", "line": 33, "msg": "Function 'main' (144 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "transpile", "file": "Analysis/NexusMode/adapters.py", "line": 45, "msg": "Function 'transpile' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "transpile", "file": "Analysis/NexusMode/adapters.py", "line": 80, "msg": "Function 'transpile' (48 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "identify_targets", "file": "Analysis/NexusMode/orchestrator.py", "line": 67, "msg": "Function 'identify_targets' (32 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "dataclass-candidate", "name": "TranslatorBridge", "file": "Analysis/NexusMode/orchestrator.py", "line": 104, "msg": "Class 'TranslatorBridge' has only 2 methods \u2014 consider @dataclass", "sug": "If this class mainly holds data, convert to @dataclass for less boilerplate."}, {"sev": "info", "cat": "missing-docstring", "name": "translate", "file": "Analysis/NexusMode/orchestrator.py", "line": 114, "msg": "Function 'translate' (33 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "verify_all_async", "file": "Analysis/NexusMode/orchestrator.py", "line": 205, "msg": "Function 'verify_all_async' (19 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "boolean-blindness", "name": "available", "file": "Analysis/_analyzer_base.py", "line": 103, "msg": "Function 'available' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "missing-docstring", "name": "visit_FunctionDef", "file": "Analysis/ast_utils.py", "line": 32, "msg": "Function 'visit_FunctionDef' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "visit_Name", "file": "Analysis/ast_utils.py", "line": 52, "msg": "Function 'visit_Name' (15 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "boolean-blindness", "name": "_should_prune_dir", "file": "Analysis/ast_utils.py", "line": 285, "msg": "Function '_should_prune_dir' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_matches_include_filter", "file": "Analysis/ast_utils.py", "line": 295, "msg": "Function '_matches_include_filter' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_scannable_py", "file": "Analysis/ast_utils.py", "line": 305, "msg": "Function '_is_scannable_py' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_code_has_blockers", "file": "Analysis/auto_rustify.py", "line": 241, "msg": "Function '_code_has_blockers' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_has_name_blocker", "file": "Analysis/auto_rustify.py", "line": 246, "msg": "Function '_has_name_blocker' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_has_code_pattern_blocker", "file": "Analysis/auto_rustify.py", "line": 256, "msg": "Function '_has_code_pattern_blocker' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_transpilable", "file": "Analysis/auto_rustify.py", "line": 268, "msg": "Function '_is_transpilable' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_self_attribute", "file": "Analysis/auto_rustify.py", "line": 553, "msg": "Function '_is_self_attribute' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "dataclass-candidate", "name": "UnionFind", "file": "Analysis/duplicates.py", "line": 39, "msg": "Class 'UnionFind' has only 3 methods \u2014 consider @dataclass", "sug": "If this class mainly holds data, convert to @dataclass for less boilerplate."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_valid_group", "file": "Analysis/duplicates.py", "line": 656, "msg": "Function '_is_valid_group' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "available", "file": "Analysis/format.py", "line": 103, "msg": "Function 'available' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_has_dunder_all", "file": "Analysis/imports.py", "line": 144, "msg": "Function '_has_dunder_all' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_dunder", "file": "Analysis/library_advisor.py", "line": 46, "msg": "Function '_is_dunder' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_cross_file_candidate", "file": "Analysis/library_advisor.py", "line": 49, "msg": "Function '_is_cross_file_candidate' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_check_rust_compiles", "file": "Analysis/llm_transpiler.py", "line": 112, "msg": "Function '_check_rust_compiles' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "available", "file": "Analysis/llm_transpiler.py", "line": 247, "msg": "Function 'available' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "missing-docstring", "name": "run_port", "file": "Analysis/port_project.py", "line": 24, "msg": "Function 'run_port' (45 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "boolean-blindness", "name": "_mutates_attribute", "file": "Analysis/rust_advisor.py", "line": 107, "msg": "Function '_mutates_attribute' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_impure_call", "file": "Analysis/rust_advisor.py", "line": 116, "msg": "Function '_is_impure_call' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_impure_node", "file": "Analysis/rust_advisor.py", "line": 125, "msg": "Function '_is_impure_node' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_detect_purity", "file": "Analysis/rust_advisor.py", "line": 136, "msg": "Function '_detect_purity' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "dataclass-candidate", "name": "SmellFixResult", "file": "Analysis/smell_fixer.py", "line": 26, "msg": "Class 'SmellFixResult' has only 2 methods \u2014 consider @dataclass", "sug": "If this class mainly holds data, convert to @dataclass for less boilerplate."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_mojibake", "file": "Analysis/smells.py", "line": 61, "msg": "Function '_is_mojibake' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_has_bare_except", "file": "Analysis/smells.py", "line": 221, "msg": "Function '_has_bare_except' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_has_nested_comprehension", "file": "Analysis/smells.py", "line": 226, "msg": "Function '_has_nested_comprehension' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "dataclass-candidate", "name": "TestGeneratorEngine", "file": "Analysis/test_generator.py", "line": 839, "msg": "Class 'TestGeneratorEngine' has only 3 methods \u2014 consider @dataclass", "sug": "If this class mainly holds data, convert to @dataclass for less boilerplate."}, {"sev": "info", "cat": "missing-docstring", "name": "generate", "file": "Analysis/transpiler.py", "line": 151, "msg": "Function 'generate' (20 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "RustFunction", "file": "Analysis/transpiler.py", "line": 206, "msg": "Class 'RustFunction' (38 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "generate", "file": "Analysis/transpiler.py", "line": 216, "msg": "Function 'generate' (28 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "RustEmitter", "file": "Analysis/transpiler.py", "line": 249, "msg": "Class 'RustEmitter' (45 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "build_function", "file": "Analysis/transpiler.py", "line": 1117, "msg": "Function 'build_function' (34 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_comment_expr", "file": "Analysis/transpiler_legacy.py", "line": 356, "msg": "Function '_is_comment_expr' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_plain_int", "file": "Analysis/transpiler_legacy.py", "line": 443, "msg": "Function '_is_plain_int' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_float_context", "file": "Analysis/transpiler_legacy.py", "line": 452, "msg": "Function '_is_float_context' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_test_function", "file": "Analysis/type_coverage.py", "line": 19, "msg": "Function '_is_test_function' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_has_return_annotation", "file": "Analysis/type_coverage.py", "line": 31, "msg": "Function '_has_return_annotation' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_get_accepted_params", "file": "Analysis/ui_compat.py", "line": 157, "msg": "Function '_get_accepted_params' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "missing-docstring", "name": "visit_Call", "file": "Analysis/ui_compat.py", "line": 230, "msg": "Function 'visit_Call' (31 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_false", "file": "Analysis/ui_health.py", "line": 194, "msg": "Function '_is_false' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_true", "file": "Analysis/ui_health.py", "line": 199, "msg": "Function '_is_true' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_int", "file": "Analysis/ui_health.py", "line": 204, "msg": "Function '_is_int' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_interactive", "file": "Analysis/ui_health.py", "line": 267, "msg": "Function '_is_interactive' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_has_event_handler", "file": "Analysis/ui_health.py", "line": 274, "msg": "Function '_has_event_handler' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_container", "file": "Analysis/ui_health.py", "line": 277, "msg": "Function '_is_container' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_should_prune_web_dir", "file": "Analysis/web_smells.py", "line": 461, "msg": "Function '_should_prune_web_dir' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "available", "file": "Core/inference.py", "line": 31, "msg": "Function 'available' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_port_has_health", "file": "Core/llm_manager.py", "line": 490, "msg": "Function '_port_has_health' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_check_server_running", "file": "Core/llm_manager.py", "line": 497, "msg": "Function '_check_server_running' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "start_server", "file": "Core/llm_manager.py", "line": 777, "msg": "Function 'start_server' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "missing-docstring", "name": "progress", "file": "Core/ui_bridge.py", "line": 180, "msg": "Function 'progress' (24 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "boolean-blindness", "name": "supports_unicode", "file": "Core/utils.py", "line": 68, "msg": "Function 'supports_unicode' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "url_responds", "file": "Core/utils.py", "line": 106, "msg": "Function 'url_responds' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_detect_avx", "file": "_mothership/hardware_detection.py", "line": 355, "msg": "Function '_detect_avx' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "missing-docstring", "name": "main", "file": "build_rustified_exe.py", "line": 10, "msg": "Function 'main' (29 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "main", "file": "run_nexus_on_transpiler.py", "line": 14, "msg": "Function 'main' (34 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_third_party", "file": "scan_all_rustify.py", "line": 178, "msg": "Function '_is_third_party' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "missing-docstring", "name": "main", "file": "scan_all_rustify.py", "line": 612, "msg": "Function 'main' (54 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "dataclass-candidate", "name": "ScanPhaseSimulator", "file": "tests/harness_generative_parity.py", "line": 19, "msg": "Class 'ScanPhaseSimulator' has only 2 methods \u2014 consider @dataclass", "sug": "If this class mainly holds data, convert to @dataclass for less boilerplate."}, {"sev": "info", "cat": "dataclass-candidate", "name": "Point", "file": "tests/rust_harness/fixtures/clean_code.py", "line": 27, "msg": "Class 'Point' has only 3 methods \u2014 consider @dataclass", "sug": "If this class mainly holds data, convert to @dataclass for less boilerplate."}, {"sev": "info", "cat": "dataclass-candidate", "name": "Animal", "file": "tests/rust_harness/fixtures/edge_cases.py", "line": 42, "msg": "Class 'Animal' has only 2 methods \u2014 consider @dataclass", "sug": "If this class mainly holds data, convert to @dataclass for less boilerplate."}, {"sev": "info", "cat": "missing-docstring", "name": "long_function", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 8, "msg": "Function 'long_function' (73 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "very_long_function", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 84, "msg": "Function 'very_long_function' (127 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "missing_docstring_function", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 275, "msg": "Function 'missing_docstring_function' (16 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "boolean-blindness", "name": "process_status", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 310, "msg": "Function 'process_status' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "dataclass-candidate", "name": "DataHolder", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 396, "msg": "Class 'DataHolder' has only 2 methods \u2014 consider @dataclass", "sug": "If this class mainly holds data, convert to @dataclass for less boilerplate."}, {"sev": "info", "cat": "missing-class-docstring", "name": "UndocumentedProcessor", "file": "tests/rust_harness/fixtures/smell_factory.py", "line": 407, "msg": "Class 'UndocumentedProcessor' (31 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "boolean-blindness", "name": "passed", "file": "tests/rust_harness/verify_rust.py", "line": 64, "msg": "Function 'passed' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "missing-docstring", "name": "test_no_duplicates", "file": "tests/test_analysis_duplicates.py", "line": 49, "msg": "Function 'test_no_duplicates' (20 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestStructuralDuplicates", "file": "tests/test_analysis_duplicates.py", "line": 76, "msg": "Class 'TestStructuralDuplicates' (67 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_structural_match", "file": "tests/test_analysis_duplicates.py", "line": 77, "msg": "Function 'test_structural_match' (21 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_structural_empty_hash_skipped", "file": "tests/test_analysis_duplicates.py", "line": 121, "msg": "Function 'test_structural_empty_hash_skipped' (22 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_groups_get_incrementing_ids", "file": "tests/test_analysis_duplicates.py", "line": 223, "msg": "Function 'test_groups_get_incrementing_ids' (36 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_identical_functions_high", "file": "tests/test_analysis_similarity.py", "line": 302, "msg": "Function 'test_identical_functions_high' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_completely_different_low", "file": "tests/test_analysis_similarity.py", "line": 320, "msg": "Function 'test_completely_different_low' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestCommentConsoleLines", "file": "tests/test_analysis_smell_fixer.py", "line": 45, "msg": "Class 'TestCommentConsoleLines' (31 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestFileLevel", "file": "tests/test_analysis_smell_fixer.py", "line": 104, "msg": "Class 'TestFileLevel' (47 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_fix_js_console_logs", "file": "tests/test_analysis_smell_fixer.py", "line": 105, "msg": "Function 'test_fix_js_console_logs' (15 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_fix_python_debug_prints", "file": "tests/test_analysis_smell_fixer.py", "line": 135, "msg": "Function 'test_fix_python_debug_prints' (16 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestFixAll", "file": "tests/test_analysis_smell_fixer.py", "line": 156, "msg": "Class 'TestFixAll' (48 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestPythonTestGenerator", "file": "tests/test_analysis_test_generator.py", "line": 170, "msg": "Class 'TestPythonTestGenerator' (71 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestJSTSTestGenerator", "file": "tests/test_analysis_test_generator.py", "line": 247, "msg": "Class 'TestJSTSTestGenerator' (82 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestMakeWebSmell", "file": "tests/test_analysis_web_smells.py", "line": 42, "msg": "Class 'TestMakeWebSmell' (41 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestWebSmellDetectorDetect", "file": "tests/test_analysis_web_smells.py", "line": 88, "msg": "Class 'TestWebSmellDetectorDetect' (92 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_tsx_file_analyzed", "file": "tests/test_analysis_web_smells.py", "line": 165, "msg": "Function 'test_tsx_file_analyzed' (15 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_async_no_catch_flagged", "file": "tests/test_analysis_web_smells.py", "line": 213, "msg": "Function 'test_async_no_catch_flagged' (16 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_strips_docstring", "file": "tests/test_lang_ast.py", "line": 164, "msg": "Function 'test_strips_docstring' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestJSFunction", "file": "tests/test_lang_js_ts_analyzer.py", "line": 98, "msg": "Class 'TestJSFunction' (40 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_location_string", "file": "tests/test_lang_js_ts_analyzer.py", "line": 99, "msg": "Function 'test_location_string' (20 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_defaults", "file": "tests/test_lang_js_ts_analyzer.py", "line": 120, "msg": "Function 'test_defaults' (18 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestExtractImports", "file": "tests/test_lang_js_ts_analyzer.py", "line": 215, "msg": "Class 'TestExtractImports' (39 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestAnalyzeJsFile", "file": "tests/test_lang_js_ts_analyzer.py", "line": 259, "msg": "Class 'TestAnalyzeJsFile' (223 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_class_method_extraction", "file": "tests/test_lang_js_ts_analyzer.py", "line": 289, "msg": "Function 'test_class_method_extraction' (18 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_import_detection", "file": "tests/test_lang_js_ts_analyzer.py", "line": 308, "msg": "Function 'test_import_detection' (16 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_console_log_detection", "file": "tests/test_lang_js_ts_analyzer.py", "line": 325, "msg": "Function 'test_console_log_detection' (15 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_typescript_language_detection", "file": "tests/test_lang_js_ts_analyzer.py", "line": 371, "msg": "Function 'test_typescript_language_detection' (16 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_exported_function_detected", "file": "tests/test_lang_js_ts_analyzer.py", "line": 394, "msg": "Function 'test_exported_function_detected' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_react_component_detected", "file": "tests/test_lang_js_ts_analyzer.py", "line": 427, "msg": "Function 'test_react_component_detected' (15 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_function_complexity_populated", "file": "tests/test_lang_js_ts_analyzer.py", "line": 461, "msg": "Function 'test_function_complexity_populated' (21 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestCategorizeImports", "file": "tests/test_lang_js_ts_analyzer.py", "line": 487, "msg": "Class 'TestCategorizeImports' (32 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "dataclass-candidate", "name": "FakeLLM", "file": "tests/test_llm_transpiler.py", "line": 142, "msg": "Class 'FakeLLM' has only 3 methods \u2014 consider @dataclass", "sug": "If this class mainly holds data, convert to @dataclass for less boilerplate."}, {"sev": "info", "cat": "missing-docstring", "name": "test_recommend_includes_transpiler_models", "file": "tests/test_llm_transpiler.py", "line": 408, "msg": "Function 'test_recommend_includes_transpiler_models' (21 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "boolean-blindness", "name": "_rust_exe_available", "file": "tests/test_parity_py_vs_rust.py", "line": 78, "msg": "Function '_rust_exe_available' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestSemanticFuzzer", "file": "tests/test_semantic_fuzzer.py", "line": 41, "msg": "Class 'TestSemanticFuzzer' (35 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestMagicNumber", "file": "tests/test_smells_new.py", "line": 40, "msg": "Class 'TestMagicNumber' (61 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestMutableDefaultArg", "file": "tests/test_smells_new.py", "line": 106, "msg": "Class 'TestMutableDefaultArg' (65 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestDeadCode", "file": "tests/test_smells_new.py", "line": 176, "msg": "Class 'TestDeadCode' (57 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestSmellDetectorIntegration", "file": "tests/test_smells_new.py", "line": 238, "msg": "Class 'TestSmellDetectorIntegration' (32 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "boolean-blindness", "name": "_rustc_available", "file": "tests/test_transpiler.py", "line": 43, "msg": "Function '_rustc_available' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "missing-docstring", "name": "test_try_except_becomes_comment", "file": "tests/test_transpiler.py", "line": 560, "msg": "Function 'test_try_except_becomes_comment' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestCompareScans", "file": "tests/test_trend.py", "line": 43, "msg": "Class 'TestCompareScans' (44 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestUICallVisitor", "file": "tests/test_ui_compat.py", "line": 143, "msg": "Class 'TestUICallVisitor' (47 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestSmellConversion", "file": "tests/test_ui_compat.py", "line": 533, "msg": "Class 'TestSmellConversion' (31 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_to_smell_fields", "file": "tests/test_ui_compat.py", "line": 535, "msg": "Function 'test_to_smell_fields' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestSummary", "file": "tests/test_ui_compat.py", "line": 571, "msg": "Class 'TestSummary' (36 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_summary_structure", "file": "tests/test_ui_compat.py", "line": 573, "msg": "Function 'test_summary_structure' (16 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestTreeScan", "file": "tests/test_ui_compat.py", "line": 614, "msg": "Class 'TestTreeScan' (49 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_print_lint_report_empty", "file": "tests/test_unified_integration.py", "line": 260, "msg": "Function 'test_print_lint_report_empty' (18 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_print_lint_report_with_data", "file": "tests/test_unified_integration.py", "line": 279, "msg": "Function 'test_print_lint_report_with_data' (18 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_print_security_report_empty", "file": "tests/test_unified_integration.py", "line": 298, "msg": "Function 'test_print_security_report_empty' (18 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_print_security_report_with_data", "file": "tests/test_unified_integration.py", "line": 317, "msg": "Function 'test_print_security_report_with_data' (25 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_print_unified_grade_with_all_data", "file": "tests/test_unified_integration.py", "line": 343, "msg": "Function 'test_print_unified_grade_with_all_data' (25 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_boolean_blindness_not_flagged_good_name", "file": "tests/test_xray_claude.py", "line": 455, "msg": "Function 'test_boolean_blindness_not_flagged_good_name' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-class-docstring", "name": "TestSemanticSimilarity", "file": "tests/test_xray_claude.py", "line": 824, "msg": "Class 'TestSemanticSimilarity' (48 lines) has no docstring", "sug": "Add a docstring explaining the class's responsibility."}, {"sev": "info", "cat": "missing-docstring", "name": "test_health_coloring_yellow", "file": "tests/test_xray_claude.py", "line": 1024, "msg": "Function 'test_health_coloring_yellow' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_health_coloring_red", "file": "tests/test_xray_claude.py", "line": 1042, "msg": "Function 'test_health_coloring_red' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_duplicate_edges", "file": "tests/test_xray_claude.py", "line": 1060, "msg": "Function 'test_duplicate_edges' (15 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_tooltip_includes_smells", "file": "tests/test_xray_claude.py", "line": 1087, "msg": "Function 'test_tooltip_includes_smells' (17 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_smell_report_with_issues", "file": "tests/test_xray_claude.py", "line": 1329, "msg": "Function 'test_smell_report_with_issues' (24 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_duplicate_report_empty", "file": "tests/test_xray_claude.py", "line": 1354, "msg": "Function 'test_duplicate_report_empty' (15 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "test_smell_issue_all_fields", "file": "tests/test_xray_claude.py", "line": 1559, "msg": "Function 'test_smell_issue_all_fields' (15 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "missing-docstring", "name": "main", "file": "verify_rust_compilation.py", "line": 275, "msg": "Function 'main' (39 lines) has no docstring", "sug": "Add a docstring explaining purpose, parameters, and return value."}, {"sev": "info", "cat": "boolean-blindness", "name": "_supports_interactive", "file": "x_ray_claude.py", "line": 68, "msg": "Function '_supports_interactive' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_is_interactive_console", "file": "x_ray_exe.py", "line": 209, "msg": "Function '_is_interactive_console' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}, {"sev": "info", "cat": "boolean-blindness", "name": "_needs_interactive", "file": "x_ray_exe.py", "line": 389, "msg": "Function '_needs_interactive' returns bool but name doesn't indicate a question", "sug": "Rename to is_/has_/can_/should_/check_ prefix for clarity."}];
 
-// ── Tab switching ──
+// ═══════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════
+function esc(s) {
+  // XSS-safe text → HTML conversion
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function toast(msg, ms=1800) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => toast('Copied!'));
+}
+
+function debounce(fn, delay=220) {
+  let timer;
+  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+}
+
+// ═══════════════════════════════════════════
+//  TAB SWITCHING  (keyboard: 1/2/3)
+// ═══════════════════════════════════════════
+const TABS = ['graph','dups','smells'];
 function showTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('panel-' + name).classList.add('active');
-  const idx = {'graph':0,'dups':1,'smells':2}[name];
+  const idx = TABS.indexOf(name);
   document.querySelectorAll('.tab-btn')[idx].classList.add('active');
+  if (name === 'graph' && network) network.redraw();
 }
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === '1') showTab('graph');
+  if (e.key === '2') showTab('dups');
+  if (e.key === '3') showTab('smells');
+});
 
-// ── Graph ──
-const container = document.getElementById('graph');
-const nodesDS = new vis.DataSet(nodesData);
-const edgesDS = new vis.DataSet(edgesData);
-const network = new vis.Network(container,
-  { nodes: nodesDS, edges: edgesDS },
+// ═══════════════════════════════════════════
+//  GRAPH  (vis-network)
+// ═══════════════════════════════════════════
+const nodeSet = new vis.DataSet(nodesData);
+const edgeSet = new vis.DataSet(edgesData);
+const network = new vis.Network(
+  document.getElementById('graph'),
+  { nodes: nodeSet, edges: edgeSet },
   {
-    physics: { solver:'barnesHut', barnesHut:{ gravitationalConstant:-3000, springLength:150, damping:.3 } },
-    interaction: { hover:true, tooltipDelay:100 },
-    edges: { width:2, font:{ size:10, color:'#888' } },
+    physics: {
+      solver: 'barnesHut',
+      barnesHut: { gravitationalConstant:-4000, springLength:170, damping:.35 },
+      stabilization: { iterations:200 },
+    },
+    interaction: { hover:true, tooltipDelay:80, multiselect:true },
+    edges: { width:2, selectionWidth:3, font:{ size:10, color:'#8b949e' }, smooth:{ type:'continuous' } },
+    nodes: { borderWidth:2, borderWidthSelected:4 },
   }
 );
 
-function filterGraph() {
-  const q = document.getElementById('graphSearch').value.toLowerCase();
-  const allNodes = nodesData;
-  if (!q) {
-    nodesDS.update(allNodes.map(n => ({id: n.id, hidden: false})));
-    return;
-  }
-  const updates = allNodes.map(n => ({
-    id: n.id,
-    hidden: !(n.label.toLowerCase().includes(q) || (n.title && n.title.toLowerCase().includes(q)))
-  }));
-  nodesDS.update(updates);
+// Click on a node → jump to smells for that file
+network.on('click', params => {
+  if (!params.nodes.length) return;
+  const node = nodeSet.get(params.nodes[0]);
+  if (!node) return;
+  showTab('smells');
+  document.getElementById('smellSearch').value = node.label;
+  filterSmells();
+});
+
+function fitGraph() { network.fit({ animation: { duration:500 } }); }
+
+function highlightNode(q) {
+  const lower = q.toLowerCase();
+  nodesData.forEach(n => {
+    const match = q && n.label.toLowerCase().includes(lower);
+    nodeSet.update({ id:n.id, borderColor: match ? '#fff' : n.color, borderWidth: match ? 4 : 2 });
+  });
 }
 
-// ── Duplicates list ──
-const dupExact = dupData.filter(g => g.type==='exact').length;
-const dupNear  = dupData.filter(g => g.type==='near').length;
-document.getElementById('dupExactChip').textContent = dupExact + ' exact';
-document.getElementById('dupNearChip').textContent  = dupNear + ' near';
+// ═══════════════════════════════════════════
+//  DUPLICATES
+// ═══════════════════════════════════════════
+const dupExactCount = dupData.filter(g => g.type==='exact').length;
+const dupNearCount  = dupData.filter(g => g.type==='near').length;
+document.getElementById('dupExactChip').textContent = dupExactCount + ' exact';
+document.getElementById('dupNearChip').textContent  = dupNearCount  + ' near';
+
+let dupFilters = new Set(['exact','near']);
+
+function toggleDupFilter(type) {
+  if (dupFilters.has(type)) dupFilters.delete(type); else dupFilters.add(type);
+  document.getElementById('dupExactChip').classList.toggle('inactive', !dupFilters.has('exact'));
+  document.getElementById('dupNearChip').classList.toggle('inactive',  !dupFilters.has('near'));
+  applyDupFilter();
+}
+
+function applyDupFilter() {
+  const q = document.getElementById('dupSearch').value.toLowerCase();
+  const filtered = dupData.filter(g =>
+    dupFilters.has(g.type) &&
+    (!q || g.funcs.some(f => f.name.toLowerCase().includes(q) || f.file.toLowerCase().includes(q)))
+  );
+  renderDups(filtered);
+}
+
+const debounceDups = debounce(applyDupFilter);
 
 function renderDups(data) {
   const el = document.getElementById('dupList');
-  if (!data.length) { el.innerHTML = '<p style="padding:20px;color:#888">No duplicates match your search.</p>'; return; }
-  let html = '';
-  data.forEach(g => {
+  if (!data.length) {
+    el.innerHTML = '<div class="empty-state"><span class="empty-icon">&#x1F50D;</span>No duplicates match.</div>';
+    return;
+  }
+  el.innerHTML = data.map(g => {
     const cls = g.type === 'near' ? 'near' : '';
-    html += '<div class="dup-group ' + cls + '">';
-    html += '<div class="dup-group-header">';
-    html += '<span><span class="dup-type ' + g.type + '">' + g.type + '</span> &nbsp;Group #' + g.id + ' &mdash; ' + g.funcs.length + ' functions</span>';
-    html += '<span class="dup-sim">' + g.sim + '% similar</span>';
-    html += '</div>';
-    html += '<div class="dup-funcs">';
-    g.funcs.forEach(f => {
-      html += '<div class="dup-func"><span class="func-name">' + f.name + '</span><span class="func-file">' + f.file + ':' + f.line + '</span></div>';
-    });
-    html += '</div>';
-    if (g.merge) html += '<div class="dup-merge">&#x1F4A1; ' + g.merge + '</div>';
-    html += '</div>';
-  });
-  el.innerHTML = html;
+    const funcsHtml = g.funcs.map(f =>
+      '<div class="dup-func">' +
+      '<span class="func-name">' + esc(f.name) + '</span>' +
+      '<span class="func-file">' + esc(f.file) + ':' + f.line + '</span>' +
+      '<button class="copy-btn" onclick="copyText(' + JSON.stringify(f.file+':'+f.line) + ')">&#x1F4CB;</button>' +
+      '</div>'
+    ).join('');
+    const mergeHtml = g.merge
+      ? '<div class="dup-merge">&#x1F4A1; ' + esc(g.merge) + '</div>'
+      : '';
+    return (
+      '<div class="dup-group ' + cls + '">' +
+      '<div class="dup-group-header" onclick="toggleDupBody(this)">' +
+      '<span><span class="dup-type ' + g.type + '">' + g.type + '</span>&nbsp; Group #' + g.id + ' &mdash; ' + g.funcs.length + ' functions</span>' +
+      '<span class="dup-sim">' + g.sim + '% similar &#x25BE;</span>' +
+      '</div>' +
+      '<div class="dup-body">' + funcsHtml + mergeHtml + '</div>' +
+      '</div>'
+    );
+  }).join('');
 }
+
+function toggleDupBody(header) {
+  header.nextElementSibling.classList.toggle('open');
+}
+
 renderDups(dupData);
 
-function filterDups() {
-  const q = document.getElementById('dupSearch').value.toLowerCase();
-  if (!q) { renderDups(dupData); return; }
-  renderDups(dupData.filter(g => g.funcs.some(f => f.name.toLowerCase().includes(q) || f.file.toLowerCase().includes(q))));
-}
-
-// ── Smells table ──
+// ═══════════════════════════════════════════
+//  SMELLS
+// ═══════════════════════════════════════════
 const smCrit = smellData.filter(s => s.sev==='critical').length;
 const smWarn = smellData.filter(s => s.sev==='warning').length;
 const smInfo = smellData.filter(s => s.sev==='info').length;
@@ -270,45 +1946,97 @@ document.getElementById('smCritChip').textContent = smCrit + ' critical';
 document.getElementById('smWarnChip').textContent = smWarn + ' warning';
 document.getElementById('smInfoChip').textContent = smInfo + ' info';
 
-let smellSorted = [...smellData];
-const sevOrder = {'critical':0,'warning':1,'info':2};
+let smellSorted  = [...smellData];
+let smellFilters = new Set(['critical','warning','info']);
+const sevOrder   = {'critical':0,'warning':1,'info':2};
+
+function toggleSmellFilter(sev) {
+  if (smellFilters.has(sev)) smellFilters.delete(sev); else smellFilters.add(sev);
+  document.getElementById('smCritChip').classList.toggle('inactive', !smellFilters.has('critical'));
+  document.getElementById('smWarnChip').classList.toggle('inactive', !smellFilters.has('warning'));
+  document.getElementById('smInfoChip').classList.toggle('inactive', !smellFilters.has('info'));
+  applySmellFilter();
+}
+
+function applySmellFilter() {
+  const q = document.getElementById('smellSearch').value.toLowerCase();
+  const filtered = smellSorted.filter(s =>
+    smellFilters.has(s.sev) &&
+    (!q || s.name.toLowerCase().includes(q) ||
+           s.file.toLowerCase().includes(q) ||
+           s.cat.toLowerCase().includes(q)  ||
+           s.msg.toLowerCase().includes(q))
+  );
+  renderSmells(filtered);
+}
+
+const debounceSmells = debounce(applySmellFilter);
+function filterSmells() { applySmellFilter(); }
 
 function renderSmells(data) {
   const tbody = document.getElementById('smellBody');
-  if (!data.length) { tbody.innerHTML = '<tr><td colspan="6" style="padding:20px;color:#888">No smells match.</td></tr>'; return; }
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="padding:40px;text-align:center;color:var(--text-dim)">No smells match.</td></tr>';
+    return;
+  }
   tbody.innerHTML = data.map(s =>
     '<tr>' +
-    '<td><span class="sev-badge ' + s.sev + '">' + s.sev + '</span></td>' +
-    '<td class="cat-cell">' + s.cat + '</td>' +
-    '<td style="font-weight:600">' + s.name + '</td>' +
-    '<td style="color:#aaa;font-size:12px">' + s.file + '</td>' +
+    '<td><span class="sev-badge ' + s.sev + '">' + esc(s.sev) + '</span></td>' +
+    '<td class="cat-cell">'  + esc(s.cat)  + '</td>' +
+    '<td class="name-cell">' + esc(s.name) + '</td>' +
+    '<td class="file-cell">' + esc(s.file) + ':' + s.line + '</td>' +
     '<td>' + s.line + '</td>' +
-    '<td class="msg-cell">' + s.msg + '</td>' +
+    '<td class="msg-cell">'  + esc(s.msg)  + '</td>' +
+    '<td class="sug-cell">'  + esc(s.sug || '') + '</td>' +
     '</tr>'
   ).join('');
 }
 renderSmells(smellSorted);
 
-let smellSortDir = {};
+// Sort
+let smellSortState = {};
 function sortSmells(col) {
-  const keys = ['sev','cat','name','file','line','msg'];
-  const key = keys[col];
-  const dir = smellSortDir[col] === 'asc' ? 'desc' : 'asc';
-  smellSortDir = {}; smellSortDir[col] = dir;
-  smellSorted.sort((a,b) => {
-    let av = key==='sev' ? sevOrder[a.sev] : (key==='line' ? a.line : a[key].toLowerCase());
-    let bv = key==='sev' ? sevOrder[b.sev] : (key==='line' ? b.line : b[key].toLowerCase());
-    if (av < bv) return dir==='asc' ? -1 : 1;
-    if (av > bv) return dir==='asc' ? 1 : -1;
-    return 0;
+  const keys = ['sev','cat','name','file','line','msg','sug'];
+  const key  = keys[col];
+  const prev = smellSortState[col];
+  const dir  = prev === 'asc' ? 'desc' : 'asc';
+  smellSortState = {}; smellSortState[col] = dir;
+  document.querySelectorAll('.smell-table th').forEach((th,i) => {
+    th.className = i===col ? ('sort-' + dir) : '';
   });
-  renderSmells(smellSorted);
+  smellSorted.sort((a,b) => {
+    let av = key==='sev' ? sevOrder[a.sev] : (key==='line' ? +a.line : String(a[key]||'').toLowerCase());
+    let bv = key==='sev' ? sevOrder[b.sev] : (key==='line' ? +b.line : String(b[key]||'').toLowerCase());
+    return (av < bv ? -1 : av > bv ? 1 : 0) * (dir==='asc' ? 1 : -1);
+  });
+  applySmellFilter();
 }
 
-function filterSmells() {
-  const q = document.getElementById('smellSearch').value.toLowerCase();
-  if (!q) { renderSmells(smellSorted); return; }
-  renderSmells(smellSorted.filter(s => s.name.toLowerCase().includes(q) || s.file.toLowerCase().includes(q) || s.cat.toLowerCase().includes(q)));
+// ═══════════════════════════════════════════
+//  EXPORT
+// ═══════════════════════════════════════════
+function exportCSV() {
+  // Export whichever panel is active
+  const panel = document.querySelector('.panel.active').id;
+  if (panel === 'panel-smells') exportSmellsCSV();
+  else toast('Switch to the Smells tab to export CSV');
+}
+
+function exportSmellsCSV() {
+  const headers = ['severity','category','name','file','line','message','suggestion'];
+  const rows = smellData.map(s =>
+    [s.sev,s.cat,s.name,s.file,s.line,s.msg,s.sug||''].map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')
+  );
+  const csv = [headers.join(','), ...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'xray_smells.csv';
+  a.click();
+  toast('CSV downloaded');
+}
+
+function copySmellsJSON() {
+  copyText(JSON.stringify(smellData, null, 2));
 }
 </script>
 </body>

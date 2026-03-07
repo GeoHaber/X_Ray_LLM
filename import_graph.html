@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dependency Analysis - X_Ray</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background: #1a1a2e; color: #eee; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    
+    .header { 
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+      padding: 15px 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    
+    .header h1 { margin: 0; font-size: 24px; color: #00d4ff; }
+    .header .stats { font-size: 14px; color: #aaa; }
+    
+    .tab-buttons { display: flex; gap: 10px; }
+    .tab-btn {
+      padding: 8px 20px; background: rgba(255,255,255,0.1); border: none;
+      color: #fff; cursor: pointer; border-radius: 5px; transition: all 0.3s;
+      font-size: 14px; font-weight: 500;
+    }
+    .tab-btn:hover { background: rgba(255,255,255,0.2); }
+    .tab-btn.active { background: #00d4ff; color: #000; }
+    
+    .content { margin-top: 70px; height: calc(100vh - 70px); }
+    .view { display: none; height: 100%; }
+    .view.active { display: block; }
+    
+    /* Graph View */
+    #graph-view { position: relative; }
+    #mynetwork { width: 100%; height: 100%; }
+    .graph-legend {
+      position: absolute; bottom: 20px; right: 20px; z-index: 10;
+      background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px;
+      font-size: 12px;
+    }
+    .legend-item { display: flex; align-items: center; margin: 8px 0; }
+    .legend-color { width: 20px; height: 20px; border-radius: 50%; margin-right: 10px; }
+    .legend-color.file { background: #2196f3; border: 2px solid #0d47a1; }
+    .legend-color.package { background: #ff9800; border: 2px solid #e65100; clip-path: polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 0% 50%); }
+    
+    /* Table View */
+    #table-view { padding: 20px; overflow-y: auto; }
+    .search-bar {
+      margin-bottom: 20px; padding: 12px; width: 100%; max-width: 600px;
+      background: rgba(255,255,255,0.1); border: 1px solid #444;
+      border-radius: 5px; color: #fff; font-size: 14px;
+    }
+    .search-bar:focus { outline: none; border-color: #00d4ff; }
+    
+    table {
+      width: 100%; border-collapse: collapse; background: rgba(255,255,255,0.05);
+      border-radius: 8px; overflow: hidden;
+    }
+    th {
+      background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+      padding: 12px; text-align: left; font-weight: 600;
+      cursor: pointer; user-select: none; position: sticky; top: 0;
+    }
+    th:hover { background: #1a4d7a; }
+    th::after { content: ' ↕'; color: #666; font-size: 10px; }
+    
+    tr { border-bottom: 1px solid rgba(255,255,255,0.1); transition: background 0.2s; }
+    tr:hover { background: rgba(0,212,255,0.1); }
+    td { padding: 12px; }
+    
+    .type-badge {
+      display: inline-block; padding: 4px 10px; border-radius: 12px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+    }
+    .type-badge.file { background: #2196f3; color: #fff; }
+    .type-badge.package { background: #ff9800; color: #fff; }
+    
+    .imports-cell { font-size: 12px; color: #aaa; max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  </style>
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>📦 X_Ray</h1>
+      <div class="stats">Nodes: 48 | Edges: 44 | Files: 43 | Packages: 5</div>
+    </div>
+    <div class="tab-buttons">
+      <button class="tab-btn active" onclick="showView('graph')">🌐 Graph View</button>
+      <button class="tab-btn" onclick="showView('table')">📊 Table View</button>
+    </div>
+  </div>
+  
+  <div class="content">
+    <!-- Graph View -->
+    <div id="graph-view" class="view active">
+      <div id="mynetwork"></div>
+      <div class="graph-legend">
+        <div style="margin-bottom: 10px; font-weight: 600;">Legend</div>
+        <div class="legend-item"><div class="legend-color file"></div> Project Files</div>
+        <div class="legend-item"><div class="legend-color package"></div> Dependencies</div>
+        <div style="margin-top: 10px; color: #666; font-size: 11px;">Scroll to zoom · Drag to pan</div>
+      </div>
+    </div>
+    
+    <!-- Table View -->
+    <div id="table-view" class="view">
+      <input type="text" class="search-bar" id="searchBox" placeholder="🔍 Search files or packages..." onkeyup="filterTable()">
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th onclick="sortTable(0)">Type</th>
+            <th onclick="sortTable(1)">Name</th>
+            <th onclick="sortTable(2)">Size (KB)</th>
+            <th onclick="sortTable(3)"># Imports</th>
+            <th onclick="sortTable(4)">Dependencies</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+  
+  <script type="text/javascript">
+    // Data
+    const graphData = {"nodes": [{"id": 1, "label": "x_ray_core", "group": "package"}, {"id": 2, "label": "x_ray_exe.py", "group": "file"}, {"id": 3, "label": "Analysis\\duplicates.py", "group": "file"}, {"id": 4, "label": "Analysis\\similarity.py", "group": "file"}, {"id": 5, "label": "Core\\utils.py", "group": "file"}, {"id": 6, "label": "tests\\bench_rust.py", "group": "file"}, {"id": 7, "label": "tests\\test_rust_smoke.py", "group": "file"}, {"id": 8, "label": "tests\\test_xray_core_comprehensive.py", "group": "file"}, {"id": 9, "label": "flet", "group": "package"}, {"id": 10, "label": "x_ray_flet.py", "group": "file"}, {"id": 11, "label": ".github\\scripts\\validate_flet_api.py", "group": "file"}, {"id": 12, "label": "UI\\tabs\\auto_rustify_tab.py", "group": "file"}, {"id": 13, "label": "UI\\tabs\\complexity_tab.py", "group": "file"}, {"id": 14, "label": "UI\\tabs\\duplicates_tab.py", "group": "file"}, {"id": 15, "label": "UI\\tabs\\graph_tab.py", "group": "file"}, {"id": 16, "label": "UI\\tabs\\heatmap_tab.py", "group": "file"}, {"id": 17, "label": "UI\\tabs\\lint_tab.py", "group": "file"}, {"id": 18, "label": "UI\\tabs\\nexus_tab.py", "group": "file"}, {"id": 19, "label": "UI\\tabs\\rustify_tab.py", "group": "file"}, {"id": 20, "label": "UI\\tabs\\security_tab.py", "group": "file"}, {"id": 21, "label": "UI\\tabs\\shared.py", "group": "file"}, {"id": 22, "label": "UI\\tabs\\smells_tab.py", "group": "file"}, {"id": 23, "label": "UI\\tabs\\ui_compat_tab.py", "group": "file"}, {"id": 24, "label": "UI\\tabs\\ui_health_tab.py", "group": "file"}, {"id": 25, "label": "tqdm", "group": "package"}, {"id": 26, "label": "Core\\ui_bridge.py", "group": "file"}, {"id": 27, "label": "pytest", "group": "package"}, {"id": 28, "label": "tests\\test_analysis_duplicates.py", "group": "file"}, {"id": 29, "label": "tests\\test_analysis_lint.py", "group": "file"}, {"id": 30, "label": "tests\\test_analysis_security.py", "group": "file"}, {"id": 31, "label": "tests\\test_analysis_similarity.py", "group": "file"}, {"id": 32, "label": "tests\\test_analysis_tracer.py", "group": "file"}, {"id": 33, "label": "tests\\test_lang_tokenizer.py", "group": "file"}, {"id": 34, "label": "tests\\test_llm_transpiler.py", "group": "file"}, {"id": 35, "label": "tests\\test_manual_async.py", "group": "file"}, {"id": 36, "label": "tests\\test_monkey_torture.py", "group": "file"}, {"id": 37, "label": "tests\\test_parity_py_vs_rust.py", "group": "file"}, {"id": 38, "label": "tests\\test_phase1_modularization.py", "group": "file"}, {"id": 39, "label": "tests\\test_scan_cache.py", "group": "file"}, {"id": 40, "label": "tests\\test_transpiler.py", "group": "file"}, {"id": 41, "label": "tests\\test_trend.py", "group": "file"}, {"id": 42, "label": "tests\\test_ui_bridge.py", "group": "file"}, {"id": 43, "label": "tests\\test_ui_compat.py", "group": "file"}, {"id": 44, "label": "tests\\test_xray_claude.py", "group": "file"}, {"id": 45, "label": "tests\\test_xray_UI_tabs_shared.py", "group": "file"}, {"id": 46, "label": "_rustified\\test_rust_verify.py", "group": "file"}, {"id": 47, "label": "aiohttp", "group": "package"}, {"id": 48, "label": "tests\\rust_harness\\fixtures\\edge_cases.py", "group": "file"}], "edges": [{"from": 2, "to": 1}, {"from": 3, "to": 1}, {"from": 4, "to": 1}, {"from": 5, "to": 1}, {"from": 6, "to": 1}, {"from": 7, "to": 1}, {"from": 8, "to": 1}, {"from": 10, "to": 9}, {"from": 11, "to": 9}, {"from": 12, "to": 9}, {"from": 13, "to": 9}, {"from": 14, "to": 9}, {"from": 15, "to": 9}, {"from": 16, "to": 9}, {"from": 17, "to": 9}, {"from": 18, "to": 9}, {"from": 19, "to": 9}, {"from": 20, "to": 9}, {"from": 21, "to": 9}, {"from": 22, "to": 9}, {"from": 23, "to": 9}, {"from": 24, "to": 9}, {"from": 26, "to": 25}, {"from": 28, "to": 27}, {"from": 29, "to": 27}, {"from": 30, "to": 27}, {"from": 31, "to": 27}, {"from": 32, "to": 27}, {"from": 33, "to": 27}, {"from": 34, "to": 27}, {"from": 35, "to": 27}, {"from": 36, "to": 27}, {"from": 37, "to": 27}, {"from": 38, "to": 27}, {"from": 39, "to": 27}, {"from": 40, "to": 27}, {"from": 41, "to": 27}, {"from": 42, "to": 27}, {"from": 43, "to": 27}, {"from": 44, "to": 27}, {"from": 8, "to": 27}, {"from": 45, "to": 27}, {"from": 46, "to": 27}, {"from": 48, "to": 47}]};
+    const tableData = [{"type": "file", "name": ".github\\scripts\\validate_flet_api.py", "size_kb": 5.1, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "Analysis\\duplicates.py", "size_kb": 24.5, "imports_count": 1, "imports": "x_ray_core"}, {"type": "file", "name": "Analysis\\similarity.py", "size_kb": 6.3, "imports_count": 1, "imports": "x_ray_core"}, {"type": "file", "name": "Core\\ui_bridge.py", "size_kb": 8.2, "imports_count": 1, "imports": "tqdm"}, {"type": "file", "name": "Core\\utils.py", "size_kb": 5.5, "imports_count": 1, "imports": "x_ray_core"}, {"type": "file", "name": "UI\\tabs\\auto_rustify_tab.py", "size_kb": 5.7, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\complexity_tab.py", "size_kb": 4.1, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\duplicates_tab.py", "size_kb": 3.5, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\graph_tab.py", "size_kb": 12.8, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\heatmap_tab.py", "size_kb": 3.6, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\lint_tab.py", "size_kb": 5.2, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\nexus_tab.py", "size_kb": 4.3, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\rustify_tab.py", "size_kb": 6.3, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\security_tab.py", "size_kb": 3.1, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\shared.py", "size_kb": 12.4, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\smells_tab.py", "size_kb": 2.1, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\ui_compat_tab.py", "size_kb": 4.8, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "UI\\tabs\\ui_health_tab.py", "size_kb": 3.0, "imports_count": 1, "imports": "flet"}, {"type": "file", "name": "_rustified\\test_rust_verify.py", "size_kb": 40.3, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\bench_rust.py", "size_kb": 2.7, "imports_count": 1, "imports": "x_ray_core"}, {"type": "file", "name": "tests\\rust_harness\\fixtures\\edge_cases.py", "size_kb": 1.8, "imports_count": 1, "imports": "aiohttp"}, {"type": "file", "name": "tests\\test_analysis_duplicates.py", "size_kb": 9.1, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_analysis_lint.py", "size_kb": 13.0, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_analysis_security.py", "size_kb": 20.4, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_analysis_similarity.py", "size_kb": 13.9, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_analysis_tracer.py", "size_kb": 12.7, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_lang_tokenizer.py", "size_kb": 4.6, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_llm_transpiler.py", "size_kb": 18.5, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_manual_async.py", "size_kb": 0.6, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_monkey_torture.py", "size_kb": 5.7, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_parity_py_vs_rust.py", "size_kb": 17.8, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_phase1_modularization.py", "size_kb": 5.8, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_rust_smoke.py", "size_kb": 2.4, "imports_count": 1, "imports": "x_ray_core"}, {"type": "file", "name": "tests\\test_scan_cache.py", "size_kb": 4.7, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_transpiler.py", "size_kb": 44.2, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_trend.py", "size_kb": 5.2, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_ui_bridge.py", "size_kb": 7.8, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_ui_compat.py", "size_kb": 21.0, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_xray_UI_tabs_shared.py", "size_kb": 5.2, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_xray_claude.py", "size_kb": 66.2, "imports_count": 1, "imports": "pytest"}, {"type": "file", "name": "tests\\test_xray_core_comprehensive.py", "size_kb": 5.7, "imports_count": 2, "imports": "pytest, x_ray_core"}, {"type": "file", "name": "x_ray_exe.py", "size_kb": 18.7, "imports_count": 1, "imports": "x_ray_core"}, {"type": "file", "name": "x_ray_flet.py", "size_kb": 74.3, "imports_count": 1, "imports": "flet"}, {"type": "package", "name": "aiohttp", "size_kb": "-", "imports_count": 1, "imports": "Used by 1 files (1 times)"}, {"type": "package", "name": "flet", "size_kb": "-", "imports_count": 15, "imports": "Used by 15 files (15 times)"}, {"type": "package", "name": "pytest", "size_kb": "-", "imports_count": 20, "imports": "Used by 20 files (20 times)"}, {"type": "package", "name": "tqdm", "size_kb": "-", "imports_count": 1, "imports": "Used by 1 files (1 times)"}, {"type": "package", "name": "x_ray_core", "size_kb": "-", "imports_count": 7, "imports": "Used by 7 files (7 times)"}];
+    
+    // Initialize Graph
+    const container = document.getElementById('mynetwork');
+    const options = {
+      nodes: {
+        shape: 'dot',
+        size: 16,
+        font: { size: 14, color: '#ffffff' },
+        borderWidth: 2
+      },
+      edges: {
+        width: 1,
+        color: { color: '#555555', highlight: '#00ccff' },
+        smooth: { type: 'continuous' }
+      },
+      groups: {
+        package: { color: { background: '#ff9800', border: '#e65100' }, shape: 'hexagon', size: 24 },
+        file:    { color: { background: '#2196f3', border: '#0d47a1' } }
+      },
+      physics: {
+        stabilization: false,
+        barnesHut: { gravitationalConstant: -3000, springConstant: 0.04, springLength: 95 }
+      }
+    };
+    new vis.Network(container, graphData, options);
+    
+    // Initialize Table
+    const tbody = document.getElementById('tableBody');
+    function renderTable(data) {
+      tbody.innerHTML = '';
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><span class="type-badge ${row.type}">${row.type}</span></td>
+          <td style="font-family: monospace; color: #00d4ff;">${row.name}</td>
+          <td>${row.size_kb}</td>
+          <td>${row.imports_count}</td>
+          <td class="imports-cell" title="${row.imports}">${row.imports}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+    renderTable(tableData);
+    
+    // View Switching
+    function showView(viewName) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      
+      if (viewName === 'graph') {
+        document.getElementById('graph-view').classList.add('active');
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+      } else {
+        document.getElementById('table-view').classList.add('active');
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+      }
+    }
+    
+    // Table Sorting
+    let sortDir = {};
+    function sortTable(colIdx) {
+      const direction = sortDir[colIdx] === 'asc' ? 'desc' : 'asc';
+      sortDir = {}; // Reset
+      sortDir[colIdx] = direction;
+      
+      const sorted = [...tableData].sort((a, b) => {
+        let aVal = Object.values(a)[colIdx];
+        let bVal = Object.values(b)[colIdx];
+        
+        // Handle numeric columns
+        if (colIdx === 2) { // Size
+          aVal = aVal === '-' ? -1 : parseFloat(aVal);
+          bVal = bVal === '-' ? -1 : parseFloat(bVal);
+        } else if (colIdx === 3) { // Imports count
+          aVal = parseInt(aVal);
+          bVal = parseInt(bVal);
+        }
+        
+        if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+      
+      renderTable(sorted);
+    }
+    
+    // Search/Filter
+    function filterTable() {
+      const query = document.getElementById('searchBox').value.toLowerCase();
+      const filtered = tableData.filter(row => 
+        row.name.toLowerCase().includes(query) ||
+        row.imports.toLowerCase().includes(query)
+      );
+      renderTable(filtered);
+    }
+  </script>
+</body>
+</html>
