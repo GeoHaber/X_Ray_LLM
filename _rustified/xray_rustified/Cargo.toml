@@ -2,14 +2,13 @@
 name = "xray_rustified"
 version = "0.1.0"
 edition = "2021"
-description = "Rust-accelerated X-Ray code quality scanner"
 
-[[bin]]
+[lib]
 name = "xray_rustified"
-path = "src/main.rs"
+crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.23", features = ["auto-initialize"] }
+pyo3 = { version = "0.23", features = ["extension-module"] }
 rayon = "1.10"
 regex = "1.10"
 

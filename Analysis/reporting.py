@@ -297,6 +297,13 @@ _PENALTY_RULES: List[tuple] = [
         20,
         [],
     ),
+    (
+        "release_readiness",
+        "Release Readiness",
+        {"critical": 1.0, "warning": 0.3, "info": 0.05},
+        15,
+        [],
+    ),
 ]
 
 
@@ -604,6 +611,83 @@ def print_typecheck_report(issues: List[SmellIssue], summary: Dict[str, Any]):
         for s in critical[:20]:
             bridge.log(f"    {s.file_path}:{s.line}  {s.message}")
         bridge.log("")
+
+
+def print_release_readiness_report(report, summary: Dict[str, Any]):
+    """Print the ASCII release readiness report."""
+    bridge = get_bridge()
+    bridge.log(f"\n{SEP}")
+    bridge.log(f"RELEASE READINESS REPORT — Grade: {summary.get('grade', '?')}  Score: {summary.get('score', 0)}/100")
+    bridge.log(f"{SEP}")
+
+    # Markers
+    marker_count = summary.get("markers", 0)
+    by_kind = summary.get("markers_by_kind", {})
+    if marker_count:
+        bridge.log(f"\n  TODO/FIXME Markers: {marker_count}")
+        for kind, count in sorted(by_kind.items(), key=lambda x: -x[1]):
+            bridge.log(f"    {kind:10s}  {count}")
+        # Show worst offenders
+        for m in report.markers[:10]:
+            bridge.log(f"    {m.file_path}:{m.line}  [{m.kind}] {m.text[:80]}")
+        if marker_count > 10:
+            bridge.log(f"    ... and {marker_count - 10} more")
+    else:
+        bridge.log("\n  TODO/FIXME Markers: 0  \u2705")
+
+    # Docstrings
+    doc_pct = summary.get("docstring_coverage_pct", 100)
+    bridge.log(f"\n  Docstring Coverage: {doc_pct:.1f}%  ({summary.get('docstring_documented', 0)}/{summary.get('docstring_total', 0)} public symbols)")
+    if summary.get("docstring_gaps", 0) > 0 and report.docstring_gaps:
+        bridge.log("  Missing docstrings (sample):")
+        for g in report.docstring_gaps[:8]:
+            bridge.log(f"    {g.file_path}:{g.line}  {g.kind} {g.name}()")
+        remaining = len(report.docstring_gaps) - 8
+        if remaining > 0:
+            bridge.log(f"    ... and {remaining} more")
+
+    # Vulnerabilities
+    vuln_count = summary.get("vulnerabilities", 0)
+    if summary.get("dep_audit_available", False):
+        if vuln_count:
+            bridge.log(f"\n  Dependency Vulnerabilities: {vuln_count}  \U0001f534")
+            for v in report.vulnerabilities[:5]:
+                fix_hint = f" -> {v.fix_version}" if v.fix_version else ""
+                bridge.log(f"    {v.package}=={v.version}  {v.vuln_id}{fix_hint}")
+        else:
+            bridge.log("\n  Dependency Vulnerabilities: 0  \u2705")
+    else:
+        bridge.log("\n  Dependency Audit: skipped (pip-audit not installed)")
+
+    # Version consistency
+    if summary.get("version_sources"):
+        if summary["versions_consistent"]:
+            v = summary["version_sources"][0]["version"]
+            bridge.log(f"\n  Version Consistency: \u2705 all sources = {v}")
+        else:
+            bridge.log("\n  Version Consistency: \U0001f534 MISMATCH")
+            for s in summary["version_sources"]:
+                bridge.log(f"    {s['source']:30s}  {s['version']}")
+
+    # Unpinned deps
+    unpinned = summary.get("unpinned_deps", 0)
+    if unpinned:
+        bridge.log(f"\n  Unpinned Dependencies: {unpinned}  \U0001f7e1")
+        for dep in report.unpinned_deps[:8]:
+            bridge.log(f"    {dep.file_path}:{dep.line}  {dep.package} {dep.spec}")
+    else:
+        bridge.log("\n  Unpinned Dependencies: 0  \u2705")
+
+    # Orphan modules
+    orphans = summary.get("orphan_modules", 0)
+    if orphans:
+        bridge.log(f"\n  Orphan Modules (unreferenced): {orphans}")
+        for o in report.orphan_modules[:10]:
+            bridge.log(f"    {o.file_path}")
+    else:
+        bridge.log("\n  Orphan Modules: 0  \u2705")
+
+    bridge.log("")
 
 
 def _build_smell_summary(smells):

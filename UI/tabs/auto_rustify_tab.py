@@ -1,4 +1,5 @@
 import flet as ft
+import asyncio
 from pathlib import Path
 from typing import Dict, Any
 from UI.tabs.shared import (
@@ -132,6 +133,15 @@ def _build_auto_rustify_tab(results: Dict[str, Any], page: ft.Page) -> ft.Contro
     )
     error_log = _build_cargo_error_log()
 
+    async def _on_rustify_click(e):
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: _run_rustify_pipeline(
+                results, page, status_text, prog_bar, error_log
+            ),
+        )
+
     return ft.Column(
         [
             glass_card(
@@ -159,9 +169,7 @@ def _build_auto_rustify_tab(results: Dict[str, Any], page: ft.Page) -> ft.Contro
                 [
                     ft.Button(
                         f" {t('run_pipeline')}",
-                        on_click=lambda e: _run_rustify_pipeline(
-                            results, page, status_text, prog_bar, error_log
-                        ),
+                        on_click=_on_rustify_click,
                         bgcolor=TH.accent2,
                         color=ft.Colors.WHITE,
                         height=BTN_H_MD,

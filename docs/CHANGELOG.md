@@ -1,5 +1,199 @@
 # Changelog
 
+## v7.2.0 — Release Readiness, Flet 0.80 Compat & UI Monkey Tests (2026-03-07)
+
+### Overview
+Adds a **Release Readiness** analyzer phase with full Flet tab, fixes **6 Flet 0.80
+breaking-change bugs**, replaces the single Chaos Monkey test with a **39-test
+comprehensive UI monkey suite**, and introduces a **Flet version gate** that
+auto-upgrades old installations at startup.
+
+---
+
+### 1 · Release Readiness Analyzer
+
+#### New File: `Analysis/release_readiness.py`
+- Full release-readiness scoring engine with weighted category checks
+- Evaluates: test health, lint cleanliness, security posture, documentation
+  coverage, dependency hygiene, CI/CD configuration, and code quality metrics
+- Produces per-category scores, an overall 0–100 score, and a letter grade
+
+#### New File: `Analysis/release_checklist.py`
+- Auto-generates a human-readable release checklist from scan results
+- Categorized pass/fail items with actionable descriptions
+
+#### New File: `UI/tabs/release_readiness_tab.py`
+- Flet tab showing overall grade card, per-category bar chart, full checklist,
+  and a "Copy checklist" button
+
+#### Integration points:
+- Registered in `Core/scan_phases.py` as a new scan phase
+- Wired into `x_ray_flet.py` tab builder list
+- Results included in CLI JSON/Markdown reports (`Analysis/reporting.py`)
+
+#### New Tests:
+- `tests/test_release_readiness.py` — 55 unit tests
+- `tests/test_release_readiness_integration.py` — 23 integration tests
+- **78 tests total, all passing**
+
+---
+
+### 2 · Flet 0.80 Compatibility Fixes (7 bugs)
+
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| `section_title()` rendering raw ints (e.g. "73802") | `ft.Icons.*` enums are ints in Flet 0.80, not strings | Detect non-string icons → `ft.Row([ft.Icon(...), ft.Text(...)])` |
+| `metric_tile()` blank/grey cards | Same `ft.Icons.*` int bug — raw int passed as control | Added `elif isinstance(icon, int)` → `ft.Icon(icon, ...)` |
+| Verification tab showing "F" / "0/100" | Score/grade nested in `results["verification"]["meta"]` but tab read top-level | Added `meta = v.get("meta", {})` fallback chain |
+| Nexus button freezing the UI | Sync `_run_nexus_pipeline` blocked Flet event loop | Async handler + `loop.run_in_executor()` |
+| Auto-Rustify button freezing the UI | Same sync-blocking pattern | Same async + `run_in_executor()` fix |
+| `ft.alignment.center` crash | Removed in Flet 0.80 | Replaced with `ft.Alignment(0, 0)` |
+| `ft.ElevatedButton` deprecation warnings | Deprecated since Flet 0.70 | Replaced with `ft.Button` |
+
+#### Files changed:
+- `UI/tabs/shared.py` — `section_title()`, `metric_tile()`, `_empty_state()`
+- `UI/tabs/verification_tab.py` — data flow fix + `ElevatedButton` → `Button`
+- `UI/tabs/nexus_tab.py` — async `_on_nexus_click` wrapper
+- `UI/tabs/auto_rustify_tab.py` — async `_on_rustify_click` wrapper
+
+---
+
+### 3 · Comprehensive UI Test Suite
+
+#### Rewritten: `tests/test_xray_UI.py`
+Replaced the single Chaos Monkey test with **39 tests across 9 test classes**:
+
+| Test Class | # | What it covers |
+|------------|---|----------------|
+| `TestUIBootstrap` | 2 | App boots, initial controls present |
+| `TestModeCheckboxes` | 3 | 13 mode checkboxes, toggle state, All/None master toggle |
+| `TestScanButton` | 1 | Scan without path doesn't crash |
+| `TestTabBuilders` | 16 | Every tab builds + all button handlers fire |
+| `TestSectionTitle` | 4 | String icons, enum icons, empty, no icon |
+| `TestExportButtons` | 3 | JSON export, MD export, gen-tests subprocess |
+| `TestTabPillNavigation` | 1 | Tab pills switch panels |
+| `TestChaosMonkey` | 2 | Full-UI systematic clicks + 200 random clicks |
+| `TestDashboardTabButtons` | 1 | Dashboard built, every button clicked |
+| `TestHandlerReactsAndUpdatesUI` | 4 | Nexus/Rustify status updates, monkey toggle, checkbox round-trip |
+
+Infrastructure: `MockEvent`, `_make_page()` factory, `FAKE_RESULTS` with real
+`FunctionRecord` objects, `find_all_interactive()` recursive walker, `_trigger()`
+async/sync handler invoker.
+
+---
+
+### 4 · Flet Version Gate
+
+#### Modified: `x_ray_flet.py`
+- Added `_check_flet_version()` — runs at import time before any UI code
+- Compares `ft.__version__` against `_MIN_FLET = (0, 80, 0)` using `packaging.Version`
+- If Flet is too old: auto-runs `pip install flet>=0.80.0`, prints restart message, exits cleanly
+- Zero overhead on machines with a compatible version
+
+#### Modified: `requirements.txt`
+- Changed `flet==0.80.2` → `flet>=0.80.0` (allows newer compatible versions)
+- Added `packaging>=20.0` (used by version gate)
+
+---
+
+### Files Changed Summary
+- `Analysis/release_readiness.py` — **New**
+- `Analysis/release_checklist.py` — **New**
+- `UI/tabs/release_readiness_tab.py` — **New**
+- `UI/tabs/shared.py` — Bug fixes (section_title, _empty_state)
+- `UI/tabs/verification_tab.py` — Data flow fix + ElevatedButton deprecation
+- `UI/tabs/nexus_tab.py` — Async handler wrapper
+- `UI/tabs/auto_rustify_tab.py` — Async handler wrapper
+- `x_ray_flet.py` — Release readiness tab registration + Flet version gate
+- `Core/scan_phases.py` — Release readiness phase registration
+- `Analysis/reporting.py` — Release readiness in reports
+- `tests/test_xray_UI.py` — Complete rewrite (1 → 39 tests)
+- `tests/test_release_readiness.py` — **New** (55 tests)
+- `tests/test_release_readiness_integration.py` — **New** (23 tests)
+- `requirements.txt` — Flet version relaxed, packaging added
+- `_rustified/xray_rustified/Cargo.toml` — Renamed bin target to avoid output collision
+
+### 5 · Rust Build Fixes
+
+- **Cargo.toml bin/lib name collision:** Both `lib.rs` and `main.rs` used the
+  same output name `xray_rustified`, causing PDB filename collisions on Windows.
+  Added explicit `[[bin]] name = "xray_rustified_bin"` to disambiguate.
+- **Missing MSVC target:** Only `x86_64-pc-windows-gnu` was installed.
+  Documented the need for `rustup target add x86_64-pc-windows-msvc`.
+
+---
+
+## v7.1.0 — Verification Phase, Import Dependency Graph & New Test Suites (2025-06-18)
+
+### Overview
+Adds a **Verification** analyzer phase to the Flet GUI, an interactive **import dependency graph** builder, new unit and UI stress tests, and a `test_generator` re-export fix.
+
+---
+
+### 1 · Verification Analyzer
+
+#### New File: `Analysis/verification.py`
+
+| Method | Purpose |
+|---|---|
+| `VerificationAnalyzer.verify_project()` | Heuristic functional verification of project testability and UI robustness |
+| `_check_testability()` | Flags high-complexity functions lacking test coverage |
+| `_check_ui_robustness()` | Evaluates UI event handler resilience |
+| `_score_to_letter()` | Converts 0–100 score to A+→F grade |
+
+- Integrated into Flet GUI as a new **Verification** tab
+- Phase runs automatically during full scan in the desktop GUI
+- Results include functional score, UI stability score, and per-issue breakdown
+
+#### New File: `UI/tabs/verification_tab.py`
+- Flet tab showing verification grade card, stats summary, and Chaos Monkey button
+
+---
+
+### 2 · Import Dependency Graph Builder
+
+#### Modified: `Analysis/imports.py`
+- Added `build_graph(root, exclude)` method to `ImportAnalyzer`
+- Builds a module-level dependency graph as `[{"from": source, "to": target}]` edges
+- Used by the GUI to generate an interactive HTML visualization
+
+#### New File: `_scratch/gen_import_graph.py`
+- Standalone script to generate `import_graph.html` using vis-network.js
+- Color-coded by package: Analysis (cyan), Core (orange), UI (green), tests (red), Lang (purple)
+
+---
+
+### 3 · Test Generator Fix
+
+#### New File: `Analysis/test_generator.py` (re-export shim)
+- Fixes critical typecheck error: `from Analysis.test_generator import TestGeneratorEngine` now resolves correctly
+- Re-exports `TestGeneratorEngine`, `TestGenReport`, `GeneratedTestFile` from `tests.test_generator`
+
+---
+
+### 4 · New Test Suites
+
+#### New File: `tests/test_xray_logic.py`
+- 4 unit tests: AST extraction, smell detection, duplicate finding, Rust advisor scoring
+
+#### New File: `tests/test_xray_UI.py`
+- Chaos Monkey UI stress test: 200 random interactions against mock Flet controls
+- Validates that no unhandled exceptions escape during rapid UI manipulation
+
+---
+
+### Files Changed
+- `Analysis/verification.py` — **New** (heuristic verification engine)
+- `Analysis/test_generator.py` — **New** (re-export shim for TestGeneratorEngine)
+- `Analysis/imports.py` — Added `build_graph()` method
+- `UI/tabs/verification_tab.py` — **New** (Flet verification tab)
+- `x_ray_flet.py` — Integrated verification phase, import graph generation
+- `tests/test_xray_logic.py` — **New** (4 unit tests)
+- `tests/test_xray_UI.py` — **New** (Chaos Monkey UI stress test)
+- `_scratch/gen_import_graph.py` — **New** (import graph HTML generator)
+
+---
+
 ## v7.0.0 — Universal Scanner: JS/TS/React, Web Smells, Health Checks & Test Generator (2026-03-02)
 
 ### Overview

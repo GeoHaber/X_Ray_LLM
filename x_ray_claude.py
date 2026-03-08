@@ -54,6 +54,7 @@ from Core.scan_phases import (
     run_health_phase,
     run_imports_phase,
     run_smell_fix_phase,
+    run_release_readiness_phase,
     collect_reports,
 )
 
@@ -634,6 +635,18 @@ def _run_typecheck_phase(args, root):
     return run_typecheck_phase(root, exclude=getattr(args, "exclude", None))
 
 
+def _run_release_readiness_phase(args, root, functions=None, classes=None):
+    """Run pre-release readiness checks if requested."""
+    if not getattr(args, "release_ready", False):
+        return None
+    return run_release_readiness_phase(
+        root,
+        exclude=getattr(args, "exclude", None),
+        functions=functions,
+        classes=classes,
+    )
+
+
 def _run_fix_smells_phase(args, root):
     """Run auto-fix smell engine if requested."""
     if not getattr(args, "fix_smells", False):
@@ -801,6 +814,8 @@ def _run_analysis_phases(
     tc_analyzer, tc_issues = _run_typecheck_phase(args, root)
     all_issues.extend(tc_issues)
 
+    release_analyzer = _run_release_readiness_phase(args, root, functions, classes)
+
     return (
         all_issues,
         detector,
@@ -817,6 +832,7 @@ def _run_analysis_phases(
         imports_issues,
         tc_analyzer,
         tc_issues,
+        release_analyzer,
     )
 
 
@@ -863,8 +879,7 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
         imports_analyzer,
         imports_issues,
         tc_analyzer,
-        tc_issues,
-    ) = _run_analysis_phases(args, root, functions, classes)
+        tc_issues,        release_analyzer,    ) = _run_analysis_phases(args, root, functions, classes)
 
     # â”€â”€ Auto-fix smells (--fix-smells) â”€â”€
     _run_fix_smells_phase(args, root)
@@ -903,6 +918,7 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
             imports_issues=imports_issues,
             typecheck_analyzer=tc_analyzer,
             typecheck_issues=tc_issues,
+            release_analyzer=release_analyzer,
         )
     )
 

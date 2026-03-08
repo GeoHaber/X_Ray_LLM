@@ -166,6 +166,9 @@ def metric_tile(icon, value, label: str, color=None):
     color = color or TH.accent
     if isinstance(icon, str):
         icon_widget = ft.Text(icon, size=SZ_H3, text_align=ft.TextAlign.CENTER)
+    elif isinstance(icon, int):
+        # ft.Icons.* enums are ints in Flet 0.80+ — wrap in ft.Icon widget
+        icon_widget = ft.Icon(icon, size=SZ_H3, color=color)
     else:
         icon_widget = icon
     return ft.Container(
@@ -196,7 +199,22 @@ def metric_tile(icon, value, label: str, color=None):
     )
 
 
-def section_title(text: str, icon: str = ""):
+def section_title(text: str, icon=""):
+    if icon and not isinstance(icon, str):
+        # ft.Icons.* enum values are ints — render as an actual icon widget
+        return ft.Row(
+            [
+                ft.Icon(icon, color=TH.accent, size=SZ_SECTION + 4),
+                ft.Text(
+                    text,
+                    size=SZ_SECTION,
+                    weight=ft.FontWeight.BOLD,
+                    color=TH.accent,
+                    font_family=MONO_FONT,
+                ),
+            ],
+            spacing=6,
+        )
     return ft.Text(
         f"{icon} {text}" if icon else text,
         size=SZ_SECTION,
@@ -296,7 +314,7 @@ def _empty_state(icon: str, title: str, subtitle: str = ""):
             spacing=10,
         ),
         expand=True,
-        alignment=ft.alignment.center,
+        alignment=ft.Alignment(0, 0),
     )
 
 

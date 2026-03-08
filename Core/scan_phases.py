@@ -46,6 +46,7 @@ class AnalysisComponents(NamedTuple):
     imports_issues: _Any = None
     typecheck_analyzer: _Any = None
     typecheck_issues: _Any = None
+    release_analyzer: _Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +267,21 @@ def run_test_gen_phase(
     return report
 
 
+def run_release_readiness_phase(
+    root: Path,
+    exclude=None,
+    functions=None,
+    classes=None,
+):
+    """Run pre-release readiness checks. Returns analyzer with report."""
+    from Analysis.release_readiness import ReleaseReadinessAnalyzer
+
+    analyzer = ReleaseReadinessAnalyzer()
+    get_bridge().status("Checking Release Readiness (X-Ray)...")
+    analyzer.analyze(root, exclude=exclude, functions=functions, classes=classes)
+    return analyzer
+
+
 def run_rustify_scan(root: Path, exclude=None) -> dict:
     """Rank functions by Rust-porting suitability and print results."""
     from Analysis.rust_advisor import RustAdvisor
@@ -366,6 +382,31 @@ def collect_reports(components: AnalysisComponents) -> dict:
         print_typecheck_report(tc_issues, summary)
         results["typecheck"] = summary
 
+    release_analyzer = components.release_analyzer
+    if release_analyzer and release_analyzer.report:
+        summary = release_analyzer.summary()
+        from Analysis.reporting import print_release_readiness_report
+
+        print_release_readiness_report(release_analyzer.report, summary)
+        results["release_readiness"] = summary
+
     grade_info = print_unified_grade(results)
     results["grade"] = grade_info
+
+    # Generate release checklist if release readiness was run
+    if "release_readiness" in results:
+        from Analysis.release_checklist import generate_checklist, format_checklist
+
+        checklist = generate_checklist(results)
+        get_bridge().log(format_checklist(checklist))
+        results["release_checklist"] = {
+            "go": checklist.go,
+            "blockers": checklist.blockers,
+            "warnings": checklist.warnings,
+            "items": [
+                {"label": i.label, "passed": i.passed, "detail": i.detail, "severity": i.severity}
+                for i in checklist.items
+            ],
+        }
+
     return results

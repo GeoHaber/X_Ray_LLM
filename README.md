@@ -21,6 +21,7 @@ Your Code  →  X-Ray  →  Grade A–F  →  Actionable Issues  →  One-Click 
 | 🔍 **Diagnose** | Detects 15+ code smells, finds duplicate logic, flags lint violations, spots security vulnerabilities, checks UI framework compatibility |
 | 📊 **Grade** | Combines all findings into a single **A+ → F score** (0–100 scale) with a breakdown of what's hurting you |
 | 🛠️ **Fix** | One-click Ruff auto-fix for lint, auto-generates a pytest test suite, suggests library consolidations |
+| ✅ **Verify** | Heuristic functional verification — testability scoring, UI stress-test robustness, per-project grade |
 | 🦀 **Rustify** | Scores every function for Rust portability, transpiles pure-Python logic to Rust, compiles with Cargo, builds a `.exe` |
 
 ---
@@ -36,10 +37,13 @@ python x_ray_flet.py          # native desktop window  (Flutter engine)
 flet run --web x_ray_flet.py  # same UI, opens in browser
 ```
 
+> **Note:** X-Ray requires **Flet >= 0.80.0**. If an older version is detected
+> at startup, the app will auto-upgrade via `pip` and ask you to restart.
+
 The GUI opens a modern dark-mode dashboard with:
 
 - **Sidebar** — folder picker, recent-paths history, analyzer toggles, ⚡ Scan button
-- **Dashboard tabs** — Smells · Duplicates · Lint · Security · Rustify · Heatmap · Complexity · Graph · Auto-Rustify · UI Compat
+- **Dashboard tabs** — Smells · Duplicates · Lint · Security · Rustify · Heatmap · Complexity · Graph · Auto-Rustify · UI Compat · Verification · Release Readiness
 - **Export bar** — 📥 JSON report · 📥 Markdown report · 🧪 Generate Tests
 - **Theme toggle** — Dark / Light  |  **5 languages** — EN · RO · ES · FR · DE
 
@@ -51,7 +55,7 @@ The GUI opens a modern dark-mode dashboard with:
 # Quick scan (smells + lint + security)
 python x_ray_claude.py --path /your/project
 
-# Full scan — all 9 analyzers, grade, report
+# Full scan — all 10 analyzers, grade, report
 python x_ray_claude.py --full-scan --path /your/project
 
 # Save a JSON report
@@ -118,7 +122,7 @@ Score = **100 − penalties** (capped per analyzer):
 
 ---
 
-## The 9 Analyzers
+## The 11 Analyzers
 
 | # | Analyzer | Finds |
 |---|---|---|
@@ -131,8 +135,25 @@ Score = **100 − penalties** (capped per analyzer):
 | 7 | **Complexity** | Cyclomatic complexity and function-size distribution charts |
 | 8 | **UI Compat** | Detects invalid Flet API usage — wrong kwargs, deprecated patterns |
 | 9 | **Test Generator** | Emits pytest smoke, callable, regression, and structure tests from AST data |
+| 10 | **Verification** | Heuristic functional verification — testability scoring, UI stress-test robustness, per-project grade |
+| 11 | **Release Readiness** | Weighted release-readiness scoring across 7 categories (tests, lint, security, docs, deps, CI, code quality) with auto-generated checklist |
 
 **JS/TS/React support:** Full analysis of `.js`, `.ts`, `.jsx`, `.tsx` files — imports, functions, React components, 142 npm package mappings in 15 categories.
+
+---
+
+## Import Dependency Graph
+
+X-Ray can generate an interactive HTML dependency graph showing all module-level imports in your project:
+
+```bash
+python x_ray_claude.py --graph --path /your/project
+```
+
+The graph uses **vis-network.js** for interactive visualization with color-coded modules:
+- **Analysis** — cyan · **Core** — orange · **UI** — green · **tests** — red · **Lang** — purple
+
+Nodes are draggable, zoomable, and hoverable. The generated `import_graph.html` opens in any browser.
 
 ---
 
@@ -184,11 +205,16 @@ X_Ray/
 │   ├── rust_advisor.py    ← Rust portability scorer
 │   ├── auto_rustify.py    ← Full Rust transpile + compile pipeline
 │   ├── smart_graph.py     ← Call graph builder
+│   ├── imports.py         ← Import analyzer + dependency graph builder
+│   ├── verification.py    ← Heuristic functional verification engine
+│   ├── release_readiness.py ← Release-readiness scoring & checklist
 │   ├── ui_compat.py       ← UI framework compatibility checker
 │   └── NexusMode/         ← LLM orchestration agents
 ├── Lang/
 │   └── transpiler/        ← Python → Rust AST transpiler
-└── tests/                 ← 4,800+ test cases
+├── UI/
+│   └── tabs/              ← Per-tab Flet UI modules (incl. verification, release readiness)
+└── tests/                 ← 4,900+ test cases
     └── xray_generated/    ← Auto-generated tests (from --gen-tests)
 ```
 

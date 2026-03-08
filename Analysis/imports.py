@@ -75,6 +75,61 @@ class ImportAnalyzer:
             "source": "xray-imports",
         }
 
+    def build_graph(
+        self, root: Path, exclude: Optional[List[str]] = None
+    ) -> List[Dict[str, str]]:
+        """Build a module-level dependency graph (source_file -> target_file)."""
+        from Analysis.ast_utils import collect_py_files
+
+        files = collect_py_files(root, exclude)
+        # Map: "package.module" -> "package/module.py"
+        all_internal = {}
+        for f in files:
+            try:
+                rel = str(f.relative_to(root)).replace("\\", "/")
+                mod = rel.replace(".py", "").replace("/", ".")
+                # Handle cases like __init__.py which represent the package itself
+                if mod.endswith(".__init__"):
+                    all_internal[mod.replace(".__init__", "")] = rel
+                all_internal[mod] = rel
+            except ValueError:
+                continue
+
+        edges = []
+        seen_edges = set()
+
+        for fpath in files:
+            try:
+                source = str(fpath.relative_to(root)).replace("\\", "/")
+            except ValueError:
+                continue
+
+            try:
+                tree = ast.parse(fpath.read_text(encoding="utf-8", errors="ignore"))
+                for node in ast.walk(tree):
+                    targets = []
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            targets.append(alias.name)
+                    elif isinstance(node, ast.ImportFrom):
+                        base = node.module or ""
+                        targets.append(base)
+                        for alias in node.names:
+                            targets.append(f"{base}.{alias.name}" if base else alias.name)
+
+                    for t_mod in targets:
+                        if t_mod in all_internal:
+                            target_file = all_internal[t_mod]
+                            if source != target_file:
+                                edge = (source, target_file)
+                                if edge not in seen_edges:
+                                    edges.append({"from": source, "to": target_file})
+                                    seen_edges.add(edge)
+            except Exception:
+                continue
+
+        return edges
+
 
 def _check_wildcard_import(tree: ast.Module, rel_path: str) -> List[SmellIssue]:
     """Flag 'from X import *' — pollutes namespace and disables F821 checking."""

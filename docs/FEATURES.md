@@ -43,6 +43,10 @@
 | **Project health checker** | `Analysis/project_health.py` | **v7.0** | Structural completeness score |
 | **Smell auto-fixer** | `Analysis/smell_fixer.py` | **v7.0** | `--fix-smells` engine |
 | **Test generator** | `Analysis/test_generator.py` | **v7.0** | `--gen-tests` engine |
+| **Verification** | `Analysis/verification.py` | **v7.1** | Heuristic functional verification & UI robustness |
+| **Import graph builder** | `Analysis/imports.py` | **v7.1** | `build_graph()` — module dependency edges |
+| **Release readiness** | `Analysis/release_readiness.py` | **v7.2** | Weighted release-readiness scoring across 7 categories |
+| **Release checklist** | `Analysis/release_checklist.py` | **v7.2** | Auto-generated pass/fail checklist from scan results |
 
 ### 1.3 Language Support (`Lang/`)
 
@@ -58,6 +62,9 @@
 |---------|--------|-------|-------|
 | CLI print bridge | `ui_bridge.py` | v5.0 | `PrintBridge`, `NullBridge`, `TqdmBridge` |
 | Flet desktop UI | `x_ray_flet.py` | v3.0 | Native desktop app |
+| Flet verification tab | `UI/tabs/verification_tab.py` | v7.1 | Verification results + Chaos Monkey |
+| Flet release readiness tab | `UI/tabs/release_readiness_tab.py` | **v7.2** | Grade card, category chart, checklist |
+| Flet version gate | `x_ray_flet.py` | **v7.2** | Auto-upgrades Flet < 0.80.0 at startup |
 | Claude markdown UI | `x_ray_claude.py` | v6.0 | Rich markdown output |
 | Unified terminal UI | `x_ray_ui.py` | v1.0 | Original terminal mode |
 
@@ -97,6 +104,11 @@
 | **`Analysis/project_health.py`** | **`tests/test_analysis_project_health.py`** | **✅** | **45** |
 | **`Analysis/smell_fixer.py`** | **`tests/test_analysis_smell_fixer.py`** | **✅** | **34** |
 | **`Analysis/test_generator.py`** | **`tests/test_analysis_test_generator.py`** | **✅** | **30** |
+| **`Analysis/verification.py`** | **`tests/test_xray_logic.py`** | **⚠️** | **partial** |
+| **`Analysis/imports.py` (build_graph)** | — | **❌** | — |
+| **`Analysis/release_readiness.py`** | **`tests/test_release_readiness.py`** | **✅** | **55** |
+| **`Analysis/release_checklist.py`** | **`tests/test_release_readiness.py`** | **✅** | **(incl.)** |
+| **`Analysis/release_readiness.py` (integration)** | **`tests/test_release_readiness_integration.py`** | **✅** | **23** |
 
 ### 2.3 Language Support
 
@@ -112,6 +124,7 @@
 |--------|-----------|--------|---------|
 | `ui_bridge.py` | `tests/test_ui_bridge.py`, `test_ui_compat.py` | ✅ | 30+ |
 | `x_ray_flet.py` | `tests/test_xray_core_comprehensive.py` | ⚠️ | partial |
+| `x_ray_flet.py` (UI stress) | `tests/test_xray_UI.py` | ✅ | **39** (9 test classes) |
 | `x_ray_claude.py` | `tests/test_xray_claude.py` | ✅ | — |
 
 ---
@@ -126,6 +139,8 @@ tests/                              # Unit & integration tests
 ├── test_smells_new.py              # Extended smell regression tests
 ├── test_unified_integration.py     # End-to-end scan pipeline
 ├── test_monkey_torture.py          # Randomised monkey tests
+├── test_xray_logic.py             # Core logic unit tests (AST, smells, dups, rust advisor)
+├── test_xray_UI.py                # Chaos Monkey Flet UI stress test
 ├── test_semantic_fuzzer.py         # Semantic-level fuzzing
 ├── test_parity_py_vs_rust.py       # Python ↔ Rust output parity
 └── xray_generated/                 # X-Ray auto-generated test stubs
@@ -188,3 +203,5 @@ These 2 failures exist **before** v7.0 and are tracked but not yet fixed:
 | v5.0 | Smart import graph, scan cache, library advisor, Nexus mode |
 | v6.0 | Nexus orchestrator, Claude markdown UI, UI bridge protocol |
 | **v7.0** | **JS/TS/JSX/TSX scanner, web smells, project health, smell auto-fixer, test generator** |
+| **v7.1** | **Verification analyzer, import dependency graph builder, Chaos Monkey UI stress tests** |
+| **v7.2** | **Release readiness analyzer + checklist, Flet 0.80 compat fixes (6 bugs), 39-test UI monkey suite, Flet version gate** |

@@ -1,10 +1,30 @@
 # Flet API Pre-Launch Validation
 
 ## Problem
-Flet 0.80.2 introduced API breaking changes that only surfaced at runtime, causing crashes that were discovered by testing the UI rather than through static analysis.
+Flet 0.80.x introduced API breaking changes that only surfaced at runtime, causing crashes that were discovered by testing the UI rather than through static analysis.
 
-## Solution
-Created a static validation tool (`.github/scripts/validate_flet_api.py`) that checks for deprecated/invalid Flet parameters BEFORE running the app.
+## Runtime Version Gate (v7.2)
+
+As of v7.2, `x_ray_flet.py` includes an automatic version gate that runs at startup:
+
+```python
+_MIN_FLET = (0, 80, 0)
+
+def _check_flet_version() -> None:
+    from packaging.version import Version
+    installed = Version(ft.__version__)
+    required  = Version(".".join(str(p) for p in _MIN_FLET))
+    if installed >= required:
+        return
+    # auto-upgrade via pip, then exit with restart message
+```
+
+If Flet is older than 0.80.0, the gate auto-runs `pip install flet>=0.80.0` and
+asks the user to restart. This prevents all of the breaking-change crashes below.
+
+## Static Validation Tool
+
+A static validation tool (`.github/scripts/validate_flet_api.py`) checks for deprecated/invalid Flet parameters BEFORE running the app.
 
 ## Usage
 
@@ -73,3 +93,13 @@ python x_ray_flet.py
 - Integrate with Pyright type checking for Flet stubs
 - Add per-version API tracking for multiple Flet versions
 - Auto-fix common issues
+
+## Additional Flet 0.80 Breaking Changes (discovered in v7.2)
+
+| Change | Impact | Fix applied |
+|--------|--------|-------------|
+| `ft.Icons.*` enums are **ints**, not strings | `section_title()` and `metric_tile()` rendered raw int codepoints or blank cards | Type-check icon; use `ft.Icon()` widget for non-string icons |
+| `ft.alignment.center` removed | `_empty_state()` crashed | Use `ft.Alignment(0, 0)` |
+| `ft.ElevatedButton` deprecated (since 0.70) | Deprecation warnings in every tab | Replace with `ft.Button` |
+| `ft.Button` first param is `content` (StrOrControl) | No `.text` attribute; auto-wraps strings | Access `.content` instead of `.text` |
+| Sync `on_click` blocks Flet event loop | Nexus / Auto-Rustify buttons froze the UI | Use `async def` handler + `loop.run_in_executor()` |

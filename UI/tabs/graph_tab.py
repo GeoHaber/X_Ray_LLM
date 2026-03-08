@@ -180,7 +180,8 @@ def _build_graph_canvas(graph: SmartGraph) -> ft.Control:
         "critical": "#e74c3c",
     }
 
-    def _paint(canvas: cv.Canvas, event: cv.CanvasResizeEvent):
+    def _paint(event: cv.CanvasResizeEvent):
+        canvas = event.control
         w, h = event.width, event.height
 
         # Draw edges first (underneath)

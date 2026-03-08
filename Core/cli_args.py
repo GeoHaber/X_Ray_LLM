@@ -77,6 +77,13 @@ def add_common_scan_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Run Pyright type checker to catch type errors",
     )
+    parser.add_argument(
+        "--release-ready",
+        action="store_true",
+        help="Pre-release readiness check: TODO/FIXME scan, docstring coverage, "
+        "dependency audit, version consistency, dep pinning, orphan modules, "
+        "and a go/no-go release checklist",
+    )
 
 
 def normalize_scan_args(
@@ -101,6 +108,7 @@ def normalize_scan_args(
             "web",
             "health",
             "typecheck",
+            "release_ready",
             *extra_flags,
         )
     )
@@ -114,4 +122,5 @@ def normalize_scan_args(
             args.web = True
             args.health = True
             args.typecheck = True
+            args.release_ready = True
     return args

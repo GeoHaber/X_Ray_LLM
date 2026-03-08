@@ -2,17 +2,22 @@ import flet as ft
 from UI.tabs.shared import (
     SZ_SM,
     SZ_MD,
-    SEV_ICONS,
     SEV_COLORS,
     TH,
     _empty_state,
 )
 
+_SEV_FT_ICONS = {
+    "critical": ft.Icons.ERROR,
+    "warning": ft.Icons.WARNING,
+    "info": ft.Icons.INFO_OUTLINE,
+}
+
 
 def _build_ui_health_tile(issue) -> ft.Container:
     """Render one UI Health issue as a severity-coloured bordered card."""
     icon_color = SEV_COLORS.get(issue.severity, TH.muted)
-    icon_name = SEV_ICONS.get(issue.severity, ft.Icons.ERROR)
+    icon_name = _SEV_FT_ICONS.get(issue.severity, ft.Icons.ERROR)
     return ft.Container(
         content=ft.Column(
             [

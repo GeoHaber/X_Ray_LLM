@@ -1,4 +1,5 @@
 import flet as ft
+import asyncio
 from pathlib import Path
 from typing import Dict, Any
 from UI.tabs.shared import (
@@ -84,11 +85,18 @@ def _build_nexus_tab(results: Dict[str, Any], page: ft.Page) -> ft.Control:
     )
     trans_results_col = ft.Column(scroll=ft.ScrollMode.ADAPTIVE, height=300)
 
+    async def _on_nexus_click(e):
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: _run_nexus_pipeline(
+                results, page, status_text, prog_bar, trans_results_col
+            ),
+        )
+
     btn = ft.Button(
         " Run Nexus Mode Orchestrator",
-        on_click=lambda e: _run_nexus_pipeline(
-            results, page, status_text, prog_bar, trans_results_col
-        ),
+        on_click=_on_nexus_click,
         bgcolor=TH.accent2,
         color=ft.Colors.WHITE,
         height=BTN_H_MD,
