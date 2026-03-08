@@ -23,25 +23,12 @@ from pathlib import Path
 from typing import List, Optional
 
 from Core.types import SmellIssue, Severity
-from Analysis._analyzer_base import _find_tool
-
-_DEFAULT_EXCLUDE = [
-    ".venv",
-    "venv",
-    ".env",
-    "__pycache__",
-    "node_modules",
-    ".git",
-    "target",
-    "dist",
-    "build",
-    "_scratch",
-]
+from Analysis._analyzer_base import AUTO_EXCLUDE, _find_tool
 
 
 def _build_format_cmd(tool: str, root: Path, exclude: Optional[List[str]]) -> List[str]:
     """Build ruff format --check command with exclusions."""
-    all_exclude = [*_DEFAULT_EXCLUDE, *(exclude or [])]
+    all_exclude = [*AUTO_EXCLUDE, *(exclude or [])]
     return [tool, "format", "--check", str(root)] + [
         arg for pat in all_exclude for arg in ("--exclude", pat)
     ]

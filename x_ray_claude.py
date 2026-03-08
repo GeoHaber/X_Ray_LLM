@@ -771,6 +771,7 @@ def _run_gen_tests_phase(ctx: GenTestContext):
         js_analyses=js_analyses,
         health_checks=health_checks,
         output_dir=test_output,
+        exclude=getattr(ctx.args, "exclude", None),
     )
 
     bridge = get_bridge()
@@ -879,7 +880,9 @@ async def _run_full_scan(root: Path, args: argparse.Namespace) -> dict:
         imports_analyzer,
         imports_issues,
         tc_analyzer,
-        tc_issues,        release_analyzer,    ) = _run_analysis_phases(args, root, functions, classes)
+        tc_issues,
+        release_analyzer,
+    ) = _run_analysis_phases(args, root, functions, classes)
 
     # â”€â”€ Auto-fix smells (--fix-smells) â”€â”€
     _run_fix_smells_phase(args, root)

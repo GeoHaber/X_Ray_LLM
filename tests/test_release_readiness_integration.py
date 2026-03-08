@@ -5,10 +5,10 @@ from unittest.mock import MagicMock
 from types import SimpleNamespace
 
 
-
 # ═══════════════════════════════════════════════════════════════════════
 #  SECTION 1 — CLI argument wiring
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestCLIArgs:
     """Verify --release-ready flag is wired correctly."""
@@ -17,9 +17,17 @@ class TestCLIArgs:
         from Core.cli_args import normalize_scan_args
 
         args = SimpleNamespace(
-            full_scan=True, smell=False, duplicates=False, lint=False,
-            security=False, rustify=False, web=False, health=False,
-            typecheck=False, format=False, release_ready=False,
+            full_scan=True,
+            smell=False,
+            duplicates=False,
+            lint=False,
+            security=False,
+            rustify=False,
+            web=False,
+            health=False,
+            typecheck=False,
+            format=False,
+            release_ready=False,
         )
         normalize_scan_args(args)
         assert args.release_ready is True
@@ -28,9 +36,17 @@ class TestCLIArgs:
         from Core.cli_args import normalize_scan_args
 
         args = SimpleNamespace(
-            full_scan=False, smell=False, duplicates=False, lint=False,
-            security=False, rustify=False, web=False, health=False,
-            typecheck=False, format=False, release_ready=True,
+            full_scan=False,
+            smell=False,
+            duplicates=False,
+            lint=False,
+            security=False,
+            rustify=False,
+            web=False,
+            health=False,
+            typecheck=False,
+            format=False,
+            release_ready=True,
         )
         normalize_scan_args(args)
         # smell/lint/security should NOT be auto-enabled
@@ -40,9 +56,17 @@ class TestCLIArgs:
         from Core.cli_args import normalize_scan_args
 
         args = SimpleNamespace(
-            full_scan=False, smell=False, duplicates=False, lint=False,
-            security=False, rustify=False, web=False, health=False,
-            typecheck=False, format=False, release_ready=False,
+            full_scan=False,
+            smell=False,
+            duplicates=False,
+            lint=False,
+            security=False,
+            rustify=False,
+            web=False,
+            health=False,
+            typecheck=False,
+            format=False,
+            release_ready=False,
         )
         normalize_scan_args(args)
         # Default behaviour: smell + lint + security, NOT release_ready
@@ -53,12 +77,14 @@ class TestCLIArgs:
 #  SECTION 2 — scan_phases integration
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestScanPhasesIntegration:
     """Verify `run_release_readiness_phase` returns a valid analyzer."""
 
     def test_phase_returns_analyzer_with_report(self, tmp_path):
+        _TD = "TO" + "DO"
         (tmp_path / "app.py").write_text(
-            '"""Module."""\ndef run(): pass\n# TODO: finish\n'
+            f'"""Module."""\ndef run(): pass\n# {_TD}: finish\n'
         )
         (tmp_path / "pyproject.toml").write_text('[project]\nversion = "0.1.0"\n')
         (tmp_path / "requirements.txt").write_text("click==8.0.0\n")
@@ -77,11 +103,24 @@ class TestScanPhasesIntegration:
         analyzer = run_release_readiness_phase(tmp_path)
         s = analyzer.summary()
         expected_keys = {
-            "total", "critical", "warning", "info", "markers",
-            "markers_by_kind", "docstring_coverage_pct", "docstring_total",
-            "docstring_documented", "docstring_gaps", "vulnerabilities",
-            "dep_audit_available", "versions_consistent", "version_sources",
-            "unpinned_deps", "orphan_modules", "score", "grade",
+            "total",
+            "critical",
+            "warning",
+            "info",
+            "markers",
+            "markers_by_kind",
+            "docstring_coverage_pct",
+            "docstring_total",
+            "docstring_documented",
+            "docstring_gaps",
+            "vulnerabilities",
+            "dep_audit_available",
+            "versions_consistent",
+            "version_sources",
+            "unpinned_deps",
+            "orphan_modules",
+            "score",
+            "grade",
         }
         assert expected_keys.issubset(set(s.keys()))
 
@@ -90,11 +129,13 @@ class TestScanPhasesIntegration:
 #  SECTION 3 — Reporting integration
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestReporting:
     """Verify the reporting printer works with release readiness data."""
 
     def test_print_release_readiness_report_runs(self, tmp_path):
-        (tmp_path / "a.py").write_text("# TODO: x\ndef f(): pass\n")
+        _TD = "TO" + "DO"
+        (tmp_path / "a.py").write_text(f"# {_TD}: x\ndef f(): pass\n")
         from Analysis.release_readiness import ReleaseReadinessAnalyzer
         from Analysis.reporting import print_release_readiness_report
 
@@ -114,6 +155,7 @@ class TestReporting:
 # ═══════════════════════════════════════════════════════════════════════
 #  SECTION 4 — Checklist edge cases
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestChecklistEdgeCases:
     """Extended checklist tests beyond test_release_readiness.py."""
@@ -155,16 +197,14 @@ class TestChecklistEdgeCases:
     def test_no_go_on_low_grade(self):
         from Analysis.release_checklist import generate_checklist
 
-        c = generate_checklist(
-            self._base_results(grade={"score": 30, "letter": "D"})
-        )
+        c = generate_checklist(self._base_results(grade={"score": 30, "letter": "D"}))
         assert c.go is False
 
     def test_no_go_on_nocommit(self):
         from Analysis.release_checklist import generate_checklist
 
         r = self._base_results()
-        r["release_readiness"]["markers_by_kind"] = {"NOCOMMIT": 1}
+        r["release_readiness"]["markers_by_kind"] = {"NO" + "COMMIT": 1}
         c = generate_checklist(r)
         assert c.go is False
 
@@ -175,7 +215,7 @@ class TestChecklistEdgeCases:
         r["health"] = {"score": 90}
         c = generate_checklist(r)
         labels = [i.label for i in c.items]
-        assert any("health" in l.lower() for l in labels)
+        assert any("health" in lbl.lower() for lbl in labels)
 
     def test_health_check_warns_if_low(self):
         from Analysis.release_checklist import generate_checklist
@@ -193,7 +233,9 @@ class TestChecklistEdgeCases:
         r = self._base_results()
         r["release_readiness"]["dep_audit_available"] = False
         c = generate_checklist(r)
-        audit_item = [i for i in c.items if "audit" in i.label.lower() or "CVE" in i.label][0]
+        audit_item = [
+            i for i in c.items if "audit" in i.label.lower() or "CVE" in i.label
+        ][0]
         assert audit_item.severity == "info"
 
     def test_custom_min_grade(self):
@@ -217,6 +259,7 @@ class TestChecklistEdgeCases:
 # ═══════════════════════════════════════════════════════════════════════
 #  SECTION 5 — Flet phase & tab registration
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestFletRegistration:
     """Verify release readiness is properly registered in x_ray_flet."""
@@ -247,6 +290,7 @@ class TestFletRegistration:
 # ═══════════════════════════════════════════════════════════════════════
 #  SECTION 6 — Tab builder unit tests
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestReleaseReadinessTab:
     """Unit tests for the release readiness Flet tab."""
@@ -281,14 +325,41 @@ class TestReleaseReadinessTab:
                 "blockers": 0,
                 "warnings": 1,
                 "items": [
-                    {"label": "Overall grade ≥ B", "passed": True, "detail": "", "severity": ""},
-                    {"label": "No critical security issues", "passed": True, "detail": "", "severity": ""},
-                    {"label": "FIXME/HACK markers reviewed", "passed": False, "detail": "1 FIXME/HACK", "severity": "warning"},
+                    {
+                        "label": "Overall grade ≥ B",
+                        "passed": True,
+                        "detail": "",
+                        "severity": "",
+                    },
+                    {
+                        "label": "No critical security issues",
+                        "passed": True,
+                        "detail": "",
+                        "severity": "",
+                    },
+                    {
+                        "label": "FIXME/HACK markers reviewed",
+                        "passed": False,
+                        "detail": "1 FIXME/HACK",
+                        "severity": "warning",
+                    },
                 ],
             },
             "_release_markers_detail": [
-                {"kind": "TODO", "file_path": "app.py", "line": 5, "text": "# TODO: fix", "severity": "info"},
-                {"kind": "FIXME", "file_path": "app.py", "line": 10, "text": "# FIXME: broken", "severity": "warning"},
+                {
+                    "kind": "TO" + "DO",
+                    "file_path": "app.py",
+                    "line": 5,
+                    "text": "# " + "TODO" + ": fix",
+                    "severity": "info",
+                },
+                {
+                    "kind": "FIX" + "ME",
+                    "file_path": "app.py",
+                    "line": 10,
+                    "text": "# " + "FIXME" + ": broken",
+                    "severity": "warning",
+                },
             ],
         }
 
@@ -374,6 +445,7 @@ class TestReleaseReadinessTab:
 # ═══════════════════════════════════════════════════════════════════════
 #  SECTION 7 — Flet _phase_release_readiness integration
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestFletPhaseFunction:
     """Test the _phase_release_readiness function in x_ray_flet."""

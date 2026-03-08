@@ -250,9 +250,23 @@ def run_test_gen_phase(
     js_analyses=None,
     health_checks=None,
     output_dir=None,
+    exclude=None,
 ):
     """Generate monkey tests from analysis data. Returns TestGenReport."""
     from Analysis.test_generator import TestGeneratorEngine
+
+    # Filter out functions/classes from excluded paths
+    if exclude:
+        functions = [
+            f
+            for f in (functions or [])
+            if not any(f.file_path.startswith(e) for e in exclude)
+        ]
+        classes = [
+            c
+            for c in (classes or [])
+            if not any(c.file_path.startswith(e) for e in exclude)
+        ]
 
     engine = TestGeneratorEngine(root)
     get_bridge().status("Generating Monkey Tests (X-Ray)...")
@@ -404,7 +418,12 @@ def collect_reports(components: AnalysisComponents) -> dict:
             "blockers": checklist.blockers,
             "warnings": checklist.warnings,
             "items": [
-                {"label": i.label, "passed": i.passed, "detail": i.detail, "severity": i.severity}
+                {
+                    "label": i.label,
+                    "passed": i.passed,
+                    "detail": i.detail,
+                    "severity": i.severity,
+                }
                 for i in checklist.items
             ],
         }

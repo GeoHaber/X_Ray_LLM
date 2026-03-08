@@ -28,12 +28,12 @@ logger = logging.getLogger("X_RAY_RELEASE")
 # ── Marker patterns ────────────────────────────────────────────────────
 
 _MARKER_PATTERNS = [
-    ("FIXME",    Severity.WARNING,  re.compile(r"#\s*FIXME\b", re.IGNORECASE)),
-    ("TODO",     Severity.INFO,     re.compile(r"#\s*TODO\b",  re.IGNORECASE)),
-    ("HACK",     Severity.WARNING,  re.compile(r"#\s*HACK\b",  re.IGNORECASE)),
-    ("XXX",      Severity.WARNING,  re.compile(r"#\s*XXX\b",   re.IGNORECASE)),
+    ("FIXME", Severity.WARNING, re.compile(r"#\s*FIXME\b", re.IGNORECASE)),
+    ("TODO", Severity.INFO, re.compile(r"#\s*TODO\b", re.IGNORECASE)),
+    ("HACK", Severity.WARNING, re.compile(r"#\s*HACK\b", re.IGNORECASE)),
+    ("XXX", Severity.WARNING, re.compile(r"#\s*XXX\b", re.IGNORECASE)),
     ("NOCOMMIT", Severity.CRITICAL, re.compile(r"#\s*NOCOMMIT\b", re.IGNORECASE)),
-    ("TEMP",     Severity.INFO,     re.compile(r"#\s*TEMP\b",  re.IGNORECASE)),
+    ("TEMP", Severity.INFO, re.compile(r"#\s*TEMP\b", re.IGNORECASE)),
 ]
 
 # ── Version file patterns ──────────────────────────────────────────────
@@ -46,28 +46,29 @@ _TOML_VERSION_RE = re.compile(r"""^version\s*=\s*["']([^"']+)["']""", re.MULTILI
 
 # ── Dataclasses ────────────────────────────────────────────────────────
 
+
 @dataclass
 class MarkerHit:
     file_path: str
     line: int
-    kind: str       # FIXME, TODO, HACK, etc.
-    text: str       # the actual comment text
+    kind: str  # marker kind (e.g. "TODO", "HACK")
+    text: str  # the actual comment text
     severity: str
 
 
 @dataclass
 class DocstringGap:
     file_path: str
-    name: str       # function/class name
+    name: str  # function/class name
     line: int
-    kind: str       # "function" or "class"
+    kind: str  # "function" or "class"
 
 
 @dataclass
 class DepVulnerability:
     package: str
     version: str
-    vuln_id: str     # CVE or PYSEC id
+    vuln_id: str  # CVE or PYSEC id
     description: str
     fix_version: str
     severity: str
@@ -75,7 +76,7 @@ class DepVulnerability:
 
 @dataclass
 class VersionMismatch:
-    source: str      # "pyproject.toml", "config.py", etc.
+    source: str  # "pyproject.toml", "config.py", etc.
     version: str
 
 
@@ -84,17 +85,18 @@ class UnpinnedDep:
     file_path: str
     line: int
     package: str
-    spec: str        # e.g. ">=2.0" or "" (no version)
+    spec: str  # e.g. ">=2.0" or "" (no version)
 
 
 @dataclass
 class OrphanModule:
-    file_path: str   # relative path
+    file_path: str  # relative path
 
 
 @dataclass
 class ReleaseReport:
     """Aggregated release readiness results."""
+
     markers: List[MarkerHit] = field(default_factory=list)
     docstring_gaps: List[DocstringGap] = field(default_factory=list)
     docstring_total: int = 0
@@ -110,6 +112,7 @@ class ReleaseReport:
 
 
 # ── Main analyzer ──────────────────────────────────────────────────────
+
 
 class ReleaseReadinessAnalyzer:
     """Pre-release readiness checker — runs all 6 sub-checks."""
@@ -165,7 +168,7 @@ class ReleaseReadinessAnalyzer:
         crit += sum(1 for v in r.vulnerabilities if v.severity == Severity.CRITICAL)
         warn = sum(1 for m in r.markers if m.severity == Severity.WARNING)
         warn += len(r.unpinned_deps)
-        warn += (0 if r.versions_consistent else 1)
+        warn += 0 if r.versions_consistent else 1
         info = sum(1 for m in r.markers if m.severity == Severity.INFO)
         info += len(r.orphan_modules)
         total = crit + warn + info
@@ -191,8 +194,7 @@ class ReleaseReadinessAnalyzer:
             "dep_audit_available": r.dep_audit_available,
             "versions_consistent": r.versions_consistent,
             "version_sources": [
-                {"source": v.source, "version": v.version}
-                for v in r.version_sources
+                {"source": v.source, "version": v.version} for v in r.version_sources
             ],
             "unpinned_deps": len(r.unpinned_deps),
             "orphan_modules": len(r.orphan_modules),
@@ -213,16 +215,66 @@ class ReleaseReadinessAnalyzer:
             for lineno, line in enumerate(lines, 1):
                 for kind, severity, pattern in _MARKER_PATTERNS:
                     if pattern.search(line):
-                        hits.append(MarkerHit(
-                            file_path=rel,
-                            line=lineno,
-                            kind=kind,
-                            text=line.strip(),
-                            severity=severity,
-                        ))
+                        hits.append(
+                            MarkerHit(
+                                file_path=rel,
+                                line=lineno,
+                                kind=kind,
+                                text=line.strip(),
+                                severity=severity,
+                            )
+                        )
         return hits
 
     # ── 2. Docstring coverage ────────────────────────────────────────
+
+    @staticmethod
+    def _tally_symbol(name, has_doc, file_path, line, kind, gaps):
+        """Count one public symbol and record its gap if undocumented."""
+        if name.startswith("_"):
+            return 0, 0
+        if has_doc:
+            return 1, 1
+        gaps.append(DocstringGap(file_path=file_path, name=name, line=line, kind=kind))
+        return 1, 0
+
+    def _docstrings_from_files(self, root, py_files, gaps):
+        """Fallback: parse files to count docstrings when AST data is unavailable."""
+        total = 0
+        documented = 0
+        for fpath in py_files:
+            try:
+                tree = ast.parse(
+                    fpath.read_text(encoding="utf-8", errors="ignore"),
+                    filename=str(fpath),
+                )
+            except SyntaxError:
+                continue
+            rel = self._rel(root, fpath)
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    t, d = self._tally_symbol(
+                        node.name,
+                        ast.get_docstring(node),
+                        rel,
+                        node.lineno,
+                        "function",
+                        gaps,
+                    )
+                elif isinstance(node, ast.ClassDef):
+                    t, d = self._tally_symbol(
+                        node.name,
+                        ast.get_docstring(node),
+                        rel,
+                        node.lineno,
+                        "class",
+                        gaps,
+                    )
+                else:
+                    continue
+                total += t
+                documented += d
+        return total, documented
 
     def _check_docstrings(
         self,
@@ -236,72 +288,31 @@ class ReleaseReadinessAnalyzer:
         documented = 0
         gaps: List[DocstringGap] = []
 
-        # Use pre-extracted AST data if available (faster)
         if functions or classes:
-            for func in (functions or []):
-                if func.name.startswith("_"):
-                    continue
-                total += 1
-                if func.docstring:
-                    documented += 1
-                else:
-                    gaps.append(DocstringGap(
-                        file_path=func.file_path,
-                        name=func.name,
-                        line=func.line_start,
-                        kind="function",
-                    ))
-            for cls in (classes or []):
-                if cls.name.startswith("_"):
-                    continue
-                total += 1
-                if cls.docstring:
-                    documented += 1
-                else:
-                    gaps.append(DocstringGap(
-                        file_path=cls.file_path,
-                        name=cls.name,
-                        line=cls.line_start,
-                        kind="class",
-                    ))
+            for func in functions or []:
+                t, d = self._tally_symbol(
+                    func.name,
+                    func.docstring,
+                    func.file_path,
+                    func.line_start,
+                    "function",
+                    gaps,
+                )
+                total += t
+                documented += d
+            for cls in classes or []:
+                t, d = self._tally_symbol(
+                    cls.name,
+                    cls.docstring,
+                    cls.file_path,
+                    cls.line_start,
+                    "class",
+                    gaps,
+                )
+                total += t
+                documented += d
         else:
-            # Fallback: parse files ourselves
-            for fpath in py_files:
-                try:
-                    tree = ast.parse(
-                        fpath.read_text(encoding="utf-8", errors="ignore"),
-                        filename=str(fpath),
-                    )
-                except SyntaxError:
-                    continue
-                rel = self._rel(root, fpath)
-                for node in ast.walk(tree):
-                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                        if node.name.startswith("_"):
-                            continue
-                        total += 1
-                        if ast.get_docstring(node):
-                            documented += 1
-                        else:
-                            gaps.append(DocstringGap(
-                                file_path=rel,
-                                name=node.name,
-                                line=node.lineno,
-                                kind="function",
-                            ))
-                    elif isinstance(node, ast.ClassDef):
-                        if node.name.startswith("_"):
-                            continue
-                        total += 1
-                        if ast.get_docstring(node):
-                            documented += 1
-                        else:
-                            gaps.append(DocstringGap(
-                                file_path=rel,
-                                name=node.name,
-                                line=node.lineno,
-                                kind="class",
-                            ))
+            total, documented = self._docstrings_from_files(root, py_files, gaps)
 
         report.docstring_total = total
         report.docstring_documented = documented
@@ -313,7 +324,9 @@ class ReleaseReadinessAnalyzer:
         try:
             result = subprocess.run(
                 ["pip-audit", "--format=json", "--progress-spinner=off"],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
             report.dep_audit_available = True
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -326,6 +339,7 @@ class ReleaseReadinessAnalyzer:
 
         try:
             import json
+
             data = json.loads(result.stdout)
         except (ValueError, KeyError):
             return
@@ -335,15 +349,23 @@ class ReleaseReadinessAnalyzer:
             pkg = dep.get("name", "")
             ver = dep.get("version", "")
             for v in dep.get("vulns", []):
-                sev = Severity.CRITICAL if "critical" in v.get("description", "").lower() else Severity.WARNING
-                report.vulnerabilities.append(DepVulnerability(
-                    package=pkg,
-                    version=ver,
-                    vuln_id=v.get("id", ""),
-                    description=v.get("description", "")[:200],
-                    fix_version=v.get("fix_versions", [""])[0] if v.get("fix_versions") else "",
-                    severity=sev,
-                ))
+                sev = (
+                    Severity.CRITICAL
+                    if "critical" in v.get("description", "").lower()
+                    else Severity.WARNING
+                )
+                report.vulnerabilities.append(
+                    DepVulnerability(
+                        package=pkg,
+                        version=ver,
+                        vuln_id=v.get("id", ""),
+                        description=v.get("description", "")[:200],
+                        fix_version=v.get("fix_versions", [""])[0]
+                        if v.get("fix_versions")
+                        else "",
+                        severity=sev,
+                    )
+                )
 
     # ── 4. Version consistency ───────────────────────────────────────
 
@@ -372,10 +394,17 @@ class ReleaseReadinessAnalyzer:
             for p in root.glob(pattern):
                 # Skip venvs and caches
                 parts = p.relative_to(root).parts
-                if any(skip in parts for skip in (
-                    ".venv", "venv", "node_modules", "__pycache__",
-                    ".git", "site-packages",
-                )):
+                if any(
+                    skip in parts
+                    for skip in (
+                        ".venv",
+                        "venv",
+                        "node_modules",
+                        "__pycache__",
+                        ".git",
+                        "site-packages",
+                    )
+                ):
                     continue
                 try:
                     content = p.read_text(encoding="utf-8", errors="ignore")
@@ -396,7 +425,9 @@ class ReleaseReadinessAnalyzer:
         req_files = list(root.glob("requirements*.txt"))
         for req_file in req_files:
             try:
-                lines = req_file.read_text(encoding="utf-8", errors="ignore").splitlines()
+                lines = req_file.read_text(
+                    encoding="utf-8", errors="ignore"
+                ).splitlines()
             except OSError:
                 continue
             rel = str(req_file.relative_to(root)).replace("\\", "/")
@@ -412,26 +443,20 @@ class ReleaseReadinessAnalyzer:
                 pkg = m.group(1)
                 spec = m.group(2).strip()
                 if not spec or not spec.startswith("=="):
-                    report.unpinned_deps.append(UnpinnedDep(
-                        file_path=rel, line=lineno,
-                        package=pkg, spec=spec or "(no version)",
-                    ))
+                    report.unpinned_deps.append(
+                        UnpinnedDep(
+                            file_path=rel,
+                            line=lineno,
+                            package=pkg,
+                            spec=spec or "(no version)",
+                        )
+                    )
 
     # ── 6. Orphan module detector ────────────────────────────────────
 
-    def _detect_orphans(
-        self, root: Path, py_files: List[Path], report: ReleaseReport
-    ):
-        # Build set of all modules and set of all imported modules
-        all_modules: Dict[str, str] = {}  # module_dotted -> relative path
-        for fpath in py_files:
-            rel = self._rel(root, fpath)
-            mod = rel.replace(".py", "").replace("/", ".").replace("\\", ".")
-            if mod.endswith(".__init__"):
-                pkg = mod[: -len(".__init__")]
-                all_modules[pkg] = rel
-            all_modules[mod] = rel
-
+    @staticmethod
+    def _collect_imported_names(py_files: List[Path]) -> set:
+        """Gather all imported module names (and parent packages) from *py_files*."""
         imported: set = set()
         for fpath in py_files:
             try:
@@ -442,35 +467,55 @@ class ReleaseReadinessAnalyzer:
             except SyntaxError:
                 continue
             for node in ast.walk(tree):
+                names: List[str] = []
                 if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        imported.add(alias.name)
-                        # Also mark parent packages
-                        parts = alias.name.split(".")
-                        for i in range(1, len(parts)):
-                            imported.add(".".join(parts[:i]))
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        imported.add(node.module)
-                        parts = node.module.split(".")
-                        for i in range(1, len(parts)):
-                            imported.add(".".join(parts[:i]))
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    names = [node.module]
+                for name in names:
+                    imported.add(name)
+                    parts = name.split(".")
+                    for i in range(1, len(parts)):
+                        imported.add(".".join(parts[:i]))
+        return imported
 
-        # Entry points and special files are never orphans
-        entry_points = {
-            "x_ray_claude", "x_ray_flet", "x_ray_exe", "x_ray_web",
-            "x_ray_desktop", "conftest", "setup", "manage",
+    _ORPHAN_ENTRY_POINTS = frozenset(
+        {
+            "x_ray_claude",
+            "x_ray_flet",
+            "x_ray_exe",
+            "x_ray_web",
+            "x_ray_desktop",
+            "conftest",
+            "setup",
+            "manage",
         }
+    )
+
+    def _detect_orphans(self, root: Path, py_files: List[Path], report: ReleaseReport):
+        # Build set of all modules
+        all_modules: Dict[str, str] = {}  # module_dotted -> relative path
+        for fpath in py_files:
+            rel = self._rel(root, fpath)
+            mod = rel.replace(".py", "").replace("/", ".").replace("\\", ".")
+            if mod.endswith(".__init__"):
+                all_modules[mod[: -len(".__init__")]] = rel
+            all_modules[mod] = rel
+
+        imported = self._collect_imported_names(py_files)
+
         for mod, rel in all_modules.items():
-            # Skip __init__.py (package markers), entry points, tests, generated
             basename = mod.split(".")[-1]
             if basename in ("__init__", "conftest"):
                 continue
-            if basename in entry_points:
+            if basename in self._ORPHAN_ENTRY_POINTS:
                 continue
             if "test" in mod.lower() or "xray_generated" in rel:
                 continue
             if "_scratch" in rel or "_training_ground" in rel:
+                continue
+            # CI scripts and optional extension packages are not imported
+            if ".github" in rel or "_rustified" in rel:
                 continue
             if mod not in imported:
                 report.orphan_modules.append(OrphanModule(file_path=rel))
@@ -519,9 +564,21 @@ class ReleaseReadinessAnalyzer:
     # ── Helpers ──────────────────────────────────────────────────────
 
     @staticmethod
-    def _collect_py_files(root: Path, exclude: Optional[List[str]] = None) -> List[Path]:
-        skip = {".venv", "venv", "node_modules", "__pycache__", ".git",
-                "site-packages", ".tox", ".eggs", "dist", "build"}
+    def _collect_py_files(
+        root: Path, exclude: Optional[List[str]] = None
+    ) -> List[Path]:
+        skip = {
+            ".venv",
+            "venv",
+            "node_modules",
+            "__pycache__",
+            ".git",
+            "site-packages",
+            ".tox",
+            ".eggs",
+            "dist",
+            "build",
+        }
         if exclude:
             skip.update(exclude)
         files = []
@@ -540,12 +597,20 @@ class ReleaseReadinessAnalyzer:
 
     @staticmethod
     def _score_to_letter(score: float) -> str:
-        if score >= 97: return "A+"
-        if score >= 93: return "A"
-        if score >= 90: return "A-"
-        if score >= 87: return "B+"
-        if score >= 83: return "B"
-        if score >= 80: return "B-"
-        if score >= 70: return "C"
-        if score >= 60: return "D"
+        if score >= 97:
+            return "A+"
+        if score >= 93:
+            return "A"
+        if score >= 90:
+            return "A-"
+        if score >= 87:
+            return "B+"
+        if score >= 83:
+            return "B"
+        if score >= 80:
+            return "B-"
+        if score >= 70:
+            return "C"
+        if score >= 60:
+            return "D"
         return "F"

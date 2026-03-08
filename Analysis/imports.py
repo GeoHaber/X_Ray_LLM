@@ -115,7 +115,9 @@ class ImportAnalyzer:
                         base = node.module or ""
                         targets.append(base)
                         for alias in node.names:
-                            targets.append(f"{base}.{alias.name}" if base else alias.name)
+                            targets.append(
+                                f"{base}.{alias.name}" if base else alias.name
+                            )
 
                     for t_mod in targets:
                         if t_mod in all_internal:

@@ -617,7 +617,9 @@ def print_release_readiness_report(report, summary: Dict[str, Any]):
     """Print the ASCII release readiness report."""
     bridge = get_bridge()
     bridge.log(f"\n{SEP}")
-    bridge.log(f"RELEASE READINESS REPORT — Grade: {summary.get('grade', '?')}  Score: {summary.get('score', 0)}/100")
+    bridge.log(
+        f"RELEASE READINESS REPORT — Grade: {summary.get('grade', '?')}  Score: {summary.get('score', 0)}/100"
+    )
     bridge.log(f"{SEP}")
 
     # Markers
@@ -637,7 +639,9 @@ def print_release_readiness_report(report, summary: Dict[str, Any]):
 
     # Docstrings
     doc_pct = summary.get("docstring_coverage_pct", 100)
-    bridge.log(f"\n  Docstring Coverage: {doc_pct:.1f}%  ({summary.get('docstring_documented', 0)}/{summary.get('docstring_total', 0)} public symbols)")
+    bridge.log(
+        f"\n  Docstring Coverage: {doc_pct:.1f}%  ({summary.get('docstring_documented', 0)}/{summary.get('docstring_total', 0)} public symbols)"
+    )
     if summary.get("docstring_gaps", 0) > 0 and report.docstring_gaps:
         bridge.log("  Missing docstrings (sample):")
         for g in report.docstring_gaps[:8]:

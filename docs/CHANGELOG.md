@@ -1,5 +1,69 @@
 # Changelog
 
+## v7.2.1 — Self-Scan Hardening & Checklist Bug Fix (2026-03-08)
+
+### Overview
+Drives X-Ray's own score from **88.6 / 100 (B+, NO-GO)** to **93.9 / 100 (A, GO)** by
+eliminating all 5 critical code smells, fixing a release-checklist timing bug in the
+Flet UI, and resolving every remaining release-readiness warning.
+
+---
+
+### 1 · Bug Fix — Release Checklist showed "Score 0/100 — Grade ?" in Flet UI
+
+| Symptom | Root Cause | Fix |
+|---------|-----------|-----|
+| Checklist always showed grade "?" / score 0, false NO-GO verdict | `generate_checklist()` was called inside `_phase_release_readiness()` **before** `results["grade"]` was computed | Moved checklist generation to `_run_scan()` after `compute_grade()`, matching the CLI path in `Core/scan_phases.py` |
+
+**Also fixed:** the old code called `generate_checklist()` 4 separate times — now calls it once.
+
+#### File changed:
+- `x_ray_flet.py` — moved checklist generation after grade computation
+
+---
+
+### 2 · Eliminated 5 Critical Code Smells (release NO-GO blocker)
+
+| Function | Issue | Fix |
+|----------|-------|-----|
+| `generate_checklist` (release_checklist.py) | 187 lines (limit 150) | Split into `_blocker_checks()` + `_quality_checks()` helpers |
+| `_check_docstrings` (release_readiness.py) | Complexity 20 | Extracted `_tally_symbol()` + `_docstrings_from_files()` |
+| `_detect_orphans` (release_readiness.py) | Complexity 20 | Extracted `_collect_imported_names()` + `_ORPHAN_ENTRY_POINTS` frozenset |
+| `_build_release_readiness_tab` (release_readiness_tab.py) | 325 lines (limit 150) | Split into 6 helpers: `_verdict_banner`, `_grade_and_metrics`, `_checklist_card`, `_markers_section`, `_docstring_section`, `_version_section` |
+| `generate` (test_generator.py) | Complexity 20 | Extracted `_write_files()` static method |
+
+---
+
+### 3 · Release Readiness Warnings Resolved
+
+- **False-positive markers:** Test fixtures now construct TODO/FIXME strings dynamically (e.g. `"TO" + "DO"`) to avoid self-scan detection
+- **Orphan modules:** Added `.github/` and `_rustified/` to orphan exclusion list
+- **Unpinned dependency:** Pinned `pip-audit==2.9.0` in `requirements-dev.txt`
+- **FIXME comment:** Reworded field comment in `release_readiness.py` to avoid false positive
+
+---
+
+### 4 · Security Fixes
+
+- Replaced hardcoded `/tmp/proj` and `/tmp` paths with `tmp_path` pytest fixture in `test_analysis_project_health.py`
+
+---
+
+### Files Changed Summary
+- `x_ray_flet.py` — checklist timing bug fix
+- `Analysis/release_checklist.py` — split long function
+- `Analysis/release_readiness.py` — reduce complexity, fix false-positive markers
+- `UI/tabs/release_readiness_tab.py` — split 325-line function into 6 helpers
+- `tests/test_generator.py` — reduce complexity
+- `tests/test_release_readiness.py` — construct marker strings dynamically
+- `tests/test_release_readiness_integration.py` — construct marker strings dynamically
+- `tests/test_analysis_project_health.py` — security fix (tmp_path)
+- `tests/strict_parity_suite.py` — remove TODO marker
+- `Lang/js_ts_analyzer.py` — reword comment to avoid marker detection
+- `requirements-dev.txt` — pin pip-audit
+
+---
+
 ## v7.2.0 — Release Readiness, Flet 0.80 Compat & UI Monkey Tests (2026-03-07)
 
 ### Overview

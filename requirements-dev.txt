@@ -1,6 +1,6 @@
 # Dev dependencies — test, type check, format, lint, security
 # Upper bounds for reproducibility; Dependabot proposes updates.
 -r requirements.txt
-pyright>=1.1.0,<2
-pip-audit>=2.0.0,<3
-bandit>=1.7.0,<2
+pyright==1.1.408
+pip-audit==2.9.0
+bandit==1.9.4

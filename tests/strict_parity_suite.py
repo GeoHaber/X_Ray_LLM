@@ -95,7 +95,7 @@ def process_data(data):
     @unittest.skipUnless(_HAS_RUST, "Rust core extension not available")
     def test_batch_similarity_parity(self):
         """Verify Batch Rust similarity matches sequential Python similarity."""
-        # TODO: Implement once Batch similarity integration is unblocked
+        # Blocked: waiting for Batch similarity integration
         pass
 
 

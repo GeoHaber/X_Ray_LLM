@@ -36,6 +36,8 @@ AUTO_EXCLUDE: List[str] = [
     "_scratch",
     ".github",
     "_OLD",
+    "xray_generated",
+    "_generated_tests",
 ]
 
 

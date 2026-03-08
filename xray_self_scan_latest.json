@@ -1,854 +1,351 @@
 {
+  "smells": {
+    "total": 10601,
+    "critical": 4,
+    "warning": 15,
+    "info": 10582,
+    "by_category": {
+      "long-function": 3,
+      "complex-function": 6,
+      "deep-nesting": 5,
+      "too-many-branches": 3,
+      "too-many-returns": 2,
+      "missing-docstring": 21,
+      "dataclass-candidate": 9,
+      "complex-comprehension": 12,
+      "import-inside-function": 10394,
+      "boolean-blindness": 4,
+      "magic-number": 36,
+      "missing-class-docstring": 25,
+      "utility-class-name": 1,
+      "missing-type-hints": 68,
+      "dead-function": 12
+    },
+    "worst_files": {
+      "tests/test_xray_tests_test_xray_import_smoke.py": 249,
+      "tests/test_xray_tests_test_xray_claude.py": 247,
+      "tests/test_xray_tests_test_xray_tests_test_xray_claude.py": 247,
+      "tests/test_xray_tests_test_xray_tests_test_xray_tests_test_xray_claude.py": 247,
+      "tests/test_xray_tests_test_transpiler.py": 181,
+      "tests/test_xray_tests_test_xray_tests_test_transpiler.py": 181,
+      "tests/test_xray_tests_test_xray_tests_test_xray_tests_test_transpiler.py": 181,
+      "tests/test_xray_tests_test_xray_tests_test_xray_UI.py": 130,
+      "tests/test_xray_tests_test_xray_tests_test_xray_import_smoke.py": 128,
+      "tests/test_xray_tests_test_xray_UI.py": 114
+    }
+  },
+  "duplicates": {
+    "total_groups": 26,
+    "exact_duplicates": 0,
+    "structural_duplicates": 1,
+    "near_duplicates": 16,
+    "semantic_duplicates": 9,
+    "total_functions_involved": 61,
+    "avg_similarity": 0.824
+  },
+  "format": {
+    "total": 235,
+    "critical": 0,
+    "warning": 235,
+    "info": 0,
+    "fixable": 235,
+    "source": "ruff-format"
+  },
+  "lint": {
+    "total": 289,
+    "critical": 284,
+    "warning": 5,
+    "info": 0,
+    "fixable": 0,
+    "by_rule": {
+      "F811": 284,
+      "E402": 4,
+      "E741": 1
+    },
+    "worst_files": {
+      "tests\\test_xray_Core_ui_bridge.py": 24,
+      "tests\\test_xray_tests_test_xray_Core_ui_bridge.py": 24,
+      "tests\\test_xray_tests_test_xray_tests_test_xray_Core_ui_bridge.py": 24,
+      "tests\\test_xray_Analysis_transpiler.py": 21,
+      "tests\\test_xray_tests_test_xray_Analysis_transpiler.py": 21,
+      "tests\\test_xray_tests_test_xray_tests_test_xray_Analysis_transpiler.py": 21,
+      "tests\\test_xray_tests_test_generator.py": 10,
+      "tests\\test_xray_tests_test_xray_tests_test_generator.py": 10,
+      "tests\\test_xray_tests_test_xray_tests_test_xray_tests_test_generator.py": 10,
+      "tests\\test_xray_Analysis_NexusMode_adapters.py": 8
+    },
+    "source": "ruff"
+  },
+  "security": {
+    "total": 87,
+    "critical": 0,
+    "warning": 2,
+    "info": 85,
+    "fixable": 0,
+    "by_rule": {
+      "B603": 32,
+      "B110": 22,
+      "B607": 15,
+      "B311": 9,
+      "B112": 5,
+      "B108": 2,
+      "B101": 1,
+      "B105": 1
+    },
+    "worst_files": {
+      "_mothership\\hardware_detection.py": 17,
+      "tests\\test_parity_py_vs_rust.py": 10,
+      "tests\\rust_harness\\benchmark.py": 6,
+      "tests\\test_monkey_torture.py": 6,
+      "tests\\test_transpiler.py": 4,
+      "x_ray_flet.py": 4,
+      "Analysis\\auto_rustify.py": 3,
+      "Core\\ui_bridge.py": 3,
+      "tests\\test_analysis_project_health.py": 2,
+      "Analysis\\release_readiness.py": 2
+    },
+    "source": "bandit",
+    "by_confidence": {
+      "MEDIUM": 3,
+      "HIGH": 84
+    }
+  },
+  "web": {
+    "total": 0,
+    "critical": 0,
+    "warning": 0,
+    "info": 0,
+    "by_category": {},
+    "worst_files": {},
+    "files_scanned": 0,
+    "total_functions": 0,
+    "react_components": 0,
+    "console_logs_total": 0,
+    "package_categories": {}
+  },
+  "health": {
+    "total": 0,
+    "critical": 0,
+    "warning": 0,
+    "info": 0,
+    "health_score": 100,
+    "health_grade": "A+",
+    "checks_passed": 10,
+    "checks_total": 10,
+    "files_created": []
+  },
+  "imports": {
+    "total": 38,
+    "critical": 0,
+    "warning": 0,
+    "info": 38,
+    "by_category": {
+      "missing-__all__": 38
+    },
+    "source": "xray-imports"
+  },
+  "typecheck": {
+    "total": 222,
+    "critical": 0,
+    "warning": 0,
+    "info": 222,
+    "fixable": 0,
+    "by_rule": {
+      "reportAttributeAccessIssue": 160,
+      "reportArgumentType": 53,
+      "reportOptionalMemberAccess": 9
+    },
+    "worst_files": {
+      "Analysis\\transpiler.py": 82,
+      "Analysis\\transpiler_legacy.py": 45,
+      "Analysis\\ast_utils.py": 11,
+      "Core\\llm_manager.py": 7,
+      "x_ray_claude.py": 5,
+      "Analysis\\duplicates.py": 4,
+      "Core\\ui_bridge.py": 4,
+      "Core\\utils.py": 4,
+      "UI\\tabs\\release_readiness_tab.py": 4,
+      "UI\\tabs\\shared.py": 4
+    },
+    "source": "pyright"
+  },
+  "release_readiness": {
+    "total": 20,
+    "critical": 1,
+    "warning": 8,
+    "info": 11,
+    "markers": 12,
+    "markers_by_kind": {
+      "FIXME": 3,
+      "TODO": 8,
+      "NOCOMMIT": 1
+    },
+    "docstring_coverage_pct": 91.2,
+    "docstring_total": 12657,
+    "docstring_documented": 11539,
+    "docstring_gaps": 1118,
+    "vulnerabilities": 0,
+    "dep_audit_available": false,
+    "versions_consistent": true,
+    "version_sources": [
+      {
+        "source": "pyproject.toml",
+        "version": "7.0.0"
+      },
+      {
+        "source": "Core/config.py",
+        "version": "7.0.0"
+      }
+    ],
+    "unpinned_deps": 5,
+    "orphan_modules": 3,
+    "score": 91.3,
+    "grade": "A-"
+  },
   "grade": {
-    "score": 3.5,
+    "score": 26.1,
     "letter": "F",
     "breakdown": {
       "smells": {
-        "penalty": 7.9,
-        "critical": 10,
-        "warning": 68,
-        "info": 196
+        "penalty": 30,
+        "critical": 4,
+        "warning": 15,
+        "info": 10582
       },
       "duplicates": {
-        "penalty": 15,
-        "groups": 152
+        "penalty": 2.6,
+        "groups": 26
+      },
+      "format": {
+        "penalty": 10,
+        "warning": 235
       },
       "lint": {
         "penalty": 25,
-        "critical": 158,
-        "warning": 59,
-        "info": 60,
-        "fixable": 96
+        "critical": 284,
+        "warning": 5,
+        "info": 0,
+        "fixable": 0
       },
       "security": {
-        "penalty": 0.4,
+        "penalty": 1.0,
+        "critical": 0,
+        "warning": 2,
+        "info": 85
+      },
+      "web": {
+        "penalty": 0.0,
         "critical": 0,
         "warning": 0,
-        "info": 75
+        "info": 0
+      },
+      "health": {
+        "penalty": 0.0,
+        "health_score": 100,
+        "checks_failed": 0
+      },
+      "imports": {
+        "penalty": 0.2,
+        "warning": 0,
+        "info": 38
+      },
+      "typecheck": {
+        "penalty": 1.1,
+        "critical": 0,
+        "warning": 0,
+        "info": 222
+      },
+      "release_readiness": {
+        "penalty": 4.0,
+        "critical": 1,
+        "warning": 8,
+        "info": 11
       }
     },
     "tools_run": [
       "X-Ray Smells",
       "X-Ray Duplicates",
+      "Ruff Format",
       "Ruff Lint",
       "Bandit Security",
-      "X-Ray Smells",
-      "X-Ray Duplicates",
-      "Ruff Lint",
-      "Bandit Security"
+      "Web Smells (JS/TS)",
+      "Project Health",
+      "Import Health (X-Ray)",
+      "Pyright Type Check",
+      "Release Readiness"
     ]
   },
-  "files": 221,
-  "functions": 5212,
-  "classes": 306,
-  "smells_summary": {
-    "total": 274,
-    "critical": 10,
-    "warning": 68,
-    "info": 196,
-    "by_category": {
-      "god-class": 3,
-      "long-function": 22,
-      "complex-function": 21,
-      "deep-nesting": 11,
-      "too-many-returns": 11,
-      "too-many-branches": 5,
-      "too-many-params": 4,
-      "large-class": 1,
-      "missing-docstring": 41,
-      "dataclass-candidate": 9,
-      "boolean-blindness": 41,
-      "complex-comprehension": 90,
-      "missing-class-docstring": 14,
-      "utility-class-name": 1
-    },
-    "worst_files": {
-      "_rustified_exe_build/test_rust_verify.py": 79,
-      "Analysis/transpiler.py": 24,
-      "Analysis/test_generator.py": 15,
-      "Analysis/auto_rustify.py": 10,
-      "Analysis/smells.py": 9,
-      "tests/test_xray_claude.py": 9,
-      "x_ray_flet.py": 8,
-      "Analysis/NexusMode/orchestrator.py": 7,
-      "Lang/js_ts_analyzer.py": 6,
-      "Analysis/ast_utils.py": 6
-    }
-  },
-  "duplicates_summary": {
-    "total_groups": 152,
-    "exact_duplicates": 7,
-    "structural_duplicates": 4,
-    "near_duplicates": 47,
-    "semantic_duplicates": 94,
-    "total_functions_involved": 1341,
-    "avg_similarity": 0.684
-  },
-  "lint_summary": {
-    "total": 277,
-    "critical": 158,
-    "warning": 59,
-    "info": 60,
-    "fixable": 96,
-    "by_rule": {
-      "F811": 131,
-      "F401": 47,
-      "F541": 30,
-      "F821": 27,
-      "E701": 21,
-      "invalid-syntax": 7,
-      "F841": 6,
-      "E402": 3,
-      "F601": 2,
-      "E401": 2,
-      "E741": 1
-    },
-    "worst_files": {
-      "Analysis\\test_generator.py": 30,
-      "_generated_tests\\tests\\test_xray_Core_ui_bridge.py": 24,
-      "_generated_tests\\tests\\test_xray_Analysis_transpiler.py": 21,
-      "Analysis\\transpiler.py": 19,
-      "x_ray_ui.py": 14,
-      "Analysis\\reporting.py": 11,
-      "_generated_tests\\tests\\test_xray_tests_test_xray_claude.py": 11,
-      "x_ray_flet.py": 11,
-      "Analysis\\auto_rustify.py": 10,
-      "_generated_tests\\tests\\test_xray_Analysis_test_generator.py": 10
-    },
-    "source": "ruff"
-  },
-  "security_summary": {
-    "total": 75,
-    "critical": 0,
-    "warning": 0,
-    "info": 75,
-    "fixable": 0,
-    "by_rule": {
-      "B603": 34,
-      "B110": 17,
-      "B607": 15,
-      "B311": 6,
-      "B112": 3
-    },
-    "worst_files": {
-      "_mothership\\hardware_detection.py": 17,
-      "tests\\test_parity_py_vs_rust.py": 10,
-      "Analysis\\auto_rustify.py": 6,
-      "tests\\rust_harness\\benchmark.py": 6,
-      "tests\\test_monkey_torture.py": 6,
-      "tests\\test_transpiler.py": 4,
-      "Core\\ui_bridge.py": 3,
-      "x_ray_flet.py": 3,
-      "Analysis\\smell_fixer.py": 2,
-      "Core\\scan_context.py": 2
-    },
-    "source": "bandit",
-    "by_confidence": {
-      "HIGH": 75
-    }
-  },
-  "critical_smells": [
-    {
-      "severity": "critical",
-      "category": "god-class",
-      "name": "ProjectHealthAnalyzer",
-      "file": "Analysis/project_health.py",
-      "line": 85,
-      "message": "Class 'ProjectHealthAnalyzer' has 16 methods (limit: 15)",
-      "suggestion": "Split into smaller classes with single responsibility. Consider delegation or mixins."
-    },
-    {
-      "severity": "critical",
-      "category": "long-function",
-      "name": "_run_function_checks",
-      "file": "Analysis/smells.py",
-      "line": 177,
-      "message": "Function '_run_function_checks' is 191 lines (limit: 120)",
-      "suggestion": "Split into smaller focused functions. Extract logical blocks."
-    },
-    {
-      "severity": "critical",
-      "category": "long-function",
-      "name": "_gen_module_tests",
-      "file": "Analysis/test_generator.py",
-      "line": 187,
-      "message": "Function '_gen_module_tests' is 151 lines (limit: 120)",
-      "suggestion": "Split into smaller focused functions. Extract logical blocks."
-    },
-    {
-      "severity": "critical",
-      "category": "complex-function",
-      "name": "_gen_module_tests",
-      "file": "Analysis/test_generator.py",
-      "line": 187,
-      "message": "Function '_gen_module_tests' has cyclomatic complexity 27 (limit: 20)",
-      "suggestion": "Decompose into smaller, single-responsibility functions."
-    },
-    {
-      "severity": "critical",
-      "category": "god-class",
-      "name": "IRBuilder",
-      "file": "Analysis/transpiler.py",
-      "line": 232,
-      "message": "Class 'IRBuilder' has 55 methods (limit: 15)",
-      "suggestion": "Split into smaller classes with single responsibility. Consider delegation or mixins."
-    },
-    {
-      "severity": "critical",
-      "category": "long-function",
-      "name": "build_function",
-      "file": "Analysis/transpiler.py",
-      "line": 898,
-      "message": "Function 'build_function' is 157 lines (limit: 120)",
-      "suggestion": "Split into smaller focused functions. Extract logical blocks."
-    },
-    {
-      "severity": "critical",
-      "category": "deep-nesting",
-      "name": "build_function",
-      "file": "Analysis/transpiler.py",
-      "line": 898,
-      "message": "Function 'build_function' has nesting depth 12 (limit: 6)",
-      "suggestion": "Use early returns, guard clauses, or extract nested blocks."
-    },
-    {
-      "severity": "critical",
-      "category": "complex-function",
-      "name": "build_function",
-      "file": "Analysis/transpiler.py",
-      "line": 898,
-      "message": "Function 'build_function' has cyclomatic complexity 79 (limit: 20)",
-      "suggestion": "Decompose into smaller, single-responsibility functions."
-    },
-    {
-      "severity": "critical",
-      "category": "god-class",
-      "name": "WebSmellDetector",
-      "file": "Analysis/web_smells.py",
-      "line": 48,
-      "message": "Class 'WebSmellDetector' has 16 methods (limit: 15)",
-      "suggestion": "Split into smaller classes with single responsibility. Consider delegation or mixins."
-    },
-    {
-      "severity": "critical",
-      "category": "deep-nesting",
-      "name": "_find_matching_brace",
-      "file": "Lang/js_ts_analyzer.py",
-      "line": 186,
-      "message": "Function '_find_matching_brace' has nesting depth 7 (limit: 6)",
-      "suggestion": "Use early returns, guard clauses, or extract nested blocks."
-    },
-    {
-      "severity": "warning",
-      "category": "deep-nesting",
-      "name": "identify_targets",
-      "file": "Analysis/NexusMode/orchestrator.py",
-      "line": 60,
-      "message": "Function 'identify_targets' has nesting depth 5 (limit: 4)",
-      "suggestion": "Flatten with early returns or extract helper functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "identify_targets",
-      "file": "Analysis/NexusMode/orchestrator.py",
-      "line": 60,
-      "message": "Function 'identify_targets' has cyclomatic complexity 10 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "deep-nesting",
-      "name": "verify_and_build",
-      "file": "Analysis/NexusMode/orchestrator.py",
-      "line": 235,
-      "message": "Function 'verify_and_build' has nesting depth 4 (limit: 4)",
-      "suggestion": "Flatten with early returns or extract helper functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "extract_functions_from_file",
-      "file": "Analysis/ast_utils.py",
-      "line": 131,
-      "message": "Function 'extract_functions_from_file' has cyclomatic complexity 10 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-returns",
-      "name": "py_type_to_rust",
-      "file": "Analysis/auto_rustify.py",
-      "line": 289,
-      "message": "Function 'py_type_to_rust' has 8 return statements (limit: 5)",
-      "suggestion": "Consolidate exit points. Consider a result variable."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_build_main_rs",
-      "file": "Analysis/auto_rustify.py",
-      "line": 1084,
-      "message": "Function '_build_main_rs' is 72 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "analyze",
-      "file": "Analysis/project_health.py",
-      "line": 104,
-      "message": "Function 'analyze' is 67 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "print_web_report",
-      "file": "Analysis/reporting.py",
-      "line": 429,
-      "message": "Function 'print_web_report' has cyclomatic complexity 10 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-returns",
-      "name": "get",
-      "file": "Analysis/scan_cache.py",
-      "line": 91,
-      "message": "Function 'get' has 6 return statements (limit: 5)",
-      "suggestion": "Consolidate exit points. Consider a result variable."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-returns",
-      "name": "_comment_debug_prints",
-      "file": "Analysis/smell_fixer.py",
-      "line": 175,
-      "message": "Function '_comment_debug_prints' has 5 return statements (limit: 5)",
-      "suggestion": "Consolidate exit points. Consider a result variable."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "_check_magic_numbers",
-      "file": "Analysis/smells.py",
-      "line": 30,
-      "message": "Function '_check_magic_numbers' has cyclomatic complexity 10 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "_run_function_checks",
-      "file": "Analysis/smells.py",
-      "line": 177,
-      "message": "Function '_run_function_checks' has cyclomatic complexity 15 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-branches",
-      "name": "_run_function_checks",
-      "file": "Analysis/smells.py",
-      "line": 177,
-      "message": "Function '_run_function_checks' has 13 branches (limit: 8)",
-      "suggestion": "Simplify with lookup tables, strategy pattern, or early returns."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_run_class_checks",
-      "file": "Analysis/smells.py",
-      "line": 370,
-      "message": "Function '_run_class_checks' is 90 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "_run_class_checks",
-      "file": "Analysis/smells.py",
-      "line": 370,
-      "message": "Function '_run_class_checks' has cyclomatic complexity 12 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-branches",
-      "name": "_gen_module_tests",
-      "file": "Analysis/test_generator.py",
-      "line": 187,
-      "message": "Function '_gen_module_tests' has 13 branches (limit: 8)",
-      "suggestion": "Simplify with lookup tables, strategy pattern, or early returns."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_gen_smell_regression",
-      "file": "Analysis/test_generator.py",
-      "line": 341,
-      "message": "Function '_gen_smell_regression' is 80 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "deep-nesting",
-      "name": "_gen_smell_regression",
-      "file": "Analysis/test_generator.py",
-      "line": 341,
-      "message": "Function '_gen_smell_regression' has nesting depth 4 (limit: 4)",
-      "suggestion": "Flatten with early returns or extract helper functions."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_gen_structure_tests",
-      "file": "Analysis/test_generator.py",
-      "line": 424,
-      "message": "Function '_gen_structure_tests' is 62 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_gen_module_tests",
-      "file": "Analysis/test_generator.py",
-      "line": 578,
-      "message": "Function '_gen_module_tests' is 77 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "_gen_module_tests",
-      "file": "Analysis/test_generator.py",
-      "line": 578,
-      "message": "Function '_gen_module_tests' has cyclomatic complexity 10 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "deep-nesting",
-      "name": "detect_project_type",
-      "file": "Analysis/test_generator.py",
-      "line": 765,
-      "message": "Function 'detect_project_type' has nesting depth 5 (limit: 4)",
-      "suggestion": "Flatten with early returns or extract helper functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "detect_project_type",
-      "file": "Analysis/test_generator.py",
-      "line": 765,
-      "message": "Function 'detect_project_type' has cyclomatic complexity 13 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-returns",
-      "name": "detect_project_type",
-      "file": "Analysis/test_generator.py",
-      "line": 765,
-      "message": "Function 'detect_project_type' has 6 return statements (limit: 5)",
-      "suggestion": "Consolidate exit points. Consider a result variable."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "generate",
-      "file": "Analysis/test_generator.py",
-      "line": 800,
-      "message": "Function 'generate' is 64 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "generate",
-      "file": "Analysis/test_generator.py",
-      "line": 800,
-      "message": "Function 'generate' has cyclomatic complexity 14 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-params",
-      "name": "generate",
-      "file": "Analysis/test_generator.py",
-      "line": 800,
-      "message": "Function 'generate' has 6 parameters (limit: 6)",
-      "suggestion": "Group related parameters into a dataclass or config object."
-    },
-    {
-      "severity": "warning",
-      "category": "large-class",
-      "name": "IRBuilder",
-      "file": "Analysis/transpiler.py",
-      "line": 232,
-      "message": "Class 'IRBuilder' is 823 lines (limit: 500)",
-      "suggestion": "Extract logical groups of methods into separate classes or modules."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-returns",
-      "name": "_expr_name_const",
-      "file": "Analysis/transpiler.py",
-      "line": 255,
-      "message": "Function '_expr_name_const' has 5 return statements (limit: 5)",
-      "suggestion": "Consolidate exit points. Consider a result variable."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-returns",
-      "name": "_expr_compare",
-      "file": "Analysis/transpiler.py",
-      "line": 303,
-      "message": "Function '_expr_compare' has 7 return statements (limit: 5)",
-      "suggestion": "Consolidate exit points. Consider a result variable."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "_expr_call_attr",
-      "file": "Analysis/transpiler.py",
-      "line": 405,
-      "message": "Function '_expr_call_attr' has cyclomatic complexity 10 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-returns",
-      "name": "_expr_call_attr",
-      "file": "Analysis/transpiler.py",
-      "line": 405,
-      "message": "Function '_expr_call_attr' has 5 return statements (limit: 5)",
-      "suggestion": "Consolidate exit points. Consider a result variable."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "_expr_call_builtin",
-      "file": "Analysis/transpiler.py",
-      "line": 455,
-      "message": "Function '_expr_call_builtin' has cyclomatic complexity 17 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-returns",
-      "name": "_expr_call_builtin",
-      "file": "Analysis/transpiler.py",
-      "line": 455,
-      "message": "Function '_expr_call_builtin' has 16 return statements (limit: 5)",
-      "suggestion": "Consolidate exit points. Consider a result variable."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-branches",
-      "name": "_expr_call_builtin",
-      "file": "Analysis/transpiler.py",
-      "line": 455,
-      "message": "Function '_expr_call_builtin' has 15 branches (limit: 8)",
-      "suggestion": "Simplify with lookup tables, strategy pattern, or early returns."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-returns",
-      "name": "_expr_slice",
-      "file": "Analysis/transpiler.py",
-      "line": 601,
-      "message": "Function '_expr_slice' has 5 return statements (limit: 5)",
-      "suggestion": "Consolidate exit points. Consider a result variable."
-    },
-    {
-      "severity": "warning",
-      "category": "deep-nesting",
-      "name": "_stmt_assign",
-      "file": "Analysis/transpiler.py",
-      "line": 697,
-      "message": "Function '_stmt_assign' has nesting depth 4 (limit: 4)",
-      "suggestion": "Flatten with early returns or extract helper functions."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-returns",
-      "name": "_stmt_assign",
-      "file": "Analysis/transpiler.py",
-      "line": 697,
-      "message": "Function '_stmt_assign' has 5 return statements (limit: 5)",
-      "suggestion": "Consolidate exit points. Consider a result variable."
-    },
-    {
-      "severity": "warning",
-      "category": "deep-nesting",
-      "name": "_wrap_returns_in_some",
-      "file": "Analysis/transpiler.py",
-      "line": 885,
-      "message": "Function '_wrap_returns_in_some' has nesting depth 5 (limit: 4)",
-      "suggestion": "Flatten with early returns or extract helper functions."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-returns",
-      "name": "build_function",
-      "file": "Analysis/transpiler.py",
-      "line": 898,
-      "message": "Function 'build_function' has 6 return statements (limit: 5)",
-      "suggestion": "Consolidate exit points. Consider a result variable."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-branches",
-      "name": "build_function",
-      "file": "Analysis/transpiler.py",
-      "line": 898,
-      "message": "Function 'build_function' has 64 branches (limit: 8)",
-      "suggestion": "Simplify with lookup tables, strategy pattern, or early returns."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-params",
-      "name": "_add",
-      "file": "Analysis/web_smells.py",
-      "line": 284,
-      "message": "Function '_add' has 9 parameters (limit: 6)",
-      "suggestion": "Group related parameters into a dataclass or config object."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "run_scan",
-      "file": "Core/scan_context.py",
-      "line": 384,
-      "message": "Function 'run_scan' is 104 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "deep-nesting",
-      "name": "run_scan",
-      "file": "Core/scan_context.py",
-      "line": 384,
-      "message": "Function 'run_scan' has nesting depth 4 (limit: 4)",
-      "suggestion": "Flatten with early returns or extract helper functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "run_scan",
-      "file": "Core/scan_context.py",
-      "line": 384,
-      "message": "Function 'run_scan' has cyclomatic complexity 16 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-params",
-      "name": "run_test_gen_phase",
-      "file": "Core/scan_phases.py",
-      "line": 185,
-      "message": "Function 'run_test_gen_phase' has 7 parameters (limit: 6)",
-      "suggestion": "Group related parameters into a dataclass or config object."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "collect_reports",
-      "file": "Core/scan_phases.py",
-      "line": 232,
-      "message": "Function 'collect_reports' has cyclomatic complexity 11 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "progress",
-      "file": "Core/ui_bridge.py",
-      "line": 177,
-      "message": "Function 'progress' has cyclomatic complexity 10 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "_find_matching_brace",
-      "file": "Lang/js_ts_analyzer.py",
-      "line": 186,
-      "message": "Function '_find_matching_brace' has cyclomatic complexity 10 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "deep-nesting",
-      "name": "_count_nesting",
-      "file": "Lang/js_ts_analyzer.py",
-      "line": 221,
-      "message": "Function '_count_nesting' has nesting depth 4 (limit: 4)",
-      "suggestion": "Flatten with early returns or extract helper functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "_extract_imports",
-      "file": "Lang/js_ts_analyzer.py",
-      "line": 339,
-      "message": "Function '_extract_imports' has cyclomatic complexity 11 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_extract_functions",
-      "file": "Lang/js_ts_analyzer.py",
-      "line": 385,
-      "message": "Function '_extract_functions' is 110 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "_extract_functions",
-      "file": "Lang/js_ts_analyzer.py",
-      "line": 385,
-      "message": "Function '_extract_functions' has cyclomatic complexity 10 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "deep-nesting",
-      "name": "get_cc",
-      "file": "find_crits.py",
-      "line": 22,
-      "message": "Function 'get_cc' has nesting depth 5 (limit: 4)",
-      "suggestion": "Flatten with early returns or extract helper functions."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_run_full_scan",
-      "file": "x_ray_claude.py",
-      "line": 686,
-      "message": "Function '_run_full_scan' is 89 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "_run_full_scan",
-      "file": "x_ray_claude.py",
-      "line": 686,
-      "message": "Function '_run_full_scan' has cyclomatic complexity 13 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-branches",
-      "name": "_run_full_scan",
-      "file": "x_ray_claude.py",
-      "line": 686,
-      "message": "Function '_run_full_scan' has 9 branches (limit: 8)",
-      "suggestion": "Simplify with lookup tables, strategy pattern, or early returns."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "main",
-      "file": "x_ray_exe.py",
-      "line": 457,
-      "message": "Function 'main' is 71 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_run_scan",
-      "file": "x_ray_flet.py",
-      "line": 452,
-      "message": "Function '_run_scan' is 73 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "complex-function",
-      "name": "_run_scan",
-      "file": "x_ray_flet.py",
-      "line": 452,
-      "message": "Function '_run_scan' has cyclomatic complexity 11 (limit: 10)",
-      "suggestion": "Simplify branching logic. Consider lookup tables or strategy pattern."
-    },
-    {
-      "severity": "warning",
-      "category": "too-many-params",
-      "name": "_run_scan",
-      "file": "x_ray_flet.py",
-      "line": 452,
-      "message": "Function '_run_scan' has 7 parameters (limit: 6)",
-      "suggestion": "Group related parameters into a dataclass or config object."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_generate_graph_html",
-      "file": "x_ray_flet.py",
-      "line": 1182,
-      "message": "Function '_generate_graph_html' is 113 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_build_graph_tab",
-      "file": "x_ray_flet.py",
-      "line": 1372,
-      "message": "Function '_build_graph_tab' is 80 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_start_scan_handler",
-      "file": "x_ray_flet.py",
-      "line": 2289,
-      "message": "Function '_start_scan_handler' is 62 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "main",
-      "file": "x_ray_flet.py",
-      "line": 2645,
-      "message": "Function 'main' is 64 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_run_scan",
-      "file": "x_ray_ui.py",
-      "line": 549,
-      "message": "Function '_run_scan' is 65 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "_render_sidebar",
-      "file": "x_ray_ui.py",
-      "line": 1859,
-      "message": "Function '_render_sidebar' is 68 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    },
-    {
-      "severity": "warning",
-      "category": "long-function",
-      "name": "main",
-      "file": "x_ray_web.py",
-      "line": 88,
-      "message": "Function 'main' is 65 lines (limit: 60)",
-      "suggestion": "Consider splitting into smaller functions."
-    }
-  ]
+  "release_checklist": {
+    "go": false,
+    "blockers": 3,
+    "warnings": 3,
+    "items": [
+      {
+        "label": "Overall grade \u2265 B",
+        "passed": false,
+        "detail": "Score 26.1/100 \u2014 Grade F",
+        "severity": "blocker"
+      },
+      {
+        "label": "No critical security issues",
+        "passed": true,
+        "detail": "",
+        "severity": ""
+      },
+      {
+        "label": "Critical issues \u2264 0",
+        "passed": false,
+        "detail": "288 critical issue(s) across smells/lint/typecheck",
+        "severity": "blocker"
+      },
+      {
+        "label": "No NOCOMMIT markers",
+        "passed": false,
+        "detail": "1 NOCOMMIT comment(s) found",
+        "severity": "blocker"
+      },
+      {
+        "label": "FIXME/HACK markers reviewed",
+        "passed": false,
+        "detail": "3 FIXME/HACK + 8 TODO comment(s)",
+        "severity": "warning"
+      },
+      {
+        "label": "Docstring coverage \u2265 40%",
+        "passed": true,
+        "detail": "91.2% documented (11539/12657)",
+        "severity": ""
+      },
+      {
+        "label": "Dependency audit (pip-audit)",
+        "passed": false,
+        "detail": "pip-audit not installed \u2014 install with: pip install pip-audit",
+        "severity": "info"
+      },
+      {
+        "label": "Version strings consistent",
+        "passed": true,
+        "detail": "",
+        "severity": ""
+      },
+      {
+        "label": "Dependencies pinned (==)",
+        "passed": false,
+        "detail": "5 unpinned package(s) in requirements",
+        "severity": "warning"
+      },
+      {
+        "label": "No orphan modules (dead files)",
+        "passed": false,
+        "detail": "3 unreferenced module(s)",
+        "severity": "info"
+      },
+      {
+        "label": "Project health check passes",
+        "passed": false,
+        "detail": "Health score: 0",
+        "severity": "warning"
+      }
+    ]
+  }
 }

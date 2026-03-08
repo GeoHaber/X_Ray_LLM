@@ -55,10 +55,7 @@ def _check_flet_version() -> None:
     subprocess.check_call(  # nosec B603
         [sys.executable, "-m", "pip", "install", f"flet>={required}"],
     )
-    print(
-        "\n[X-Ray] Flet upgraded successfully.  "
-        "Please restart the application.\n"
-    )
+    print("\n[X-Ray] Flet upgraded successfully.  Please restart the application.\n")
     sys.exit(0)
 
 
@@ -407,7 +404,9 @@ def _phase_imports(root, exclude, results):
         results["_import_issues"] = imp_issues
         # Generate import graph
         if hasattr(analyzer, "build_graph"):
-            results["import_graph"] = analyzer.build_graph(root, exclude=exclude or None)
+            results["import_graph"] = analyzer.build_graph(
+                root, exclude=exclude or None
+            )
     except Exception as exc:
         results["imports"] = {"error": str(exc)}
 
@@ -415,11 +414,12 @@ def _phase_imports(root, exclude, results):
 def _phase_verification(root, results):
     try:
         from Analysis.verification import VerificationAnalyzer
+
         analyzer = VerificationAnalyzer(root)
         # Use existing AST data if available
         ast_data = {
             "functions": results.get("_functions", []),
-            "classes": results.get("_classes", [])
+            "classes": results.get("_classes", []),
         }
         results["verification"] = analyzer.verify_project(ast_data)
     except Exception as exc:
@@ -429,7 +429,7 @@ def _phase_verification(root, results):
 def _phase_release_readiness(root, exclude, results):
     try:
         from Analysis.release_readiness import ReleaseReadinessAnalyzer
-        from Analysis.release_checklist import generate_checklist
+
         analyzer = ReleaseReadinessAnalyzer()
         report = analyzer.analyze(
             root,
@@ -441,21 +441,16 @@ def _phase_release_readiness(root, exclude, results):
         results["release_readiness"] = summary
         # Stash marker detail for the UI tab
         results["_release_markers_detail"] = [
-            {"kind": m.kind, "file_path": m.file_path, "line": m.line,
-             "text": m.text, "severity": m.severity}
+            {
+                "kind": m.kind,
+                "file_path": m.file_path,
+                "line": m.line,
+                "text": m.text,
+                "severity": m.severity,
+            }
             for m in report.markers
         ]
-        # Generate checklist from all results collected so far
-        results["release_checklist"] = {
-            "items": [
-                {"label": i.label, "passed": i.passed,
-                 "detail": i.detail, "severity": i.severity}
-                for i in generate_checklist(results).items
-            ],
-            "go": generate_checklist(results).go,
-            "blockers": generate_checklist(results).blockers,
-            "warnings": generate_checklist(results).warnings,
-        }
+        # Checklist is generated later in _run_scan after grade is computed
     except Exception as exc:
         results["release_readiness"] = {"error": str(exc)}
 
@@ -518,7 +513,12 @@ PHASE_REGISTRY = [
     ("rustify", "Rust Candidates"),
     ("ui_compat", "UI Compat"),
     ("ui_health", "UI Health"),
-    ("verification", t("tab_verification") if "tab_verification" in LOCALES.get("en", {}) else "Verification"),
+    (
+        "verification",
+        t("tab_verification")
+        if "tab_verification" in LOCALES.get("en", {})
+        else "Verification",
+    ),
     ("release_readiness", "Release Readiness"),
 ]
 
@@ -556,7 +556,10 @@ def _run_flet_phases(
         ("ui_compat", lambda: _phase_ui_compat(ctx.root, ctx.exclude, results)),
         ("ui_health", lambda: _phase_ui_health(ctx.root, ctx.exclude, results)),
         ("verification", lambda: _phase_verification(ctx.root, results)),
-        ("release_readiness", lambda: _phase_release_readiness(ctx.root, ctx.exclude, results)),
+        (
+            "release_readiness",
+            lambda: _phase_release_readiness(ctx.root, ctx.exclude, results),
+        ),
     ]
     for key, runner in _phases:
         if not ctx.modes.get(key):
@@ -622,6 +625,27 @@ def _run_scan(ctx: FletScanContext) -> Dict[str, Any]:
         _run_flet_phases(ctx, functions, classes, results)
 
         results["grade"] = compute_grade(results)
+
+        # Generate release checklist *after* grade is available
+        if "release_readiness" in results:
+            from Analysis.release_checklist import generate_checklist
+
+            checklist = generate_checklist(results)
+            results["release_checklist"] = {
+                "go": checklist.go,
+                "blockers": checklist.blockers,
+                "warnings": checklist.warnings,
+                "items": [
+                    {
+                        "label": i.label,
+                        "passed": i.passed,
+                        "detail": i.detail,
+                        "severity": i.severity,
+                    }
+                    for i in checklist.items
+                ],
+            }
+
         results["meta"]["duration"] = round(time.time() - t0, 2)
         return results
 
@@ -875,7 +899,11 @@ _TAB_BUILDERS = [
     ("ui_compat", "tab_ui_compat", lambda r, _p: _build_ui_compat_tab(r)),
     ("ui_health", "UI Health", lambda r, _p: _build_ui_health_tab(r)),
     ("verification", "Verification", lambda r, p: _build_verification_tab(r, p)),
-    ("release_readiness", "Release Readiness", lambda r, p: _build_release_readiness_tab(r, p)),
+    (
+        "release_readiness",
+        "Release Readiness",
+        lambda r, p: _build_release_readiness_tab(r, p),
+    ),
 ]
 
 

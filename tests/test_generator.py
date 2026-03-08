@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Dict, Optional
 
+from Core.config import _ALWAYS_SKIP
 from Core.types import FunctionRecord, ClassRecord, SmellIssue
 
 
@@ -41,7 +42,7 @@ class GeneratedTestFile:
 
 
 @dataclass
-class TestGenReport:
+class GenReport:
     """Summary of test generation."""
 
     files_created: List[GeneratedTestFile] = field(default_factory=list)
@@ -90,6 +91,25 @@ def _group_by_file(records) -> Dict[str, list]:
     return groups
 
 
+def _is_test_file(fpath: str) -> bool:
+    """Return True if fpath looks like a test/generated file — not production source."""
+    p = Path(fpath)
+    return (
+        p.name.startswith("test_")
+        or p.name == "conftest.py"
+        or "tests" in p.parts
+        or "test" in p.parts
+        or "xray_generated" in p.parts
+        or "__tests__" in p.parts
+        or p.name.endswith(".test.ts")
+        or p.name.endswith(".test.js")
+        or p.name.endswith(".test.tsx")
+        or p.name.endswith(".test.jsx")
+        or p.name.endswith(".spec.ts")
+        or p.name.endswith(".spec.js")
+    )
+
+
 # ── Python Test Generator ──────────────────────────────────────────────────
 
 
@@ -108,6 +128,10 @@ class PythonTestGenerator:
         health_checks: list | None = None,
     ) -> List[GeneratedTestFile]:
         """Generate all test files."""
+        # Layer A: filter out test/generated files — prevents recursive generation
+        functions = [f for f in functions if not _is_test_file(f.file_path)]
+        classes = [c for c in classes if not _is_test_file(c.file_path)]
+
         files: List[GeneratedTestFile] = []
 
         # 1. Import smoke tests
@@ -180,7 +204,7 @@ class PythonTestGenerator:
             test_count += 1
 
         return GeneratedTestFile(
-            path="tests/test_xray_import_smoke.py",
+            path="tests/xray_generated/test_xray_import_smoke.py",
             content="\n".join(lines),
             test_count=test_count,
             language="python",
@@ -371,7 +395,7 @@ class PythonTestGenerator:
             return None
 
         return GeneratedTestFile(
-            path=f"tests/test_xray_{safe_mod}.py",
+            path=f"tests/xray_generated/test_xray_{safe_mod}.py",
             content="\n".join(lines),
             test_count=test_count,
             language="python",
@@ -389,7 +413,7 @@ class PythonTestGenerator:
             return [
                 f"def test_smell_regression_{safe}():",
                 f'    """Regression: {smell.name} in {smell.file_path} is {smell.metric_value} lines (limit ~60)."""',
-                f'    size = _count_lines("{smell.file_path}", "{smell.name}")',
+                f'    size = _count_lines(str(ROOT / "{smell.file_path}"), "{smell.name}")',
                 f"    # Originally {smell.metric_value} lines — track if it grows or gets refactored",
                 f'    assert size > 0, "Function {smell.name} should still exist"',
                 "    # Uncomment to enforce size limit:",
@@ -400,7 +424,7 @@ class PythonTestGenerator:
             return [
                 f"def test_smell_regression_{safe}():",
                 f'    """Regression: {smell.name} in {smell.file_path} — god class ({smell.metric_value} methods)."""',
-                f'    source = Path("{smell.file_path}").read_text(encoding="utf-8")',
+                f'    source = (ROOT / "{smell.file_path}").read_text(encoding="utf-8")',
                 f'    assert "{smell.name}" in source, "Class should still exist"',
                 "",
             ]
@@ -408,7 +432,7 @@ class PythonTestGenerator:
             return [
                 f"def test_smell_regression_{safe}():",
                 f'    """Regression: {smell.name} — {smell.category} (metric={smell.metric_value})."""',
-                f'    source = Path("{smell.file_path}").read_text(encoding="utf-8")',
+                f'    source = (ROOT / "{smell.file_path}").read_text(encoding="utf-8")',
                 f'    assert "def {smell.name}" in source or "async def {smell.name}" in source',
                 "",
             ]
@@ -437,9 +461,12 @@ class PythonTestGenerator:
             "import pytest",
             "",
             "",
+            "ROOT = Path(__file__).resolve().parent.parent.parent",
+            "",
+            "",
             "def _count_lines(filepath, func_name):",
             '    """Count lines of a function by name using AST."""',
-            '    source = Path(filepath).read_text(encoding="utf-8")',
+            '    source = (ROOT / filepath).read_text(encoding="utf-8")',
             "    tree = ast.parse(source)",
             "    for node in ast.walk(tree):",
             "        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):",
@@ -468,7 +495,7 @@ class PythonTestGenerator:
             return None
 
         return GeneratedTestFile(
-            path="tests/test_xray_smell_regression.py",
+            path="tests/xray_generated/test_xray_smell_regression.py",
             content="\n".join(lines),
             test_count=test_count,
             language="python",
@@ -491,7 +518,7 @@ class PythonTestGenerator:
             "import pytest",
             "",
             "",
-            "ROOT = Path(__file__).parent.parent.resolve()",
+            "ROOT = Path(__file__).resolve().parent.parent.parent",
             "",
         ]
 
@@ -541,7 +568,7 @@ class PythonTestGenerator:
         test_count += 1
 
         return GeneratedTestFile(
-            path="tests/test_xray_project_structure.py",
+            path="tests/xray_generated/test_xray_project_structure.py",
             content="\n".join(lines),
             test_count=test_count,
             language="python",
@@ -564,6 +591,9 @@ class JSTSTestGenerator:
         smells: List[SmellIssue] | None = None,
     ) -> List[GeneratedTestFile]:
         """Generate all JS/TS test files."""
+        # Layer A: filter out test/generated files — prevents recursive generation
+        js_analyses = [a for a in js_analyses if not _is_test_file(a.file_path)]
+
         files: List[GeneratedTestFile] = []
 
         # 1. Import smoke tests
@@ -836,7 +866,7 @@ class JSTSTestGenerator:
 # ── Master Orchestrator ────────────────────────────────────────────────────
 
 
-class TestGeneratorEngine:
+class GeneratorEngine:
     """Top-level engine that detects project type and generates tests."""
 
     def __init__(self, root: Path):
@@ -848,23 +878,14 @@ class TestGeneratorEngine:
         Returns: 'python' | 'javascript' | 'typescript' | 'react' | 'mixed' | 'unknown'
         """
         py_files = list(self.root.rglob("*.py"))
-        py_files = [
-            f
-            for f in py_files
-            if not any(
-                p in f.parts
-                for p in ("__pycache__", ".venv", "venv", "node_modules", ".git")
-            )
-        ]
+        py_files = [f for f in py_files if not any(p in f.parts for p in _ALWAYS_SKIP)]
 
         js_ts_exts = {".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs"}
         jsts_files = []
         for ext in js_ts_exts:
             jsts_files.extend(self.root.rglob(f"*{ext}"))
         jsts_files = [
-            f
-            for f in jsts_files
-            if not any(p in f.parts for p in ("node_modules", ".git", "dist", "build"))
+            f for f in jsts_files if not any(p in f.parts for p in _ALWAYS_SKIP)
         ]
 
         has_py = len(py_files) > 0
@@ -884,6 +905,44 @@ class TestGeneratorEngine:
             return "python"
         return "unknown"
 
+    @staticmethod
+    def _write_files(output_dir: Path, all_files: List[GeneratedTestFile], bridge):
+        """Write generated test files to disk with dedup and __init__.py creation."""
+        out = Path(output_dir)
+        written = 0
+        skipped = 0
+        seen_dirs: set[Path] = set()
+        for tf in all_files:
+            dest = out / tf.path
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            # Ensure __init__.py exists in generated subdirectories
+            if dest.parent not in seen_dirs:
+                seen_dirs.add(dest.parent)
+                init = dest.parent / "__init__.py"
+                if not init.exists():
+                    init.write_text(
+                        "# Auto-generated by X-Ray test generator\n",
+                        encoding="utf-8",
+                    )
+            # Layer D: skip write if content is identical (dedup)
+            if dest.exists():
+                try:
+                    existing = dest.read_text(encoding="utf-8")
+                    if existing == tf.content:
+                        skipped += 1
+                        continue
+                except OSError:
+                    pass  # file unreadable — overwrite it
+            dest.write_text(tf.content, encoding="utf-8")
+            written += 1
+            bridge.log(f"  Created: {tf.path} ({tf.test_count} tests)")
+
+        bridge.log(
+            f"  Total: {written} test files written, "
+            f"{skipped} unchanged (skipped), "
+            f"{sum(f.test_count for f in all_files)} tests generated"
+        )
+
     def generate(
         self,
         functions: List[FunctionRecord] | None = None,
@@ -893,25 +952,20 @@ class TestGeneratorEngine:
         health_checks: list | None = None,
         output_dir: Path | None = None,
     ) -> TestGenReport:
-        """Generate all tests and optionally write them to disk.
-
-        Returns a TestGenReport with all generated test files.
-        """
+        """Generate all tests and optionally write them to disk."""
         from Core.ui_bridge import get_bridge
 
         bridge = get_bridge()
-
         project_type = self.detect_project_type()
         bridge.log(f"  Project type detected: {project_type}")
 
-        report = TestGenReport()
+        report = GenReport()
         all_files: List[GeneratedTestFile] = []
 
         # Python tests
         if project_type in ("python", "mixed") and (functions or classes):
             bridge.status("Generating Python monkey tests...")
-            gen = PythonTestGenerator(self.root)
-            py_tests = gen.generate(
+            py_tests = PythonTestGenerator(self.root).generate(
                 functions or [],
                 classes or [],
                 smells=smells,
@@ -927,8 +981,9 @@ class TestGeneratorEngine:
             and js_analyses
         ):
             bridge.status("Generating JS/TS monkey tests...")
-            gen = JSTSTestGenerator(self.root)
-            jsts_tests = gen.generate(js_analyses, smells=smells)
+            jsts_tests = JSTSTestGenerator(self.root).generate(
+                js_analyses, smells=smells
+            )
             all_files.extend(jsts_tests)
             lang = (
                 "typescript"
@@ -938,23 +993,14 @@ class TestGeneratorEngine:
             if lang not in report.languages:
                 report.languages.append(lang)
 
-        # Write files if output_dir provided
         if output_dir and all_files:
-            out = Path(output_dir)
-            written = 0
-            for tf in all_files:
-                dest = out / tf.path
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_text(tf.content, encoding="utf-8")
-                written += 1
-                bridge.log(f"  Created: {tf.path} ({tf.test_count} tests)")
-
-            bridge.log(
-                f"  Total: {written} test files, "
-                f"{sum(f.test_count for f in all_files)} tests generated"
-            )
+            self._write_files(output_dir, all_files, bridge)
 
         report.files_created = all_files
         report.total_tests = sum(f.test_count for f in all_files)
-
         return report
+
+
+# Public aliases for backward compatibility.
+TestGeneratorEngine = GeneratorEngine
+TestGenReport = GenReport

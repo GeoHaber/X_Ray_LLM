@@ -4,38 +4,29 @@ import flet as ft
 from typing import Dict, Any
 
 from UI.tabs.shared import (
-    TH, SZ_XS, SZ_SM, SZ_BODY, SZ_LG, SZ_H2,
-    MONO_FONT, GRADE_COLORS, glass_card, metric_tile, section_title,
+    TH,
+    SZ_XS,
+    SZ_SM,
+    SZ_BODY,
+    SZ_LG,
+    SZ_H2,
+    MONO_FONT,
+    GRADE_COLORS,
+    glass_card,
+    metric_tile,
+    section_title,
 )
 
 
-def _build_release_readiness_tab(results: Dict[str, Any], page: ft.Page) -> ft.Control:
-    """Render the Release Readiness tab with checklist + sub-check details."""
-    release = results.get("release_readiness", {})
-    checklist = results.get("release_checklist", {})
-
-    if not release:
-        return ft.Container(
-            content=ft.Text(
-                "No release readiness data. Enable 'Release Ready' and run a scan.",
-                color=TH.dim,
-            ),
-            padding=40,
-        )
-
-    score = release.get("score", 0)
-    grade = release.get("grade", "F")
-    color = GRADE_COLORS.get(grade, ft.Colors.RED_400)
-
-    # ── Go / No-Go verdict banner ────────────────────────────────────
-    go = checklist.get("go", True) if checklist else True
+def _verdict_banner(checklist, go):
+    """Render the GO / NO-GO banner."""
     blockers = checklist.get("blockers", 0)
     warnings = checklist.get("warnings", 0)
     verdict_color = "#00c853" if go else "#ff1744"
     verdict_text = "GO" if go else "NO-GO"
     verdict_icon = ft.Icons.CHECK_CIRCLE if go else ft.Icons.CANCEL
 
-    verdict_banner = ft.Container(
+    return ft.Container(
         content=ft.Row(
             [
                 ft.Icon(verdict_icon, size=36, color=verdict_color),
@@ -67,7 +58,9 @@ def _build_release_readiness_tab(results: Dict[str, Any], page: ft.Page) -> ft.C
         padding=20,
     )
 
-    # ── Grade card ───────────────────────────────────────────────────
+
+def _grade_and_metrics(release, grade, color, score):
+    """Grade card + summary metric tiles row."""
     grade_card = ft.Container(
         content=ft.Column(
             [
@@ -85,78 +78,91 @@ def _build_release_readiness_tab(results: Dict[str, Any], page: ft.Page) -> ft.C
         alignment=ft.Alignment(0, 0),
     )
 
-    # ── Summary metric tiles ─────────────────────────────────────────
     doc_pct = release.get("docstring_coverage_pct", 0)
-    markers_count = release.get("markers", 0)
-    vuln_count = release.get("vulnerabilities", 0)
-    orphan_count = release.get("orphan_modules", 0)
-    unpinned_count = release.get("unpinned_deps", 0)
-
     metrics_row = ft.Row(
         [
             metric_tile(ft.Icons.COMMENT, f"{doc_pct:.0f}%", "Docstrings"),
-            metric_tile(ft.Icons.FLAG, str(markers_count), "Markers"),
-            metric_tile(ft.Icons.BUG_REPORT, str(vuln_count), "CVEs"),
-            metric_tile(ft.Icons.DELETE_OUTLINE, str(orphan_count), "Orphans"),
-            metric_tile(ft.Icons.LINK_OFF, str(unpinned_count), "Unpinned"),
+            metric_tile(ft.Icons.FLAG, str(release.get("markers", 0)), "Markers"),
+            metric_tile(
+                ft.Icons.BUG_REPORT, str(release.get("vulnerabilities", 0)), "CVEs"
+            ),
+            metric_tile(
+                ft.Icons.DELETE_OUTLINE,
+                str(release.get("orphan_modules", 0)),
+                "Orphans",
+            ),
+            metric_tile(
+                ft.Icons.LINK_OFF, str(release.get("unpinned_deps", 0)), "Unpinned"
+            ),
         ],
         spacing=10,
         scroll=ft.ScrollMode.AUTO,
     )
 
-    # ── Checklist items ──────────────────────────────────────────────
-    checklist_widgets = []
+    return ft.Row(
+        [grade_card, ft.Column([metrics_row], expand=True, spacing=10)],
+        spacing=20,
+        vertical_alignment=ft.CrossAxisAlignment.START,
+    )
+
+
+def _checklist_card(checklist):
+    """Render checklist items as a glass card."""
+    widgets = []
     for item in checklist.get("items", []):
         passed = item.get("passed", False)
-        label = item.get("label", "")
-        detail = item.get("detail", "")
         sev = item.get("severity", "")
-
         if passed:
-            icon = ft.Icons.CHECK_CIRCLE
-            icon_color = "#00c853"
+            icon, icon_color = ft.Icons.CHECK_CIRCLE, "#00c853"
         elif sev == "blocker":
-            icon = ft.Icons.CANCEL
-            icon_color = "#ff1744"
+            icon, icon_color = ft.Icons.CANCEL, "#ff1744"
         elif sev == "warning":
-            icon = ft.Icons.WARNING
-            icon_color = "#ffab00"
+            icon, icon_color = ft.Icons.WARNING, "#ffab00"
         else:
-            icon = ft.Icons.INFO_OUTLINE
-            icon_color = TH.dim
+            icon, icon_color = ft.Icons.INFO_OUTLINE, TH.dim
 
-        row = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(icon, size=20, color=icon_color),
-                    ft.Text(label, size=SZ_BODY, color=TH.text, expand=True),
-                    ft.Text(detail, size=SZ_SM, color=TH.dim, italic=True)
-                    if detail
-                    else ft.Container(width=0),
-                ],
-                spacing=10,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+        detail = item.get("detail", "")
+        widgets.append(
+            ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(icon, size=20, color=icon_color),
+                        ft.Text(
+                            item.get("label", ""),
+                            size=SZ_BODY,
+                            color=TH.text,
+                            expand=True,
+                        ),
+                        ft.Text(detail, size=SZ_SM, color=TH.dim, italic=True)
+                        if detail
+                        else ft.Container(width=0),
+                    ],
+                    spacing=10,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+            )
         )
-        checklist_widgets.append(row)
 
-    checklist_card = glass_card(
-        ft.Column(checklist_widgets, spacing=2),
-        padding=14,
-    ) if checklist_widgets else ft.Container()
+    if widgets:
+        return glass_card(ft.Column(widgets, spacing=2), padding=14)
+    return ft.Container()
 
-    # ── Markers detail table ─────────────────────────────────────────
+
+def _markers_section(release, results):
+    """Marker kind chips + optional detail rows."""
     markers_by_kind = release.get("markers_by_kind", {})
     marker_detail = results.get("_release_markers_detail", [])
+    controls: list = []
 
-    markers_section = []
     if markers_by_kind:
         chips = []
         for kind, count in sorted(markers_by_kind.items()):
             chip_color = (
-                "#ff1744" if kind == "NOCOMMIT"
-                else "#ffab00" if kind in ("FIXME", "HACK", "XXX")
+                "#ff1744"
+                if kind == "NOCOMMIT"
+                else "#ffab00"
+                if kind in ("FIXME", "HACK", "XXX")
                 else TH.dim
             )
             chips.append(
@@ -167,20 +173,24 @@ def _build_release_readiness_tab(results: Dict[str, Any], page: ft.Page) -> ft.C
                     padding=ft.Padding.symmetric(horizontal=10, vertical=4),
                 )
             )
-        markers_section.append(ft.Row(chips, spacing=8, wrap=True))
+        controls.append(ft.Row(chips, spacing=8, wrap=True))
 
     if marker_detail:
-        marker_rows = []
-        for m in marker_detail[:50]:  # cap at 50 visible
+        rows = []
+        for m in marker_detail[:50]:
             sev_color = (
-                "#ff1744" if m.get("severity") == "critical"
-                else "#ffab00" if m.get("severity") == "warning"
+                "#ff1744"
+                if m.get("severity") == "critical"
+                else "#ffab00"
+                if m.get("severity") == "warning"
                 else TH.dim
             )
-            marker_rows.append(
+            rows.append(
                 ft.Row(
                     [
-                        ft.Text(m.get("kind", ""), size=SZ_XS, color=sev_color, width=80),
+                        ft.Text(
+                            m.get("kind", ""), size=SZ_XS, color=sev_color, width=80
+                        ),
                         ft.Text(
                             f"{m.get('file_path', '')}:{m.get('line', '')}",
                             size=SZ_XS,
@@ -202,21 +212,20 @@ def _build_release_readiness_tab(results: Dict[str, Any], page: ft.Page) -> ft.C
                     spacing=8,
                 )
             )
-        markers_section.append(
-            glass_card(ft.Column(marker_rows, spacing=2), padding=10)
-        )
+        controls.append(glass_card(ft.Column(rows, spacing=2), padding=10))
 
-    # ── Docstring coverage bar ───────────────────────────────────────
+    return controls
+
+
+def _docstring_section(release):
+    """Docstring coverage progress bar."""
+    doc_pct = release.get("docstring_coverage_pct", 0)
     doc_total = release.get("docstring_total", 0)
     doc_documented = release.get("docstring_documented", 0)
-    doc_bar = ft.ProgressBar(
-        value=doc_pct / 100 if doc_total else 1.0,
-        color="#00c853" if doc_pct >= 60 else "#ffab00" if doc_pct >= 30 else "#ff1744",
-        bgcolor=TH.bar_bg,
-        height=12,
-        border_radius=6,
+    bar_color = (
+        "#00c853" if doc_pct >= 60 else "#ffab00" if doc_pct >= 30 else "#ff1744"
     )
-    doc_section = ft.Column(
+    return ft.Column(
         [
             ft.Row(
                 [
@@ -225,91 +234,123 @@ def _build_release_readiness_tab(results: Dict[str, Any], page: ft.Page) -> ft.C
                         size=SZ_BODY,
                         color=TH.text,
                     ),
-                    ft.Text(f"{doc_pct:.1f}%", size=SZ_LG, weight=ft.FontWeight.BOLD, color=TH.text),
+                    ft.Text(
+                        f"{doc_pct:.1f}%",
+                        size=SZ_LG,
+                        weight=ft.FontWeight.BOLD,
+                        color=TH.text,
+                    ),
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
-            doc_bar,
+            ft.ProgressBar(
+                value=doc_pct / 100 if doc_total else 1.0,
+                color=bar_color,
+                bgcolor=TH.bar_bg,
+                height=12,
+                border_radius=6,
+            ),
         ],
         spacing=6,
     )
 
-    # ── Version consistency ──────────────────────────────────────────
-    versions_ok = release.get("versions_consistent", True)
-    version_sources = release.get("version_sources", [])
-    version_section = []
-    if version_sources:
-        v_icon = ft.Icons.CHECK_CIRCLE if versions_ok else ft.Icons.WARNING
-        v_color = "#00c853" if versions_ok else "#ffab00"
-        v_chips = []
-        for vs in version_sources:
-            v_chips.append(
-                ft.Container(
-                    content=ft.Text(
-                        f'{vs.get("source", "?")}: {vs.get("version", "?")}',
-                        size=SZ_SM,
-                        color=TH.text,
-                    ),
-                    bgcolor=TH.chip,
-                    border_radius=8,
-                    padding=ft.Padding.symmetric(horizontal=10, vertical=4),
-                )
-            )
-        version_section = [
-            ft.Row(
-                [
-                    ft.Icon(v_icon, size=18, color=v_color),
-                    ft.Text(
-                        "Consistent" if versions_ok else "Mismatch detected",
-                        size=SZ_BODY,
-                        color=v_color,
-                    ),
-                ],
-                spacing=8,
-            ),
-            ft.Row(v_chips, spacing=8, wrap=True),
-        ]
 
-    # ── Assemble ─────────────────────────────────────────────────────
-    children = [
-        ft.Container(height=16),
-        verdict_banner,
-        ft.Container(height=12),
+def _version_section(release):
+    """Version consistency chips (or empty list)."""
+    versions_ok = release.get("versions_consistent", True)
+    vsources = release.get("version_sources", [])
+    if not vsources:
+        return []
+    v_icon = ft.Icons.CHECK_CIRCLE if versions_ok else ft.Icons.WARNING
+    v_color = "#00c853" if versions_ok else "#ffab00"
+    v_chips = [
+        ft.Container(
+            content=ft.Text(
+                f"{vs.get('source', '?')}: {vs.get('version', '?')}",
+                size=SZ_SM,
+                color=TH.text,
+            ),
+            bgcolor=TH.chip,
+            border_radius=8,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+        )
+        for vs in vsources
+    ]
+    return [
         ft.Row(
             [
-                grade_card,
-                ft.Column([metrics_row], expand=True, spacing=10),
+                ft.Icon(v_icon, size=18, color=v_color),
+                ft.Text(
+                    "Consistent" if versions_ok else "Mismatch detected",
+                    size=SZ_BODY,
+                    color=v_color,
+                ),
             ],
-            spacing=20,
-            vertical_alignment=ft.CrossAxisAlignment.START,
+            spacing=8,
         ),
+        ft.Row(v_chips, spacing=8, wrap=True),
+    ]
+
+
+def _build_release_readiness_tab(results: Dict[str, Any], page: ft.Page) -> ft.Control:
+    """Render the Release Readiness tab with checklist + sub-check details."""
+    release = results.get("release_readiness", {})
+    checklist = results.get("release_checklist", {})
+
+    if not release:
+        return ft.Container(
+            content=ft.Text(
+                "No release readiness data. Enable 'Release Ready' and run a scan.",
+                color=TH.dim,
+            ),
+            padding=40,
+        )
+
+    score = release.get("score", 0)
+    grade = release.get("grade", "F")
+    color = GRADE_COLORS.get(grade, ft.Colors.RED_400)
+    go = checklist.get("go", True) if checklist else True
+
+    children = [
+        ft.Container(height=16),
+        _verdict_banner(checklist, go),
+        ft.Container(height=12),
+        _grade_and_metrics(release, grade, color, score),
         ft.Container(height=20),
         section_title("Release Checklist", ft.Icons.CHECKLIST),
         ft.Container(height=6),
-        checklist_card,
+        _checklist_card(checklist),
     ]
 
-    if markers_section:
-        children.extend([
-            ft.Container(height=20),
-            section_title("Code Markers", ft.Icons.FLAG),
-            ft.Container(height=6),
-            *markers_section,
-        ])
+    markers_ctrls = _markers_section(release, results)
+    if markers_ctrls:
+        children.extend(
+            [
+                ft.Container(height=20),
+                section_title("Code Markers", ft.Icons.FLAG),
+                ft.Container(height=6),
+                *markers_ctrls,
+            ]
+        )
 
-    children.extend([
-        ft.Container(height=20),
-        section_title("Docstring Coverage", ft.Icons.DESCRIPTION),
-        ft.Container(height=6),
-        doc_section,
-    ])
-
-    if version_section:
-        children.extend([
+    children.extend(
+        [
             ft.Container(height=20),
-            section_title("Version Consistency", ft.Icons.NUMBERS),
+            section_title("Docstring Coverage", ft.Icons.DESCRIPTION),
             ft.Container(height=6),
-            *version_section,
-        ])
+            _docstring_section(release),
+        ]
+    )
+
+    ver_ctrls = _version_section(release)
+    if ver_ctrls:
+        children.extend(
+            [
+                ft.Container(height=20),
+                section_title("Version Consistency", ft.Icons.NUMBERS),
+                ft.Container(height=6),
+                *ver_ctrls,
+            ]
+        )
 
     return ft.ListView(children, expand=True, spacing=6, padding=12)

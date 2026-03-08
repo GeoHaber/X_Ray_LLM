@@ -81,20 +81,22 @@ class TestHealthCheck:
 
 
 class TestHealthReport:
-    def test_to_dict_structure(self):
+    def test_to_dict_structure(self, tmp_path):
         hc = HealthCheck(
             name="readme", description="Has README", weight=10, passed=True
         )
-        report = HealthReport(root="/tmp/proj", score=90, grade="A-", checks=[hc])
+        report = HealthReport(
+            root=str(tmp_path / "proj"), score=90, grade="A-", checks=[hc]
+        )
         d = report.to_dict()
         assert "score" in d
         assert "grade" in d
         assert "checks" in d
         assert isinstance(d["checks"], list)
 
-    def test_to_dict_check_list(self):
+    def test_to_dict_check_list(self, tmp_path):
         hc = HealthCheck(name="test", description="Has tests", weight=10, passed=False)
-        report = HealthReport(root="/tmp", score=70, grade="C", checks=[hc])
+        report = HealthReport(root=str(tmp_path), score=70, grade="C", checks=[hc])
         d = report.to_dict()
         assert len(d["checks"]) == 1
         assert d["checks"][0]["name"] == "test"

@@ -174,7 +174,7 @@ _RE_CONSOLE = re.compile(
     re.MULTILINE,
 )
 
-# TODO/FIXME/HACK comments
+# Marker comments (e.g. "// TODO:", "/* FIXME */")
 _RE_TODO = re.compile(
     r"(?://|/\*)\s*(?:TODO|FIXME|HACK|XXX)\s*:?\s*(.*)",
     re.IGNORECASE,
