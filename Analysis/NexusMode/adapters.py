@@ -48,17 +48,25 @@ class XRayTranspilerAdapter(BaseTranspilerAdapter):
                 "X-Ray Native Transpiler module not found or failed to import."
             )
 
+        if node is None:
+            raise ValueError("AST node cannot be None")
+        if context is None:
+            raise ValueError("context (file path) cannot be None")
+
         try:
             # Reconstruct the function source dynamically from the AST node
             function_code = ast.unparse(node)
             return transpile_function_code(
                 code=function_code, name_hint=node.name, source_info=str(context)
             )
+        except (ValueError, TypeError, AttributeError, KeyError):
+            # Re-raise these expected exceptions
+            raise
         except Exception as e:
             logger.error(
                 f"Native XRay Transpiler crashed on node {getattr(node, 'name', '<unknown>')}: {e}"
             )
-            raise RuntimeError(f"Native Transpilation failed: {e}") from e
+            raise ValueError(f"Native Transpilation failed: {e}") from e
 
 
 class SubprocessTranspilerAdapter(BaseTranspilerAdapter):
@@ -82,6 +90,14 @@ class SubprocessTranspilerAdapter(BaseTranspilerAdapter):
             # 1. Re-serialize the specific AST Node back to Python source code.
             # We don't want to transpile the whole file, just this bottleneck.
             source_snippet = ast.unparse(node)
+        except TypeError as e:
+            raise TypeError(
+                f"Failed to unparse AST node for {self.binary_name}: {e}"
+            ) from e
+        except AttributeError as e:
+            raise AttributeError(
+                f"Failed to unparse AST node for {self.binary_name}: {e}"
+            ) from e
         except Exception as e:
             raise ValueError(
                 f"Failed to unparse AST node for {self.binary_name}: {e}"
@@ -149,3 +165,21 @@ class PyrsAdapter(SubprocessTranspilerAdapter):
     def __init__(self):
         # E.g., `pyrs ./snippet.py`
         super().__init__(binary_name="pyrs", args_template=["{input_file}"])
+
+
+# ── Public Module-Level API ──────────────────────────────────────────────────
+
+
+# Default adapter instance for module-level transpile() function
+_default_adapter = XRayTranspilerAdapter()
+
+
+def transpile(node: ast.AST, context: Path) -> str:
+    """
+    Module-level transpile function wrapping the default XRay adapter.
+    
+    :param node: Python AST node (typically a FunctionDef)
+    :param context: Path to the source file (for source_info tracking)
+    :return: Generated Rust code string
+    """
+    return _default_adapter.transpile(node, context)

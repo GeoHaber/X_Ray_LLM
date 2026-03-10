@@ -13,7 +13,7 @@ import logging
 import tempfile
 from pathlib import Path
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from Analysis.NexusMode.adapters import (
     BaseTranspilerAdapter,
@@ -321,6 +321,120 @@ class NexusOrchestrator:
                         r["cargo_error"] = v.cargo_stderr
 
         return output
+
+
+# ── Public Module-Level API ──────────────────────────────────────────────────
+
+
+def identify_targets(files: List[Path], progress_cb=None) -> List[TargetNode]:
+    """
+    Module-level wrapper for Analyzer.identify_targets().
+    Scans Python files to extract structural bottlenecks (FunctionDefs).
+    
+    :param files: List of Python file paths to analyze
+    :param progress_cb: Optional callback(current, total) for progress reporting
+    :return: List of TargetNode objects representing identified bottlenecks
+    """
+    return Analyzer.identify_targets(files, progress_cb)
+
+
+def translate(
+    targets: List[TargetNode], target_adapter: str = "x-ray", progress_cb=None
+) -> List[TranslationResult]:
+    """
+    Module-level wrapper for TranslatorBridge.translate().
+    Routes AST nodes through pluggable transpiler adapters.
+    
+    :param targets: List of TargetNode objects to transpile
+    :param target_adapter: Name of adapter to use ('x-ray', 'depyler', 'pyrs')
+    :param progress_cb: Optional callback(current, total) for progress reporting
+    :return: List of TranslationResult objects
+    """
+    bridge = TranslatorBridge()
+    return bridge.translate(targets, target_adapter, progress_cb)
+
+
+async def verify_all_async(
+    translations: List[TranslationResult], progress_cb=None
+) -> List[VerifiedResult]:
+    """
+    Module-level wrapper for CargoVerifier.verify_all_async().
+    Asynchronously verifies generated Rust code using Cargo.
+    
+    :param translations: List of TranslationResult objects from translate()
+    :param progress_cb: Optional callback(current, total) for progress reporting
+    :return: List of VerifiedResult objects
+    """
+    return await CargoVerifier.verify_all_async(translations, progress_cb)
+
+
+def verify_all(
+    translations: List[TranslationResult], progress_cb=None
+) -> List[VerifiedResult]:
+    """
+    Module-level synchronous wrapper for CargoVerifier.verify_all().
+    Verifies generated Rust code using Cargo (runs async verification in event loop).
+    
+    :param translations: List of TranslationResult objects from translate()
+    :param progress_cb: Optional callback(current, total) for progress reporting
+    :return: List of VerifiedResult objects
+    """
+    return CargoVerifier.verify_all(translations, progress_cb)
+
+
+# Global instance for convenience
+_default_orchestrator: Optional[NexusOrchestrator] = None
+
+
+def build_context_graph(files: List[Path], progress_cb=None) -> Dict[str, Any]:
+    """
+    Build a context graph of Python bottlenecks in a project.
+    
+    :param files: List of Python file paths to analyze
+    :param progress_cb: Optional callback(current, total) for progress reporting
+    :return: Dictionary mapping bottleneck info
+    """
+    global _default_orchestrator
+    _default_orchestrator = NexusOrchestrator(Path("."))
+    _default_orchestrator.build_context_graph(files, progress_cb)
+    return _default_orchestrator.graph_index
+
+
+def run_transpilation_pipeline(
+    target_adapter: str = "x-ray", progress_cb=None
+) -> List[Dict[str, Any]]:
+    """
+    Run the full transpilation pipeline on previously identified targets.
+    Requires build_context_graph() to have been called first.
+    
+    :param target_adapter: Name of adapter to use
+    :param progress_cb: Optional callback(current, total) for progress reporting
+    :return: List of transpilation result dictionaries
+    """
+    global _default_orchestrator
+    if _default_orchestrator is None:
+        raise RuntimeError(
+            "build_context_graph() must be called first to identify targets"
+        )
+    return _default_orchestrator.run_transpilation_pipeline(target_adapter, progress_cb)
+
+
+def verify_and_build(
+    transpilation_results: List[Dict[str, Any]], progress_cb=None
+) -> List[Dict[str, Any]]:
+    """
+    Verify translated Rust code and report build status.
+    
+    :param transpilation_results: List of transpilation result dicts from run_transpilation_pipeline()
+    :param progress_cb: Optional callback(current, total) for progress reporting
+    :return: List of verified result dictionaries
+    """
+    global _default_orchestrator
+    if _default_orchestrator is None:
+        raise RuntimeError(
+            "build_context_graph() must be called first to initialize orchestrator"
+        )
+    return _default_orchestrator.verify_and_build(transpilation_results, progress_cb)
 
 
 if __name__ == "__main__":
