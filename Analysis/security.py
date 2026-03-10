@@ -421,3 +421,21 @@ class SecurityAnalyzer(BaseStaticAnalyzer):
         by_confidence = Counter(s.confidence for s in issues)
         result["by_confidence"] = dict(by_confidence)
         return result
+
+
+# Module-level API for test compatibility
+_default_analyzer = SecurityAnalyzer()
+
+
+def analyze(source_code: str, project_root: str = None) -> List[SmellIssue]:
+    """Analyze source code for security issues. Wrapper for SecurityAnalyzer.analyze()."""
+    if source_code is None:
+        raise ValueError("source_code cannot be None")
+    return _default_analyzer.analyze(source_code, project_root)
+
+
+def summary(issues: List[SmellIssue]) -> Dict[str, Any]:
+    """Build summary with security issue breakdown. Wrapper for SecurityAnalyzer.summary()."""
+    if issues is None:
+        raise ValueError("issues cannot be None")
+    return _default_analyzer.summary(issues)
