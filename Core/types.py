@@ -131,3 +131,31 @@ class Severity:
 
         icons = Severity._ICONS_UNICODE if UNICODE_OK else Severity._ICONS_ASCII
         return icons.get(level, "?")
+
+
+def icon(level: str) -> str:
+    """Wrapper for Severity.icon() static method."""
+    if level is None:
+        raise ValueError("level cannot be None")
+    return Severity.icon(level)
+
+
+def key(record) -> str:
+    """Wrapper for FunctionRecord.key property."""
+    if record is None:
+        raise ValueError("record cannot be None")
+    return record.key
+
+
+def location(record) -> str:
+    """Wrapper for FunctionRecord.location property."""
+    if record is None:
+        raise ValueError("record cannot be None")
+    return record.location
+
+
+def signature(record) -> str:
+    """Wrapper for FunctionRecord.signature property."""
+    if record is None:
+        raise ValueError("record cannot be None")
+    return record.signature
