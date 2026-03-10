@@ -124,3 +124,29 @@ class FormatAnalyzer:
             "fixable": n,
             "source": "ruff-format",
         }
+
+
+# ── Module-level API ────────────────────────────────────────────────────────
+
+
+# Global analyzer instance
+_default_analyzer = FormatAnalyzer()
+
+
+def available() -> bool:
+    """Check if ruff format is available."""
+    return _default_analyzer.available
+
+
+def analyze(
+    root: Path, exclude: Optional[List[str]] = None
+) -> List[SmellIssue]:
+    """Analyze code formatting with ruff."""
+    if root is None:
+        raise ValueError("root path cannot be None")
+    return _default_analyzer.analyze(root, exclude)
+
+
+def summary(issues: List[SmellIssue]) -> dict:
+    """Generate summary statistics for format issues."""
+    return _default_analyzer.summary(issues)

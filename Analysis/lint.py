@@ -172,3 +172,17 @@ class LintAnalyzer(BaseStaticAnalyzer):
             "E999": "syntax-error",
         }
         return categories.get(code, f"lint-{code}")
+
+
+# ── Module-level API ────────────────────────────────────────────────────────
+
+
+# Global analyzer instance
+_default_lint_analyzer = LintAnalyzer()
+
+
+def fix(root: Path, exclude: Optional[List[str]] = None) -> int:
+    """Run ruff check --fix to auto-fix linting issues."""
+    if root is None:
+        raise ValueError("root path cannot be None")
+    return _default_lint_analyzer.fix(root, exclude)
