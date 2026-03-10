@@ -330,3 +330,20 @@ def collect_py_files(
             if _is_scannable_py(fn):
                 results.append(Path(dirpath) / fn)
     return results
+
+
+# Module-level API for test compatibility
+_default_analyzer = ASTNormalizer()
+
+def visit_FunctionDef(*args, **kwargs):
+    """Wrapper for ASTNormalizer.visit_FunctionDef()."""
+    return _default_analyzer.visit_FunctionDef(*args, **kwargs)
+
+def visit_Name(*args, **kwargs):
+    """Wrapper for ASTNormalizer.visit_Name()."""
+    return _default_analyzer.visit_Name(*args, **kwargs)
+
+def visit_arg(*args, **kwargs):
+    """Wrapper for ASTNormalizer.visit_arg()."""
+    return _default_analyzer.visit_arg(*args, **kwargs)
+

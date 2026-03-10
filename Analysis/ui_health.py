@@ -734,3 +734,62 @@ class UIHealthAnalyzer:
             return []
         rel_path = str(path.relative_to(root)) if root else str(path)
         return _scan_jsx_file(src, rel_path)
+
+
+# Module-level API for test compatibility
+_default_analyzer = UIHealthIssue()
+
+def analyze(source_code: str, project_root: str = None):
+    """Wrapper for UIHealthIssue.analyze()."""
+    if source_code is None:
+        raise ValueError("source_code cannot be None")
+    return _default_analyzer.analyze(source_code)
+
+def analyze_to_smells(source_code: str, project_root: str = None):
+    """Wrapper for UIHealthIssue.analyze_to_smells()."""
+    if source_code is None:
+        raise ValueError("source_code cannot be None")
+    return _default_analyzer.analyze_to_smells(source_code)
+
+def message(*args, **kwargs):
+    """Wrapper for UIHealthIssue.message()."""
+    return _default_analyzer.message(*args, **kwargs)
+
+def severity(*args, **kwargs):
+    """Wrapper for UIHealthIssue.severity()."""
+    return _default_analyzer.severity(*args, **kwargs)
+
+def summary(issues: List):
+    """Wrapper for UIHealthIssue.summary()."""
+    if issues is None:
+        raise ValueError("issues cannot be None")
+    return _default_analyzer.summary(issues)
+
+def to_smell(*args, **kwargs):
+    """Wrapper for UIHealthIssue.to_smell()."""
+    return _default_analyzer.to_smell(*args, **kwargs)
+
+def visit_Assign(*args, **kwargs):
+    """Wrapper for UIHealthIssue.visit_Assign()."""
+    return _default_analyzer.visit_Assign(*args, **kwargs)
+
+def visit_Assign_attr(*args, **kwargs):
+    """Wrapper for UIHealthIssue.visit_Assign_attr()."""
+    return _default_analyzer.visit_Assign_attr(*args, **kwargs)
+
+def visit_Attribute(*args, **kwargs):
+    """Wrapper for UIHealthIssue.visit_Attribute()."""
+    return _default_analyzer.visit_Attribute(*args, **kwargs)
+
+def visit_AugAssign(*args, **kwargs):
+    """Wrapper for UIHealthIssue.visit_AugAssign()."""
+    return _default_analyzer.visit_AugAssign(*args, **kwargs)
+
+def visit_Call(*args, **kwargs):
+    """Wrapper for UIHealthIssue.visit_Call()."""
+    return _default_analyzer.visit_Call(*args, **kwargs)
+
+def visit_Name(*args, **kwargs):
+    """Wrapper for UIHealthIssue.visit_Name()."""
+    return _default_analyzer.visit_Name(*args, **kwargs)
+

@@ -791,3 +791,62 @@ class LLMManager:
             return True
         except Exception:
             return False
+
+
+# Module-level API for test compatibility
+_default_analyzer = ModelCard()
+
+def check_and_prompt(*args, **kwargs):
+    """Wrapper for ModelCard.check_and_prompt()."""
+    return _default_analyzer.check_and_prompt(*args, **kwargs)
+
+def detect_all(*args, **kwargs):
+    """Wrapper for ModelCard.detect_all()."""
+    return _default_analyzer.detect_all(*args, **kwargs)
+
+def fingerprint(*args, **kwargs):
+    """Wrapper for ModelCard.fingerprint()."""
+    return _default_analyzer.fingerprint(*args, **kwargs)
+
+def format_model_recommendations(*args, **kwargs):
+    """Wrapper for ModelCard.format_model_recommendations()."""
+    return _default_analyzer.format_model_recommendations(*args, **kwargs)
+
+def format_runtime_status(*args, **kwargs):
+    """Wrapper for ModelCard.format_runtime_status()."""
+    return _default_analyzer.format_runtime_status(*args, **kwargs)
+
+def format_system_profile(*args, **kwargs):
+    """Wrapper for ModelCard.format_system_profile()."""
+    return _default_analyzer.format_system_profile(*args, **kwargs)
+
+def human_summary(issues: List):
+    """Wrapper for ModelCard.human_summary()."""
+    if issues is None:
+        raise ValueError("issues cannot be None")
+    return _default_analyzer.human_summary(issues)
+
+def recommended_gpu_layers(*args, **kwargs):
+    """Wrapper for ModelCard.recommended_gpu_layers()."""
+    return _default_analyzer.recommended_gpu_layers(*args, **kwargs)
+
+def stars(*args, **kwargs):
+    """Wrapper for ModelCard.stars()."""
+    return _default_analyzer.stars(*args, **kwargs)
+
+def start_server(*args, **kwargs):
+    """Wrapper for ModelCard.start_server()."""
+    return _default_analyzer.start_server(*args, **kwargs)
+
+def tier(*args, **kwargs):
+    """Wrapper for ModelCard.tier()."""
+    return _default_analyzer.tier(*args, **kwargs)
+
+def tier_label(*args, **kwargs):
+    """Wrapper for ModelCard.tier_label()."""
+    return _default_analyzer.tier_label(*args, **kwargs)
+
+def to_dict(*args, **kwargs):
+    """Wrapper for ModelCard.to_dict()."""
+    return _default_analyzer.to_dict(*args, **kwargs)
+

@@ -678,3 +678,26 @@ def _func_to_dict(func: FunctionRecord) -> Dict[str, Any]:
         "size": func.size_lines,
         "signature": func.signature,
     }
+
+
+# Module-level API for test compatibility
+_default_analyzer = _MatchContext()
+
+def enrich_with_llm(*args, **kwargs):
+    """Wrapper for _MatchContext.enrich_with_llm()."""
+    return _default_analyzer.enrich_with_llm(*args, **kwargs)
+
+def find(*args, **kwargs):
+    """Wrapper for _MatchContext.find()."""
+    return _default_analyzer.find(*args, **kwargs)
+
+def summary(issues: List):
+    """Wrapper for _MatchContext.summary()."""
+    if issues is None:
+        raise ValueError("issues cannot be None")
+    return _default_analyzer.summary(issues)
+
+def union(*args, **kwargs):
+    """Wrapper for _MatchContext.union()."""
+    return _default_analyzer.union(*args, **kwargs)
+

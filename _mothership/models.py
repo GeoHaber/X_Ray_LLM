@@ -423,3 +423,36 @@ class LocalLLMStatus:
             "status": self.status,
             "error": self.error,
         }
+
+
+# Module-level API for test compatibility
+_default_analyzer = ModelCategory()
+
+def fingerprint(*args, **kwargs):
+    """Wrapper for ModelCategory.fingerprint()."""
+    return _default_analyzer.fingerprint(*args, **kwargs)
+
+def recommended_gpu_layers(*args, **kwargs):
+    """Wrapper for ModelCategory.recommended_gpu_layers()."""
+    return _default_analyzer.recommended_gpu_layers(*args, **kwargs)
+
+def tier(*args, **kwargs):
+    """Wrapper for ModelCategory.tier()."""
+    return _default_analyzer.tier(*args, **kwargs)
+
+def tier_label(*args, **kwargs):
+    """Wrapper for ModelCategory.tier_label()."""
+    return _default_analyzer.tier_label(*args, **kwargs)
+
+def to_card_dict(*args, **kwargs):
+    """Wrapper for ModelCategory.to_card_dict()."""
+    return _default_analyzer.to_card_dict(*args, **kwargs)
+
+def to_dict(*args, **kwargs):
+    """Wrapper for ModelCategory.to_dict()."""
+    return _default_analyzer.to_dict(*args, **kwargs)
+
+def to_list(*args, **kwargs):
+    """Wrapper for ModelCategory.to_list()."""
+    return _default_analyzer.to_list(*args, **kwargs)
+

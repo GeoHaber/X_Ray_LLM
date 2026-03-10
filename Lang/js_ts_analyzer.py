@@ -760,3 +760,12 @@ def categorize_imports(imports: List[JSImport]) -> Dict[str, List[str]]:
         if cat:
             result.setdefault(cat, []).append(module)
     return result
+
+
+# Module-level API for test compatibility
+_default_analyzer = JSFunction()
+
+def location(*args, **kwargs):
+    """Wrapper for JSFunction.location()."""
+        return _default_analyzer.location(*args, **kwargs)
+

@@ -516,3 +516,24 @@ class ProjectHealthAnalyzer:
             "checks_total": len(self.report.checks),
             "files_created": self.report.files_created,
         }
+
+
+# Module-level API for test compatibility
+_default_analyzer = HealthCheck()
+
+def analyze(source_code: str, project_root: str = None):
+    """Wrapper for HealthCheck.analyze()."""
+    if source_code is None:
+        raise ValueError("source_code cannot be None")
+    return _default_analyzer.analyze(source_code)
+
+def summary(issues: List):
+    """Wrapper for HealthCheck.summary()."""
+    if issues is None:
+        raise ValueError("issues cannot be None")
+    return _default_analyzer.summary(issues)
+
+def to_dict(*args, **kwargs):
+    """Wrapper for HealthCheck.to_dict()."""
+    return _default_analyzer.to_dict(*args, **kwargs)
+

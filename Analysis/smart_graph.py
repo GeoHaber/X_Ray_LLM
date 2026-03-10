@@ -140,3 +140,16 @@ class SmartGraph:
 </html>
 """
         output_path.write_text(html_content, encoding="utf-8")
+
+
+# Module-level API for test compatibility
+_default_analyzer = SmartGraph()
+
+def build(*args, **kwargs):
+    """Wrapper for SmartGraph.build()."""
+    return _default_analyzer.build(*args, **kwargs)
+
+def write_html(*args, **kwargs):
+    """Wrapper for SmartGraph.write_html()."""
+    return _default_analyzer.write_html(*args, **kwargs)
+

@@ -231,3 +231,26 @@ class BaseStaticAnalyzer:
             "worst_files": dict(by_file.most_common(10)),
             "source": self.TOOL_NAME,
         }
+
+
+# Module-level API for test compatibility
+_default_analyzer = BaseStaticAnalyzer()
+
+def analyze(source_code: str, project_root: str = None):
+    """Wrapper for BaseStaticAnalyzer.analyze()."""
+    if source_code is None:
+        raise ValueError("source_code cannot be None")
+    return _default_analyzer.analyze(source_code)
+
+def available(extensions: List = None):
+    """Wrapper for BaseStaticAnalyzer.available()."""
+    if extensions is None:
+        raise ValueError("extensions cannot be None")
+    return _default_analyzer.available(extensions)
+
+def summary(issues: List):
+    """Wrapper for BaseStaticAnalyzer.summary()."""
+    if issues is None:
+        raise ValueError("issues cannot be None")
+    return _default_analyzer.summary(issues)
+

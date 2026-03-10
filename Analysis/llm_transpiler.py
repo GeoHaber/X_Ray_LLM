@@ -459,3 +459,24 @@ def hybrid_transpile(
 
     # LLM failed — return the safe AST stub
     return ast_result
+
+
+# Module-level API for test compatibility
+_default_analyzer = LLMTranspiler()
+
+def available(extensions: List = None):
+    """Wrapper for LLMTranspiler.available()."""
+    if extensions is None:
+        raise ValueError("extensions cannot be None")
+    return _default_analyzer.available(extensions)
+
+def stats(*args, **kwargs):
+    """Wrapper for LLMTranspiler.stats()."""
+    return _default_analyzer.stats(*args, **kwargs)
+
+def transpile(node):
+    """Wrapper for LLMTranspiler.transpile()."""
+    if node is None:
+        raise ValueError("node cannot be None")
+    return _default_analyzer.transpile(node)
+

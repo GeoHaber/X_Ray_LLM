@@ -302,3 +302,44 @@ class FunctionTracer:
                 )
 
         return result
+
+
+# Module-level API for test compatibility
+_default_analyzer = IOSample()
+
+def avg_time_us(*args, **kwargs):
+    """Wrapper for IOSample.avg_time_us()."""
+    return _default_analyzer.avg_time_us(*args, **kwargs)
+
+def dominant_return_type(*args, **kwargs):
+    """Wrapper for IOSample.dominant_return_type()."""
+    return _default_analyzer.dominant_return_type(*args, **kwargs)
+
+def load(*args, **kwargs):
+    """Wrapper for IOSample.load()."""
+    return _default_analyzer.load(*args, **kwargs)
+
+def profile_for(*args, **kwargs):
+    """Wrapper for IOSample.profile_for()."""
+    return _default_analyzer.profile_for(*args, **kwargs)
+
+def profiles(*args, **kwargs):
+    """Wrapper for IOSample.profiles()."""
+    return _default_analyzer.profiles(*args, **kwargs)
+
+def reset(*args, **kwargs):
+    """Wrapper for IOSample.reset()."""
+    return _default_analyzer.reset(*args, **kwargs)
+
+def save(*args, **kwargs):
+    """Wrapper for IOSample.save()."""
+    return _default_analyzer.save(*args, **kwargs)
+
+def to_dict(*args, **kwargs):
+    """Wrapper for IOSample.to_dict()."""
+    return _default_analyzer.to_dict(*args, **kwargs)
+
+def wrap(*args, **kwargs):
+    """Wrapper for IOSample.wrap()."""
+    return _default_analyzer.wrap(*args, **kwargs)
+

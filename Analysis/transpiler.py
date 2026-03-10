@@ -1302,3 +1302,48 @@ def transpile_module_code(code: str) -> str:
 def transpile_module_file(filepath: str) -> str:
     with open(filepath, "r", encoding="utf-8") as f:
         return transpile_module_code(f.read())
+
+
+# Module-level API for test compatibility
+_default_analyzer = RustNode()
+
+def build_function(*args, **kwargs):
+    """Wrapper for RustNode.build_function()."""
+    return _default_analyzer.build_function(*args, **kwargs)
+
+def dedent(*args, **kwargs):
+    """Wrapper for RustNode.dedent()."""
+    return _default_analyzer.dedent(*args, **kwargs)
+
+def emit(*args, **kwargs):
+    """Wrapper for RustNode.emit()."""
+    return _default_analyzer.emit(*args, **kwargs)
+
+def emit_inline(*args, **kwargs):
+    """Wrapper for RustNode.emit_inline()."""
+    return _default_analyzer.emit_inline(*args, **kwargs)
+
+def emit_newline(*args, **kwargs):
+    """Wrapper for RustNode.emit_newline()."""
+    return _default_analyzer.emit_newline(*args, **kwargs)
+
+def generate(*args, **kwargs):
+    """Wrapper for RustNode.generate()."""
+    return _default_analyzer.generate(*args, **kwargs)
+
+def get_code(*args, **kwargs):
+    """Wrapper for RustNode.get_code()."""
+    return _default_analyzer.get_code(*args, **kwargs)
+
+def indent(*args, **kwargs):
+    """Wrapper for RustNode.indent()."""
+    return _default_analyzer.indent(*args, **kwargs)
+
+def parse_body(*args, **kwargs):
+    """Wrapper for RustNode.parse_body()."""
+    return _default_analyzer.parse_body(*args, **kwargs)
+
+def require_import(*args, **kwargs):
+    """Wrapper for RustNode.require_import()."""
+    return _default_analyzer.require_import(*args, **kwargs)
+

@@ -111,3 +111,20 @@ class LibraryAdvisor:
                 list(set(s.module_name for s in self.suggestions))
             ),
         }
+
+
+# Module-level API for test compatibility
+_default_analyzer = LibraryAdvisor()
+
+def analyze(source_code: str, project_root: str = None):
+    """Wrapper for LibraryAdvisor.analyze()."""
+    if source_code is None:
+        raise ValueError("source_code cannot be None")
+    return _default_analyzer.analyze(source_code)
+
+def summary(issues: List):
+    """Wrapper for LibraryAdvisor.summary()."""
+    if issues is None:
+        raise ValueError("issues cannot be None")
+    return _default_analyzer.summary(issues)
+

@@ -108,3 +108,12 @@ class DeadFunctionDetector:
                     )
                 )
         return smells
+
+
+# Module-level API for test compatibility
+_default_analyzer = DeadFunctionDetector()
+
+def detect(*args, **kwargs):
+    """Wrapper for DeadFunctionDetector.detect()."""
+    return _default_analyzer.detect(*args, **kwargs)
+

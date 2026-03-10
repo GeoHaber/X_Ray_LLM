@@ -485,3 +485,30 @@ class RustAdvisor:
             bridge.log(footer_text)
 
         bridge.log(f"{'=' * 72}\n")
+
+
+# Module-level API for test compatibility
+_default_analyzer = RustCandidate()
+
+def generate_golden(*args, **kwargs):
+    """Wrapper for RustCandidate.generate_golden()."""
+    return _default_analyzer.generate_golden(*args, **kwargs)
+
+def print_candidates(*args, **kwargs):
+    """Wrapper for RustCandidate.print_candidates()."""
+    return _default_analyzer.print_candidates(*args, **kwargs)
+
+def score(*args, **kwargs):
+    """Wrapper for RustCandidate.score()."""
+    return _default_analyzer.score(*args, **kwargs)
+
+def to_dict(*args, **kwargs):
+    """Wrapper for RustCandidate.to_dict()."""
+    return _default_analyzer.to_dict(*args, **kwargs)
+
+def verify_golden(results: List):
+    """Wrapper for RustCandidate.verify_golden()."""
+    if results is None:
+        raise ValueError("results cannot be None")
+    return _default_analyzer.verify_golden(results)
+

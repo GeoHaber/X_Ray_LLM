@@ -199,3 +199,32 @@ def reset_cache() -> None:
     """Reset the global singleton (used in tests)."""
     with _init_lock:
         _cache_ref[0] = None
+
+
+# Module-level API for test compatibility
+_default_analyzer = ScanCache()
+
+def clear(*args, **kwargs):
+    """Wrapper for ScanCache.clear()."""
+    return _default_analyzer.clear(*args, **kwargs)
+
+def get(*args, **kwargs):
+    """Wrapper for ScanCache.get()."""
+    return _default_analyzer.get(*args, **kwargs)
+
+def invalidate(*args, **kwargs):
+    """Wrapper for ScanCache.invalidate()."""
+    return _default_analyzer.invalidate(*args, **kwargs)
+
+def put(*args, **kwargs):
+    """Wrapper for ScanCache.put()."""
+    return _default_analyzer.put(*args, **kwargs)
+
+def save(*args, **kwargs):
+    """Wrapper for ScanCache.save()."""
+    return _default_analyzer.save(*args, **kwargs)
+
+def size(*args, **kwargs):
+    """Wrapper for ScanCache.size()."""
+    return _default_analyzer.size(*args, **kwargs)
+
