@@ -119,11 +119,28 @@ def assert_compiles(rust_code: str, *, allow_warnings: bool = True):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  0. Base Test Class with Shared Helpers
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TranspilerTestBase:
+    """Base class providing shared helper methods for all transpiler tests."""
+
+    def _fn_body(self, python_body: str) -> str:
+        """Helper: wrap body in a function, transpile, return body lines."""
+        code = f"def test_fn():\n    {python_body}"
+        rust = transpile_function_code(code)
+        # Extract everything between first { and last }
+        body = rust[rust.index("{") + 1 : rust.rindex("}")].strip()
+        return body
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  1. Type Mapping
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class TestTypeMapping:
+class TestTypeMapping(TranspilerTestBase):
     """Test py_type_to_rust()."""
 
     @pytest.mark.parametrize(
@@ -186,16 +203,8 @@ class TestTypeMapping:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class TestExpressions:
+class TestExpressions(TranspilerTestBase):
     """Test that Python expressions map to correct Rust."""
-
-    def _fn_body(self, python_body: str) -> str:
-        """Helper: wrap body in a function, transpile, return body lines."""
-        code = f"def test_fn():\n    {python_body}"
-        rust = transpile_function_code(code)
-        # Extract everything between first { and last }
-        body = rust[rust.index("{") + 1 : rust.rindex("}")].strip()
-        return body
 
     def test_integer_literal(self):
         body = self._fn_body("x = 42")
@@ -255,7 +264,7 @@ class TestExpressions:
         assert "vec![]" in body
 
 
-class TestExpressionsAdvanced:
+class TestExpressionsAdvanced(TranspilerTestBase):
     """Test advanced Python expression transpilation (dict, set, in, ternary, lambda)."""
 
     def test_dict_literal(self):
@@ -292,7 +301,7 @@ class TestExpressionsAdvanced:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class TestBuiltinRewrites:
+class TestBuiltinRewrites(TranspilerTestBase):
     """Test that Python builtins are rewritten to Rust idioms."""
 
     def test_len(self):
@@ -346,7 +355,7 @@ class TestBuiltinRewrites:
         assert ".max(" in body2
 
 
-class TestBuiltinRewritesAdvanced:
+class TestBuiltinRewritesAdvanced(TranspilerTestBase):
     """Test advanced Python builtin → Rust rewrites."""
 
     def test_sum(self):
@@ -397,7 +406,7 @@ class TestBuiltinRewritesAdvanced:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class TestMethodRewrites:
+class TestMethodRewrites(TranspilerTestBase):
     """Test Python method → Rust method mapping."""
 
     def test_append_to_push(self):
@@ -601,7 +610,7 @@ class TestStatementsMisc:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class TestComprehensions:
+class TestComprehensions(TranspilerTestBase):
     """Test list/set/dict comprehensions."""
 
     def test_list_comprehension(self):
