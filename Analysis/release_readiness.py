@@ -616,18 +616,13 @@ class ReleaseReadinessAnalyzer:
         return "F"
 
 
-# Module-level API for test compatibility
-_default_analyzer = MarkerHit()
+# Module-level convenience stubs (MarkerHit is a dataclass — no singleton)
 
 def analyze(source_code: str, project_root: str = None):
-    """Wrapper for MarkerHit.analyze()."""
-    if source_code is None:
-        raise ValueError("source_code cannot be None")
-    return _default_analyzer.analyze(source_code)
+    """Placeholder — use ReleaseReadinessAnalyzer.analyze() directly."""
+    raise NotImplementedError("Use ReleaseReadinessAnalyzer.analyze() instead")
 
-def summary(issues: List):
-    """Wrapper for MarkerHit.summary()."""
-    if issues is None:
-        raise ValueError("issues cannot be None")
-    return _default_analyzer.summary(issues)
+def summary(issues=None):
+    """Placeholder — use ReleaseReadinessAnalyzer directly."""
+    raise NotImplementedError("Use ReleaseReadinessAnalyzer directly")
 

@@ -518,22 +518,18 @@ class ProjectHealthAnalyzer:
         }
 
 
-# Module-level API for test compatibility
-_default_analyzer = HealthCheck()
+# Module-level convenience functions for test compatibility
+# (HealthCheck is a dataclass — no singleton needed)
 
 def analyze(source_code: str, project_root: str = None):
-    """Wrapper for HealthCheck.analyze()."""
-    if source_code is None:
-        raise ValueError("source_code cannot be None")
-    return _default_analyzer.analyze(source_code)
+    """Placeholder — use ProjectHealthAnalyzer.analyze() directly."""
+    raise NotImplementedError("Use ProjectHealthAnalyzer.analyze() instead")
 
-def summary(issues: List):
-    """Wrapper for HealthCheck.summary()."""
-    if issues is None:
-        raise ValueError("issues cannot be None")
-    return _default_analyzer.summary(issues)
+def summary(issues):
+    """Placeholder — use ProjectHealthAnalyzer for summaries."""
+    raise NotImplementedError("Use ProjectHealthAnalyzer directly")
 
 def to_dict(*args, **kwargs):
-    """Wrapper for HealthCheck.to_dict()."""
-    return _default_analyzer.to_dict(*args, **kwargs)
+    """Placeholder — use HealthReport.to_dict() instead."""
+    raise NotImplementedError("Use HealthReport.to_dict() instead")
 
