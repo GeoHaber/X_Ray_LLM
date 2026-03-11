@@ -2231,19 +2231,3 @@ async def main(page: ft.Page):
 if __name__ == "__main__":
     ft.run(main)
 
-
-# Module-level API for test compatibility
-_default_analyzer = FletBridge()
-
-def log(*args, **kwargs):
-    """Wrapper for FletBridge.log()."""
-    return _default_analyzer.log(*args, **kwargs)
-
-def progress(*args, **kwargs):
-    """Wrapper for FletBridge.progress()."""
-    return _default_analyzer.progress(*args, **kwargs)
-
-def status(*args, **kwargs):
-    """Wrapper for FletBridge.status()."""
-    return _default_analyzer.status(*args, **kwargs)
-

@@ -2,7 +2,7 @@ import os
 import json
 import urllib.request
 import urllib.error
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import asyncio
 from .utils import logger, url_responds
 from .config import LLM_CONFIG, load_llm_config

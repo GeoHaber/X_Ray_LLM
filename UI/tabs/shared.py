@@ -476,13 +476,11 @@ def _code_panel(label, emoji, code_text, color):
 
 
 # Module-level API for test compatibility
-_default_analyzer = _THMeta()
-
 def is_dark(*args, **kwargs):
-    """Wrapper for _THMeta.is_dark()."""
-    return _default_analyzer.is_dark(*args, **kwargs)
+    """Wrapper for TH.is_dark()."""
+    return TH.is_dark(*args, **kwargs)
 
 def toggle(*args, **kwargs):
-    """Wrapper for _THMeta.toggle()."""
-    return _default_analyzer.toggle(*args, **kwargs)
+    """Wrapper for TH.toggle()."""
+    return TH.toggle(*args, **kwargs)
 

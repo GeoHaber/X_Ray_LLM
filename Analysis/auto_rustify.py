@@ -1830,13 +1830,15 @@ class RustifyPipeline:
 
 
 # Module-level API for test compatibility
-_default_analyzer = SystemProfile()
-
 def run(*args, **kwargs):
-    """Wrapper for SystemProfile.run()."""
-    return _default_analyzer.run(*args, **kwargs)
+    """Wrapper for RustifyPipeline.run()."""
+    if not args or not isinstance(args[0], RustifyPipeline):
+        raise TypeError("First argument must be a RustifyPipeline instance")
+    return args[0].run(*args[1:], **kwargs)
 
 def to_dict(*args, **kwargs):
-    """Wrapper for SystemProfile.to_dict()."""
-    return _default_analyzer.to_dict(*args, **kwargs)
+    """Wrapper for RustifyPipeline.to_dict()."""
+    if not args or not isinstance(args[0], RustifyPipeline):
+        raise TypeError("First argument must be a RustifyPipeline instance")
+    return args[0].to_dict(*args[1:], **kwargs)
 
