@@ -31,6 +31,10 @@ def test_import_Analysis_dead_functions():
     """Smoke: Analysis.dead_functions imports without error."""
     importlib.import_module("Analysis.dead_functions")
 
+def test_import_Analysis_design_oracle():
+    """Smoke: Analysis.design_oracle imports without error."""
+    importlib.import_module("Analysis.design_oracle")
+
 def test_import_Analysis_duplicates():
     """Smoke: Analysis.duplicates imports without error."""
     importlib.import_module("Analysis.duplicates")
@@ -275,6 +279,10 @@ def test_import__mothership_settings_service():
     """Smoke: _mothership.settings_service imports without error."""
     importlib.import_module("_mothership.settings_service")
 
+def test_import_auto_fix_api():
+    """Smoke: auto_fix_api imports without error."""
+    importlib.import_module("auto_fix_api")
+
 def test_import_build_rustified_exe():
     """Smoke: build_rustified_exe imports without error."""
     importlib.import_module("build_rustified_exe")
@@ -283,6 +291,14 @@ def test_import_find_crits():
     """Smoke: find_crits imports without error."""
     importlib.import_module("find_crits")
 
+def test_import_fix_missing_api():
+    """Smoke: fix_missing_api imports without error."""
+    importlib.import_module("fix_missing_api")
+
+def test_import_llm_transpiler():
+    """Smoke: llm_transpiler imports without error."""
+    importlib.import_module("llm_transpiler")
+
 def test_import_run_nexus_on_transpiler():
     """Smoke: run_nexus_on_transpiler imports without error."""
     importlib.import_module("run_nexus_on_transpiler")
@@ -290,6 +306,10 @@ def test_import_run_nexus_on_transpiler():
 def test_import_scan_all_rustify():
     """Smoke: scan_all_rustify imports without error."""
     importlib.import_module("scan_all_rustify")
+
+def test_import_transpile_with_llm():
+    """Smoke: transpile_with_llm imports without error."""
+    importlib.import_module("transpile_with_llm")
 
 def test_import_verify_rust_compilation():
     """Smoke: verify_rust_compilation imports without error."""

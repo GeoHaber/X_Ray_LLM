@@ -76,6 +76,51 @@ def test_Analysis__analyzer_base_summary_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(summary)
 
+def test_Analysis__analyzer_base_analyze_is_callable():
+    """Verify analyze exists and is callable."""
+    from Analysis._analyzer_base import analyze
+    assert callable(analyze)
+
+def test_Analysis__analyzer_base_analyze_none_args():
+    """Monkey: call analyze with None args — should not crash unhandled."""
+    from Analysis._analyzer_base import analyze
+    try:
+        analyze(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis__analyzer_base_available_is_callable():
+    """Verify available exists and is callable."""
+    from Analysis._analyzer_base import available
+    assert callable(available)
+
+def test_Analysis__analyzer_base_available_none_args():
+    """Monkey: call available with None args — should not crash unhandled."""
+    from Analysis._analyzer_base import available
+    try:
+        available(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis__analyzer_base_summary_is_callable():
+    """Verify summary exists and is callable."""
+    from Analysis._analyzer_base import summary
+    assert callable(summary)
+
+def test_Analysis__analyzer_base_summary_none_args():
+    """Monkey: call summary with None args — should not crash unhandled."""
+    from Analysis._analyzer_base import summary
+    try:
+        summary(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
 def test_Analysis__analyzer_base_BaseStaticAnalyzer_is_class():
     """Verify BaseStaticAnalyzer exists and is a class."""
     from Analysis._analyzer_base import BaseStaticAnalyzer

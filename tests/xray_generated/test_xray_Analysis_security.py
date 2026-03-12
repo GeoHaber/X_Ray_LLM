@@ -64,6 +64,50 @@ def test_Analysis_security_summary_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(summary)
 
+def test_Analysis_security_analyze_is_callable():
+    """Verify analyze exists and is callable."""
+    from Analysis.security import analyze
+    assert callable(analyze)
+
+def test_Analysis_security_analyze_none_args():
+    """Monkey: call analyze with None args — should not crash unhandled."""
+    from Analysis.security import analyze
+    try:
+        analyze(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_security_analyze_return_type():
+    """Verify analyze returns expected type."""
+    from Analysis.security import analyze
+    # Smoke check — return type should be: List[SmellIssue]
+    # (requires valid args to test; assert function exists)
+    assert callable(analyze)
+
+def test_Analysis_security_summary_is_callable():
+    """Verify summary exists and is callable."""
+    from Analysis.security import summary
+    assert callable(summary)
+
+def test_Analysis_security_summary_none_args():
+    """Monkey: call summary with None args — should not crash unhandled."""
+    from Analysis.security import summary
+    try:
+        summary(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_security_summary_return_type():
+    """Verify summary returns expected type."""
+    from Analysis.security import summary
+    # Smoke check — return type should be: Dict[str, Any]
+    # (requires valid args to test; assert function exists)
+    assert callable(summary)
+
 def test_Analysis_security_SecurityAnalyzer_is_class():
     """Verify SecurityAnalyzer exists and is a class."""
     from Analysis.security import SecurityAnalyzer

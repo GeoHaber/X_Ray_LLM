@@ -91,6 +91,36 @@ def test_Analysis_smells_summary_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(summary)
 
+def test_Analysis_smells_detect_is_callable():
+    """Verify detect exists and is callable."""
+    from Analysis.smells import detect
+    assert callable(detect)
+
+def test_Analysis_smells_enrich_with_llm_is_callable():
+    """Verify enrich_with_llm exists and is callable."""
+    from Analysis.smells import enrich_with_llm
+    assert callable(enrich_with_llm)
+
+def test_Analysis_smells_enrich_with_llm_async_is_callable():
+    """Verify enrich_with_llm_async exists and is callable."""
+    from Analysis.smells import enrich_with_llm_async
+    assert callable(enrich_with_llm_async)
+
+def test_Analysis_smells_summary_is_callable():
+    """Verify summary exists and is callable."""
+    from Analysis.smells import summary
+    assert callable(summary)
+
+def test_Analysis_smells_summary_none_args():
+    """Monkey: call summary with None args — should not crash unhandled."""
+    from Analysis.smells import summary
+    try:
+        summary(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
 def test_Analysis_smells_CodeSmellDetector_is_class():
     """Verify CodeSmellDetector exists and is a class."""
     from Analysis.smells import CodeSmellDetector

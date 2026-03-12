@@ -119,6 +119,126 @@ def test_UI_tabs_shared_bar_chart_none_args():
     except Exception as e:
         pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
 
+def test_UI_tabs_shared_build_html_report_is_callable():
+    """Verify build_html_report exists and is callable."""
+    from UI.tabs.shared import build_html_report
+    assert callable(build_html_report)
+
+def test_UI_tabs_shared_build_html_report_none_args():
+    """Monkey: call build_html_report with None args — should not crash unhandled."""
+    from UI.tabs.shared import build_html_report
+    try:
+        build_html_report(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_UI_tabs_shared_build_html_report_return_type():
+    """Verify build_html_report returns expected type."""
+    from UI.tabs.shared import build_html_report
+    # Smoke check — return type should be: str
+    # (requires valid args to test; assert function exists)
+    assert callable(build_html_report)
+
+def test_UI_tabs_shared_build_dimension_cards_is_callable():
+    """Verify build_dimension_cards exists and is callable."""
+    from UI.tabs.shared import build_dimension_cards
+    assert callable(build_dimension_cards)
+
+def test_UI_tabs_shared_build_dimension_cards_none_args():
+    """Monkey: call build_dimension_cards with None args — should not crash unhandled."""
+    from UI.tabs.shared import build_dimension_cards
+    try:
+        build_dimension_cards(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_UI_tabs_shared_build_dimension_cards_return_type():
+    """Verify build_dimension_cards returns expected type."""
+    from UI.tabs.shared import build_dimension_cards
+    # Smoke check — return type should be: ft.Row
+    # (requires valid args to test; assert function exists)
+    assert callable(build_dimension_cards)
+
+def test_UI_tabs_shared_build_severity_bar_is_callable():
+    """Verify build_severity_bar exists and is callable."""
+    from UI.tabs.shared import build_severity_bar
+    assert callable(build_severity_bar)
+
+def test_UI_tabs_shared_build_severity_bar_none_args():
+    """Monkey: call build_severity_bar with None args — should not crash unhandled."""
+    from UI.tabs.shared import build_severity_bar
+    try:
+        build_severity_bar(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_UI_tabs_shared_build_severity_bar_return_type():
+    """Verify build_severity_bar returns expected type."""
+    from UI.tabs.shared import build_severity_bar
+    # Smoke check — return type should be: ft.Container
+    # (requires valid args to test; assert function exists)
+    assert callable(build_severity_bar)
+
+def test_UI_tabs_shared_build_trend_indicator_is_callable():
+    """Verify build_trend_indicator exists and is callable."""
+    from UI.tabs.shared import build_trend_indicator
+    assert callable(build_trend_indicator)
+
+def test_UI_tabs_shared_build_trend_indicator_none_args():
+    """Monkey: call build_trend_indicator with None args — should not crash unhandled."""
+    from UI.tabs.shared import build_trend_indicator
+    try:
+        build_trend_indicator(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_UI_tabs_shared_build_trend_indicator_return_type():
+    """Verify build_trend_indicator returns expected type."""
+    from UI.tabs.shared import build_trend_indicator
+    # Smoke check — return type should be: ft.Row
+    # (requires valid args to test; assert function exists)
+    assert callable(build_trend_indicator)
+
+def test_UI_tabs_shared_build_sparkline_is_callable():
+    """Verify build_sparkline exists and is callable."""
+    from UI.tabs.shared import build_sparkline
+    assert callable(build_sparkline)
+
+def test_UI_tabs_shared_build_sparkline_none_args():
+    """Monkey: call build_sparkline with None args — should not crash unhandled."""
+    from UI.tabs.shared import build_sparkline
+    try:
+        build_sparkline(None, None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_UI_tabs_shared_build_sparkline_return_type():
+    """Verify build_sparkline returns expected type."""
+    from UI.tabs.shared import build_sparkline
+    # Smoke check — return type should be: ft.Container
+    # (requires valid args to test; assert function exists)
+    assert callable(build_sparkline)
+
+def test_UI_tabs_shared_is_dark_is_callable():
+    """Verify is_dark exists and is callable."""
+    from UI.tabs.shared import is_dark
+    assert callable(is_dark)
+
+def test_UI_tabs_shared_toggle_is_callable():
+    """Verify toggle exists and is callable."""
+    from UI.tabs.shared import toggle
+    assert callable(toggle)
+
 def test_UI_tabs_shared_TH_is_class():
     """Verify TH exists and is a class."""
     from UI.tabs.shared import TH

@@ -217,6 +217,96 @@ def test_Analysis_ui_health_summary_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(summary)
 
+def test_Analysis_ui_health_analyze_is_callable():
+    """Verify analyze exists and is callable."""
+    from Analysis.ui_health import analyze
+    assert callable(analyze)
+
+def test_Analysis_ui_health_analyze_none_args():
+    """Monkey: call analyze with None args — should not crash unhandled."""
+    from Analysis.ui_health import analyze
+    try:
+        analyze(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_ui_health_analyze_to_smells_is_callable():
+    """Verify analyze_to_smells exists and is callable."""
+    from Analysis.ui_health import analyze_to_smells
+    assert callable(analyze_to_smells)
+
+def test_Analysis_ui_health_analyze_to_smells_none_args():
+    """Monkey: call analyze_to_smells with None args — should not crash unhandled."""
+    from Analysis.ui_health import analyze_to_smells
+    try:
+        analyze_to_smells(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_ui_health_message_is_callable():
+    """Verify message exists and is callable."""
+    from Analysis.ui_health import message
+    assert callable(message)
+
+def test_Analysis_ui_health_severity_is_callable():
+    """Verify severity exists and is callable."""
+    from Analysis.ui_health import severity
+    assert callable(severity)
+
+def test_Analysis_ui_health_summary_is_callable():
+    """Verify summary exists and is callable."""
+    from Analysis.ui_health import summary
+    assert callable(summary)
+
+def test_Analysis_ui_health_summary_none_args():
+    """Monkey: call summary with None args — should not crash unhandled."""
+    from Analysis.ui_health import summary
+    try:
+        summary(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_ui_health_to_smell_is_callable():
+    """Verify to_smell exists and is callable."""
+    from Analysis.ui_health import to_smell
+    assert callable(to_smell)
+
+def test_Analysis_ui_health_visit_Assign_is_callable():
+    """Verify visit_Assign exists and is callable."""
+    from Analysis.ui_health import visit_Assign
+    assert callable(visit_Assign)
+
+def test_Analysis_ui_health_visit_Assign_attr_is_callable():
+    """Verify visit_Assign_attr exists and is callable."""
+    from Analysis.ui_health import visit_Assign_attr
+    assert callable(visit_Assign_attr)
+
+def test_Analysis_ui_health_visit_Attribute_is_callable():
+    """Verify visit_Attribute exists and is callable."""
+    from Analysis.ui_health import visit_Attribute
+    assert callable(visit_Attribute)
+
+def test_Analysis_ui_health_visit_AugAssign_is_callable():
+    """Verify visit_AugAssign exists and is callable."""
+    from Analysis.ui_health import visit_AugAssign
+    assert callable(visit_AugAssign)
+
+def test_Analysis_ui_health_visit_Call_is_callable():
+    """Verify visit_Call exists and is callable."""
+    from Analysis.ui_health import visit_Call
+    assert callable(visit_Call)
+
+def test_Analysis_ui_health_visit_Name_is_callable():
+    """Verify visit_Name exists and is callable."""
+    from Analysis.ui_health import visit_Name
+    assert callable(visit_Name)
+
 def test_Analysis_ui_health_UIHealthIssue_is_class():
     """Verify UIHealthIssue exists and is a class."""
     from Analysis.ui_health import UIHealthIssue

@@ -518,6 +518,7 @@ PHASE_REGISTRY = [
     ("rustify", "Rust Candidates"),
     ("ui_compat", "UI Compat"),
     ("ui_health", "UI Health"),
+    ("design_oracle", "Architectural Review (AI)"),
     (
         "verification",
         t("tab_verification")
@@ -565,6 +566,7 @@ def _run_flet_phases(
             "release_readiness",
             lambda: _phase_release_readiness(ctx.root, ctx.exclude, results),
         ),
+        ("design_oracle", lambda: _phase_design_oracle(results)),
     ]
     for key, runner in _phases:
         if not ctx.modes.get(key):
@@ -697,7 +699,7 @@ def _update_onboard(st, page):
         w["back"].on_click = lambda e: _on_back_onboard(st, page)
     else:
         w["back"].text = t("onboard_skip")
-        w["back"].on_click = lambda e: page.pop_dialog()
+        w["back"].on_click = lambda e: (setattr(st.get("dlg"), "open", False), page.update()) if st.get("dlg") else None
     w["next"].text = t("onboard_got_it") if i == st["n"] - 1 else t("onboard_next")
     page.update()
 
@@ -705,7 +707,9 @@ def _update_onboard(st, page):
 def _on_next_onboard(st, page):
     """Advance onboarding by one step or close."""
     if st["idx"] >= st["n"] - 1:
-        page.pop_dialog()
+        if st.get("dlg"):
+            st["dlg"].open = False
+            page.update()
         return
     st["idx"] += 1
     _update_onboard(st, page)
@@ -736,7 +740,7 @@ def _show_onboarding(page: ft.Page):
     w["label"] = ft.Text(f"1 / {n}", size=SZ_XS, color=TH.muted)
     w["back"] = ft.TextButton(
         t("onboard_skip"),
-        on_click=lambda e: page.pop_dialog(),
+        on_click=lambda e: (setattr(st.get("dlg"), "open", False), page.update()) if st.get("dlg") else None,
         style=ft.ButtonStyle(color=TH.muted),
     )
     w["next"] = ft.Button(
@@ -790,7 +794,10 @@ def _show_onboarding(page: ft.Page):
         actions=[],
         shape=ft.RoundedRectangleBorder(radius=14),
     )
-    page.show_dialog(dlg)
+    st["dlg"] = dlg
+    if dlg not in page.overlay: page.overlay.append(dlg)
+    dlg.open = True
+    page.update()
 
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -2121,6 +2128,7 @@ def _build_mode_checks(state):
         _cb("rustify", t("rustify")),
         _cb("ui_compat", t("ui_compat")),
         _cb("ui_health", "UI Health"),
+        _cb("design_oracle", "Architectural Review (AI)"),
         _cb("verification", "Verification"),
         _cb("release_readiness", "Release Readiness"),
     ]
@@ -2154,10 +2162,6 @@ def _build_theme_lang_controls(page, main_fn):
     def on_theme_toggle(e):
         TH.toggle()
         page.data["_onboarded"] = True
-        try:
-            page.pop_dialog()
-        except Exception:  # nosec B110
-            pass
         page.controls.clear()
         page.run_task(main_fn, page)
 
@@ -2167,10 +2171,6 @@ def _build_theme_lang_controls(page, main_fn):
         set_locale(e.control.value)
         page.data = page.data or {}
         page.data["_onboarded"] = True
-        try:
-            page.pop_dialog()
-        except Exception:  # nosec B110
-            pass
         page.controls.clear()
         page.run_task(main_fn, page)
 
@@ -2436,9 +2436,7 @@ async def _setup_main_state(page: ft.Page):
     if not state["root_path"] and state["recent_paths"]:
         state["root_path"] = state["recent_paths"][0]
 
-    file_picker = ft.FilePicker()
-    if not any(isinstance(s, ft.FilePicker) for s in page.services):
-        page.services.append(file_picker)
+    # FilePicker is instantiated dynamically in pick_directory for desktop clients
 
     _prev_path = state.get("root_path", "")
     path_text = ft.Text(
@@ -2460,14 +2458,68 @@ async def _setup_main_state(page: ft.Page):
         state["recent_paths"] = _load_settings().get("recent_paths", [])
 
     async def pick_directory(e):
-        result = await file_picker.get_directory_path(
-            dialog_title=t("select_directory")
-        )
-        if result:
-            _apply_path(result)
+        if page.web:
+            # Fallback for web mode: ask user to type the path
+            def _close_dlg(e):
+                dlg.open = False
+                page.update()
+            
+            def _apply_dlg(e):
+                if d_path.value:
+                    _apply_path(d_path.value)
+                dlg.open = False
+                page.update()
+
+            d_path = ft.TextField(label="Enter Directory Path", value=state.get("root_path", ""), autofocus=True, expand=True)
+            dlg = ft.AlertDialog(
+                title=ft.Text("Select Directory (Web Mode)"),
+                content=d_path,
+                actions=[
+                    ft.TextButton("Cancel", on_click=_close_dlg),
+                    ft.TextButton("Apply", on_click=_apply_dlg)
+                ]
+            )
+            if dlg not in page.overlay: page.overlay.append(dlg)
+            dlg.open = True
             page.update()
+        else:
+            # Dynamically instantiate FilePicker to avoid web rendering bugs on page load
+            f_picker = None
+            for s in page.overlay:
+                if type(s).__name__ == "FilePicker":
+                    f_picker = s
+                    break
+            
+            if not f_picker:
+                # ONLY create FilePicker on non-web clients
+                f_picker = ft.FilePicker()
+                page.overlay.append(f_picker)
+                page.update()
+            
+            try:
+                result = await f_picker.get_directory_path(
+                    dialog_title=t("select_directory")
+                )
+                if result:
+                    _apply_path(result)
+                    page.update()
+            except Exception as exc:
+                import logging
+                logging.error(f"Error opening directory picker: {exc}")
 
     return state, path_text, pick_directory, _apply_path
+
+
+def _phase_design_oracle(results):
+    try:
+        from Analysis.design_oracle import _default_oracle
+        functions = results.get("_functions", [])
+        file_count = len(results.get("meta", {}).get("files", [])) or 1
+        oracle_res = _default_oracle.analyze(functions, file_count)
+        results["design_oracle"] = _default_oracle.summary(oracle_res)
+        results["_design_oracle_full"] = oracle_res
+    except Exception as exc:
+        results["design_oracle"] = {"error": str(exc)}
 
 
 def _show_keyboard_help(page):
@@ -2504,11 +2556,13 @@ def _show_keyboard_help(page):
             width=340, padding=8,
         ),
         actions=[
-            ft.TextButton("Close", on_click=lambda e: page.pop_dialog()),
+            ft.TextButton("Close", on_click=lambda e: (setattr(dlg, "open", False), page.update())),
         ],
         shape=ft.RoundedRectangleBorder(radius=14),
     )
-    page.show_dialog(dlg)
+    if dlg not in page.overlay: page.overlay.append(dlg)
+    dlg.open = True
+    page.update()
 
 
 def _build_main_ui(page: ft.Page, state: dict, path_text, pick_directory, apply_path):
@@ -2623,10 +2677,6 @@ async def main(page: ft.Page):
                 # Ctrl+D → Toggle theme
                 TH.toggle()
                 page.data["_onboarded"] = True
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
                 page.controls.clear()
                 page.run_task(main, page)
         elif e.key == "F1":

@@ -308,6 +308,16 @@ def test_Analysis_auto_rustify_run_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(run)
 
+def test_Analysis_auto_rustify_run_is_callable():
+    """Verify run exists and is callable."""
+    from Analysis.auto_rustify import run
+    assert callable(run)
+
+def test_Analysis_auto_rustify_to_dict_is_callable():
+    """Verify to_dict exists and is callable."""
+    from Analysis.auto_rustify import to_dict
+    assert callable(to_dict)
+
 def test_Analysis_auto_rustify_SystemProfile_is_class():
     """Verify SystemProfile exists and is a class."""
     from Analysis.auto_rustify import SystemProfile

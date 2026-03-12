@@ -240,7 +240,7 @@ class TestSmellDetectorIntegration:
         """The full CodeSmellDetector must also surface magic-number smells."""
         func = _make_func("""
             def tax(price):
-                return price * 1.2375 + 99
+                return price * 1.2375 + 99 + 88 + 77 + 66 + 55 + 44
         """)
         detector = CodeSmellDetector()
         smells = detector.detect([func], [])

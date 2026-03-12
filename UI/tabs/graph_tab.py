@@ -4,6 +4,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Dict, Any
 from Analysis.smart_graph import SmartGraph
+from Analysis.design_oracle import _default_oracle
 from UI.tabs.shared import (
     MONO_FONT,
     SZ_SM,
@@ -471,7 +472,7 @@ def _build_graph_group_chart(graph) -> ft.Control:
 
 
 def _build_graph_header(
-    on_open_graph, mode_selector: ft.Control, layout_selector: ft.Control
+    on_open_graph, mode_selector: ft.Control, layout_selector: ft.Control, on_run_oracle
 ) -> ft.Control:
     """Build the branded glass-card header for the graph tab."""
     return glass_card(
@@ -488,7 +489,7 @@ def _build_graph_header(
                             color=TH.accent,
                         ),
                         ft.Container(expand=True),
-                        ft.Button(
+                        ft.ElevatedButton(
                             " Open Fullscreen Graph",
                             icon=ft.Icons.OPEN_IN_NEW,
                             on_click=on_open_graph,
@@ -509,6 +510,18 @@ def _build_graph_header(
                         ft.Container(width=10),
                         ft.Text("Layout:", size=SZ_SM, color=TH.dim, weight=ft.FontWeight.BOLD),
                         layout_selector,
+                        ft.Container(expand=True),
+                        ft.ElevatedButton(
+                            " Analyze Architecture (AI)",
+                            icon=ft.Icons.AUTO_AWESOME,
+                            on_click=on_run_oracle,
+                            bgcolor="#673ab7",
+                            color=ft.Colors.WHITE,
+                            height=BTN_H_SM,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS)
+                            ),
+                        ),
                     ],
                     spacing=10,
                 ),
@@ -603,6 +616,33 @@ def _build_graph_tab(results: Dict[str, Any], page: ft.Page) -> ft.Control:
         expand=True,
     )
 
+    oracle_container = ft.Container(
+        content=ft.Column(
+            [
+                ft.Text("Architectural Design Review", size=SZ_H3, weight=ft.FontWeight.BOLD, color=TH.accent),
+                ft.Markdown("", selectable=True, extension_set="gitHubWeb", code_theme="atom-one-dark"),
+            ],
+            spacing=10,
+        ),
+        visible=False,
+        padding=20,
+        expand=True,
+    )
+
+    def on_run_oracle(e):
+        e.control.disabled = True
+        e.control.text = " Analyzing..."
+        page.update()
+        result = _default_oracle.analyze(functions, len(results.get("meta", {}).get("files", [])) or 1)
+        if "error" in result:
+             oracle_container.content.controls[1].value = f"**Error**: {result['error']}"
+        else:
+             oracle_container.content.controls[1].value = result.get("markdown", "")
+        oracle_container.visible = True
+        e.control.text = " Analyze Architecture (AI)"
+        e.control.disabled = False
+        page.update()
+    
     def on_mode_change(e):
         g = graphs_map[e.control.value]
         content_area.controls[0] = _build_graph_metrics(g)
@@ -643,8 +683,8 @@ def _build_graph_tab(results: Dict[str, Any], page: ft.Page) -> ft.Control:
 
     return ft.Column(
         [
-            _build_graph_header(_open_graph, mode_selector, layout_selector),
-            content_area
+            _build_graph_header(_open_graph, mode_selector, layout_selector, on_run_oracle),
+            ft.Row([content_area, oracle_container], expand=True, spacing=10, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START)
         ],
         spacing=10,
         expand=True,

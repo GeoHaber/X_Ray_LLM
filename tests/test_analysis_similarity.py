@@ -240,31 +240,34 @@ class TestNameSimilarity:
 # ════════════════════════════════════════════════════════════════════
 
 
-class TestSignatureSimilarity:
-    def _mock_func(self, name="f", params=None, ret=None, **kw):
-        f = MagicMock()
-        f.name = name
-        f.parameters = params or []
-        f.return_type = ret
-        f.is_async = kw.get("is_async", False)
-        f.calls_to = kw.get("calls_to", [])
-        f.docstring = kw.get("docstring", None)
-        return f
+def _mock_func(name="f", params=None, ret=None, **kw):
+    f = MagicMock()
+    f.name = name
+    f.parameters = params or []
+    f.return_type = ret
+    f.is_async = kw.get("is_async", False)
+    f.calls_to = kw.get("calls_to", [])
+    if "calls" in kw:  # handle legacy kwarg
+        f.calls_to = kw["calls"]
+    f.docstring = kw.get("docstring", None)
+    return f
 
+
+class TestSignatureSimilarity:
     def test_identical_signatures(self):
-        a = self._mock_func(params=["x", "y"], ret="int")
-        b = self._mock_func(params=["x", "y"], ret="int")
+        a = _mock_func(params=["x", "y"], ret="int")
+        b = _mock_func(params=["x", "y"], ret="int")
         assert signature_similarity(a, b) == pytest.approx(1.0)
 
     def test_different_return_types(self):
-        a = self._mock_func(params=["x"], ret="int")
-        b = self._mock_func(params=["x"], ret="str")
+        a = _mock_func(params=["x"], ret="int")
+        b = _mock_func(params=["x"], ret="str")
         sim = signature_similarity(a, b)
         assert sim < 1.0
 
     def test_async_mismatch_penalized(self):
-        a = self._mock_func(is_async=True)
-        b = self._mock_func(is_async=False)
+        a = _mock_func(is_async=True)
+        b = _mock_func(is_async=False)
         sim = signature_similarity(a, b)
         assert sim < 1.0
 
@@ -276,18 +279,18 @@ class TestSignatureSimilarity:
 
 class TestCallgraphOverlap:
     def test_identical_calls(self):
-        a = self._mock_func(calls=["foo", "bar"])
-        b = self._mock_func(calls=["foo", "bar"])
+        a = _mock_func(calls=["foo", "bar"])
+        b = _mock_func(calls=["foo", "bar"])
         assert callgraph_overlap(a, b) == 1.0
 
     def test_disjoint_calls(self):
-        a = self._mock_func(calls=["foo"])
-        b = self._mock_func(calls=["bar"])
+        a = _mock_func(calls=["foo"])
+        b = _mock_func(calls=["bar"])
         assert callgraph_overlap(a, b) == 0.0
 
     def test_empty_calls(self):
-        a = self._mock_func(calls=[])
-        b = self._mock_func(calls=["foo"])
+        a = _mock_func(calls=[])
+        b = _mock_func(calls=["foo"])
         assert callgraph_overlap(a, b) == 0.0
 
 
@@ -300,14 +303,14 @@ class TestSemanticSimilarity:
     """Tests for semantic similarity computation."""
 
     def test_identical_functions_high(self):
-        a = self._mock_func(
+        a = _mock_func(
             "process_data",
             ["items"],
             "list",
             calls_to=["filter", "map"],
             docstring="Process items.",
         )
-        b = self._mock_func(
+        b = _mock_func(
             "process_data",
             ["items"],
             "list",
@@ -318,14 +321,14 @@ class TestSemanticSimilarity:
         assert sim > 0.8
 
     def test_completely_different_low(self):
-        a = self._mock_func(
+        a = _mock_func(
             "render_widget",
             ["canvas"],
             "None",
             calls_to=["draw", "paint"],
             docstring="Render a widget.",
         )
-        b = self._mock_func(
+        b = _mock_func(
             "parse_config",
             ["path"],
             "dict",
@@ -336,7 +339,7 @@ class TestSemanticSimilarity:
         assert sim < 0.3
 
     def test_returns_float_0_to_1(self):
-        a = self._mock_func("foo", ["x"])
-        b = self._mock_func("bar", ["y"])
+        a = _mock_func("foo", ["x"])
+        b = _mock_func("bar", ["y"])
         sim = semantic_similarity(a, b)
         assert 0.0 <= sim <= 1.0

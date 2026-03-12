@@ -394,6 +394,56 @@ def test_Analysis_transpiler_transpile_module_file_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(transpile_module_file)
 
+def test_Analysis_transpiler_build_function_is_callable():
+    """Verify build_function exists and is callable."""
+    from Analysis.transpiler import build_function
+    assert callable(build_function)
+
+def test_Analysis_transpiler_dedent_is_callable():
+    """Verify dedent exists and is callable."""
+    from Analysis.transpiler import dedent
+    assert callable(dedent)
+
+def test_Analysis_transpiler_emit_is_callable():
+    """Verify emit exists and is callable."""
+    from Analysis.transpiler import emit
+    assert callable(emit)
+
+def test_Analysis_transpiler_emit_inline_is_callable():
+    """Verify emit_inline exists and is callable."""
+    from Analysis.transpiler import emit_inline
+    assert callable(emit_inline)
+
+def test_Analysis_transpiler_emit_newline_is_callable():
+    """Verify emit_newline exists and is callable."""
+    from Analysis.transpiler import emit_newline
+    assert callable(emit_newline)
+
+def test_Analysis_transpiler_generate_is_callable():
+    """Verify generate exists and is callable."""
+    from Analysis.transpiler import generate
+    assert callable(generate)
+
+def test_Analysis_transpiler_get_code_is_callable():
+    """Verify get_code exists and is callable."""
+    from Analysis.transpiler import get_code
+    assert callable(get_code)
+
+def test_Analysis_transpiler_indent_is_callable():
+    """Verify indent exists and is callable."""
+    from Analysis.transpiler import indent
+    assert callable(indent)
+
+def test_Analysis_transpiler_parse_body_is_callable():
+    """Verify parse_body exists and is callable."""
+    from Analysis.transpiler import parse_body
+    assert callable(parse_body)
+
+def test_Analysis_transpiler_require_import_is_callable():
+    """Verify require_import exists and is callable."""
+    from Analysis.transpiler import require_import
+    assert callable(require_import)
+
 def test_Analysis_transpiler_RustNode_is_class():
     """Verify RustNode exists and is a class."""
     from Analysis.transpiler import RustNode

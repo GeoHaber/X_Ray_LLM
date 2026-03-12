@@ -154,6 +154,51 @@ def test_Analysis_tracer_reset_is_callable():
     from Analysis.tracer import reset
     assert callable(reset)
 
+def test_Analysis_tracer_avg_time_us_is_callable():
+    """Verify avg_time_us exists and is callable."""
+    from Analysis.tracer import avg_time_us
+    assert callable(avg_time_us)
+
+def test_Analysis_tracer_dominant_return_type_is_callable():
+    """Verify dominant_return_type exists and is callable."""
+    from Analysis.tracer import dominant_return_type
+    assert callable(dominant_return_type)
+
+def test_Analysis_tracer_load_is_callable():
+    """Verify load exists and is callable."""
+    from Analysis.tracer import load
+    assert callable(load)
+
+def test_Analysis_tracer_profile_for_is_callable():
+    """Verify profile_for exists and is callable."""
+    from Analysis.tracer import profile_for
+    assert callable(profile_for)
+
+def test_Analysis_tracer_profiles_is_callable():
+    """Verify profiles exists and is callable."""
+    from Analysis.tracer import profiles
+    assert callable(profiles)
+
+def test_Analysis_tracer_reset_is_callable():
+    """Verify reset exists and is callable."""
+    from Analysis.tracer import reset
+    assert callable(reset)
+
+def test_Analysis_tracer_save_is_callable():
+    """Verify save exists and is callable."""
+    from Analysis.tracer import save
+    assert callable(save)
+
+def test_Analysis_tracer_to_dict_is_callable():
+    """Verify to_dict exists and is callable."""
+    from Analysis.tracer import to_dict
+    assert callable(to_dict)
+
+def test_Analysis_tracer_wrap_is_callable():
+    """Verify wrap exists and is callable."""
+    from Analysis.tracer import wrap
+    assert callable(wrap)
+
 def test_Analysis_tracer_IOSample_is_class():
     """Verify IOSample exists and is a class."""
     from Analysis.tracer import IOSample

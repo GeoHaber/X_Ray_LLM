@@ -56,6 +56,41 @@ def test_Analysis_project_health_summary_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(summary)
 
+def test_Analysis_project_health_analyze_is_callable():
+    """Verify analyze exists and is callable."""
+    from Analysis.project_health import analyze
+    assert callable(analyze)
+
+def test_Analysis_project_health_analyze_none_args():
+    """Monkey: call analyze with None args — should not crash unhandled."""
+    from Analysis.project_health import analyze
+    try:
+        analyze(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_project_health_summary_is_callable():
+    """Verify summary exists and is callable."""
+    from Analysis.project_health import summary
+    assert callable(summary)
+
+def test_Analysis_project_health_summary_none_args():
+    """Monkey: call summary with None args — should not crash unhandled."""
+    from Analysis.project_health import summary
+    try:
+        summary(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_project_health_to_dict_is_callable():
+    """Verify to_dict exists and is callable."""
+    from Analysis.project_health import to_dict
+    assert callable(to_dict)
+
 def test_Analysis_project_health_HealthCheck_is_class():
     """Verify HealthCheck exists and is a class."""
     from Analysis.project_health import HealthCheck

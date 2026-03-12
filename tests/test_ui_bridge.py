@@ -235,6 +235,12 @@ class TestSwappability:
             def __init__(self):
                 self.logs = []
                 self.statuses = []
+            def log(self, msg: str) -> None:
+                self.logs.append(msg)
+            def status(self, label: str) -> None:
+                self.statuses.append(label)
+            def progress(self, done: int, total: int, label: str = "") -> None:
+                pass
 
         collector = CollectorBridge()
         set_bridge(collector)

@@ -87,6 +87,13 @@ async def test_x_ray_flet_main_is_async():
     import inspect
     assert inspect.iscoroutinefunction(main)
 
+def test_x_ray_flet_main_high_complexity():
+    """Flag: main has CC=15 — verify it handles edge cases."""
+    from x_ray_flet import main
+    # X-Ray detected CC=15 (cyclomatic complexity)
+    # This function has many branches — test edge cases carefully
+    assert callable(main), "Complex function should be importable"
+
 def test_x_ray_flet_FletBridge_is_class():
     """Verify FletBridge exists and is a class."""
     from x_ray_flet import FletBridge

@@ -19,7 +19,7 @@ def test_Analysis_smart_graph_build_none_args():
     """Monkey: call build with None args — should not crash unhandled."""
     from Analysis.smart_graph import build
     try:
-        build(None, None, None, None)
+        build(None, None, None, None, None)
     except (TypeError, ValueError, AttributeError, KeyError):
         pass  # Expected — function should raise, not crash
     except Exception as e:
@@ -39,6 +39,16 @@ def test_Analysis_smart_graph_write_html_none_args():
         pass  # Expected — function should raise, not crash
     except Exception as e:
         pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_smart_graph_build_is_callable():
+    """Verify build exists and is callable."""
+    from Analysis.smart_graph import build
+    assert callable(build)
+
+def test_Analysis_smart_graph_write_html_is_callable():
+    """Verify write_html exists and is callable."""
+    from Analysis.smart_graph import write_html
+    assert callable(write_html)
 
 def test_Analysis_smart_graph_SmartGraph_is_class():
     """Verify SmartGraph exists and is a class."""

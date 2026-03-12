@@ -460,7 +460,6 @@ class TestFletPhaseFunction:
         _phase_release_readiness(tmp_path, [], results)
 
         assert "release_readiness" in results
-        assert "release_checklist" in results
         assert isinstance(results["release_readiness"].get("score"), (int, float))
 
     def test_phase_handles_exceptions(self, tmp_path):

@@ -125,6 +125,41 @@ def test__mothership_models_to_dict_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(to_dict)
 
+def test__mothership_models_fingerprint_is_callable():
+    """Verify fingerprint exists and is callable."""
+    from _mothership.models import fingerprint
+    assert callable(fingerprint)
+
+def test__mothership_models_recommended_gpu_layers_is_callable():
+    """Verify recommended_gpu_layers exists and is callable."""
+    from _mothership.models import recommended_gpu_layers
+    assert callable(recommended_gpu_layers)
+
+def test__mothership_models_tier_is_callable():
+    """Verify tier exists and is callable."""
+    from _mothership.models import tier
+    assert callable(tier)
+
+def test__mothership_models_tier_label_is_callable():
+    """Verify tier_label exists and is callable."""
+    from _mothership.models import tier_label
+    assert callable(tier_label)
+
+def test__mothership_models_to_card_dict_is_callable():
+    """Verify to_card_dict exists and is callable."""
+    from _mothership.models import to_card_dict
+    assert callable(to_card_dict)
+
+def test__mothership_models_to_dict_is_callable():
+    """Verify to_dict exists and is callable."""
+    from _mothership.models import to_dict
+    assert callable(to_dict)
+
+def test__mothership_models_to_list_is_callable():
+    """Verify to_list exists and is callable."""
+    from _mothership.models import to_list
+    assert callable(to_list)
+
 def test__mothership_models_ModelCategory_is_class():
     """Verify ModelCategory exists and is a class."""
     from _mothership.models import ModelCategory

@@ -79,6 +79,10 @@ class TestCommentConsoleLines:
 
 
 class TestCommentDebugPrints:
+    def _run(self, content):
+        fixer = SmellFixer(dry_run=True)
+        return fixer._comment_debug_prints(content)
+
     def test_comments_debug_print(self):
         new, count = self._run('print(f"DEBUG: {val}")\n')
         assert count >= 1

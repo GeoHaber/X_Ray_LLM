@@ -27,6 +27,28 @@ def test_Analysis_lint_fix_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(fix)
 
+def test_Analysis_lint_fix_is_callable():
+    """Verify fix exists and is callable."""
+    from Analysis.lint import fix
+    assert callable(fix)
+
+def test_Analysis_lint_fix_none_args():
+    """Monkey: call fix with None args — should not crash unhandled."""
+    from Analysis.lint import fix
+    try:
+        fix(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_lint_fix_return_type():
+    """Verify fix returns expected type."""
+    from Analysis.lint import fix
+    # Smoke check — return type should be: int
+    # (requires valid args to test; assert function exists)
+    assert callable(fix)
+
 def test_Analysis_lint_LintAnalyzer_is_class():
     """Verify LintAnalyzer exists and is a class."""
     from Analysis.lint import LintAnalyzer

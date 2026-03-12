@@ -44,6 +44,36 @@ def test_Analysis_release_readiness_summary_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(summary)
 
+def test_Analysis_release_readiness_analyze_is_callable():
+    """Verify analyze exists and is callable."""
+    from Analysis.release_readiness import analyze
+    assert callable(analyze)
+
+def test_Analysis_release_readiness_analyze_none_args():
+    """Monkey: call analyze with None args — should not crash unhandled."""
+    from Analysis.release_readiness import analyze
+    try:
+        analyze(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_release_readiness_summary_is_callable():
+    """Verify summary exists and is callable."""
+    from Analysis.release_readiness import summary
+    assert callable(summary)
+
+def test_Analysis_release_readiness_summary_none_args():
+    """Monkey: call summary with None args — should not crash unhandled."""
+    from Analysis.release_readiness import summary
+    try:
+        summary(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
 def test_Analysis_release_readiness_MarkerHit_is_class():
     """Verify MarkerHit exists and is a class."""
     from Analysis.release_readiness import MarkerHit

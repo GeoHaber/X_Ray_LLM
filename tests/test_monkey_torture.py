@@ -173,5 +173,42 @@ async def test_async_llm_concurrency_torture():
     # So we expect exactly 15 processed.
     assert processed == 15
 
-    # To truly torture, we might need to modify/mock the limit, but testing the LIMIT itself is valid.
     # The user asked for torture, but our code prevents self-torture. That's a feature.
+
+def test_design_oracle_torture():
+    """Stress test the Design Oracle with a massive number of garbage functions."""
+    from Analysis.design_oracle import DesignOracle
+    
+    oracle = DesignOracle()
+    massive_funcs = []
+    
+    # Generate 1000 noisy functions
+    for i in range(1000):
+        massive_funcs.append(
+            FunctionRecord(
+                name=f"garbage_func_{i}",
+                file_path=f"path/to/garbage_{i % 10}.py",
+                line_start=1,
+                line_end=50,
+                complexity=random.randint(1, 100),
+                nesting_depth=random.randint(1, 10),
+                parameters=[],
+                docstring=None,
+                code="pass",
+                size_lines=50,
+                return_type=None,
+                decorators=[],
+                calls_to={f"other_func_{random.randint(1, 2000)}" for _ in range(20)},
+                code_hash="hash",
+                structure_hash="hash"
+            )
+        )
+        
+    # The oracle limits input internally to 100, so it shouldn't crash or OOM
+    start_time = time.time()
+    result = oracle.analyze(massive_funcs, 10)
+    duration = time.time() - start_time
+    
+    assert "status" in result or "error" in result
+    assert duration < 2.0  # Should be extremely fast due to internal truncations
+

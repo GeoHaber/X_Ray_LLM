@@ -21,10 +21,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from x_ray_claude import (  # noqa: E402
-    DuplicateFinder,
-    FunctionRecord,
-    _extract_functions_from_file,
+from Analysis.duplicates import DuplicateFinder
+from Core.types import FunctionRecord
+from Lang.python_ast import _extract_functions_from_file
+from Analysis.similarity import (
     callgraph_overlap,
     code_similarity,
     cosine_similarity,

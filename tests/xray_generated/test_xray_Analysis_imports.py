@@ -78,6 +78,41 @@ def test_Analysis_imports_build_graph_high_complexity():
     # This function has many branches — test edge cases carefully
     assert callable(build_graph), "Complex function should be importable"
 
+def test_Analysis_imports_analyze_is_callable():
+    """Verify analyze exists and is callable."""
+    from Analysis.imports import analyze
+    assert callable(analyze)
+
+def test_Analysis_imports_analyze_none_args():
+    """Monkey: call analyze with None args — should not crash unhandled."""
+    from Analysis.imports import analyze
+    try:
+        analyze(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_imports_build_graph_is_callable():
+    """Verify build_graph exists and is callable."""
+    from Analysis.imports import build_graph
+    assert callable(build_graph)
+
+def test_Analysis_imports_summary_is_callable():
+    """Verify summary exists and is callable."""
+    from Analysis.imports import summary
+    assert callable(summary)
+
+def test_Analysis_imports_summary_none_args():
+    """Monkey: call summary with None args — should not crash unhandled."""
+    from Analysis.imports import summary
+    try:
+        summary(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
 def test_Analysis_imports_ImportAnalyzer_is_class():
     """Verify ImportAnalyzer exists and is a class."""
     from Analysis.imports import ImportAnalyzer

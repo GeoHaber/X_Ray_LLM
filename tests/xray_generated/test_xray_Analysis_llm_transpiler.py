@@ -124,6 +124,41 @@ def test_Analysis_llm_transpiler_hybrid_transpile_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(hybrid_transpile)
 
+def test_Analysis_llm_transpiler_available_is_callable():
+    """Verify available exists and is callable."""
+    from Analysis.llm_transpiler import available
+    assert callable(available)
+
+def test_Analysis_llm_transpiler_available_none_args():
+    """Monkey: call available with None args — should not crash unhandled."""
+    from Analysis.llm_transpiler import available
+    try:
+        available(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_llm_transpiler_stats_is_callable():
+    """Verify stats exists and is callable."""
+    from Analysis.llm_transpiler import stats
+    assert callable(stats)
+
+def test_Analysis_llm_transpiler_transpile_is_callable():
+    """Verify transpile exists and is callable."""
+    from Analysis.llm_transpiler import transpile
+    assert callable(transpile)
+
+def test_Analysis_llm_transpiler_transpile_none_args():
+    """Monkey: call transpile with None args — should not crash unhandled."""
+    from Analysis.llm_transpiler import transpile
+    try:
+        transpile(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
 def test_Analysis_llm_transpiler_LLMTranspiler_is_class():
     """Verify LLMTranspiler exists and is a class."""
     from Analysis.llm_transpiler import LLMTranspiler

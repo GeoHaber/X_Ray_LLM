@@ -54,6 +54,16 @@ def test_Analysis_semantic_fuzzer_fuzz_functions_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(fuzz_functions)
 
+def test_Analysis_semantic_fuzzer_check_equivalence_is_callable():
+    """Verify check_equivalence exists and is callable."""
+    from Analysis.semantic_fuzzer import check_equivalence
+    assert callable(check_equivalence)
+
+def test_Analysis_semantic_fuzzer_fuzz_functions_is_callable():
+    """Verify fuzz_functions exists and is callable."""
+    from Analysis.semantic_fuzzer import fuzz_functions
+    assert callable(fuzz_functions)
+
 def test_Analysis_semantic_fuzzer_SemanticFuzzer_is_class():
     """Verify SemanticFuzzer exists and is a class."""
     from Analysis.semantic_fuzzer import SemanticFuzzer

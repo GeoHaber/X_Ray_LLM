@@ -156,6 +156,46 @@ async def test_Core_inference_generate_json_async_is_async():
     import inspect
     assert inspect.iscoroutinefunction(generate_json_async)
 
+def test_Core_inference_available_is_callable():
+    """Verify available exists and is callable."""
+    from Core.inference import available
+    assert callable(available)
+
+def test_Core_inference_available_none_args():
+    """Monkey: call available with None args — should not crash unhandled."""
+    from Core.inference import available
+    try:
+        available(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Core_inference_completion_is_callable():
+    """Verify completion exists and is callable."""
+    from Core.inference import completion
+    assert callable(completion)
+
+def test_Core_inference_completion_async_is_callable():
+    """Verify completion_async exists and is callable."""
+    from Core.inference import completion_async
+    assert callable(completion_async)
+
+def test_Core_inference_generate_json_is_callable():
+    """Verify generate_json exists and is callable."""
+    from Core.inference import generate_json
+    assert callable(generate_json)
+
+def test_Core_inference_generate_json_async_is_callable():
+    """Verify generate_json_async exists and is callable."""
+    from Core.inference import generate_json_async
+    assert callable(generate_json_async)
+
+def test_Core_inference_query_sync_is_callable():
+    """Verify query_sync exists and is callable."""
+    from Core.inference import query_sync
+    assert callable(query_sync)
+
 def test_Core_inference_LLMHelper_is_class():
     """Verify LLMHelper exists and is a class."""
     from Core.inference import LLMHelper

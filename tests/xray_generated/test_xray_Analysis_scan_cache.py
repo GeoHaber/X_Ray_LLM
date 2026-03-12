@@ -111,6 +111,36 @@ def test_Analysis_scan_cache_reset_cache_is_callable():
     from Analysis.scan_cache import reset_cache
     assert callable(reset_cache)
 
+def test_Analysis_scan_cache_clear_is_callable():
+    """Verify clear exists and is callable."""
+    from Analysis.scan_cache import clear
+    assert callable(clear)
+
+def test_Analysis_scan_cache_get_is_callable():
+    """Verify get exists and is callable."""
+    from Analysis.scan_cache import get
+    assert callable(get)
+
+def test_Analysis_scan_cache_invalidate_is_callable():
+    """Verify invalidate exists and is callable."""
+    from Analysis.scan_cache import invalidate
+    assert callable(invalidate)
+
+def test_Analysis_scan_cache_put_is_callable():
+    """Verify put exists and is callable."""
+    from Analysis.scan_cache import put
+    assert callable(put)
+
+def test_Analysis_scan_cache_save_is_callable():
+    """Verify save exists and is callable."""
+    from Analysis.scan_cache import save
+    assert callable(save)
+
+def test_Analysis_scan_cache_size_is_callable():
+    """Verify size exists and is callable."""
+    from Analysis.scan_cache import size
+    assert callable(size)
+
 def test_Analysis_scan_cache_ScanCache_is_class():
     """Verify ScanCache exists and is a class."""
     from Analysis.scan_cache import ScanCache

@@ -42,6 +42,21 @@ def test_Analysis_verification_verify_project_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(verify_project)
 
+def test_Analysis_verification_verify_project_is_callable():
+    """Verify verify_project exists and is callable."""
+    from Analysis.verification import verify_project
+    assert callable(verify_project)
+
+def test_Analysis_verification_verify_project_none_args():
+    """Monkey: call verify_project with None args — should not crash unhandled."""
+    from Analysis.verification import verify_project
+    try:
+        verify_project(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
 def test_Analysis_verification_VerificationAnalyzer_is_class():
     """Verify VerificationAnalyzer exists and is a class."""
     from Analysis.verification import VerificationAnalyzer

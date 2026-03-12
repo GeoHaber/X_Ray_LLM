@@ -123,6 +123,36 @@ async def test_Analysis_duplicates_enrich_with_llm_async_is_async():
     import inspect
     assert inspect.iscoroutinefunction(enrich_with_llm_async)
 
+def test_Analysis_duplicates_enrich_with_llm_is_callable():
+    """Verify enrich_with_llm exists and is callable."""
+    from Analysis.duplicates import enrich_with_llm
+    assert callable(enrich_with_llm)
+
+def test_Analysis_duplicates_find_is_callable():
+    """Verify find exists and is callable."""
+    from Analysis.duplicates import find
+    assert callable(find)
+
+def test_Analysis_duplicates_summary_is_callable():
+    """Verify summary exists and is callable."""
+    from Analysis.duplicates import summary
+    assert callable(summary)
+
+def test_Analysis_duplicates_summary_none_args():
+    """Monkey: call summary with None args — should not crash unhandled."""
+    from Analysis.duplicates import summary
+    try:
+        summary(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_duplicates_union_is_callable():
+    """Verify union exists and is callable."""
+    from Analysis.duplicates import union
+    assert callable(union)
+
 def test_Analysis_duplicates_UnionFind_is_class():
     """Verify UnionFind exists and is a class."""
     from Analysis.duplicates import UnionFind

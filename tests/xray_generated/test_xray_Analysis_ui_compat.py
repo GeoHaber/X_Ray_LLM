@@ -160,6 +160,81 @@ def test_Analysis_ui_compat_main_is_callable():
     from Analysis.ui_compat import main
     assert callable(main)
 
+def test_Analysis_ui_compat_analyze_is_callable():
+    """Verify analyze exists and is callable."""
+    from Analysis.ui_compat import analyze
+    assert callable(analyze)
+
+def test_Analysis_ui_compat_analyze_none_args():
+    """Monkey: call analyze with None args — should not crash unhandled."""
+    from Analysis.ui_compat import analyze
+    try:
+        analyze(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_ui_compat_analyze_to_smells_is_callable():
+    """Verify analyze_to_smells exists and is callable."""
+    from Analysis.ui_compat import analyze_to_smells
+    assert callable(analyze_to_smells)
+
+def test_Analysis_ui_compat_analyze_to_smells_none_args():
+    """Monkey: call analyze_to_smells with None args — should not crash unhandled."""
+    from Analysis.ui_compat import analyze_to_smells
+    try:
+        analyze_to_smells(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_ui_compat_analyze_tree_is_callable():
+    """Verify analyze_tree exists and is callable."""
+    from Analysis.ui_compat import analyze_tree
+    assert callable(analyze_tree)
+
+def test_Analysis_ui_compat_analyze_tree_none_args():
+    """Monkey: call analyze_tree with None args — should not crash unhandled."""
+    from Analysis.ui_compat import analyze_tree
+    try:
+        analyze_tree(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_ui_compat_print_report_is_callable():
+    """Verify print_report exists and is callable."""
+    from Analysis.ui_compat import print_report
+    assert callable(print_report)
+
+def test_Analysis_ui_compat_summary_is_callable():
+    """Verify summary exists and is callable."""
+    from Analysis.ui_compat import summary
+    assert callable(summary)
+
+def test_Analysis_ui_compat_summary_none_args():
+    """Monkey: call summary with None args — should not crash unhandled."""
+    from Analysis.ui_compat import summary
+    try:
+        summary(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_ui_compat_to_smell_is_callable():
+    """Verify to_smell exists and is callable."""
+    from Analysis.ui_compat import to_smell
+    assert callable(to_smell)
+
+def test_Analysis_ui_compat_visit_Call_is_callable():
+    """Verify visit_Call exists and is callable."""
+    from Analysis.ui_compat import visit_Call
+    assert callable(visit_Call)
+
 def test_Analysis_ui_compat_UICallSite_is_class():
     """Verify UICallSite exists and is a class."""
     from Analysis.ui_compat import UICallSite

@@ -300,8 +300,8 @@ class TestHybridTranspile:
         # Patch the singleton
         import Analysis.llm_transpiler as mod
 
-        old = mod._default_engine
-        mod._default_engine = engine
+        old = mod._engine_ref[0]
+        mod._engine_ref[0] = engine
         try:
             # This Python uses json.dumps — AST will produce todo!()
             result = hybrid_transpile(
@@ -316,7 +316,7 @@ class TestHybridTranspile:
             assert "todo!" not in result
             assert "fn complex_op" in result
         finally:
-            mod._default_engine = old
+            mod._engine_ref[0] = old
 
     def test_complex_fn_keeps_todo_if_no_llm(self):
         """When LLM is unavailable, complex functions keep todo!()."""
@@ -326,8 +326,8 @@ class TestHybridTranspile:
 
         import Analysis.llm_transpiler as mod
 
-        old = mod._default_engine
-        mod._default_engine = engine
+        old = mod._engine_ref[0]
+        mod._engine_ref[0] = engine
         try:
             result = hybrid_transpile(
                 textwrap.dedent("""\
@@ -341,7 +341,7 @@ class TestHybridTranspile:
             # result should be valid Rust (no todo!), or todo! if it can't
             assert "fn " in result or "todo!" in result
         finally:
-            mod._default_engine = old
+            mod._engine_ref[0] = old
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -355,14 +355,14 @@ class TestAPI:
     def test_singleton_returns_same_instance(self):
         import Analysis.llm_transpiler as mod
 
-        old = mod._default_engine
-        mod._default_engine = None
+        old = mod._engine_ref[0]
+        mod._engine_ref[0] = None
         try:
             a = get_llm_transpiler()
             b = get_llm_transpiler()
             assert a is b
         finally:
-            mod._default_engine = old
+            mod._engine_ref[0] = old
 
     def test_llm_transpile_function_when_unavailable(self):
         """Should return None gracefully when no LLM server."""
@@ -370,13 +370,13 @@ class TestAPI:
 
         engine = LLMTranspiler(verify_compilation=False)
         engine._llm = FakeLLM(responses=[], available=False)
-        old = mod._default_engine
-        mod._default_engine = engine
+        old = mod._engine_ref[0]
+        mod._engine_ref[0] = engine
         try:
             result = llm_transpile_function("def foo(): pass", name_hint="foo")
             assert result is None
         finally:
-            mod._default_engine = old
+            mod._engine_ref[0] = old
 
 
 # ═══════════════════════════════════════════════════════════════════════════

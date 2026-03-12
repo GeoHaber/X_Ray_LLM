@@ -612,7 +612,6 @@ class TestSummary:
 
 
 class TestTreeScan:
-    @pytest.fixture(autouse=True)
     def test_analyze_tree(self, tmp_path):
         """Should recursively find issues across multiple files."""
         sub = tmp_path / "sub"

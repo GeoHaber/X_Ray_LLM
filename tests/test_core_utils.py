@@ -70,7 +70,7 @@ class TestVerifyRustEnvironment:
         # Reset the module-level cache before each test
         import Core.utils as _mod
 
-        _mod._verified_cache = False
+        _mod._verify_ref[0] = False
 
     def test_returns_true(self):
         assert verify_rust_environment() is True
@@ -80,6 +80,6 @@ class TestVerifyRustEnvironment:
         verify_rust_environment()
         import Core.utils as _mod
 
-        assert _mod._verified_cache is True
+        assert _mod._verify_ref[0] is True
         # Call again — should be idempotent
         assert verify_rust_environment() is True

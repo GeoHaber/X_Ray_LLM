@@ -1,5 +1,5 @@
 import flet as ft
-from UI.tabs.shared import TH, SZ_BODY, SZ_LG, metric_tile, section_title, GRADE_COLORS
+from UI.tabs.shared import TH, SZ_BODY, SZ_LG, SZ_XS, metric_tile, section_title, GRADE_COLORS
 
 
 def _build_verification_tab(results: dict, page: ft.Page):
@@ -34,13 +34,40 @@ def _build_verification_tab(results: dict, page: ft.Page):
     )
 
     # Action Buttons
+    test_output = ft.Text("", font_family="monospace", size=SZ_XS, color=TH.dim)
+    
     async def run_monkey(e):
         e.control.disabled = True
         e.control.text = "Monkey Running..."
+        test_output.value = "Starting suite: tests/test_monkey_torture.py ...\n"
         page.update()
-        import asyncio
-
-        await asyncio.sleep(2)
+        
+        import subprocess
+        import sys
+        
+        try:
+            # Run the torture test
+            process = await asyncio.to_thread(
+                subprocess.run,
+                [sys.executable, "-m", "pytest", "tests/test_monkey_torture.py", "tests/test_design_oracle.py"],
+                capture_output=True,
+                text=True,
+                cwd=str(Path(__file__).parent.parent.parent),
+                timeout=30
+            )
+            
+            if process.returncode == 0:
+                test_output.value += "\n\u2705 ALL TESTS PASSED!\n"
+                test_output.color = ft.Colors.GREEN_400
+            else:
+                test_output.value += f"\n\u274c TESTS FAILED (Exit {process.returncode})\n"
+                test_output.value += process.stdout[-1000:] # Show last 1000 chars
+                test_output.color = ft.Colors.RED_400
+                
+        except Exception as exc:
+            test_output.value += f"\nError running tests: {exc}"
+            test_output.color = ft.Colors.RED_400
+            
         e.control.disabled = False
         e.control.text = "Run Chaos Monkey"
         page.update()
@@ -86,7 +113,15 @@ def _build_verification_tab(results: dict, page: ft.Page):
                 "Heuristic analysis of AST patterns suggests high reliability in core logic branches.",
                 color=TH.dim,
             ),
-            # More details could go here...
+            ft.Container(height=10),
+            ft.Container(
+                content=test_output,
+                bgcolor=TH.code_bg,
+                padding=15,
+                border_radius=10,
+                border=ft.Border.all(1, TH.border),
+                visible=True
+            ),
         ],
         expand=True,
         spacing=10,

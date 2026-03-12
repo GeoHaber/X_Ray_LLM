@@ -63,6 +63,94 @@ def test_Core_types_icon_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(icon)
 
+def test_Core_types_icon_is_callable():
+    """Verify icon exists and is callable."""
+    from Core.types import icon
+    assert callable(icon)
+
+def test_Core_types_icon_none_args():
+    """Monkey: call icon with None args — should not crash unhandled."""
+    from Core.types import icon
+    try:
+        icon(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Core_types_icon_return_type():
+    """Verify icon returns expected type."""
+    from Core.types import icon
+    # Smoke check — return type should be: str
+    # (requires valid args to test; assert function exists)
+    assert callable(icon)
+
+def test_Core_types_key_is_callable():
+    """Verify key exists and is callable."""
+    from Core.types import key
+    assert callable(key)
+
+def test_Core_types_key_none_args():
+    """Monkey: call key with None args — should not crash unhandled."""
+    from Core.types import key
+    try:
+        key(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Core_types_key_return_type():
+    """Verify key returns expected type."""
+    from Core.types import key
+    # Smoke check — return type should be: str
+    # (requires valid args to test; assert function exists)
+    assert callable(key)
+
+def test_Core_types_location_is_callable():
+    """Verify location exists and is callable."""
+    from Core.types import location
+    assert callable(location)
+
+def test_Core_types_location_none_args():
+    """Monkey: call location with None args — should not crash unhandled."""
+    from Core.types import location
+    try:
+        location(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Core_types_location_return_type():
+    """Verify location returns expected type."""
+    from Core.types import location
+    # Smoke check — return type should be: str
+    # (requires valid args to test; assert function exists)
+    assert callable(location)
+
+def test_Core_types_signature_is_callable():
+    """Verify signature exists and is callable."""
+    from Core.types import signature
+    assert callable(signature)
+
+def test_Core_types_signature_none_args():
+    """Monkey: call signature with None args — should not crash unhandled."""
+    from Core.types import signature
+    try:
+        signature(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Core_types_signature_return_type():
+    """Verify signature returns expected type."""
+    from Core.types import signature
+    # Smoke check — return type should be: str
+    # (requires valid args to test; assert function exists)
+    assert callable(signature)
+
 def test_Core_types_FunctionRecord_is_class():
     """Verify FunctionRecord exists and is a class."""
     from Core.types import FunctionRecord

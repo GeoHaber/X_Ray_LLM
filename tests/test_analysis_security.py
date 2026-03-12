@@ -136,24 +136,24 @@ class TestSecurityAvailability:
 class TestSecuritySeverityMapping:
     """Tests for security severity mapping."""
 
-    def _mock_analyze(self, bandit_json: str) -> list:
-        """Run analyze with mocked subprocess."""
-        return _sec_mock(bandit_json)
+def _mock_analyze(bandit_json: str) -> list:
+    """Run analyze with mocked subprocess."""
+    return _sec_mock(bandit_json)
 
     def test_high_maps_to_critical(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         high_issues = [i for i in issues if i.rule_code in ("B602", "B324")]
         for issue in high_issues:
             assert issue.severity == Severity.CRITICAL
 
     def test_medium_maps_to_warning(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         medium_issues = [i for i in issues if i.rule_code in ("B113", "B102")]
         for issue in medium_issues:
             assert issue.severity == Severity.WARNING
 
     def test_low_maps_to_info(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         low_issues = [i for i in issues if i.rule_code == "B101"]
         for issue in low_issues:
             assert issue.severity == Severity.INFO
@@ -168,27 +168,27 @@ class TestSecurityParsing:
     """Tests for security result parsing."""
 
     def test_parses_sample_output(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         # B101 in test file is filtered out → 4 results
         assert len(issues) == 4
 
     def test_all_issues_are_smell_issues(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         assert_all_issues_are_smell_issues(issues)
 
     def test_source_is_bandit(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         for issue in issues:
             assert issue.source == "bandit"
 
     def test_rule_codes_preserved(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         codes = {i.rule_code for i in issues}
         # B101 in test file is filtered out
         assert codes == {"B602", "B324", "B113", "B102"}
 
     def test_confidence_preserved(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         b113 = [i for i in issues if i.rule_code == "B113"][0]
         assert b113.confidence == "LOW"
 
@@ -196,18 +196,18 @@ class TestSecurityParsing:
         assert b602.confidence == "HIGH"
 
     def test_relative_paths(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         paths = {i.file_path for i in issues}
         assert "utils.py" in paths
         assert "api.py" in paths
 
     def test_lines_correct(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         b602 = [i for i in issues if i.rule_code == "B602"][0]
         assert b602.line == 15
 
     def test_categories_assigned(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         b602 = [i for i in issues if i.rule_code == "B602"][0]
         assert b602.category == "subprocess-shell"
 
@@ -215,7 +215,7 @@ class TestSecurityParsing:
         assert b324.category == "weak-hash"
 
     def test_suggestions_populated(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         b324 = [i for i in issues if i.rule_code == "B324"][0]
         assert "SHA-256" in b324.suggestion or "usedforsecurity" in b324.suggestion
 
@@ -223,7 +223,7 @@ class TestSecurityParsing:
         assert "shell" in b602.suggestion.lower()
 
     def test_sorted_critical_first(self):
-        issues = self._mock_analyze(SAMPLE_BANDIT_OUTPUT)
+        issues = _mock_analyze(SAMPLE_BANDIT_OUTPUT)
         assert issues[0].severity == Severity.CRITICAL
 
     def test_empty_output_returns_empty(self):
@@ -234,7 +234,7 @@ class TestSecurityParsing:
 
     def test_empty_results_returns_empty(self):
         empty = json.dumps({"errors": [], "results": []})
-        issues = self._mock_analyze(empty)
+        issues = _mock_analyze(empty)
         assert issues == []
 
 
@@ -428,7 +428,7 @@ class TestSecurityEdgeCases:
                 ],
             }
         )
-        issues = self._mock_analyze(data)
+        issues = _mock_analyze(data)
         assert len(issues) == 1
         assert issues[0].rule_code == "B101"
 
@@ -455,14 +455,14 @@ class TestSecurityEdgeCases:
                 ],
             }
         )
-        issues = self._mock_analyze(data)
+        issues = _mock_analyze(data)
         assert len(issues) == 0
 
     def test_progress_bar_stripped(self):
         """Bandit progress bar before JSON should be stripped cleanly."""
         preamble = "Working... ---------------------------------------- 100%  0:00:01\n"
         raw = preamble + SAMPLE_BANDIT_OUTPUT
-        issues = self._mock_analyze(raw)
+        issues = _mock_analyze(raw)
         assert len(issues) == 4  # B101 filtered
 
     def test_severity_threshold_high(self):

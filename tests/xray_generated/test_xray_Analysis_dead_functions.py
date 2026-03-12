@@ -34,6 +34,11 @@ def test_Analysis_dead_functions_detect_high_complexity():
     # This function has many branches — test edge cases carefully
     assert callable(detect), "Complex function should be importable"
 
+def test_Analysis_dead_functions_detect_is_callable():
+    """Verify detect exists and is callable."""
+    from Analysis.dead_functions import detect
+    assert callable(detect)
+
 def test_Analysis_dead_functions_DeadFunctionDetector_is_class():
     """Verify DeadFunctionDetector exists and is a class."""
     from Analysis.dead_functions import DeadFunctionDetector

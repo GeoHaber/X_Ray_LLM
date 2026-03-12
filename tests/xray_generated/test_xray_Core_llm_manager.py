@@ -281,6 +281,91 @@ def test_Core_llm_manager_start_server_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(start_server)
 
+def test_Core_llm_manager_check_and_prompt_is_callable():
+    """Verify check_and_prompt exists and is callable."""
+    from Core.llm_manager import check_and_prompt
+    assert callable(check_and_prompt)
+
+def test_Core_llm_manager_detect_all_is_callable():
+    """Verify detect_all exists and is callable."""
+    from Core.llm_manager import detect_all
+    assert callable(detect_all)
+
+def test_Core_llm_manager_fingerprint_is_callable():
+    """Verify fingerprint exists and is callable."""
+    from Core.llm_manager import fingerprint
+    assert callable(fingerprint)
+
+def test_Core_llm_manager_format_model_recommendations_is_callable():
+    """Verify format_model_recommendations exists and is callable."""
+    from Core.llm_manager import format_model_recommendations
+    assert callable(format_model_recommendations)
+
+def test_Core_llm_manager_format_runtime_status_is_callable():
+    """Verify format_runtime_status exists and is callable."""
+    from Core.llm_manager import format_runtime_status
+    assert callable(format_runtime_status)
+
+def test_Core_llm_manager_format_system_profile_is_callable():
+    """Verify format_system_profile exists and is callable."""
+    from Core.llm_manager import format_system_profile
+    assert callable(format_system_profile)
+
+def test_Core_llm_manager_human_summary_is_callable():
+    """Verify human_summary exists and is callable."""
+    from Core.llm_manager import human_summary
+    assert callable(human_summary)
+
+def test_Core_llm_manager_human_summary_none_args():
+    """Monkey: call human_summary with None args — should not crash unhandled."""
+    from Core.llm_manager import human_summary
+    try:
+        human_summary(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Core_llm_manager_recommended_gpu_layers_is_callable():
+    """Verify recommended_gpu_layers exists and is callable."""
+    from Core.llm_manager import recommended_gpu_layers
+    assert callable(recommended_gpu_layers)
+
+def test_Core_llm_manager_stars_is_callable():
+    """Verify stars exists and is callable."""
+    from Core.llm_manager import stars
+    assert callable(stars)
+
+def test_Core_llm_manager_stars_none_args():
+    """Monkey: call stars with None args — should not crash unhandled."""
+    from Core.llm_manager import stars
+    try:
+        stars(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Core_llm_manager_start_server_is_callable():
+    """Verify start_server exists and is callable."""
+    from Core.llm_manager import start_server
+    assert callable(start_server)
+
+def test_Core_llm_manager_tier_is_callable():
+    """Verify tier exists and is callable."""
+    from Core.llm_manager import tier
+    assert callable(tier)
+
+def test_Core_llm_manager_tier_label_is_callable():
+    """Verify tier_label exists and is callable."""
+    from Core.llm_manager import tier_label
+    assert callable(tier_label)
+
+def test_Core_llm_manager_to_dict_is_callable():
+    """Verify to_dict exists and is callable."""
+    from Core.llm_manager import to_dict
+    assert callable(to_dict)
+
 def test_Core_llm_manager_HardwareProfile_is_class():
     """Verify HardwareProfile exists and is a class."""
     from Core.llm_manager import HardwareProfile

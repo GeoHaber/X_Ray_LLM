@@ -106,6 +106,21 @@ def test_Analysis_ast_utils_collect_py_files_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(collect_py_files)
 
+def test_Analysis_ast_utils_visit_FunctionDef_is_callable():
+    """Verify visit_FunctionDef exists and is callable."""
+    from Analysis.ast_utils import visit_FunctionDef
+    assert callable(visit_FunctionDef)
+
+def test_Analysis_ast_utils_visit_Name_is_callable():
+    """Verify visit_Name exists and is callable."""
+    from Analysis.ast_utils import visit_Name
+    assert callable(visit_Name)
+
+def test_Analysis_ast_utils_visit_arg_is_callable():
+    """Verify visit_arg exists and is callable."""
+    from Analysis.ast_utils import visit_arg
+    assert callable(visit_arg)
+
 def test_Analysis_ast_utils_ASTNormalizer_is_class():
     """Verify ASTNormalizer exists and is a class."""
     from Analysis.ast_utils import ASTNormalizer

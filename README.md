@@ -20,6 +20,7 @@ Your Code  →  X-Ray  →  Grade A–F  →  Actionable Issues  →  One-Click 
 |---|---|
 | 🔍 **Diagnose** | Detects 15+ code smells, finds duplicate logic, flags lint violations, spots security vulnerabilities, checks UI framework compatibility |
 | 📊 **Grade** | Combines all findings into a single **A+ → F score** (0–100 scale) with a breakdown of what's hurting you |
+| 🧠 **Oracle** | Generates an AI-powered top-down architectural design review of the codebase |
 | 🛠️ **Fix** | One-click Ruff auto-fix for lint, auto-generates a pytest test suite, suggests library consolidations |
 | ✅ **Verify** | Heuristic functional verification — testability scoring, UI stress-test robustness, per-project grade |
 | 🦀 **Rustify** | Scores every function for Rust portability, transpiles pure-Python logic to Rust, compiles with Cargo, builds a `.exe` |

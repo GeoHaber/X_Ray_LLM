@@ -96,6 +96,28 @@ def test_Analysis_NexusMode_adapters___init___is_callable():
     from Analysis.NexusMode.adapters import __init__
     assert callable(__init__)
 
+def test_Analysis_NexusMode_adapters_transpile_is_callable():
+    """Verify transpile exists and is callable."""
+    from Analysis.NexusMode.adapters import transpile
+    assert callable(transpile)
+
+def test_Analysis_NexusMode_adapters_transpile_none_args():
+    """Monkey: call transpile with None args — should not crash unhandled."""
+    from Analysis.NexusMode.adapters import transpile
+    try:
+        transpile(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_NexusMode_adapters_transpile_return_type():
+    """Verify transpile returns expected type."""
+    from Analysis.NexusMode.adapters import transpile
+    # Smoke check — return type should be: str
+    # (requires valid args to test; assert function exists)
+    assert callable(transpile)
+
 def test_Analysis_NexusMode_adapters_BaseTranspilerAdapter_is_class():
     """Verify BaseTranspilerAdapter exists and is a class."""
     from Analysis.NexusMode.adapters import BaseTranspilerAdapter

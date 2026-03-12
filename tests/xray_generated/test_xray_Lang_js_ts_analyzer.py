@@ -105,6 +105,28 @@ def test_Lang_js_ts_analyzer_categorize_imports_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(categorize_imports)
 
+def test_Lang_js_ts_analyzer_location_is_callable():
+    """Verify location exists and is callable."""
+    from Lang.js_ts_analyzer import location
+    assert callable(location)
+
+def test_Lang_js_ts_analyzer_location_none_args():
+    """Monkey: call location with None args — should not crash unhandled."""
+    from Lang.js_ts_analyzer import location
+    try:
+        location(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Lang_js_ts_analyzer_location_return_type():
+    """Verify location returns expected type."""
+    from Lang.js_ts_analyzer import location
+    # Smoke check — return type should be: str
+    # (requires valid args to test; assert function exists)
+    assert callable(location)
+
 def test_Lang_js_ts_analyzer_JSFunction_is_class():
     """Verify JSFunction exists and is a class."""
     from Lang.js_ts_analyzer import JSFunction

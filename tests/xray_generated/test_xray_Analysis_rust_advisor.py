@@ -113,6 +113,41 @@ def test_Analysis_rust_advisor_print_candidates_none_args():
     except Exception as e:
         pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
 
+def test_Analysis_rust_advisor_generate_golden_is_callable():
+    """Verify generate_golden exists and is callable."""
+    from Analysis.rust_advisor import generate_golden
+    assert callable(generate_golden)
+
+def test_Analysis_rust_advisor_print_candidates_is_callable():
+    """Verify print_candidates exists and is callable."""
+    from Analysis.rust_advisor import print_candidates
+    assert callable(print_candidates)
+
+def test_Analysis_rust_advisor_score_is_callable():
+    """Verify score exists and is callable."""
+    from Analysis.rust_advisor import score
+    assert callable(score)
+
+def test_Analysis_rust_advisor_to_dict_is_callable():
+    """Verify to_dict exists and is callable."""
+    from Analysis.rust_advisor import to_dict
+    assert callable(to_dict)
+
+def test_Analysis_rust_advisor_verify_golden_is_callable():
+    """Verify verify_golden exists and is callable."""
+    from Analysis.rust_advisor import verify_golden
+    assert callable(verify_golden)
+
+def test_Analysis_rust_advisor_verify_golden_none_args():
+    """Monkey: call verify_golden with None args — should not crash unhandled."""
+    from Analysis.rust_advisor import verify_golden
+    try:
+        verify_golden(None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
 def test_Analysis_rust_advisor_RustCandidate_is_class():
     """Verify RustCandidate exists and is a class."""
     from Analysis.rust_advisor import RustCandidate

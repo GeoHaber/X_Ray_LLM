@@ -186,6 +186,167 @@ def test_Analysis_NexusMode_orchestrator_verify_and_build_return_type():
     # (requires valid args to test; assert function exists)
     assert callable(verify_and_build)
 
+def test_Analysis_NexusMode_orchestrator_identify_targets_is_callable():
+    """Verify identify_targets exists and is callable."""
+    from Analysis.NexusMode.orchestrator import identify_targets
+    assert callable(identify_targets)
+
+def test_Analysis_NexusMode_orchestrator_identify_targets_none_args():
+    """Monkey: call identify_targets with None args — should not crash unhandled."""
+    from Analysis.NexusMode.orchestrator import identify_targets
+    try:
+        identify_targets(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_NexusMode_orchestrator_identify_targets_return_type():
+    """Verify identify_targets returns expected type."""
+    from Analysis.NexusMode.orchestrator import identify_targets
+    # Smoke check — return type should be: List[TargetNode]
+    # (requires valid args to test; assert function exists)
+    assert callable(identify_targets)
+
+def test_Analysis_NexusMode_orchestrator_translate_is_callable():
+    """Verify translate exists and is callable."""
+    from Analysis.NexusMode.orchestrator import translate
+    assert callable(translate)
+
+def test_Analysis_NexusMode_orchestrator_translate_none_args():
+    """Monkey: call translate with None args — should not crash unhandled."""
+    from Analysis.NexusMode.orchestrator import translate
+    try:
+        translate(None, None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_NexusMode_orchestrator_translate_return_type():
+    """Verify translate returns expected type."""
+    from Analysis.NexusMode.orchestrator import translate
+    # Smoke check — return type should be: List[TranslationResult]
+    # (requires valid args to test; assert function exists)
+    assert callable(translate)
+
+def test_Analysis_NexusMode_orchestrator_verify_all_async_is_callable():
+    """Verify verify_all_async exists and is callable."""
+    from Analysis.NexusMode.orchestrator import verify_all_async
+    assert callable(verify_all_async)
+
+def test_Analysis_NexusMode_orchestrator_verify_all_async_none_args():
+    """Monkey: call verify_all_async with None args — should not crash unhandled."""
+    from Analysis.NexusMode.orchestrator import verify_all_async
+    try:
+        verify_all_async(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_NexusMode_orchestrator_verify_all_async_return_type():
+    """Verify verify_all_async returns expected type."""
+    from Analysis.NexusMode.orchestrator import verify_all_async
+    # Smoke check — return type should be: List[VerifiedResult]
+    # (requires valid args to test; assert function exists)
+    assert callable(verify_all_async)
+
+@pytest.mark.asyncio
+async def test_Analysis_NexusMode_orchestrator_verify_all_async_is_async():
+    """Verify verify_all_async is an async coroutine."""
+    from Analysis.NexusMode.orchestrator import verify_all_async
+    import inspect
+    assert inspect.iscoroutinefunction(verify_all_async)
+
+def test_Analysis_NexusMode_orchestrator_verify_all_is_callable():
+    """Verify verify_all exists and is callable."""
+    from Analysis.NexusMode.orchestrator import verify_all
+    assert callable(verify_all)
+
+def test_Analysis_NexusMode_orchestrator_verify_all_none_args():
+    """Monkey: call verify_all with None args — should not crash unhandled."""
+    from Analysis.NexusMode.orchestrator import verify_all
+    try:
+        verify_all(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_NexusMode_orchestrator_verify_all_return_type():
+    """Verify verify_all returns expected type."""
+    from Analysis.NexusMode.orchestrator import verify_all
+    # Smoke check — return type should be: List[VerifiedResult]
+    # (requires valid args to test; assert function exists)
+    assert callable(verify_all)
+
+def test_Analysis_NexusMode_orchestrator_build_context_graph_is_callable():
+    """Verify build_context_graph exists and is callable."""
+    from Analysis.NexusMode.orchestrator import build_context_graph
+    assert callable(build_context_graph)
+
+def test_Analysis_NexusMode_orchestrator_build_context_graph_none_args():
+    """Monkey: call build_context_graph with None args — should not crash unhandled."""
+    from Analysis.NexusMode.orchestrator import build_context_graph
+    try:
+        build_context_graph(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_NexusMode_orchestrator_build_context_graph_return_type():
+    """Verify build_context_graph returns expected type."""
+    from Analysis.NexusMode.orchestrator import build_context_graph
+    # Smoke check — return type should be: Dict[str, Any]
+    # (requires valid args to test; assert function exists)
+    assert callable(build_context_graph)
+
+def test_Analysis_NexusMode_orchestrator_run_transpilation_pipeline_is_callable():
+    """Verify run_transpilation_pipeline exists and is callable."""
+    from Analysis.NexusMode.orchestrator import run_transpilation_pipeline
+    assert callable(run_transpilation_pipeline)
+
+def test_Analysis_NexusMode_orchestrator_run_transpilation_pipeline_none_args():
+    """Monkey: call run_transpilation_pipeline with None args — should not crash unhandled."""
+    from Analysis.NexusMode.orchestrator import run_transpilation_pipeline
+    try:
+        run_transpilation_pipeline(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_NexusMode_orchestrator_run_transpilation_pipeline_return_type():
+    """Verify run_transpilation_pipeline returns expected type."""
+    from Analysis.NexusMode.orchestrator import run_transpilation_pipeline
+    # Smoke check — return type should be: List[Dict[str, Any]]
+    # (requires valid args to test; assert function exists)
+    assert callable(run_transpilation_pipeline)
+
+def test_Analysis_NexusMode_orchestrator_verify_and_build_is_callable():
+    """Verify verify_and_build exists and is callable."""
+    from Analysis.NexusMode.orchestrator import verify_and_build
+    assert callable(verify_and_build)
+
+def test_Analysis_NexusMode_orchestrator_verify_and_build_none_args():
+    """Monkey: call verify_and_build with None args — should not crash unhandled."""
+    from Analysis.NexusMode.orchestrator import verify_and_build
+    try:
+        verify_and_build(None, None)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        pass  # Expected — function should raise, not crash
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
+
+def test_Analysis_NexusMode_orchestrator_verify_and_build_return_type():
+    """Verify verify_and_build returns expected type."""
+    from Analysis.NexusMode.orchestrator import verify_and_build
+    # Smoke check — return type should be: List[Dict[str, Any]]
+    # (requires valid args to test; assert function exists)
+    assert callable(verify_and_build)
+
 def test_Analysis_NexusMode_orchestrator_TargetNode_is_class():
     """Verify TargetNode exists and is a class."""
     from Analysis.NexusMode.orchestrator import TargetNode
