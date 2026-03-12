@@ -550,42 +550,24 @@ if __name__ == "__main__":
     main()
 
 
-# Module-level API for test compatibility
-_default_analyzer = UICallSite()
-
 def analyze(source_code: str, project_root: str = None):
-    """Wrapper for UICallSite.analyze()."""
-    if source_code is None:
-        raise ValueError("source_code cannot be None")
-    return _default_analyzer.analyze(source_code)
+    raise NotImplementedError("Use UICompatAnalyzer directly")
 
 def analyze_to_smells(source_code: str, project_root: str = None):
-    """Wrapper for UICallSite.analyze_to_smells()."""
-    if source_code is None:
-        raise ValueError("source_code cannot be None")
-    return _default_analyzer.analyze_to_smells(source_code)
+    raise NotImplementedError("Use UICompatAnalyzer directly")
 
 def analyze_tree(source_code: str, project_root: str = None):
-    """Wrapper for UICallSite.analyze_tree()."""
-    if source_code is None:
-        raise ValueError("source_code cannot be None")
-    return _default_analyzer.analyze_tree(source_code)
+    raise NotImplementedError("Use UICompatAnalyzer directly")
 
 def print_report(*args, **kwargs):
-    """Wrapper for UICallSite.print_report()."""
-    return _default_analyzer.print_report(*args, **kwargs)
+    raise NotImplementedError("Use UICompatAnalyzer directly")
 
 def summary(issues: List):
-    """Wrapper for UICallSite.summary()."""
-    if issues is None:
-        raise ValueError("issues cannot be None")
-    return _default_analyzer.summary(issues)
+    raise NotImplementedError("Use UICompatAnalyzer directly")
 
 def to_smell(*args, **kwargs):
-    """Wrapper for UICallSite.to_smell()."""
-    return _default_analyzer.to_smell(*args, **kwargs)
+    raise NotImplementedError("Use UICompatAnalyzer directly")
 
 def visit_Call(*args, **kwargs):
-    """Wrapper for UICallSite.visit_Call()."""
-    return _default_analyzer.visit_Call(*args, **kwargs)
+    raise NotImplementedError("Use UICompatAnalyzer directly")
 

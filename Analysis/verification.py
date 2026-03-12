@@ -1,5 +1,6 @@
 import time
 from pathlib import Path
+from typing import List
 
 
 class VerificationAnalyzer:
@@ -72,12 +73,6 @@ class VerificationAnalyzer:
         return "F"
 
 
-# Module-level API for test compatibility
-_default_analyzer = VerificationAnalyzer()
-
 def verify_project(results: List):
-    """Wrapper for VerificationAnalyzer.verify_project()."""
-    if results is None:
-        raise ValueError("results cannot be None")
-    return _default_analyzer.verify_project(results)
+    raise NotImplementedError("Use VerificationAnalyzer directly")
 
