@@ -426,7 +426,7 @@ def build_issues_section(results: Dict[str, Any], page) -> ft.Control:
         panels.append(_build_duplicates_tab(results))
     if results.get("lint") and not results["lint"].get("error"):
         labels.append("📋 Lint")
-        panels.append(_build_lint_tab(results))
+        panels.append(_build_lint_tab(results, page))
     if results.get("security") and not results["security"].get("error"):
         labels.append("🔒 Security")
         panels.append(_build_security_tab(results))
