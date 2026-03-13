@@ -55,7 +55,7 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
         "hierarchy": {"nodes": graph_hier.nodes, "edges": graph_hier.edges}
     })
 
-    return f"""<!DOCTYPE html>
+    template = """<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -63,7 +63,7 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <style>
-        body {{
+        body {
             margin: 0; padding: 0;
             background-color: #0d1117;
             color: #c9d1d9;
@@ -71,8 +71,8 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
             overflow: hidden;
             display: flex;
             height: 100vh;
-        }}
-        #header {{
+        }
+        #header {
             position: absolute;
             top: 15px; left: 15px; right: 15px;
             height: 60px;
@@ -85,9 +85,9 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
             padding: 0 25px;
             z-index: 100;
             box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-        }}
-        h2 {{ margin: 0; font-size: 22px; color: #58a6ff; font-weight: 600; letter-spacing: -0.5px; }}
-        .search-box {{
+        }
+        h2 { margin: 0; font-size: 22px; color: #58a6ff; font-weight: 600; letter-spacing: -0.5px; }
+        .search-box {
             margin-left: 30px;
             padding: 8px 16px;
             border-radius: 8px;
@@ -99,14 +99,14 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
             width: 300px;
             outline: none;
             transition: all 0.2s;
-        }}
-        .search-box:focus {{ border-color: #58a6ff; box-shadow: 0 0 0 3px rgba(88,166,255,0.25); }}
-        .controls {{
+        }
+        .search-box:focus { border-color: #58a6ff; box-shadow: 0 0 0 3px rgba(88,166,255,0.25); }
+        .controls {
             margin-left: auto;
             display: flex;
             gap: 15px;
-        }}
-        select, button {{
+        }
+        select, button {
             padding: 8px 16px;
             border-radius: 8px;
             border: 1px solid #30363d;
@@ -118,11 +118,11 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
             outline: none;
             cursor: pointer;
             transition: all 0.2s;
-        }}
-        select:hover, button:hover {{ border-color: #8b949e; background: #1c2128; }}
-        #mynetwork {{ flex: 1; height: 100%; outline: none; }}
+        }
+        select:hover, button:hover { border-color: #8b949e; background: #1c2128; }
+        #mynetwork { flex: 1; height: 100%; outline: none; }
         
-        #sidebar {{
+        #sidebar {
             width: 400px;
             background: rgba(22, 27, 34, 0.9);
             backdrop-filter: blur(16px);
@@ -138,19 +138,19 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
             padding: 25px;
             padding-top: 90px;
             overflow-y: auto;
-        }}
-        #sidebar.open {{ transform: translateX(0); }}
-        .node-title {{ font-size: 24px; font-weight: 600; color: #ffffff; margin-bottom: 8px; word-break: break-all; line-height: 1.2; }}
-        .node-meta {{ font-size: 14px; color: #8b949e; margin-bottom: 20px; }}
-        .badge {{
+        }
+        #sidebar.open { transform: translateX(0); }
+        .node-title { font-size: 24px; font-weight: 600; color: #ffffff; margin-bottom: 8px; word-break: break-all; line-height: 1.2; }
+        .node-meta { font-size: 14px; color: #8b949e; margin-bottom: 20px; }
+        .badge {
             display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-right: 8px; border: 1px solid;
-        }}
-        .badge-healthy {{ color: #52c41a; border-color: rgba(82,196,26,0.3); background: rgba(82,196,26,0.1); }}
-        .badge-warning {{ color: #faad14; border-color: rgba(250,173,20,0.3); background: rgba(250,173,20,0.1); }}
-        .badge-critical {{ color: #ff4d4f; border-color: rgba(255,77,79,0.3); background: rgba(255,77,79,0.1); }}
+        }
+        .badge-healthy { color: #52c41a; border-color: rgba(82,196,26,0.3); background: rgba(82,196,26,0.1); }
+        .badge-warning { color: #faad14; border-color: rgba(250,173,20,0.3); background: rgba(250,173,20,0.1); }
+        .badge-critical { color: #ff4d4f; border-color: rgba(255,77,79,0.3); background: rgba(255,77,79,0.1); }
         
-        .section-title {{ font-size: 12px; font-weight: 600; color: #58a6ff; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }}
-        .node-code {{
+        .section-title { font-size: 12px; font-weight: 600; color: #58a6ff; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .node-code {
             font-family: 'JetBrains Mono', monospace;
             font-size: 13px; line-height: 1.5;
             background: #0d1117;
@@ -162,8 +162,8 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
             overflow-y: auto;
             color: #e6edf3;
             margin-bottom: 20px;
-        }}
-        .issue-card {{
+        }
+        .issue-card {
             background: rgba(48, 54, 61, 0.5);
             border-left: 4px solid;
             padding: 12px;
@@ -172,13 +172,13 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
             border-top: 1px solid #30363d;
             border-right: 1px solid #30363d;
             border-bottom: 1px solid #30363d;
-        }}
-        .issue-CRITICAL {{ border-left-color: #ff4d4f; }}
-        .issue-WARNING {{ border-left-color: #faad14; }}
-        .issue-INFO {{ border-left-color: #52c41a; }}
-        .issue-msg {{ font-size: 14px; color: #c9d1d9; margin-top: 6px; line-height: 1.4; }}
-        .close-btn {{ position: absolute; left: 25px; top: 90px; cursor: pointer; color: #8b949e; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255,255,255,0.05); transition: background 0.2s; }}
-        .close-btn:hover {{ color: #ffffff; background: rgba(255,255,255,0.15); }}
+        }
+        .issue-CRITICAL { border-left-color: #ff4d4f; }
+        .issue-WARNING { border-left-color: #faad14; }
+        .issue-INFO { border-left-color: #52c41a; }
+        .issue-msg { font-size: 14px; color: #c9d1d9; margin-top: 6px; line-height: 1.4; }
+        .close-btn { position: absolute; left: 25px; top: 90px; cursor: pointer; color: #8b949e; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255,255,255,0.05); transition: background 0.2s; }
+        .close-btn:hover { color: #ffffff; background: rgba(255,255,255,0.15); }
     </style>
 </head>
 <body>
@@ -219,83 +219,83 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
     </div>
 
     <script type="text/javascript">
-        var allDatasets = {data_json};
+        var allDatasets = DATA_JSON_PLACEHOLDER;
         
         var nodes = new vis.DataSet(allDatasets.complete.nodes);
         var edges = new vis.DataSet(allDatasets.complete.edges);
         
         var container = document.getElementById('mynetwork');
-        var data = {{ nodes: nodes, edges: edges }};
-        var baseOptions = {{
-            nodes: {{
-                font: {{ size: 14, color: '#c9d1d9', face: 'Outfit' }},
+        var data = { nodes: nodes, edges: edges };
+        var baseOptions = {
+            nodes: {
+                font: { size: 14, color: '#c9d1d9', face: 'Outfit' },
                 borderWidth: 2,
-                color: {{ border: '#30363d', background: '#161b22', highlight: {{ border: '#58a6ff', background: '#1f2428' }} }}
-            }},
-            edges: {{
-                color: {{ color: '#8b949e', opacity: 0.5, highlight: '#58a6ff' }},
-                smooth: {{ type: 'continuous' }}
-            }},
-            interaction: {{ hover: true, tooltipDelay: 200 }},
-        }};
+                color: { border: '#30363d', background: '#161b22', highlight: { border: '#58a6ff', background: '#1f2428' } }
+            },
+            edges: {
+                color: { color: '#8b949e', opacity: 0.5, highlight: '#58a6ff' },
+                smooth: { type: 'continuous' }
+            },
+            interaction: { hover: true, tooltipDelay: 200 },
+        };
         
-        var forcePhysics = {{
+        var forcePhysics = {
             stabilization: false,
-            barnesHut: {{ gravitationalConstant: -30000, springConstant: 0.005, springLength: 150 }}
-        }};
-        var hierarchicalOptions = {{ enabled: true, sortMethod: 'directed', nodeSpacing: 150, treeSpacing: 250, direction: 'DU' }};
+            barnesHut: { gravitationalConstant: -30000, springConstant: 0.005, springLength: 150 }
+        };
+        var hierarchicalOptions = { enabled: true, sortMethod: 'directed', nodeSpacing: 150, treeSpacing: 250, direction: 'DU' };
         
-        var network = new vis.Network(container, data, {{...baseOptions, physics: forcePhysics}});
+        var network = new vis.Network(container, data, {...baseOptions, physics: forcePhysics});
         
         // Mode Toggle
-        document.getElementById('modeSelect').addEventListener('change', function(e) {{
+        document.getElementById('modeSelect').addEventListener('change', function(e) {
             var mode = e.target.value;
             nodes.clear();
             edges.clear();
             nodes.add(allDatasets[mode].nodes);
             edges.add(allDatasets[mode].edges);
-            if (mode === 'hierarchy' && document.getElementById('layoutSelect').value !== 'hierarchical') {{
+            if (mode === 'hierarchy' && document.getElementById('layoutSelect').value !== 'hierarchical') {
                 document.getElementById('layoutSelect').value = 'hierarchical';
-                network.setOptions({{ layout: {{ hierarchical: hierarchicalOptions }}, physics: false }});
-            }} else if (mode === 'complete' && document.getElementById('layoutSelect').value === 'hierarchical') {{
+                network.setOptions({ layout: { hierarchical: hierarchicalOptions }, physics: false });
+            } else if (mode === 'complete' && document.getElementById('layoutSelect').value === 'hierarchical') {
                 document.getElementById('layoutSelect').value = 'force';
-                network.setOptions({{ layout: {{ hierarchical: false }}, physics: forcePhysics }});
-            }}
+                network.setOptions({ layout: { hierarchical: false }, physics: forcePhysics });
+            }
             document.getElementById('searchInput').value = '';
             sidebar.classList.remove('open');
-        }});
+        });
 
         // Setup Search
-        document.getElementById('searchInput').addEventListener('input', function(e) {{
+        document.getElementById('searchInput').addEventListener('input', function(e) {
             var term = e.target.value.toLowerCase();
-            if (!term) {{
-                nodes.forEach(n => nodes.update({{id: n.id, hidden: false}}));
-                edges.forEach(e => edges.update({{id: e.id, hidden: false}}));
+            if (!term) {
+                nodes.forEach(n => nodes.update({id: n.id, hidden: false}));
+                edges.forEach(e => edges.update({id: e.id, hidden: false}));
                 return;
-            }}
+            }
             var matched = new Set();
-            nodes.forEach(n => {{
+            nodes.forEach(n => {
                 var match = (n.label && n.label.toLowerCase().includes(term)) || (n.file && n.file.toLowerCase().includes(term));
                 if (match) matched.add(n.id);
-            }});
-            nodes.forEach(n => nodes.update({{id: n.id, hidden: !matched.has(n.id)}}));
-            edges.forEach(e => edges.update({{id: e.id, hidden: !matched.has(e.from) || !matched.has(e.to)}}));
-        }});
+            });
+            nodes.forEach(n => nodes.update({id: n.id, hidden: !matched.has(n.id)}));
+            edges.forEach(e => edges.update({id: e.id, hidden: !matched.has(e.from) || !matched.has(e.to)}));
+        });
         
         // Layout Toggle
-        document.getElementById('layoutSelect').addEventListener('change', function(e) {{
-            if (e.target.value === 'hierarchical') {{
-                network.setOptions({{ layout: {{ hierarchical: hierarchicalOptions }}, physics: false }});
-            }} else {{
-                network.setOptions({{ layout: {{ hierarchical: false }}, physics: forcePhysics }});
-            }}
-        }});
+        document.getElementById('layoutSelect').addEventListener('change', function(e) {
+            if (e.target.value === 'hierarchical') {
+                network.setOptions({ layout: { hierarchical: hierarchicalOptions }, physics: false });
+            } else {
+                network.setOptions({ layout: { hierarchical: false }, physics: forcePhysics });
+            }
+        });
         
         // Sidebar logic
         var sidebar = document.getElementById('sidebar');
         document.getElementById('closeSidebar').onclick = () => sidebar.classList.remove('open');
         
-        network.on("selectNode", function (params) {{
+        network.on("selectNode", function (params) {
             var nodeId = params.nodes[0];
             var node = nodes.get(nodeId);
             if (!node || node.id === 'root' || node.id.startsWith('path:')) return;
@@ -305,14 +305,14 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
             
             var badges = document.getElementById('sb-badges');
             badges.innerHTML = '';
-            if (node.health) {{
-                badges.innerHTML += `<span class="badge badge-${{node.health}}">${{node.health.toUpperCase()}}</span>`;
-            }}
-            if (node.complexity) {{
-                badges.innerHTML += `<span class="badge" style="color:#8b949e; border-color:#30363d; background:transparent;">Cx: ${{node.complexity}}</span>`;
-            }}
+            if (node.health) {
+                badges.innerHTML += `<span class="badge badge-${node.health}">${node.health.toUpperCase()}</span>`;
+            }
+            if (node.complexity) {
+                badges.innerHTML += `<span class="badge" style="color:#8b949e; border-color:#30363d; background:transparent;">Cx: ${node.complexity}</span>`;
+            }
 
-            var metaText = node.file ? `${{node.file}} | Line ${{node.line}}` : 'No file info';
+            var metaText = node.file ? `${node.file} | Line ${node.line}` : 'No file info';
             document.getElementById('sb-meta').textContent = metaText;
             document.getElementById('sb-details').style.display = 'block';
             document.getElementById('sb-sig').textContent = node.signature || node.label;
@@ -321,24 +321,25 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
             var issuesDiv = document.getElementById('sb-issues');
             issuesDiv.innerHTML = '';
             var issuesTitle = document.getElementById('sb-issues-title');
-            if (node.issues && node.issues.length > 0) {{
+            if (node.issues && node.issues.length > 0) {
                 issuesTitle.style.display = 'block';
-                node.issues.forEach(iss => {{
+                node.issues.forEach(iss => {
                     var d = document.createElement('div');
-                    d.className = `issue-card issue-${{iss.severity}}`;
-                    d.innerHTML = `<strong style="color:#c9d1d9;font-size:12px;letter-spacing:0.5px;">${{iss.severity}}</strong><div class="issue-msg">${{iss.category}}: ${{iss.message}}</div>`;
+                    d.className = `issue-card issue-${iss.severity}`;
+                    d.innerHTML = `<strong style="color:#c9d1d9;font-size:12px;letter-spacing:0.5px;">${iss.severity}</strong><div class="issue-msg">${iss.category}: ${iss.message}</div>`;
                     issuesDiv.appendChild(d);
-                }});
-            }} else {{
+                });
+            } else {
                 issuesTitle.style.display = 'none';
-            }}
-        }});
-        network.on("deselectNode", function () {{
+            }
+        });
+        network.on("deselectNode", function () {
             sidebar.classList.remove('open');
-        }});
+        });
     </script>
 </body>
 </html>"""
+    return template.replace("DATA_JSON_PLACEHOLDER", data_json)
 
 
 def _build_graph_canvas(graph: SmartGraph) -> ft.Control:
