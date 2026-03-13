@@ -38,16 +38,13 @@ def _enable_windows_utf8():
 
         ctypes.windll.kernel32.SetConsoleOutputCP(65001)
         ctypes.windll.kernel32.SetConsoleCP(65001)
-    except Exception:  # nosec B110
+    except (AttributeError, OSError):  # nosec B110 — ctypes not available on all platforms
         pass
-
-
-def _reconfigure_streams_fallback():
     """Fallback: wrap stdout/stderr buffers in UTF-8 TextIOWrapper."""
     try:
         sys.stdout = _wrap_stream_utf8(sys.stdout, "stdout")
         sys.stderr = _wrap_stream_utf8(sys.stderr, "stderr")
-    except Exception:  # nosec B110
+    except (AttributeError, OSError):  # nosec B110 — stream reconfigure not available everywhere
         pass
 
 
@@ -61,7 +58,7 @@ def _enable_utf8_console() -> None:
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
+    except (AttributeError, OSError):
         _reconfigure_streams_fallback()
 
 
@@ -117,7 +114,7 @@ def url_responds(url: str, timeout: int = 2) -> bool:
         req = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310  # nosec B310
             return resp.status == 200
-    except Exception:
+    except (OSError, TimeoutError, ValueError):
         return False
 
 

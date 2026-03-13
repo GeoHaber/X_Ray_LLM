@@ -108,7 +108,8 @@ def _compute_structure_hash(node: ast.AST) -> str:
 
         normalized = ASTNormalizer().visit(copy.deepcopy(node))
         return _hash_source(ast.unparse(normalized))
-    except Exception:
+    except (RecursionError, ValueError, AttributeError) as exc:
+        logger.debug("structure_hash fallback: %s", exc)
         return ""
 
 
@@ -208,7 +209,7 @@ def _safe_decorators(node: ast.AST) -> List[str]:
     """Extract decorator strings, returning empty list on failure."""
     try:
         return [ast.unparse(d) for d in node.decorator_list]
-    except Exception:
+    except (AttributeError, TypeError):
         return []
 
 
@@ -265,7 +266,7 @@ def _build_class_record(node: ast.ClassDef, rel_path: str) -> ClassRecord:
     for b in node.bases:
         try:
             bases.append(ast.unparse(b))
-        except Exception:
+        except (TypeError, ValueError):
             bases.append("?")
 
     return ClassRecord(
@@ -331,19 +332,4 @@ def collect_py_files(
                 results.append(Path(dirpath) / fn)
     return results
 
-
-# Module-level API for test compatibility
-_default_analyzer = ASTNormalizer()
-
-def visit_FunctionDef(*args, **kwargs):
-    """Wrapper for ASTNormalizer.visit_FunctionDef()."""
-    return _default_analyzer.visit_FunctionDef(*args, **kwargs)
-
-def visit_Name(*args, **kwargs):
-    """Wrapper for ASTNormalizer.visit_Name()."""
-    return _default_analyzer.visit_Name(*args, **kwargs)
-
-def visit_arg(*args, **kwargs):
-    """Wrapper for ASTNormalizer.visit_arg()."""
-    return _default_analyzer.visit_arg(*args, **kwargs)
 

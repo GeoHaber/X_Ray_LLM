@@ -83,7 +83,7 @@ def _check_magic_numbers(func: FunctionRecord, smells: list, threshold: int = 2)
     """Flag bare numeric literals (other than 0/1/-1/2/100) used in arithmetic/comparisons."""
     try:
         tree = ast.parse(func.code)
-    except Exception:
+    except SyntaxError:
         return
     found = []
     for node in ast.walk(tree):
@@ -120,7 +120,7 @@ def _check_mutable_default_arg(func: FunctionRecord, smells: list):
     """Flag functions with mutable default arguments (list, dict, set literals)."""
     try:
         tree = ast.parse(func.code)
-    except Exception:
+    except SyntaxError:
         return
     if not tree.body:
         return
@@ -153,7 +153,7 @@ def _check_dead_code(func: FunctionRecord, smells: list):
     """Flag unreachable statements after an unconditional return/raise."""
     try:
         tree = ast.parse(func.code)
-    except Exception:
+    except SyntaxError:
         return
     for node in ast.walk(tree):
         if not isinstance(
@@ -466,7 +466,7 @@ def _check_mojibake_strings(func: FunctionRecord, smells: list):
     """
     try:
         tree = ast.parse(func.code)
-    except Exception:
+    except SyntaxError:
         return
     hits = []
     for node in ast.walk(tree):
@@ -517,7 +517,7 @@ def _check_print_statement(func: FunctionRecord, smells: list):
         return
     try:
         tree = ast.parse(func.code)
-    except Exception:
+    except SyntaxError:
         return
     hits = []
     for node in ast.walk(tree):

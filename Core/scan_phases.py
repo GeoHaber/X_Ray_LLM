@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import concurrent.futures
+import logging
 from pathlib import Path
 from typing import List, Tuple
 
@@ -115,20 +116,16 @@ def run_smell_phase(functions, classes):
         type_result = TypeCoverageAnalyzer().analyze(functions)
         detector.smells.extend(type_result.get("smells", []))
         smells = detector.smells
-    except Exception:
-        pass
-
-    # Tier 5: dead function detection
+    except Exception as exc:  # noqa: BLE001 — keep scan alive if optional phase fails
+        logging.getLogger(__name__).warning("type_coverage phase skipped: %s", exc)
     try:
         from Analysis.dead_functions import DeadFunctionDetector
 
         dead_smells = DeadFunctionDetector().detect(functions)
         detector.smells.extend(dead_smells)
         smells = detector.smells
-    except Exception:
-        pass
-
-    return detector, smells
+    except Exception as exc:  # noqa: BLE001 — keep scan alive if optional phase fails
+        logging.getLogger(__name__).warning("dead_functions phase skipped: %s", exc)
 
 
 def run_duplicate_phase(functions):

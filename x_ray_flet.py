@@ -102,6 +102,8 @@ from UI.tabs.ui_health_tab import _build_ui_health_tab  # noqa: E402
 from UI.tabs.ui_compat_tab import _build_ui_compat_tab  # noqa: E402
 from UI.tabs.verification_tab import _build_verification_tab  # noqa: E402
 from UI.tabs.release_readiness_tab import _build_release_readiness_tab  # noqa: E402
+from UI.tabs.debt_tab import _build_debt_tab  # noqa: E402
+from UI.tabs.diagrams_tab import _build_diagrams_tab  # noqa: E402
 
 import concurrent.futures  # noqa: E402
 
@@ -460,6 +462,108 @@ def _phase_release_readiness(root, exclude, results):
         results["release_readiness"] = {"error": str(exc)}
 
 
+# ── v8.0 New Analysis Phase Functions ────────────────────────────────────────
+
+def _phase_satd(root, results):
+    """Run SATD scanner and store results in results['_satd']."""
+    try:
+        from Analysis.satd import SATDScanner
+        scanner = SATDScanner()
+        summary = scanner.scan_directory(root)
+        results["_satd"] = summary.as_dict()
+        results["_satd_summary"] = summary  # keep object for QualityGate
+    except Exception as exc:
+        results["_satd"] = {"error": str(exc)}
+
+
+def _phase_hotspots(root, results):
+    """Run git hotspot analysis and store results in results['_hotspots']."""
+    try:
+        from Analysis.git_hotspots import HotspotAnalyzer
+        # Pass complexity map if available from smells/complexity data
+        cx_map = {}
+        for f in results.get("_functions", []):
+            fp = getattr(f, "file_path", None) or ""
+            cc = getattr(f, "complexity", 0) or 0
+            if fp:
+                prev = cx_map.get(fp, 0)
+                cx_map[fp] = max(prev, cc)
+        analyzer = HotspotAnalyzer(root)
+        report = analyzer.analyze(days=90, complexity_map=cx_map)
+        results["_hotspots"] = report.as_dict()
+    except Exception as exc:
+        results["_hotspots"] = {"error": str(exc)}
+
+
+def _phase_coupling(root, results):
+    """Run temporal coupling analysis and store in results['_coupling']."""
+    try:
+        from Analysis.temporal_coupling import TemporalCouplingAnalyzer
+        analyzer = TemporalCouplingAnalyzer(root)
+        report = analyzer.analyze(days=180, min_commits=3, min_coupling=0.25)
+        results["_coupling"] = report.as_dict()
+    except Exception as exc:
+        results["_coupling"] = {"error": str(exc)}
+
+
+def _phase_ai_debt(root, results):
+    """Run AI-generated code detector and store in results['_ai_debt']."""
+    try:
+        from Analysis.ai_code_detector import AICodeDetector
+        detector = AICodeDetector()
+        report = detector.scan_directory(root)
+        results["_ai_debt"] = report.as_dict()
+    except Exception as exc:
+        results["_ai_debt"] = {"error": str(exc)}
+
+
+def _phase_diagrams(root, results):
+    """Generate Mermaid/C4 diagrams from import graph and store in results['_diagrams']."""
+    try:
+        from Analysis.diagram_export import DiagramExporter
+        import_graph = results.get("import_graph", {})
+        edges = [
+            (e.get("source", ""), e.get("target", ""))
+            for e in import_graph.get("edges", [])
+            if e.get("source") and e.get("target")
+        ]
+        exporter = DiagramExporter(root=root)
+        diagram = exporter.export(edges)
+        results["_diagrams"] = {
+            "mermaid_flowchart": diagram.mermaid_flowchart,
+            "c4_context": diagram.c4_context,
+            "c4_component": diagram.c4_component,
+            "node_count": diagram.node_count,
+            "edge_count": diagram.edge_count,
+        }
+        # Save .mmd to project root(non-blocking, best-effort)
+        try:
+            mmd_path = root / "xray_architecture.mmd"
+            exporter.save(diagram.mermaid_flowchart, mmd_path)
+        except Exception:
+            pass
+    except Exception as exc:
+        results["_diagrams"] = {"error": str(exc)}
+
+
+def _phase_quality_gate(root, results):
+    """Evaluate quality gate and store result in results['_gate']."""
+    try:
+        from Analysis.quality_gate import QualityGate
+        settings_path = root / "xray_settings.json"
+        gate = QualityGate(settings_path=settings_path)
+        satd_summary = results.get("_satd_summary")
+        gate_result = gate.evaluate(results, satd_summary=satd_summary)
+        results["_gate"] = gate_result.as_dict()
+        # Write gate result JSON for CI
+        try:
+            gate_result.write_json(root / "xray_gate_result.json")
+        except Exception:
+            pass
+    except Exception as exc:
+        results["_gate"] = {"error": str(exc)}
+
+
 def _make_parse_progress_cb(progress_cb, parse_t0):
     """Create a progress callback for the parse phase."""
     if not progress_cb:
@@ -631,7 +735,17 @@ def _run_scan(ctx: FletScanContext) -> Dict[str, Any]:
 
         _run_flet_phases(ctx, functions, classes, results)
 
+        # ── v8.0 new analysis phases ──────────────────────────────────
+        _phase_satd(ctx.root, results)
+        _phase_hotspots(ctx.root, results)
+        _phase_coupling(ctx.root, results)
+        _phase_ai_debt(ctx.root, results)
+        _phase_diagrams(ctx.root, results)
+
         results["grade"] = compute_grade(results)
+
+        # Quality gate runs after grade is available
+        _phase_quality_gate(ctx.root, results)
 
         # Generate release checklist *after* grade is available
         if "release_readiness" in results:
@@ -1152,6 +1266,17 @@ def _build_result_tabs(results, page):
         tab_panels.append(_build_auto_rustify_tab(results, page))
         tab_names.append("Nexus Mode")
         tab_panels.append(_build_nexus_tab(results, page))
+
+    # ── v8.0 new tabs ─────────────────────────────────────────────────
+    has_debt_data = any(results.get(k) for k in ("_satd", "_hotspots", "_coupling", "_ai_debt"))
+    if has_debt_data:
+        tab_names.append("💸 Debt Center")
+        tab_panels.append(_build_debt_tab(results))
+
+    if results.get("_diagrams", {}).get("mermaid_flowchart"):
+        tab_names.append("🗺️ Diagrams")
+        tab_panels.append(_build_diagrams_tab(results, page))
+
 
     # Add the "All Issues" search/filter tab
     all_issues = _collect_all_issues(results)
