@@ -1354,17 +1354,20 @@ async def _setup_main_state(page: ft.Page):
             dlg.open = True
             page.update()
         else:
-            # Dynamically instantiate FilePicker to avoid web rendering bugs on page load
+            # Dynamically instantiate FilePicker — Flet 0.80+ uses page.services
             f_picker = None
-            for s in page.overlay:
+            svc_list = getattr(page, "services", None) or page.overlay
+            for s in svc_list:
                 if type(s).__name__ == "FilePicker":
                     f_picker = s
                     break
 
             if not f_picker:
-                # ONLY create FilePicker on non-web clients
                 f_picker = ft.FilePicker()
-                page.overlay.append(f_picker)
+                if hasattr(page, "services"):
+                    page.services.append(f_picker)
+                else:
+                    page.overlay.append(f_picker)
                 page.update()
 
             try:
