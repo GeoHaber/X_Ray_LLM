@@ -2840,7 +2840,7 @@ async def main(page: ft.Page):
             ft.Container(
                 width=64,
                 bgcolor=TH.surface,
-                border=ft.border.only(right=ft.BorderSide(1, TH.divider)),
+                border=ft.Border.only(right=ft.BorderSide(1, TH.divider)),
                 content=ft.Column([
                     ft.Container(
                         content=ft.Text("☢", size=22, text_align=ft.TextAlign.CENTER,
@@ -2848,7 +2848,7 @@ async def main(page: ft.Page):
                         width=64, height=48, alignment=ft.Alignment(0, 0),
                     ),
                 ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                padding=ft.padding.symmetric(vertical=8),
+                padding=ft.Padding.symmetric(vertical=8),
             ),
             ft.Container(
                 expand=True,
@@ -2863,7 +2863,7 @@ async def main(page: ft.Page):
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
                     ft.Container(expand=True),
                 ], expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                padding=ft.padding.symmetric(horizontal=60, vertical=20),
+                padding=ft.Padding.symmetric(horizontal=60, vertical=20),
                 bgcolor=TH.bg,
             ),
         ], expand=True, spacing=0,
