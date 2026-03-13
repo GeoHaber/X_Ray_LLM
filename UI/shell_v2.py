@@ -511,7 +511,7 @@ def build_actions_section(results: Dict[str, Any], page) -> ft.Control:
         labels.append("🌐 Nexus Mode")
         panels.append(_build_nexus_tab(results, page))
         labels.append("🦀 Rustify")
-        panels.append(_build_rustify_tab(results, page))
+        panels.append(_build_rustify_tab(results))
 
     if not panels:
         return ft.Column([

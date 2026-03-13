@@ -658,8 +658,12 @@ def _dimension_letter(breakdown: dict, keys: list) -> str:
     """Derive a letter grade for a dimension from its contributing penalties."""
     total_penalty = 0.0
     for k in keys:
-        d = breakdown.get(k, {})
-        total_penalty += d.get("penalty", 0)
+        v = breakdown.get(k, 0)
+        if isinstance(v, dict):
+            total_penalty += v.get("penalty", 0)
+        elif isinstance(v, (int, float)):
+            total_penalty += v
+        # else ignore strings or other junk
     # Map penalty → letter (lower penalty = better grade)
     if total_penalty <= 0.5:
         return "A"
