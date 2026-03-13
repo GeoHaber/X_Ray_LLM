@@ -104,6 +104,7 @@ from UI.tabs.verification_tab import _build_verification_tab  # noqa: E402
 from UI.tabs.release_readiness_tab import _build_release_readiness_tab  # noqa: E402
 from UI.tabs.debt_tab import _build_debt_tab  # noqa: E402
 from UI.tabs.diagrams_tab import _build_diagrams_tab  # noqa: E402
+from UI.shell_v2 import build_shell_v2  # noqa: E402 — v8.0 redesigned shell
 
 import concurrent.futures  # noqa: E402
 
@@ -2755,51 +2756,194 @@ def _build_main_ui(page: ft.Page, state: dict, path_text, pick_directory, apply_
     return layout, main_content, build_dashboard, start_scan
 
 
+
 async def main(page: ft.Page):
-    """Flet application entry point."""
+    """Flet application entry point — v8.0 redesigned shell."""
     _setup_page(page)
     state, path_text, pick_directory, apply_path = await _setup_main_state(page)
 
-    layout, main_content, build_dashboard, start_scan = _build_main_ui(
-        page, state, path_text, pick_directory, apply_path
-    )
+    # ── Path helpers ───────────────────────────────────────────────────────
+    def on_pick_dir(e):
+        pick_directory(e)
 
-    if state.get("results"):
-        build_dashboard(state["results"])
-    else:
-        _build_main_landing(page, main_content, start_scan)
+    def on_apply_path(path_str: str):
+        apply_path(path_str)
 
-    page.add(layout)
-    _install_resize_handler(page, main)
+    # ── Shell container (will hold the ft.Row rail+content) ────────────────
+    page_container = ft.Container(expand=True, bgcolor=TH.bg)
 
-    # ── Keyboard shortcuts ─────────────────────────────────────────────────
+    def _rebuild_shell(results=None):
+        """Rebuild the full shell, optionally with results."""
+        async def on_scan(e):
+            await _do_scan(e)
+
+        shell = build_shell_v2(
+            page=page,
+            state=state,
+            on_scan=on_scan,
+            on_pick_dir=on_pick_dir,
+            on_apply_path=on_apply_path,
+            results=results,
+        )
+        page_container.content = shell
+        page.update()
+
+    async def _do_scan(e):
+        """Run the scan and rebuild shell with results."""
+        if not state.get("root_path"):
+            _show_snack(page, t("select_dir_first"), bgcolor=ft.Colors.RED_400)
+            return
+
+        # Show a minimal progress overlay inside the content area
+        progress_col = ft.Column(
+            [
+                ft.Container(expand=True),
+                ft.Column([
+                    ft.Text("☢", size=60, text_align=ft.TextAlign.CENTER),
+                    ft.Text("Scanning…", size=20, color="#00d4ff",
+                            text_align=ft.TextAlign.CENTER),
+                    ft.ProgressBar(width=320, color="#00d4ff", bgcolor="#1e293b"),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=16),
+                ft.Container(expand=True),
+            ],
+            expand=True,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
+        # Phase checklist
+        phase_rows_container = ft.Column([], spacing=0)
+        phase_states: Dict[str, tuple] = {"_parse": (PhaseStatus.PENDING, 0)}
+        for key, _label in PHASE_REGISTRY:
+            phase_states[key] = (PhaseStatus.PENDING, 0)
+
+        def _refresh_phase_rows():
+            rows = []
+            ps, el = phase_states.get("_parse", (PhaseStatus.PENDING, 0))
+            rows.append(_build_phase_row("_parse", "AST Parsing", ps, el))
+            for key, label in PHASE_REGISTRY:
+                ps, el = phase_states.get(key, (PhaseStatus.PENDING, 0))
+                rows.append(_build_phase_row(key, label, ps, el))
+            phase_rows_container.controls = rows
+
+        def phase_cb(key, status, elapsed):
+            phase_states[key] = (status, elapsed)
+            _refresh_phase_rows()
+            try:
+                page.update()
+            except Exception:
+                pass
+
+        _refresh_phase_rows()
+
+        # Replace shell content with scan progress
+        scan_progress_shell = ft.Row([
+            ft.Container(
+                width=64,
+                bgcolor=TH.surface,
+                border=ft.border.only(right=ft.BorderSide(1, TH.divider)),
+                content=ft.Column([
+                    ft.Container(
+                        content=ft.Text("☢", size=22, text_align=ft.TextAlign.CENTER,
+                                        color="#00d4ff"),
+                        width=64, height=48, alignment=ft.Alignment(0, 0),
+                    ),
+                ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=ft.padding.symmetric(vertical=8),
+            ),
+            ft.Container(
+                expand=True,
+                content=ft.Column([
+                    ft.Container(expand=True),
+                    ft.Column([
+                        ft.Text("☢  Scanning…", size=28, weight=ft.FontWeight.BOLD,
+                                color="#00d4ff", font_family=MONO_FONT,
+                                text_align=ft.TextAlign.CENTER),
+                        ft.Container(height=16),
+                        _build_phase_checklist(phase_rows_container, state.get("modes", {})),
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+                    ft.Container(expand=True),
+                ], expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=ft.padding.symmetric(horizontal=60, vertical=20),
+                bgcolor=TH.bg,
+            ),
+        ], expand=True, spacing=0,
+           vertical_alignment=ft.CrossAxisAlignment.STRETCH)
+
+        page_container.content = scan_progress_shell
+        page.update()
+
+        try:
+            loop = asyncio.get_event_loop()
+            ctx = FletScanContext(
+                root=Path(state["root_path"]),
+                modes=state["modes"],
+                exclude=state["exclude"],
+                thresholds=state["thresholds"],
+                progress_cb=None,
+                phase_cb=phase_cb,
+                page=page,
+                log_list=state.get("log_list"),
+            )
+            results = await loop.run_in_executor(None, lambda: _run_scan(ctx))
+        except Exception as exc:
+            _show_snack(page, f"Scan failed: {exc}", bgcolor=ft.Colors.RED_400)
+            _rebuild_shell(None)
+            return
+
+        if "error" in results:
+            _show_snack(page, f"Scan error: {results['error']}", bgcolor=ft.Colors.RED_400)
+            _rebuild_shell(None)
+            return
+
+        results["_scan_path"] = state["root_path"]
+        state["results"] = results
+
+        # Save to history
+        grade = results.get("grade", {})
+        meta  = results.get("meta", {})
+        if state["root_path"] and grade:
+            _save_scan_to_history(state["root_path"], grade, meta)
+
+        # Brief completion flash
+        page_container.content = _build_scan_complete_screen(results)
+        page.update()
+        await asyncio.sleep(0.7)
+
+        # Rebuild shell with results (auto-navigate to Overview)
+        _rebuild_shell(results)
+
+    # ── Initial render ─────────────────────────────────────────────────────
+    _rebuild_shell(state.get("results"))
+    page.add(page_container)
+
+    # ── Keyboard shortcuts (preserved from v7) ─────────────────────────────
     async def on_keyboard(e: ft.KeyboardEvent):
         if e.ctrl:
             if e.key == "S":
-                # Ctrl+S → Start Scan
-                await start_scan(e)
+                await _do_scan(e)
             elif e.key == "E":
-                # Ctrl+E → Quick JSON export
                 if state.get("results"):
                     try:
-                        export = {k: v for k, v in state["results"].items() if not k.startswith("_")}
+                        export = {k: v for k, v in state["results"].items()
+                                  if not k.startswith("_")}
                         path = Path(state["root_path"]) / "xray_report.json"
-                        path.write_text(json.dumps(export, indent=2, default=str), encoding="utf-8")
-                        _show_snack(page, f" Saved to {path}")
+                        path.write_text(json.dumps(export, indent=2, default=str),
+                                        encoding="utf-8")
+                        _show_snack(page, f"✓ Saved to {path}")
                     except Exception as exc:
-                        _show_snack(page, f" Export failed: {exc}", bgcolor=ft.Colors.RED_400)
+                        _show_snack(page, f"Export failed: {exc}",
+                                    bgcolor=ft.Colors.RED_400)
             elif e.key == "H":
-                # Ctrl+H → HTML export
                 if state.get("results"):
                     try:
                         html = build_html_report(state["results"])
                         path = Path(state["root_path"]) / "xray_report.html"
                         path.write_text(html, encoding="utf-8")
-                        _show_snack(page, f" HTML report saved to {path}")
+                        _show_snack(page, f"✓ HTML report saved to {path}")
                     except Exception as exc:
-                        _show_snack(page, f" Export failed: {exc}", bgcolor=ft.Colors.RED_400)
+                        _show_snack(page, f"Export failed: {exc}",
+                                    bgcolor=ft.Colors.RED_400)
             elif e.key == "D":
-                # Ctrl+D → Toggle theme
                 TH.toggle()
                 page.data["_onboarded"] = True
                 page.controls.clear()
@@ -2811,7 +2955,8 @@ async def main(page: ft.Page):
 
     if not page.data.get("_onboarded"):
         page.data["_onboarded"] = True
-        _show_onboarding(page)
+
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
