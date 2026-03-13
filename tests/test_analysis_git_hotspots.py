@@ -1,7 +1,7 @@
 """
 tests/test_analysis_git_hotspots.py — Unit tests for Analysis/git_hotspots.py
 """
-from pathlib import Path
+
 from unittest.mock import patch, MagicMock
 
 from Analysis.git_hotspots import HotspotAnalyzer, HotspotFile, HotspotReport
@@ -26,8 +26,8 @@ class TestHotspotReport:
         r = HotspotReport()
         r.hotspots = [
             HotspotFile("a.py", churn=20, complexity=10, loc=300, priority=40),
-            HotspotFile("b.py", churn=5,  complexity=2,  loc=50,  priority=6),
-            HotspotFile("c.py", churn=15, complexity=8,  loc=200, priority=25),
+            HotspotFile("b.py", churn=5, complexity=2, loc=50, priority=6),
+            HotspotFile("c.py", churn=15, complexity=8, loc=200, priority=25),
         ]
         return r
 
@@ -65,12 +65,7 @@ class TestHotspotAnalyzer:
     def test_analyze_with_mocked_git(self, tmp_path):
         """Mock git subprocess to return deterministic output."""
         fake_log = (
-            "\n"
-            "Analysis/smells.py\n"
-            "UI/tabs/graph_tab.py\n"
-            "\n"
-            "Analysis/smells.py\n"
-            "\n"
+            "\nAnalysis/smells.py\nUI/tabs/graph_tab.py\n\nAnalysis/smells.py\n\n"
         )
 
         def fake_run(cmd, **kwargs):
@@ -92,11 +87,7 @@ class TestHotspotAnalyzer:
         assert "Analysis/smells.py" in paths
 
     def test_churn_counts_correct_with_mock(self, tmp_path):
-        fake_log = (
-            "\nAnalysis/smells.py\n"
-            "\nAnalysis/smells.py\n"
-            "\nAnalysis/smells.py\n"
-        )
+        fake_log = "\nAnalysis/smells.py\n\nAnalysis/smells.py\n\nAnalysis/smells.py\n"
 
         def fake_run(cmd, **kwargs):
             m = MagicMock()
@@ -108,7 +99,9 @@ class TestHotspotAnalyzer:
             analyzer = HotspotAnalyzer(root=tmp_path)
             report = analyzer.analyze(days=90)
 
-        smell = next((h for h in report.hotspots if h.path == "Analysis/smells.py"), None)
+        smell = next(
+            (h for h in report.hotspots if h.path == "Analysis/smells.py"), None
+        )
         assert smell is not None
         assert smell.churn == 3
 
@@ -127,6 +120,8 @@ class TestHotspotAnalyzer:
             r_high_cx = analyzer.analyze(days=90, complexity_map={"some_file.py": 20.0})
 
         base = next((h for h in r_no_cx.hotspots if h.path == "some_file.py"), None)
-        boosted = next((h for h in r_high_cx.hotspots if h.path == "some_file.py"), None)
+        boosted = next(
+            (h for h in r_high_cx.hotspots if h.path == "some_file.py"), None
+        )
         assert base is not None and boosted is not None
         assert boosted.priority > base.priority

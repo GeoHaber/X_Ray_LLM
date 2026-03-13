@@ -1,17 +1,26 @@
 """
 tests/test_analysis_temporal_coupling.py — Unit tests for temporal_coupling.py
 """
-from pathlib import Path
+
 from unittest.mock import patch, MagicMock
 
-from Analysis.temporal_coupling import TemporalCouplingAnalyzer, CoupledPair, TemporalCouplingReport
+from Analysis.temporal_coupling import (
+    TemporalCouplingAnalyzer,
+    CoupledPair,
+    TemporalCouplingReport,
+)
 
 
 class TestCoupledPair:
     def _pair(self, pct):
-        return CoupledPair("a.py", "b.py", cochange_count=5,
-                           total_commits_a=10, total_commits_b=8,
-                           coupling_pct=pct)
+        return CoupledPair(
+            "a.py",
+            "b.py",
+            cochange_count=5,
+            total_commits_a=10,
+            total_commits_b=8,
+            coupling_pct=pct,
+        )
 
     def test_strong_coupling(self):
         assert self._pair(0.80).strength == "strong"
@@ -33,7 +42,7 @@ class TestReport:
         r = TemporalCouplingReport()
         r.pairs = [
             CoupledPair("a.py", "b.py", 10, 12, 10, 0.83),
-            CoupledPair("c.py", "d.py", 3,  8,  5, 0.37),
+            CoupledPair("c.py", "d.py", 3, 8, 5, 0.37),
         ]
         return r
 
@@ -75,7 +84,9 @@ class TestAnalyzer:
             return m
 
         with patch("Analysis.temporal_coupling.subprocess.run", side_effect=fake_run):
-            r = TemporalCouplingAnalyzer(root=tmp_path).analyze(min_commits=2, min_coupling=0.1)
+            r = TemporalCouplingAnalyzer(root=tmp_path).analyze(
+                min_commits=2, min_coupling=0.1
+            )
 
         assert r.git_available is True
         assert len(r.pairs) >= 1
@@ -93,16 +104,15 @@ class TestAnalyzer:
             return m
 
         with patch("Analysis.temporal_coupling.subprocess.run", side_effect=fake_run):
-            r = TemporalCouplingAnalyzer(root=tmp_path).analyze(min_commits=2, min_coupling=0.0)
+            r = TemporalCouplingAnalyzer(root=tmp_path).analyze(
+                min_commits=2, min_coupling=0.0
+            )
 
         assert len(r.pairs) == 0
 
     def test_single_file_commits_excluded(self, tmp_path):
         """Commits with only one file should not generate pairs."""
-        fake_log = (
-            "COMMIT_BOUNDARY\na.py\n"
-            "COMMIT_BOUNDARY\na.py\n"
-        )
+        fake_log = "COMMIT_BOUNDARY\na.py\nCOMMIT_BOUNDARY\na.py\n"
 
         def fake_run(cmd, **kwargs):
             m = MagicMock()
@@ -111,9 +121,11 @@ class TestAnalyzer:
             return m
 
         with patch("Analysis.temporal_coupling.subprocess.run", side_effect=fake_run):
-            r = TemporalCouplingAnalyzer(root=tmp_path).analyze(min_commits=1, min_coupling=0.0)
+            r = TemporalCouplingAnalyzer(root=tmp_path).analyze(
+                min_commits=1, min_coupling=0.0
+            )
 
         assert len(r.pairs) == 0
 
 
-import pytest
+import pytest  # noqa: E402

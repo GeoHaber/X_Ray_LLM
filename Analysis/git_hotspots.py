@@ -19,7 +19,6 @@ Usage::
 from __future__ import annotations
 
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -42,11 +41,11 @@ _SKIP_PATTERNS = (
 class HotspotFile:
     """One file's hotspot metrics."""
 
-    path: str                   # Relative to repo root
-    churn: int                  # Commit count in analysis window
-    complexity: float           # Average cyclomatic complexity (0 if unknown)
-    loc: int                    # Lines of code (0 if unknown)
-    priority: float             # churn × (1 + complexity_factor) — higher = worse
+    path: str  # Relative to repo root
+    churn: int  # Commit count in analysis window
+    complexity: float  # Average cyclomatic complexity (0 if unknown)
+    loc: int  # Lines of code (0 if unknown)
+    priority: float  # churn × (1 + complexity_factor) — higher = worse
 
     @property
     def badge(self) -> str:
@@ -192,7 +191,7 @@ class HotspotAnalyzer:
                 text=True,
                 timeout=30,
             )
-        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        except (FileNotFoundError, subprocess.TimeoutExpired):
             return {}
 
         churn: Dict[str, int] = {}

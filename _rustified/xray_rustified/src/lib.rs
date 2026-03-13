@@ -7,22 +7,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 #[pyfunction]
-fn metric_tile(icon: PyObject, value: PyObject, label: String, color: PyObject) -> PyResult<PyObject> {
-    todo!()
-}
-
-#[pyfunction]
 fn score_pair_detailed(f1: PyObject, f2: PyObject) -> PyResult<HashMap<String, String>> {
     todo!()
 }
 
 #[pyfunction]
 fn semantic_similarity(func_a: PyObject, func_b: PyObject) -> PyResult<f64> {
-    todo!()
-}
-
-#[pyfunction]
-fn section_title(text: String, icon: PyObject) -> PyResult<PyObject> {
     todo!()
 }
 
@@ -102,17 +92,7 @@ fn _detect_gpu() -> PyResult<PyObject> {
 }
 
 #[pyfunction]
-fn _make_proportional_bar(pct: f64, color: String) -> PyResult<PyObject> {
-    todo!()
-}
-
-#[pyfunction]
-fn _code_panel(label: PyObject, emoji: PyObject, code_text: PyObject, color: PyObject) -> PyResult<PyObject> {
-    todo!()
-}
-
-#[pyfunction]
-fn _code_snippet_container(snippet: String, limit: i64) -> PyResult<PyObject> {
+fn analyze(root: PyObject, exclude: PyObject) -> PyResult<Vec<String>> {
     todo!()
 }
 
@@ -127,7 +107,7 @@ fn get_cache() -> PyResult<PyObject> {
 }
 
 #[pyfunction]
-fn _empty_state(icon: String, title: String, subtitle: String) -> PyResult<PyObject> {
+fn fix(root: PyObject, exclude: PyObject) -> PyResult<i64> {
     todo!()
 }
 
@@ -150,12 +130,32 @@ fn cached_factorial(n: i64) -> PyResult<i64> {
 }
 
 #[pyfunction]
-fn _empty_result_box(label: String) -> PyResult<PyObject> {
+fn _make_class(name: PyObject, fpath: PyObject) -> PyResult<PyObject> {
     todo!()
 }
 
 #[pyfunction]
-fn _make_class(name: PyObject, fpath: PyObject) -> PyResult<PyObject> {
+fn _make_smell(file: PyObject) -> PyResult<PyObject> {
+    todo!()
+}
+
+#[pyfunction]
+fn _build_sys_row(sys_profile: PyObject) -> PyResult<PyObject> {
+    todo!()
+}
+
+#[pyfunction]
+fn llm_transpile_function(python_code: String) -> PyResult<PyObject> {
+    todo!()
+}
+
+#[pyfunction]
+fn _chip(label: String, color: String) -> PyResult<PyObject> {
+    todo!()
+}
+
+#[pyfunction]
+fn run_duplicate_phase(functions: PyObject) -> PyResult<PyObject> {
     todo!()
 }
 
@@ -172,12 +172,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_metric_tile_compiles() {
-        // Smoke test: function exists and is callable
-        // Full verification done via Python golden tests
-    }
-
-    #[test]
     fn test_score_pair_detailed_compiles() {
         // Smoke test: function exists and is callable
         // Full verification done via Python golden tests
@@ -185,12 +179,6 @@ mod tests {
 
     #[test]
     fn test_semantic_similarity_compiles() {
-        // Smoke test: function exists and is callable
-        // Full verification done via Python golden tests
-    }
-
-    #[test]
-    fn test_section_title_compiles() {
         // Smoke test: function exists and is callable
         // Full verification done via Python golden tests
     }
@@ -286,19 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn test__make_proportional_bar_compiles() {
-        // Smoke test: function exists and is callable
-        // Full verification done via Python golden tests
-    }
-
-    #[test]
-    fn test__code_panel_compiles() {
-        // Smoke test: function exists and is callable
-        // Full verification done via Python golden tests
-    }
-
-    #[test]
-    fn test__code_snippet_container_compiles() {
+    fn test_analyze_compiles() {
         // Smoke test: function exists and is callable
         // Full verification done via Python golden tests
     }
@@ -316,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn test__empty_state_compiles() {
+    fn test_fix_compiles() {
         // Smoke test: function exists and is callable
         // Full verification done via Python golden tests
     }
@@ -340,13 +316,37 @@ mod tests {
     }
 
     #[test]
-    fn test__empty_result_box_compiles() {
+    fn test__make_class_compiles() {
         // Smoke test: function exists and is callable
         // Full verification done via Python golden tests
     }
 
     #[test]
-    fn test__make_class_compiles() {
+    fn test__make_smell_compiles() {
+        // Smoke test: function exists and is callable
+        // Full verification done via Python golden tests
+    }
+
+    #[test]
+    fn test__build_sys_row_compiles() {
+        // Smoke test: function exists and is callable
+        // Full verification done via Python golden tests
+    }
+
+    #[test]
+    fn test_llm_transpile_function_compiles() {
+        // Smoke test: function exists and is callable
+        // Full verification done via Python golden tests
+    }
+
+    #[test]
+    fn test__chip_compiles() {
+        // Smoke test: function exists and is callable
+        // Full verification done via Python golden tests
+    }
+
+    #[test]
+    fn test_run_duplicate_phase_compiles() {
         // Smoke test: function exists and is callable
         // Full verification done via Python golden tests
     }

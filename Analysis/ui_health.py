@@ -739,36 +739,46 @@ class UIHealthAnalyzer:
 def analyze(source_code: str, project_root: str = None):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
 
+
 def analyze_to_smells(source_code: str, project_root: str = None):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
+
 
 def message(*args, **kwargs):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
 
+
 def severity(*args, **kwargs):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
+
 
 def summary(issues: List):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
 
+
 def to_smell(*args, **kwargs):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
+
 
 def visit_Assign(*args, **kwargs):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
 
+
 def visit_Assign_attr(*args, **kwargs):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
+
 
 def visit_Attribute(*args, **kwargs):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
 
+
 def visit_AugAssign(*args, **kwargs):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
+
 
 def visit_Call(*args, **kwargs):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
 
+
 def visit_Name(*args, **kwargs):
     raise NotImplementedError("Use UIHealthAnalyzer directly")
-

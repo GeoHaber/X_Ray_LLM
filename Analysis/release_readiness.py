@@ -618,11 +618,12 @@ class ReleaseReadinessAnalyzer:
 
 # Module-level convenience stubs (MarkerHit is a dataclass — no singleton)
 
+
 def analyze(source_code: str, project_root: str = None):
     """Placeholder — use ReleaseReadinessAnalyzer.analyze() directly."""
     raise NotImplementedError("Use ReleaseReadinessAnalyzer.analyze() instead")
 
+
 def summary(issues=None):
     """Placeholder — use ReleaseReadinessAnalyzer directly."""
     raise NotImplementedError("Use ReleaseReadinessAnalyzer directly")
-

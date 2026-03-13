@@ -116,15 +116,12 @@ class LibraryAdvisor:
 # Module-level API for test compatibility
 _default_analyzer = LibraryAdvisor()
 
-def analyze(source_code: str, project_root: str = None):
+
+def analyze(duplicates, functions):
     """Wrapper for LibraryAdvisor.analyze()."""
-    if source_code is None:
-        raise ValueError("source_code cannot be None")
-    return _default_analyzer.analyze(source_code)
+    return _default_analyzer.analyze(duplicates, functions)
 
-def summary(issues: List):
+
+def summary():
     """Wrapper for LibraryAdvisor.summary()."""
-    if issues is None:
-        raise ValueError("issues cannot be None")
-    return _default_analyzer.summary(issues)
-
+    return _default_analyzer.summary()

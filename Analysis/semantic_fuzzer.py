@@ -101,11 +101,12 @@ class SemanticFuzzer:
 # Module-level API for test compatibility
 _default_analyzer = SemanticFuzzer()
 
+
 def check_equivalence(*args, **kwargs):
     """Wrapper for SemanticFuzzer.check_equivalence()."""
     return _default_analyzer.check_equivalence(*args, **kwargs)
 
+
 def fuzz_functions(*args, **kwargs):
     """Wrapper for SemanticFuzzer.fuzz_functions()."""
     return _default_analyzer.fuzz_functions(*args, **kwargs)
-

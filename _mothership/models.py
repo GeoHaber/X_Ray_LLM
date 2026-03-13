@@ -428,21 +428,26 @@ class LocalLLMStatus:
 def fingerprint(*args, **kwargs):
     raise NotImplementedError("Use ModelCategory directly")
 
+
 def recommended_gpu_layers(*args, **kwargs):
     raise NotImplementedError("Use ModelCategory directly")
+
 
 def tier(*args, **kwargs):
     raise NotImplementedError("Use ModelCategory directly")
 
+
 def tier_label(*args, **kwargs):
     raise NotImplementedError("Use ModelCategory directly")
+
 
 def to_card_dict(*args, **kwargs):
     raise NotImplementedError("Use ModelCategory directly")
 
+
 def to_dict(*args, **kwargs):
     raise NotImplementedError("Use ModelCategory directly")
 
+
 def to_list(*args, **kwargs):
     raise NotImplementedError("Use ModelCategory directly")
-

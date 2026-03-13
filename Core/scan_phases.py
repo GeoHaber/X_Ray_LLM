@@ -127,6 +127,8 @@ def run_smell_phase(functions, classes):
     except Exception as exc:  # noqa: BLE001 — keep scan alive if optional phase fails
         logging.getLogger(__name__).warning("dead_functions phase skipped: %s", exc)
 
+    return detector, smells
+
 
 def run_duplicate_phase(functions):
     """Run duplicate detection. Returns finder instance."""

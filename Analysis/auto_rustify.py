@@ -1836,9 +1836,9 @@ def run(*args, **kwargs):
         raise TypeError("First argument must be a RustifyPipeline instance")
     return args[0].run(*args[1:], **kwargs)
 
+
 def to_dict(*args, **kwargs):
     """Wrapper for RustifyPipeline.to_dict()."""
     if not args or not isinstance(args[0], RustifyPipeline):
         raise TypeError("First argument must be a RustifyPipeline instance")
     return args[0].to_dict(*args[1:], **kwargs)
-

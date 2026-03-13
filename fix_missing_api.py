@@ -16,7 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple
+from typing import Dict, Optional, Set
 
 PROJECT_ROOT = Path(__file__).parent
 ANALYSIS_DIR = PROJECT_ROOT / "Analysis"
@@ -38,18 +38,18 @@ def run_tests() -> str:
 
 def parse_import_errors(test_output: str) -> Dict[str, Set[str]]:
     """Parse ImportError lines to extract module -> missing_functions mapping.
-    
+
     Example line:
-    ImportError: cannot import name 'analyze' from 'Analysis.security' 
+    ImportError: cannot import name 'analyze' from 'Analysis.security'
     """
     pattern = r"cannot import name '(\w+)' from '([^']+)'"
     missing_by_module: Dict[str, Set[str]] = defaultdict(set)
-    
+
     for match in re.finditer(pattern, test_output):
         func_name = match.group(1)
         module_name = match.group(2)
         missing_by_module[module_name].add(func_name)
-    
+
     return missing_by_module
 
 
@@ -58,7 +58,7 @@ def module_to_file_path(module_name: str) -> Path:
     # 'Analysis.format' -> Analysis/format.py
     # 'Core.types' -> Core/types.py
     parts = module_name.split(".")
-    
+
     if parts[0] == "Analysis":
         # Handle nested like "Analysis.NexusMode.adapters"
         return ANALYSIS_DIR / "/".join(parts[1:]).replace(".", "/") / ".py"
@@ -70,28 +70,28 @@ def module_to_file_path(module_name: str) -> Path:
         return PROJECT_ROOT / (parts[0] + ".py")
 
 
-def get_class_with_method(file_path: Path, method_name: str) -> str:
+def get_class_with_method(file_path: Path, method_name: str) -> Optional[str]:
     """Find class that defines a method."""
     if not file_path.exists():
         return None
-    
+
     content = file_path.read_text("utf-8")
-    
+
     # Look for "def method_name" and find enclosing class
     method_pattern = rf"^\s+def {re.escape(method_name)}\("
     class_pattern = r"^class\s+(\w+)"
-    
+
     lines = content.split("\n")
     last_class = None
-    
+
     for i, line in enumerate(lines):
         if re.match(class_pattern, line):
             match = re.match(class_pattern, line)
             last_class = match.group(1)
-        
+
         if re.match(method_pattern, line) and last_class:
             return last_class
-    
+
     return last_class
 
 
@@ -103,7 +103,7 @@ def generate_wrapper_function(
         sig = f"({signature})"
     else:
         sig = "(*args, **kwargs)"
-    
+
     return f"""def {method_name}{sig}:
     \"\"\"Wrapper for {class_name}.{method_name}().\"\"\"
     return _default_{class_name.lower()}.{method_name}{sig}
@@ -113,18 +113,20 @@ def generate_wrapper_function(
 def main():
     print("[*] Running tests to identify missing APIs...")
     test_output = run_tests()
-    
+
     missing_by_module = parse_import_errors(test_output)
-    
+
     if not missing_by_module:
         print("[OK] No missing imports found!")
         return 0
-    
-    print(f"\n[SUMMARY] Found {sum(len(v) for v in missing_by_module.values())} missing functions in {len(missing_by_module)} modules:")
-    
+
+    print(
+        f"\n[SUMMARY] Found {sum(len(v) for v in missing_by_module.values())} missing functions in {len(missing_by_module)} modules:"
+    )
+
     for module_name, functions in sorted(missing_by_module.items()):
         print(f"  {module_name}: {', '.join(sorted(functions))}")
-    
+
     print("\n[INFO] To fix these, we need to add module-level wrapper functions.")
     print("   This follows the TDD principle: expose testable APIs at module level.")
     return 1

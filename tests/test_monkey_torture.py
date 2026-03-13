@@ -175,13 +175,14 @@ async def test_async_llm_concurrency_torture():
 
     # The user asked for torture, but our code prevents self-torture. That's a feature.
 
+
 def test_design_oracle_torture():
     """Stress test the Design Oracle with a massive number of garbage functions."""
     from Analysis.design_oracle import DesignOracle
-    
+
     oracle = DesignOracle()
     massive_funcs = []
-    
+
     # Generate 1000 noisy functions
     for i in range(1000):
         massive_funcs.append(
@@ -200,15 +201,14 @@ def test_design_oracle_torture():
                 decorators=[],
                 calls_to={f"other_func_{random.randint(1, 2000)}" for _ in range(20)},
                 code_hash="hash",
-                structure_hash="hash"
+                structure_hash="hash",
             )
         )
-        
+
     # The oracle limits input internally to 100, so it shouldn't crash or OOM
     start_time = time.time()
     result = oracle.analyze(massive_funcs, 10)
     duration = time.time() - start_time
-    
+
     assert "status" in result or "error" in result
     assert duration < 2.0  # Should be extremely fast due to internal truncations
-

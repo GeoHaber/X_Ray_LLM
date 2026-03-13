@@ -79,10 +79,10 @@ class SATDItem:
 
     file: str
     line: int
-    category: str          # defect / design / debt / test / documentation
-    marker: str            # The matched keyword (e.g. "TODO")
-    text: str              # Full comment text (stripped)
-    hours: float           # Estimated remediation hours
+    category: str  # defect / design / debt / test / documentation
+    marker: str  # The matched keyword (e.g. "TODO")
+    text: str  # Full comment text (stripped)
+    hours: float  # Estimated remediation hours
     severity: str = "warning"
 
     @property
@@ -131,9 +131,7 @@ class SATDSummary:
         return {
             "total": self.total,
             "total_hours": self.total_hours,
-            "by_category": {
-                cat: len(items) for cat, items in self.by_category.items()
-            },
+            "by_category": {cat: len(items) for cat, items in self.by_category.items()},
             "top_files": [
                 {"file": f, "count": c, "hours": round(h, 1)}
                 for f, c, h in self.top_files[:10]

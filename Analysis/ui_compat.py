@@ -553,21 +553,26 @@ if __name__ == "__main__":
 def analyze(source_code: str, project_root: str = None):
     raise NotImplementedError("Use UICompatAnalyzer directly")
 
+
 def analyze_to_smells(source_code: str, project_root: str = None):
     raise NotImplementedError("Use UICompatAnalyzer directly")
+
 
 def analyze_tree(source_code: str, project_root: str = None):
     raise NotImplementedError("Use UICompatAnalyzer directly")
 
+
 def print_report(*args, **kwargs):
     raise NotImplementedError("Use UICompatAnalyzer directly")
+
 
 def summary(issues: List):
     raise NotImplementedError("Use UICompatAnalyzer directly")
 
+
 def to_smell(*args, **kwargs):
     raise NotImplementedError("Use UICompatAnalyzer directly")
 
+
 def visit_Call(*args, **kwargs):
     raise NotImplementedError("Use UICompatAnalyzer directly")
-

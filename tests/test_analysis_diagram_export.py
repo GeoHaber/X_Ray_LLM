@@ -1,7 +1,13 @@
 """
 tests/test_analysis_diagram_export.py — Unit tests for Analysis/diagram_export.py
 """
-from Analysis.diagram_export import DiagramExporter, _node_id, _short_label, _detect_layer
+
+from Analysis.diagram_export import (
+    DiagramExporter,
+    _node_id,
+    _short_label,
+    _detect_layer,
+)
 
 
 class TestHelpers:
@@ -82,7 +88,7 @@ class TestDiagramExporter:
         assert result.edge_count == 0
 
     def test_max_nodes_respected(self):
-        large_edges = [(f"file_{i}.py", f"file_{i+1}.py") for i in range(200)]
+        large_edges = [(f"file_{i}.py", f"file_{i + 1}.py") for i in range(200)]
         e = DiagramExporter()
         result = e.export(large_edges, max_nodes=50)
         assert result.node_count <= 50

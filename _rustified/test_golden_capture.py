@@ -1,26 +1,13 @@
 """Auto-generated golden-value tests for Rust candidates."""
-import json, sys, importlib, pathlib
 
-FIXTURE_DIR = pathlib.Path(r"C:\Users\dvdze\Documents\_Python\X_Ray\_rustified\golden")
+import json
+import importlib
+import pathlib
 
-def test_golden_metric_tile():
-    """Golden capture for metric_tile (UI/tabs/shared.py:164)."""
-    # Import the original function
-    mod = importlib.import_module("UI.tabs.shared")
-    func = getattr(mod, "metric_tile", None)
-    if func is None:
-        return  # function not importable
-    results = []
-    test_inputs = [{"icon": 0, "value": 0, "label": 0, "color": 0}, {"icon": 27, "value": 42, "label": 70, "color": 17}, {"icon": -31, "value": -44, "label": -96, "color": -30}, {"icon": 1, "value": 1, "label": 1, "color": 1}]
-    for kwargs in test_inputs:
-        try:
-            out = func(**kwargs)
-            results.append({"input": kwargs, "output": repr(out), "error": None})
-        except Exception as e:
-            results.append({"input": kwargs, "output": None, "error": str(e)})
-    path = FIXTURE_DIR / "metric_tile_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
-    assert len(results) > 0, "No test results captured"
+FIXTURE_DIR = pathlib.Path(
+    r"C:\Users\dvdze\Documents\GitHub\GeorgeHaber\X_Ray\_rustified\golden"
+)
+
 
 def test_golden_score_pair_detailed():
     """Golden capture for score_pair_detailed (tests/rust_harness/calibrate_fixtures.py:98)."""
@@ -30,7 +17,12 @@ def test_golden_score_pair_detailed():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"f1": 0, "f2": 0}, {"f1": 29, "f2": 48}, {"f1": -27, "f2": -17}, {"f1": 1, "f2": 1}]
+    test_inputs = [
+        {"f1": 0, "f2": 0},
+        {"f1": 83, "f2": 9},
+        {"f1": -26, "f2": -63},
+        {"f1": 1, "f2": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -38,8 +30,9 @@ def test_golden_score_pair_detailed():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "score_pair_detailed_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden_semantic_similarity():
     """Golden capture for semantic_similarity (Analysis/similarity.py:192)."""
@@ -49,7 +42,12 @@ def test_golden_semantic_similarity():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"func_a": 0, "func_b": 0}, {"func_a": 3, "func_b": 60}, {"func_a": -33, "func_b": -3}, {"func_a": 1, "func_b": 1}]
+    test_inputs = [
+        {"func_a": 0, "func_b": 0},
+        {"func_a": 35, "func_b": 14},
+        {"func_a": -36, "func_b": -39},
+        {"func_a": 1, "func_b": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -57,27 +55,9 @@ def test_golden_semantic_similarity():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "semantic_similarity_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
 
-def test_golden_section_title():
-    """Golden capture for section_title (UI/tabs/shared.py:202)."""
-    # Import the original function
-    mod = importlib.import_module("UI.tabs.shared")
-    func = getattr(mod, "section_title", None)
-    if func is None:
-        return  # function not importable
-    results = []
-    test_inputs = [{"text": "basic_test", "icon": 10}, {"text": "", "icon": 0}, {"text": "CamelCase", "icon": 1}]
-    for kwargs in test_inputs:
-        try:
-            out = func(**kwargs)
-            results.append({"input": kwargs, "output": repr(out), "error": None})
-        except Exception as e:
-            results.append({"input": kwargs, "output": None, "error": str(e)})
-    path = FIXTURE_DIR / "section_title_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
-    assert len(results) > 0, "No test results captured"
 
 def test_golden__classify_token():
     """Golden capture for _classify_token (Analysis/similarity.py:53)."""
@@ -87,7 +67,7 @@ def test_golden__classify_token():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"tok": 0}, {"tok": 54}, {"tok": -63}, {"tok": 1}]
+    test_inputs = [{"tok": 0}, {"tok": 77}, {"tok": -66}, {"tok": 1}]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -95,8 +75,9 @@ def test_golden__classify_token():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_classify_token_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden__classify_name():
     """Golden capture for _classify_name (Analysis/similarity.py:29)."""
@@ -114,8 +95,9 @@ def test_golden__classify_name():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_classify_name_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden_assert_tokenize_snake_case():
     """Golden capture for assert_tokenize_snake_case (tests/shared_tokenize_tests.py:18)."""
@@ -125,7 +107,12 @@ def test_golden_assert_tokenize_snake_case():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"tokenize_fn": 0}, {"tokenize_fn": 89}, {"tokenize_fn": -4}, {"tokenize_fn": 1}]
+    test_inputs = [
+        {"tokenize_fn": 0},
+        {"tokenize_fn": 10},
+        {"tokenize_fn": -36},
+        {"tokenize_fn": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -133,8 +120,9 @@ def test_golden_assert_tokenize_snake_case():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "assert_tokenize_snake_case_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden_assert_tokenize_camel_case():
     """Golden capture for assert_tokenize_camel_case (tests/shared_tokenize_tests.py:26)."""
@@ -144,7 +132,12 @@ def test_golden_assert_tokenize_camel_case():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"tokenize_fn": 0}, {"tokenize_fn": 47}, {"tokenize_fn": -20}, {"tokenize_fn": 1}]
+    test_inputs = [
+        {"tokenize_fn": 0},
+        {"tokenize_fn": 79},
+        {"tokenize_fn": -38},
+        {"tokenize_fn": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -152,8 +145,9 @@ def test_golden_assert_tokenize_camel_case():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "assert_tokenize_camel_case_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden__has_return_annotation():
     """Golden capture for _has_return_annotation (Analysis/type_coverage.py:31)."""
@@ -163,7 +157,7 @@ def test_golden__has_return_annotation():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"func": 0}, {"func": 85}, {"func": -6}, {"func": 1}]
+    test_inputs = [{"func": 0}, {"func": 38}, {"func": -41}, {"func": 1}]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -171,8 +165,9 @@ def test_golden__has_return_annotation():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_has_return_annotation_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden__strip_markdown_fences():
     """Golden capture for _strip_markdown_fences (Analysis/llm_transpiler.py:157)."""
@@ -190,8 +185,9 @@ def test_golden__strip_markdown_fences():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_strip_markdown_fences_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden__token_ngram_similarity():
     """Golden capture for _token_ngram_similarity (Analysis/similarity.py:93)."""
@@ -201,7 +197,12 @@ def test_golden__token_ngram_similarity():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"code_a": 0, "code_b": 0}, {"code_a": 14, "code_b": 1}, {"code_a": -25, "code_b": -80}, {"code_a": 1, "code_b": 1}]
+    test_inputs = [
+        {"code_a": 0, "code_b": 0},
+        {"code_a": 81, "code_b": 99},
+        {"code_a": -47, "code_b": -5},
+        {"code_a": 1, "code_b": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -209,8 +210,9 @@ def test_golden__token_ngram_similarity():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_token_ngram_similarity_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden_name_similarity():
     """Golden capture for name_similarity (Analysis/similarity.py:137)."""
@@ -220,7 +222,12 @@ def test_golden_name_similarity():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"name_a": 0, "name_b": 0}, {"name_a": 69, "name_b": 45}, {"name_a": -65, "name_b": -46}, {"name_a": 1, "name_b": 1}]
+    test_inputs = [
+        {"name_a": 0, "name_b": 0},
+        {"name_a": 93, "name_b": 93},
+        {"name_a": -82, "name_b": -97},
+        {"name_a": 1, "name_b": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -228,8 +235,9 @@ def test_golden_name_similarity():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "name_similarity_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden_callgraph_overlap():
     """Golden capture for callgraph_overlap (Analysis/similarity.py:183)."""
@@ -239,7 +247,12 @@ def test_golden_callgraph_overlap():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"func_a": 0, "func_b": 0}, {"func_a": 49, "func_b": 97}, {"func_a": -44, "func_b": -11}, {"func_a": 1, "func_b": 1}]
+    test_inputs = [
+        {"func_a": 0, "func_b": 0},
+        {"func_a": 98, "func_b": 49},
+        {"func_a": -35, "func_b": -82},
+        {"func_a": 1, "func_b": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -247,8 +260,9 @@ def test_golden_callgraph_overlap():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "callgraph_overlap_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden__safe_repr():
     """Golden capture for _safe_repr (Analysis/tracer.py:56)."""
@@ -258,7 +272,12 @@ def test_golden__safe_repr():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"value": 0, "limit": 0}, {"value": 19, "limit": 3}, {"value": -40, "limit": -95}, {"value": 1, "limit": 1}]
+    test_inputs = [
+        {"value": 0, "limit": 0},
+        {"value": 67, "limit": 98},
+        {"value": -63, "limit": -78},
+        {"value": 1, "limit": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -266,8 +285,9 @@ def test_golden__safe_repr():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_safe_repr_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden__make_func():
     """Golden capture for _make_func (tests/test_analysis_test_generator.py:26)."""
@@ -277,7 +297,11 @@ def test_golden__make_func():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"name": "basic_test", "fpath": 10, "lines": 10, "params": 10}, {"name": "", "fpath": 0, "lines": 0, "params": 0}, {"name": "CamelCase", "fpath": 1, "lines": 1, "params": 1}]
+    test_inputs = [
+        {"name": "basic_test", "fpath": 10, "lines": 10, "params": 10},
+        {"name": "", "fpath": 0, "lines": 0, "params": 0},
+        {"name": "CamelCase", "fpath": 1, "lines": 1, "params": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -285,8 +309,9 @@ def test_golden__make_func():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_make_func_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden__grade_ge():
     """Golden capture for _grade_ge (Analysis/release_checklist.py:278)."""
@@ -296,7 +321,12 @@ def test_golden__grade_ge():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"actual": 0, "minimum": 0}, {"actual": 9, "minimum": 97}, {"actual": -42, "minimum": -22}, {"actual": 1, "minimum": 1}]
+    test_inputs = [
+        {"actual": 0, "minimum": 0},
+        {"actual": 73, "minimum": 42},
+        {"actual": -15, "minimum": -100},
+        {"actual": 1, "minimum": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -304,8 +334,9 @@ def test_golden__grade_ge():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_grade_ge_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden__delta_int():
     """Golden capture for _delta_int (Analysis/trend.py:37)."""
@@ -315,7 +346,12 @@ def test_golden__delta_int():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"prev_val": 0, "curr_val": 0}, {"prev_val": 89, "curr_val": 98}, {"prev_val": -19, "curr_val": -23}, {"prev_val": 1, "curr_val": 1}]
+    test_inputs = [
+        {"prev_val": 0, "curr_val": 0},
+        {"prev_val": 86, "curr_val": 78},
+        {"prev_val": -43, "curr_val": -59},
+        {"prev_val": 1, "curr_val": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -323,8 +359,9 @@ def test_golden__delta_int():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_delta_int_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden__delta_float():
     """Golden capture for _delta_float (Analysis/trend.py:45)."""
@@ -334,7 +371,12 @@ def test_golden__delta_float():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"prev_val": 0, "curr_val": 0, "ndigits": 0}, {"prev_val": 14, "curr_val": 46, "ndigits": 20}, {"prev_val": -94, "curr_val": -1, "ndigits": -53}, {"prev_val": 1, "curr_val": 1, "ndigits": 1}]
+    test_inputs = [
+        {"prev_val": 0, "curr_val": 0, "ndigits": 0},
+        {"prev_val": 29, "curr_val": 4, "ndigits": 19},
+        {"prev_val": -98, "curr_val": -71, "ndigits": -36},
+        {"prev_val": 1, "curr_val": 1, "ndigits": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -342,8 +384,9 @@ def test_golden__delta_float():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_delta_float_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden__detect_gpu():
     """Golden capture for _detect_gpu (_mothership/hardware_detection.py:335)."""
@@ -361,65 +404,34 @@ def test_golden__detect_gpu():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_detect_gpu_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
 
-def test_golden__make_proportional_bar():
-    """Golden capture for _make_proportional_bar (UI/tabs/shared.py:227)."""
+
+def test_golden_analyze():
+    """Golden capture for analyze (Analysis/format.py:141)."""
     # Import the original function
-    mod = importlib.import_module("UI.tabs.shared")
-    func = getattr(mod, "_make_proportional_bar", None)
+    mod = importlib.import_module("Analysis.format")
+    func = getattr(mod, "analyze", None)
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"pct": 0, "color": 0}, {"pct": 10, "color": 28}, {"pct": -15, "color": -8}, {"pct": 1, "color": 1}]
+    test_inputs = [
+        {"root": 0, "exclude": 0},
+        {"root": 83, "exclude": 5},
+        {"root": -34, "exclude": -22},
+        {"root": 1, "exclude": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
             results.append({"input": kwargs, "output": repr(out), "error": None})
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
-    path = FIXTURE_DIR / "_make_proportional_bar_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path = FIXTURE_DIR / "analyze_golden.json"
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
 
-def test_golden__code_panel():
-    """Golden capture for _code_panel (UI/tabs/shared.py:451)."""
-    # Import the original function
-    mod = importlib.import_module("UI.tabs.shared")
-    func = getattr(mod, "_code_panel", None)
-    if func is None:
-        return  # function not importable
-    results = []
-    test_inputs = [{"label": 0, "emoji": 0, "code_text": 0, "color": 0}, {"label": 86, "emoji": 32, "code_text": 20, "color": 80}, {"label": -82, "emoji": -81, "code_text": -86, "color": -18}, {"label": 1, "emoji": 1, "code_text": 1, "color": 1}]
-    for kwargs in test_inputs:
-        try:
-            out = func(**kwargs)
-            results.append({"input": kwargs, "output": repr(out), "error": None})
-        except Exception as e:
-            results.append({"input": kwargs, "output": None, "error": str(e)})
-    path = FIXTURE_DIR / "_code_panel_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
-    assert len(results) > 0, "No test results captured"
-
-def test_golden__code_snippet_container():
-    """Golden capture for _code_snippet_container (UI/tabs/shared.py:324)."""
-    # Import the original function
-    mod = importlib.import_module("UI.tabs.shared")
-    func = getattr(mod, "_code_snippet_container", None)
-    if func is None:
-        return  # function not importable
-    results = []
-    test_inputs = [{"snippet": 0, "limit": 0}, {"snippet": 30, "limit": 32}, {"snippet": -16, "limit": -1}, {"snippet": 1, "limit": 1}]
-    for kwargs in test_inputs:
-        try:
-            out = func(**kwargs)
-            results.append({"input": kwargs, "output": repr(out), "error": None})
-        except Exception as e:
-            results.append({"input": kwargs, "output": None, "error": str(e)})
-    path = FIXTURE_DIR / "_code_snippet_container_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
-    assert len(results) > 0, "No test results captured"
 
 def test_golden__build_cargo_error_log():
     """Golden capture for _build_cargo_error_log (UI/tabs/auto_rustify_tab.py:102)."""
@@ -437,8 +449,9 @@ def test_golden__build_cargo_error_log():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_build_cargo_error_log_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden_get_cache():
     """Golden capture for get_cache (Analysis/scan_cache.py:190)."""
@@ -456,27 +469,34 @@ def test_golden_get_cache():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "get_cache_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
 
-def test_golden__empty_state():
-    """Golden capture for _empty_state (UI/tabs/shared.py:303)."""
+
+def test_golden_fix():
+    """Golden capture for fix (Analysis/lint.py:184)."""
     # Import the original function
-    mod = importlib.import_module("UI.tabs.shared")
-    func = getattr(mod, "_empty_state", None)
+    mod = importlib.import_module("Analysis.lint")
+    func = getattr(mod, "fix", None)
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"icon": 0, "title": 0, "subtitle": 0}, {"icon": 90, "title": 85, "subtitle": 7}, {"icon": -79, "title": -23, "subtitle": -70}, {"icon": 1, "title": 1, "subtitle": 1}]
+    test_inputs = [
+        {"root": 0, "exclude": 0},
+        {"root": 59, "exclude": 26},
+        {"root": -81, "exclude": -32},
+        {"root": 1, "exclude": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
             results.append({"input": kwargs, "output": repr(out), "error": None})
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
-    path = FIXTURE_DIR / "_empty_state_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path = FIXTURE_DIR / "fix_golden.json"
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden_get_llm_transpiler():
     """Golden capture for get_llm_transpiler (Analysis/llm_transpiler.py:391)."""
@@ -494,8 +514,9 @@ def test_golden_get_llm_transpiler():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "get_llm_transpiler_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden__boom():
     """Golden capture for _boom (tests/test_analysis_tracer.py:31)."""
@@ -505,7 +526,7 @@ def test_golden__boom():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"x": 0}, {"x": 7}, {"x": -45}, {"x": 1}]
+    test_inputs = [{"x": 0}, {"x": 4}, {"x": -3}, {"x": 1}]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -513,8 +534,9 @@ def test_golden__boom():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_boom_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
+
 
 def test_golden_cached_factorial():
     """Golden capture for cached_factorial (tests/rust_harness/fixtures/edge_cases.py:26)."""
@@ -524,7 +546,7 @@ def test_golden_cached_factorial():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"n": 0}, {"n": 91}, {"n": -4}, {"n": 1}]
+    test_inputs = [{"n": 0}, {"n": 65}, {"n": -49}, {"n": 1}]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -532,27 +554,9 @@ def test_golden_cached_factorial():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "cached_factorial_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"
 
-def test_golden__empty_result_box():
-    """Golden capture for _empty_result_box (UI/tabs/shared.py:296)."""
-    # Import the original function
-    mod = importlib.import_module("UI.tabs.shared")
-    func = getattr(mod, "_empty_result_box", None)
-    if func is None:
-        return  # function not importable
-    results = []
-    test_inputs = [{"label": 0}, {"label": 89}, {"label": -15}, {"label": 1}]
-    for kwargs in test_inputs:
-        try:
-            out = func(**kwargs)
-            results.append({"input": kwargs, "output": repr(out), "error": None})
-        except Exception as e:
-            results.append({"input": kwargs, "output": None, "error": str(e)})
-    path = FIXTURE_DIR / "_empty_result_box_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
-    assert len(results) > 0, "No test results captured"
 
 def test_golden__make_class():
     """Golden capture for _make_class (tests/test_analysis_test_generator.py:50)."""
@@ -562,7 +566,11 @@ def test_golden__make_class():
     if func is None:
         return  # function not importable
     results = []
-    test_inputs = [{"name": "basic_test", "fpath": 10}, {"name": "", "fpath": 0}, {"name": "CamelCase", "fpath": 1}]
+    test_inputs = [
+        {"name": "basic_test", "fpath": 10},
+        {"name": "", "fpath": 0},
+        {"name": "CamelCase", "fpath": 1},
+    ]
     for kwargs in test_inputs:
         try:
             out = func(**kwargs)
@@ -570,5 +578,125 @@ def test_golden__make_class():
         except Exception as e:
             results.append({"input": kwargs, "output": None, "error": str(e)})
     path = FIXTURE_DIR / "_make_class_golden.json"
-    path.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
+    assert len(results) > 0, "No test results captured"
+
+
+def test_golden__make_smell():
+    """Golden capture for _make_smell (tests/test_analysis_test_generator.py:65)."""
+    # Import the original function
+    mod = importlib.import_module("tests.test_analysis_test_generator")
+    func = getattr(mod, "_make_smell", None)
+    if func is None:
+        return  # function not importable
+    results = []
+    test_inputs = [{"file": 0}, {"file": 68}, {"file": -97}, {"file": 1}]
+    for kwargs in test_inputs:
+        try:
+            out = func(**kwargs)
+            results.append({"input": kwargs, "output": repr(out), "error": None})
+        except Exception as e:
+            results.append({"input": kwargs, "output": None, "error": str(e)})
+    path = FIXTURE_DIR / "_make_smell_golden.json"
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
+    assert len(results) > 0, "No test results captured"
+
+
+def test_golden__build_sys_row():
+    """Golden capture for _build_sys_row (UI/tabs/auto_rustify_tab.py:90)."""
+    # Import the original function
+    mod = importlib.import_module("UI.tabs.auto_rustify_tab")
+    func = getattr(mod, "_build_sys_row", None)
+    if func is None:
+        return  # function not importable
+    results = []
+    test_inputs = [
+        {"sys_profile": 0},
+        {"sys_profile": 88},
+        {"sys_profile": -91},
+        {"sys_profile": 1},
+    ]
+    for kwargs in test_inputs:
+        try:
+            out = func(**kwargs)
+            results.append({"input": kwargs, "output": repr(out), "error": None})
+        except Exception as e:
+            results.append({"input": kwargs, "output": None, "error": str(e)})
+    path = FIXTURE_DIR / "_build_sys_row_golden.json"
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
+    assert len(results) > 0, "No test results captured"
+
+
+def test_golden_llm_transpile_function():
+    """Golden capture for llm_transpile_function (Analysis/llm_transpiler.py:413)."""
+    # Import the original function
+    mod = importlib.import_module("Analysis.llm_transpiler")
+    func = getattr(mod, "llm_transpile_function", None)
+    if func is None:
+        return  # function not importable
+    results = []
+    test_inputs = [
+        {"python_code": 0},
+        {"python_code": 78},
+        {"python_code": -43},
+        {"python_code": 1},
+    ]
+    for kwargs in test_inputs:
+        try:
+            out = func(**kwargs)
+            results.append({"input": kwargs, "output": repr(out), "error": None})
+        except Exception as e:
+            results.append({"input": kwargs, "output": None, "error": str(e)})
+    path = FIXTURE_DIR / "llm_transpile_function_golden.json"
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
+    assert len(results) > 0, "No test results captured"
+
+
+def test_golden__chip():
+    """Golden capture for _chip (UI/tabs/debt_tab.py:37)."""
+    # Import the original function
+    mod = importlib.import_module("UI.tabs.debt_tab")
+    func = getattr(mod, "_chip", None)
+    if func is None:
+        return  # function not importable
+    results = []
+    test_inputs = [
+        {"label": 0, "color": 0},
+        {"label": 6, "color": 99},
+        {"label": -65, "color": -82},
+        {"label": 1, "color": 1},
+    ]
+    for kwargs in test_inputs:
+        try:
+            out = func(**kwargs)
+            results.append({"input": kwargs, "output": repr(out), "error": None})
+        except Exception as e:
+            results.append({"input": kwargs, "output": None, "error": str(e)})
+    path = FIXTURE_DIR / "_chip_golden.json"
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
+    assert len(results) > 0, "No test results captured"
+
+
+def test_golden_run_duplicate_phase():
+    """Golden capture for run_duplicate_phase (Core/scan_phases.py:131)."""
+    # Import the original function
+    mod = importlib.import_module("Core.scan_phases")
+    func = getattr(mod, "run_duplicate_phase", None)
+    if func is None:
+        return  # function not importable
+    results = []
+    test_inputs = [
+        {"functions": 0},
+        {"functions": 13},
+        {"functions": -49},
+        {"functions": 1},
+    ]
+    for kwargs in test_inputs:
+        try:
+            out = func(**kwargs)
+            results.append({"input": kwargs, "output": repr(out), "error": None})
+        except Exception as e:
+            results.append({"input": kwargs, "output": None, "error": str(e)})
+    path = FIXTURE_DIR / "run_duplicate_phase_golden.json"
+    path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     assert len(results) > 0, "No test results captured"

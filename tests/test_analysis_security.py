@@ -136,6 +136,7 @@ class TestSecurityAvailability:
 class TestSecuritySeverityMapping:
     """Tests for security severity mapping."""
 
+
 def _mock_analyze(bandit_json: str) -> list:
     """Run analyze with mocked subprocess."""
     return _sec_mock(bandit_json)

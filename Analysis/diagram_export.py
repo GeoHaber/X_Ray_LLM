@@ -148,7 +148,7 @@ class DiagramExporter:
         lines = [
             "```mermaid",
             "C4Context",
-            '    title System Context Diagram — X-Ray Project',
+            "    title System Context Diagram — X-Ray Project",
             "",
         ]
 
@@ -178,7 +178,7 @@ class DiagramExporter:
         lines = [
             "```mermaid",
             "C4Component",
-            '    title Component Diagram — Major Modules',
+            "    title Component Diagram — Major Modules",
             "",
         ]
 
@@ -198,7 +198,7 @@ class DiagramExporter:
         lines.append("")
         for src, tgt in edges:
             if src in top_nodes and tgt in top_nodes:
-                lines.append(f"    Rel({_node_id(src)}, {_node_id(tgt)}, \"imports\")")
+                lines.append(f'    Rel({_node_id(src)}, {_node_id(tgt)}, "imports")')
 
         lines.append("```")
         return "\n".join(lines)
@@ -207,6 +207,7 @@ class DiagramExporter:
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
 
 def _collect_nodes(edges: List[Edge], max_nodes: int) -> set:
     """Collect unique node paths, capped at *max_nodes*."""

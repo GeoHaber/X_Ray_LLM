@@ -1,6 +1,7 @@
 import importlib
 import pytest
 
+
 def test_imports():
     """Verify that affected modules can be imported without crashing (broken singletons fixed)."""
     modules_to_test = [
@@ -10,7 +11,7 @@ def test_imports():
         "Analysis.ui_health",
         "Analysis.verification",
     ]
-    
+
     for module_name in modules_to_test:
         try:
             importlib.import_module(module_name)

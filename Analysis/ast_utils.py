@@ -331,5 +331,3 @@ def collect_py_files(
             if _is_scannable_py(fn):
                 results.append(Path(dirpath) / fn)
     return results
-
-

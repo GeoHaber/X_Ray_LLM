@@ -6,7 +6,6 @@ If a smell disappears (fixed), the test should be updated.
 
 import ast
 from pathlib import Path
-import pytest
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -22,6 +21,7 @@ def _count_lines(filepath, func_name):
                 return node.end_lineno - node.lineno + 1
     return 0
 
+
 def test_smell_regression__generate_graph_html_long_function():
     """Regression: _generate_graph_html in UI/tabs/graph_tab.py is 294 lines (limit ~60)."""
     size = _count_lines(str(ROOT / "UI/tabs/graph_tab.py"), "_generate_graph_html")
@@ -29,6 +29,7 @@ def test_smell_regression__generate_graph_html_long_function():
     assert size > 0, "Function _generate_graph_html should still exist"
     # Uncomment to enforce size limit:
     # assert size <= 60, f"_generate_graph_html is {size} lines — refactor needed"
+
 
 def test_smell_regression__build_graph_tab_long_function():
     """Regression: _build_graph_tab in UI/tabs/graph_tab.py is 150 lines (limit ~60)."""

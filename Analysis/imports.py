@@ -277,19 +277,21 @@ def _check_missing_all(tree: ast.Module, rel_path: str) -> List[SmellIssue]:
 # Module-level API for test compatibility
 _default_analyzer = ImportAnalyzer()
 
+
 def analyze(source_code: str, project_root: str = None):
     """Wrapper for ImportAnalyzer.analyze()."""
     if source_code is None:
         raise ValueError("source_code cannot be None")
     return _default_analyzer.analyze(source_code)
 
+
 def build_graph(*args, **kwargs):
     """Wrapper for ImportAnalyzer.build_graph()."""
     return _default_analyzer.build_graph(*args, **kwargs)
+
 
 def summary(issues: List):
     """Wrapper for ImportAnalyzer.summary()."""
     if issues is None:
         raise ValueError("issues cannot be None")
     return _default_analyzer.summary(issues)
-

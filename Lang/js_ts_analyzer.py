@@ -764,7 +764,7 @@ def categorize_imports(imports: List[JSImport]) -> Dict[str, List[str]]:
 
 # Module-level API for test compatibility
 
+
 def location(file_path: str, line_start: int) -> str:
     """Return a human-readable location string (standalone helper)."""
     return f"{file_path}:{line_start}"
-

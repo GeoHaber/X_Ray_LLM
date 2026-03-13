@@ -10,14 +10,130 @@ and save the .mmd file.
 import flet as ft
 from typing import Any, Dict, Optional
 from UI.tabs.shared import (
-    TH, section_title, glass_card,
-    SZ_XS, SZ_SM, SZ_BODY, SZ_MD,
-    _empty_result_box,
+    TH,
+    section_title,
+    glass_card,
+    SZ_XS,
+    SZ_SM,
+    SZ_BODY,
 )
-from Core.i18n import t
 
 
-def _build_diagrams_tab(results: Dict[str, Any], page: Optional[ft.Page] = None) -> ft.Control:
+def _mermaid_code_block(text: str) -> ft.Container:
+    """Render a code block for Mermaid/C4 content."""
+    return ft.Container(
+        content=ft.Text(
+            text,
+            selectable=True,
+            font_family="Cascadia Code, Consolas, monospace",
+            size=SZ_XS,
+            color="#e2e8f0",
+        ),
+        bgcolor="#0d1117",
+        border_radius=8,
+        padding=16,
+        border=ft.border.all(1, TH.divider),
+    )
+
+
+def _build_flowchart_panel(mmd: str, n_nodes: int, n_edges: int, on_copy) -> ft.Control:
+    """Build the Mermaid flowchart panel."""
+    return glass_card(
+        ft.Column(
+            [
+                ft.Row(
+                    [
+                        section_title("🗺️ Mermaid Flowchart", ""),
+                        ft.Row(
+                            [
+                                ft.Text(
+                                    f"{n_nodes} nodes · {n_edges} edges",
+                                    size=SZ_XS,
+                                    color=TH.dim,
+                                ),
+                                ft.FilledButton(
+                                    "Copy .mmd",
+                                    icon=ft.Icons.COPY,
+                                    on_click=on_copy,
+                                    style=ft.ButtonStyle(
+                                        bgcolor={"": "#1e2432"},
+                                        color={
+                                            "": TH.accent
+                                            if hasattr(TH, "accent")
+                                            else "#00d4ff"
+                                        },
+                                    ),
+                                ),
+                            ],
+                            spacing=8,
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                ft.Divider(color=TH.divider, height=12),
+                _mermaid_code_block(mmd),
+                ft.Container(height=8),
+                ft.Text(
+                    "💡 Paste this block into any GitHub README, Notion page, or "
+                    "Mermaid-enabled editor to render the diagram instantly.",
+                    size=SZ_XS,
+                    color=TH.muted,
+                ),
+            ],
+            spacing=8,
+        )
+    )
+
+
+def _build_c4_context_panel(c4_ctx: str, on_copy) -> ft.Control:
+    """Build the C4 context diagram panel."""
+    if not c4_ctx:
+        return ft.Container()
+    return glass_card(
+        ft.Column(
+            [
+                ft.Row(
+                    [
+                        section_title("🏗️ C4 Context Diagram", ""),
+                        ft.FilledButton(
+                            "Copy C4",
+                            icon=ft.Icons.COPY,
+                            on_click=on_copy,
+                            style=ft.ButtonStyle(
+                                bgcolor={"": "#1e2432"},
+                                color={"": "#a855f7"},
+                            ),
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                ft.Divider(color=TH.divider, height=12),
+                _mermaid_code_block(c4_ctx),
+            ],
+            spacing=8,
+        )
+    )
+
+
+def _build_c4_component_panel(c4_comp: str) -> ft.Control:
+    """Build the C4 component diagram panel."""
+    if not c4_comp:
+        return ft.Container()
+    return glass_card(
+        ft.Column(
+            [
+                section_title("📦 C4 Component Diagram", ""),
+                ft.Divider(color=TH.divider, height=12),
+                _mermaid_code_block(c4_comp),
+            ],
+            spacing=8,
+        )
+    )
+
+
+def _build_diagrams_tab(
+    results: Dict[str, Any], page: Optional[ft.Page] = None
+) -> ft.Control:
     """
     Render the Diagrams tab.
 
@@ -26,32 +142,39 @@ def _build_diagrams_tab(results: Dict[str, Any], page: Optional[ft.Page] = None)
     """
     diagrams = results.get("_diagrams", {})
     if not diagrams or not diagrams.get("mermaid_flowchart"):
-        return ft.Column([
-            ft.Container(height=20),
-            ft.Column([
-                ft.Text("🗺️", size=48, text_align=ft.TextAlign.CENTER),
-                ft.Text(
-                    "No import graph data available yet.",
-                    size=SZ_BODY,
-                    color=TH.dim,
-                    text_align=ft.TextAlign.CENTER,
+        return ft.Column(
+            [
+                ft.Container(height=20),
+                ft.Column(
+                    [
+                        ft.Text("🗺️", size=48, text_align=ft.TextAlign.CENTER),
+                        ft.Text(
+                            "No import graph data available yet.",
+                            size=SZ_BODY,
+                            color=TH.dim,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                        ft.Text(
+                            "Run a scan first — the diagram will be generated automatically.",
+                            size=SZ_SM,
+                            color=TH.muted,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=8,
                 ),
-                ft.Text(
-                    "Run a scan first — the diagram will be generated automatically.",
-                    size=SZ_SM,
-                    color=TH.muted,
-                    text_align=ft.TextAlign.CENTER,
-                ),
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        )
 
-    mmd      = diagrams.get("mermaid_flowchart", "")
-    c4_ctx   = diagrams.get("c4_context", "")
-    c4_comp  = diagrams.get("c4_component", "")
-    n_nodes  = diagrams.get("node_count", 0)
-    n_edges  = diagrams.get("edge_count", 0)
+    mmd = diagrams.get("mermaid_flowchart", "")
+    c4_ctx = diagrams.get("c4_context", "")
+    c4_comp = diagrams.get("c4_component", "")
+    n_nodes = diagrams.get("node_count", 0)
+    n_edges = diagrams.get("edge_count", 0)
 
-    # ── Copy handler ──────────────────────────────────────────────────
+    # ── Copy handlers ─────────────────────────────────────────────────
     def on_copy_mmd(e):
         if page:
             page.set_clipboard(mmd)
@@ -60,100 +183,19 @@ def _build_diagrams_tab(results: Dict[str, Any], page: Optional[ft.Page] = None)
         if page:
             page.set_clipboard(c4_ctx)
 
-    # ── Flowchart panel ───────────────────────────────────────────────
-    flowchart_panel = glass_card(ft.Column([
-        ft.Row([
-            section_title("🗺️ Mermaid Flowchart", ""),
-            ft.Row([
-                ft.Text(f"{n_nodes} nodes · {n_edges} edges",
-                        size=SZ_XS, color=TH.dim),
-                ft.FilledButton(
-                    "Copy .mmd",
-                    icon=ft.Icons.COPY,
-                    on_click=on_copy_mmd,
-                    style=ft.ButtonStyle(
-                        bgcolor={"": "#1e2432"},
-                        color={"": TH.accent if hasattr(TH, "accent") else "#00d4ff"},
-                    ),
-                ),
-            ], spacing=8),
-        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-        ft.Divider(color=TH.divider, height=12),
-        ft.Container(
-            content=ft.Text(
-                mmd,
-                selectable=True,
-                font_family="Cascadia Code, Consolas, monospace",
-                size=SZ_XS,
-                color="#e2e8f0",
-            ),
-            bgcolor="#0d1117",
-            border_radius=8,
-            padding=16,
-            border=ft.border.all(1, TH.divider),
-        ),
-        ft.Container(height=8),
-        ft.Text(
-            "💡 Paste this block into any GitHub README, Notion page, or "
-            "Mermaid-enabled editor to render the diagram instantly.",
-            size=SZ_XS,
-            color=TH.muted,
-        ),
-    ], spacing=8))
+    flowchart_panel = _build_flowchart_panel(mmd, n_nodes, n_edges, on_copy_mmd)
+    c4_panel = _build_c4_context_panel(c4_ctx, on_copy_c4)
+    c4_comp_panel = _build_c4_component_panel(c4_comp)
 
-    # ── C4 Context panel ──────────────────────────────────────────────
-    c4_panel = glass_card(ft.Column([
-        ft.Row([
-            section_title("🏗️ C4 Context Diagram", ""),
-            ft.FilledButton(
-                "Copy C4",
-                icon=ft.Icons.COPY,
-                on_click=on_copy_c4,
-                style=ft.ButtonStyle(
-                    bgcolor={"": "#1e2432"},
-                    color={"": "#a855f7"},
-                ),
-            ),
-        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-        ft.Divider(color=TH.divider, height=12),
-        ft.Container(
-            content=ft.Text(
-                c4_ctx,
-                selectable=True,
-                font_family="Cascadia Code, Consolas, monospace",
-                size=SZ_XS,
-                color="#e2e8f0",
-            ),
-            bgcolor="#0d1117",
-            border_radius=8,
-            padding=16,
-            border=ft.border.all(1, TH.divider),
-        ),
-    ], spacing=8)) if c4_ctx else ft.Container()
-
-    # ── C4 Component panel ────────────────────────────────────────────
-    c4_comp_panel = glass_card(ft.Column([
-        section_title("📦 C4 Component Diagram", ""),
-        ft.Divider(color=TH.divider, height=12),
-        ft.Container(
-            content=ft.Text(
-                c4_comp,
-                selectable=True,
-                font_family="Cascadia Code, Consolas, monospace",
-                size=SZ_XS,
-                color="#e2e8f0",
-            ),
-            bgcolor="#0d1117",
-            border_radius=8,
-            padding=16,
-            border=ft.border.all(1, TH.divider),
-        ),
-    ], spacing=8)) if c4_comp else ft.Container()
-
-    return ft.Column([
-        flowchart_panel,
-        ft.Divider(color=TH.divider, height=24),
-        c4_panel,
-        ft.Divider(color=TH.divider, height=24) if c4_comp else ft.Container(),
-        c4_comp_panel,
-    ], spacing=0, expand=True, scroll=ft.ScrollMode.AUTO)
+    return ft.Column(
+        [
+            flowchart_panel,
+            ft.Divider(color=TH.divider, height=24),
+            c4_panel,
+            ft.Divider(color=TH.divider, height=24) if c4_comp else ft.Container(),
+            c4_comp_panel,
+        ],
+        spacing=0,
+        expand=True,
+        scroll=ft.ScrollMode.AUTO,
+    )

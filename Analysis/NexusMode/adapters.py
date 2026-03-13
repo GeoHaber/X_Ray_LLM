@@ -177,7 +177,7 @@ _default_adapter = XRayTranspilerAdapter()
 def transpile(node: ast.AST, context: Path) -> str:
     """
     Module-level transpile function wrapping the default XRay adapter.
-    
+
     :param node: Python AST node (typically a FunctionDef)
     :param context: Path to the source file (for source_info tracking)
     :return: Generated Rust code string

@@ -59,7 +59,7 @@ def _enable_utf8_console() -> None:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, OSError):
-        _reconfigure_streams_fallback()
+        pass
 
 
 def supports_unicode() -> bool:

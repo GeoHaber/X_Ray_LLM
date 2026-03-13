@@ -30,7 +30,7 @@ import ast
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 # Naming patterns that heavily correlate with AI-generated names
 _GPT_NAME_PATTERNS = re.compile(
@@ -51,9 +51,9 @@ class AIDebtItem:
 
     file: str
     line: int
-    pattern: str        # Pattern name (e.g. "over_documented")
-    description: str    # Human-readable description
-    severity: str = "info"   # info / warning
+    pattern: str  # Pattern name (e.g. "over_documented")
+    description: str  # Human-readable description
+    severity: str = "info"  # info / warning
 
 
 @dataclass
@@ -165,11 +165,7 @@ class AICodeDetector:
             # Trivial: docstring + ≤2 other statements
             if has_docstring and len(body) <= 3:
                 # Check name is also GPT-style → elevate to warning
-                severity = (
-                    "warning"
-                    if _GPT_NAME_PATTERNS.match(node.name)
-                    else "info"
-                )
+                severity = "warning" if _GPT_NAME_PATTERNS.match(node.name) else "info"
                 report.items.append(
                     AIDebtItem(
                         file=file,
@@ -177,15 +173,13 @@ class AICodeDetector:
                         pattern="over_documented",
                         description=(
                             f"Trivial function '{node.name}' has a docstring "
-                            f"but only {len(body)-1} statement(s) — possible AI boilerplate"
+                            f"but only {len(body) - 1} statement(s) — possible AI boilerplate"
                         ),
                         severity=severity,
                     )
                 )
 
-    def _check_gpt_naming(
-        self, tree: ast.AST, file: str, report: AICodeReport
-    ) -> None:
+    def _check_gpt_naming(self, tree: ast.AST, file: str, report: AICodeReport) -> None:
         """Flag functions/classes with names matching common AI naming patterns."""
         seen: set[str] = set()
         for node in ast.walk(tree):
@@ -216,14 +210,14 @@ class AICodeDetector:
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            body = [s for s in node.body if not (
-                isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant)
-            )]  # skip docstring
+            body = [
+                s
+                for s in node.body
+                if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant))
+            ]  # skip docstring
             if len(body) == 1 and isinstance(body[0], (ast.Return, ast.Expr)):
                 stmt = body[0]
-                is_single_call = isinstance(
-                    getattr(stmt, "value", None), ast.Call
-                )
+                is_single_call = isinstance(getattr(stmt, "value", None), ast.Call)
                 if is_single_call:
                     report.items.append(
                         AIDebtItem(
@@ -273,13 +267,15 @@ class AICodeDetector:
         report: AICodeReport,
     ) -> None:
         """Flag files where >40% of non-empty lines are docstring/comment content."""
-        total = len([l for l in lines if l.strip()])
+        total = len([ln for ln in lines if ln.strip()])
         if total < 20:
             return  # skip tiny files
 
-        comment_lines = len([l for l in lines if l.strip().startswith("#")])
+        comment_lines = len([ln for ln in lines if ln.strip().startswith("#")])
         docstring_lines = sum(
-            1 for l in lines if l.strip().startswith('"""') or l.strip().startswith("'''")
+            1
+            for ln in lines
+            if ln.strip().startswith('"""') or ln.strip().startswith("'''")
         )
         comment_ratio = (comment_lines + docstring_lines) / total
 

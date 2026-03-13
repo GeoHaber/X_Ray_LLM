@@ -48,10 +48,10 @@ class CoupledPair:
 
     file_a: str
     file_b: str
-    cochange_count: int        # Times changed in same commit
-    total_commits_a: int       # Total commits touching file_a
-    total_commits_b: int       # Total commits touching file_b
-    coupling_pct: float        # cochange / max(commits_a, commits_b)
+    cochange_count: int  # Times changed in same commit
+    total_commits_a: int  # Total commits touching file_a
+    total_commits_b: int  # Total commits touching file_b
+    coupling_pct: float  # cochange / max(commits_a, commits_b)
 
     @property
     def strength(self) -> str:
@@ -200,7 +200,8 @@ class TemporalCouplingAnalyzer:
         try:
             result = subprocess.run(
                 [
-                    "git", "log",
+                    "git",
+                    "log",
                     f"--since={days}.days",
                     "--name-only",
                     "--pretty=format:COMMIT_BOUNDARY",

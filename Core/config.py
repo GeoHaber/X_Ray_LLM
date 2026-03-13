@@ -1,6 +1,6 @@
 import builtins as _builtins_mod
 
-__version__ = "7.0.0"
+__version__ = "7.2.2"
 
 # Safe separator: always ASCII dash — renders correctly on every terminal/console
 SEP = "-"

@@ -138,9 +138,7 @@ def available() -> bool:
     return _default_analyzer.available
 
 
-def analyze(
-    root: Path, exclude: Optional[List[str]] = None
-) -> List[SmellIssue]:
+def analyze(root: Path, exclude: Optional[List[str]] = None) -> List[SmellIssue]:
     """Analyze code formatting with ruff."""
     if root is None:
         raise ValueError("root path cannot be None")

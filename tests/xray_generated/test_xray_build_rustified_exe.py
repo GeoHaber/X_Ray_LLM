@@ -3,9 +3,9 @@
 Tests function signatures, edge cases, and class instantiation.
 """
 
-import pytest
 
 def test_build_rustified_exe_main_is_callable():
     """Verify main exists and is callable."""
     from build_rustified_exe import main
+
     assert callable(main)

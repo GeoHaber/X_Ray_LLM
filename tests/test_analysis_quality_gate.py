@@ -1,11 +1,10 @@
 """
 tests/test_analysis_quality_gate.py — Unit tests for Analysis/quality_gate.py
 """
-import json
-from pathlib import Path
-import pytest
 
-from Analysis.quality_gate import QualityGate, GateResult, GateViolation
+import json
+
+from Analysis.quality_gate import QualityGate
 
 
 def _make_results(score=85, crit_smells=0, crit_sec=0, dup_groups=5):
@@ -19,13 +18,16 @@ def _make_results(score=85, crit_smells=0, crit_sec=0, dup_groups=5):
 
 def _gate(tmp_path, thresholds=None):
     settings = tmp_path / "xray_settings.json"
-    base = {"gate": thresholds or {
-        "min_score": 70,
-        "max_critical_smells": 0,
-        "max_critical_security": 0,
-        "max_debt_hours": 80,
-        "max_duplicate_groups": 20,
-    }}
+    base = {
+        "gate": thresholds
+        or {
+            "min_score": 70,
+            "max_critical_smells": 0,
+            "max_critical_security": 0,
+            "max_debt_hours": 80,
+            "max_duplicate_groups": 20,
+        }
+    }
     settings.write_text(json.dumps(base), encoding="utf-8")
     return QualityGate(settings_path=settings)
 
@@ -71,8 +73,15 @@ class TestQualityGateFails:
         assert "max_critical_security" in rules
 
     def test_fail_too_many_duplicates(self, tmp_path):
-        gate = _gate(tmp_path, {"min_score": 0, "max_duplicate_groups": 3,
-                                 "max_critical_smells": 99, "max_critical_security": 99})
+        gate = _gate(
+            tmp_path,
+            {
+                "min_score": 0,
+                "max_duplicate_groups": 3,
+                "max_critical_smells": 99,
+                "max_critical_security": 99,
+            },
+        )
         result = gate.evaluate(_make_results(dup_groups=10))
         assert result.passed is False
         rules = [v.rule for v in result.violations]
@@ -110,7 +119,7 @@ class TestQualityGateJSON:
     def test_default_thresholds_written_if_missing(self, tmp_path):
         settings = tmp_path / "xray_settings.json"
         settings.write_text("{}", encoding="utf-8")
-        gate = QualityGate(settings_path=settings)
+        QualityGate(settings_path=settings)  # side-effect: writes defaults
         data = json.loads(settings.read_text())
         assert "gate" in data
         assert "min_score" in data["gate"]
@@ -118,11 +127,20 @@ class TestQualityGateJSON:
 
 class TestSATDGateRule:
     def test_fail_on_high_satd_hours(self, tmp_path):
-        gate = _gate(tmp_path, {"min_score": 0, "max_debt_hours": 10,
-                                 "max_critical_smells": 99, "max_critical_security": 99,
-                                 "max_duplicate_groups": 99})
+        gate = _gate(
+            tmp_path,
+            {
+                "min_score": 0,
+                "max_debt_hours": 10,
+                "max_critical_smells": 99,
+                "max_critical_security": 99,
+                "max_duplicate_groups": 99,
+            },
+        )
+
         class FakeSATD:
             total_hours = 50
+
         result = gate.evaluate(_make_results(), satd_summary=FakeSATD())
         assert result.passed is False
         rules = [v.rule for v in result.violations]
@@ -130,7 +148,9 @@ class TestSATDGateRule:
 
     def test_pass_on_acceptable_satd_hours(self, tmp_path):
         gate = _gate(tmp_path)
+
         class FakeSATD:
             total_hours = 10
+
         result = gate.evaluate(_make_results(), satd_summary=FakeSATD())
         assert result.passed is True

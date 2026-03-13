@@ -1,35 +1,20 @@
 """Auto-generated: verify Rust DLL outputs match Python goldens."""
-import json, pathlib, pytest
+
+import json
+import pathlib
+import pytest
 
 try:
     import xray_rustified
+
     HAS_RUST = True
 except ImportError:
     HAS_RUST = False
 
-FIXTURE_DIR = pathlib.Path(r"C:\Users\dvdze\Documents\_Python\X_Ray\_rustified\golden")
+FIXTURE_DIR = pathlib.Path(
+    r"C:\Users\dvdze\Documents\GitHub\GeorgeHaber\X_Ray\_rustified\golden"
+)
 
-@pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
-def test_rust_metric_tile():
-    """Verify Rust metric_tile matches Python golden."""
-    golden_path = FIXTURE_DIR / "metric_tile_golden.json"
-    if not golden_path.exists():
-        pytest.skip("golden fixture not found")
-    goldens = json.loads(golden_path.read_text())
-    rust_fn = getattr(xray_rustified, "metric_tile", None)
-    if rust_fn is None:
-        pytest.skip("function not in Rust module")
-    for case in goldens:
-        if case.get('error'):
-            continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
-        try:
-            result = repr(rust_fn(**kwargs))
-        except Exception as e:
-            pytest.fail(f"Rust raised {e} for input {kwargs}")
-        assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust_score_pair_detailed():
@@ -42,16 +27,18 @@ def test_rust_score_pair_detailed():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust_semantic_similarity():
@@ -64,38 +51,18 @@ def test_rust_semantic_similarity():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
 
-@pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
-def test_rust_section_title():
-    """Verify Rust section_title matches Python golden."""
-    golden_path = FIXTURE_DIR / "section_title_golden.json"
-    if not golden_path.exists():
-        pytest.skip("golden fixture not found")
-    goldens = json.loads(golden_path.read_text())
-    rust_fn = getattr(xray_rustified, "section_title", None)
-    if rust_fn is None:
-        pytest.skip("function not in Rust module")
-    for case in goldens:
-        if case.get('error'):
-            continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
-        try:
-            result = repr(rust_fn(**kwargs))
-        except Exception as e:
-            pytest.fail(f"Rust raised {e} for input {kwargs}")
-        assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__classify_token():
@@ -108,16 +75,18 @@ def test_rust__classify_token():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__classify_name():
@@ -130,16 +99,18 @@ def test_rust__classify_name():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust_assert_tokenize_snake_case():
@@ -152,16 +123,18 @@ def test_rust_assert_tokenize_snake_case():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust_assert_tokenize_camel_case():
@@ -174,16 +147,18 @@ def test_rust_assert_tokenize_camel_case():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__has_return_annotation():
@@ -196,16 +171,18 @@ def test_rust__has_return_annotation():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__strip_markdown_fences():
@@ -218,16 +195,18 @@ def test_rust__strip_markdown_fences():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__token_ngram_similarity():
@@ -240,16 +219,18 @@ def test_rust__token_ngram_similarity():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust_name_similarity():
@@ -262,16 +243,18 @@ def test_rust_name_similarity():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust_callgraph_overlap():
@@ -284,16 +267,18 @@ def test_rust_callgraph_overlap():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__safe_repr():
@@ -306,16 +291,18 @@ def test_rust__safe_repr():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__make_func():
@@ -328,16 +315,18 @@ def test_rust__make_func():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__grade_ge():
@@ -350,16 +339,18 @@ def test_rust__grade_ge():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__delta_int():
@@ -372,16 +363,18 @@ def test_rust__delta_int():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__delta_float():
@@ -394,16 +387,18 @@ def test_rust__delta_float():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__detect_gpu():
@@ -416,82 +411,42 @@ def test_rust__detect_gpu():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
-def test_rust__make_proportional_bar():
-    """Verify Rust _make_proportional_bar matches Python golden."""
-    golden_path = FIXTURE_DIR / "_make_proportional_bar_golden.json"
+def test_rust_analyze():
+    """Verify Rust analyze matches Python golden."""
+    golden_path = FIXTURE_DIR / "analyze_golden.json"
     if not golden_path.exists():
         pytest.skip("golden fixture not found")
     goldens = json.loads(golden_path.read_text())
-    rust_fn = getattr(xray_rustified, "_make_proportional_bar", None)
+    rust_fn = getattr(xray_rustified, "analyze", None)
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
 
-@pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
-def test_rust__code_panel():
-    """Verify Rust _code_panel matches Python golden."""
-    golden_path = FIXTURE_DIR / "_code_panel_golden.json"
-    if not golden_path.exists():
-        pytest.skip("golden fixture not found")
-    goldens = json.loads(golden_path.read_text())
-    rust_fn = getattr(xray_rustified, "_code_panel", None)
-    if rust_fn is None:
-        pytest.skip("function not in Rust module")
-    for case in goldens:
-        if case.get('error'):
-            continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
-        try:
-            result = repr(rust_fn(**kwargs))
-        except Exception as e:
-            pytest.fail(f"Rust raised {e} for input {kwargs}")
-        assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
-
-@pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
-def test_rust__code_snippet_container():
-    """Verify Rust _code_snippet_container matches Python golden."""
-    golden_path = FIXTURE_DIR / "_code_snippet_container_golden.json"
-    if not golden_path.exists():
-        pytest.skip("golden fixture not found")
-    goldens = json.loads(golden_path.read_text())
-    rust_fn = getattr(xray_rustified, "_code_snippet_container", None)
-    if rust_fn is None:
-        pytest.skip("function not in Rust module")
-    for case in goldens:
-        if case.get('error'):
-            continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
-        try:
-            result = repr(rust_fn(**kwargs))
-        except Exception as e:
-            pytest.fail(f"Rust raised {e} for input {kwargs}")
-        assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__build_cargo_error_log():
@@ -504,16 +459,18 @@ def test_rust__build_cargo_error_log():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust_get_cache():
@@ -526,38 +483,42 @@ def test_rust_get_cache():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
-def test_rust__empty_state():
-    """Verify Rust _empty_state matches Python golden."""
-    golden_path = FIXTURE_DIR / "_empty_state_golden.json"
+def test_rust_fix():
+    """Verify Rust fix matches Python golden."""
+    golden_path = FIXTURE_DIR / "fix_golden.json"
     if not golden_path.exists():
         pytest.skip("golden fixture not found")
     goldens = json.loads(golden_path.read_text())
-    rust_fn = getattr(xray_rustified, "_empty_state", None)
+    rust_fn = getattr(xray_rustified, "fix", None)
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust_get_llm_transpiler():
@@ -570,16 +531,18 @@ def test_rust_get_llm_transpiler():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__boom():
@@ -592,16 +555,18 @@ def test_rust__boom():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust_cached_factorial():
@@ -614,38 +579,18 @@ def test_rust_cached_factorial():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
 
-@pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
-def test_rust__empty_result_box():
-    """Verify Rust _empty_result_box matches Python golden."""
-    golden_path = FIXTURE_DIR / "_empty_result_box_golden.json"
-    if not golden_path.exists():
-        pytest.skip("golden fixture not found")
-    goldens = json.loads(golden_path.read_text())
-    rust_fn = getattr(xray_rustified, "_empty_result_box", None)
-    if rust_fn is None:
-        pytest.skip("function not in Rust module")
-    for case in goldens:
-        if case.get('error'):
-            continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
-        try:
-            result = repr(rust_fn(**kwargs))
-        except Exception as e:
-            pytest.fail(f"Rust raised {e} for input {kwargs}")
-        assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
 
 @pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
 def test_rust__make_class():
@@ -658,13 +603,134 @@ def test_rust__make_class():
     if rust_fn is None:
         pytest.skip("function not in Rust module")
     for case in goldens:
-        if case.get('error'):
+        if case.get("error"):
             continue  # skip error cases
-        kwargs = case['input']
-        expected = case['output']
+        kwargs = case["input"]
+        expected = case["output"]
         try:
             result = repr(rust_fn(**kwargs))
         except Exception as e:
             pytest.fail(f"Rust raised {e} for input {kwargs}")
         assert result == expected, (
-            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}")
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
+
+@pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
+def test_rust__make_smell():
+    """Verify Rust _make_smell matches Python golden."""
+    golden_path = FIXTURE_DIR / "_make_smell_golden.json"
+    if not golden_path.exists():
+        pytest.skip("golden fixture not found")
+    goldens = json.loads(golden_path.read_text())
+    rust_fn = getattr(xray_rustified, "_make_smell", None)
+    if rust_fn is None:
+        pytest.skip("function not in Rust module")
+    for case in goldens:
+        if case.get("error"):
+            continue  # skip error cases
+        kwargs = case["input"]
+        expected = case["output"]
+        try:
+            result = repr(rust_fn(**kwargs))
+        except Exception as e:
+            pytest.fail(f"Rust raised {e} for input {kwargs}")
+        assert result == expected, (
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
+
+@pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
+def test_rust__build_sys_row():
+    """Verify Rust _build_sys_row matches Python golden."""
+    golden_path = FIXTURE_DIR / "_build_sys_row_golden.json"
+    if not golden_path.exists():
+        pytest.skip("golden fixture not found")
+    goldens = json.loads(golden_path.read_text())
+    rust_fn = getattr(xray_rustified, "_build_sys_row", None)
+    if rust_fn is None:
+        pytest.skip("function not in Rust module")
+    for case in goldens:
+        if case.get("error"):
+            continue  # skip error cases
+        kwargs = case["input"]
+        expected = case["output"]
+        try:
+            result = repr(rust_fn(**kwargs))
+        except Exception as e:
+            pytest.fail(f"Rust raised {e} for input {kwargs}")
+        assert result == expected, (
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
+
+@pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
+def test_rust_llm_transpile_function():
+    """Verify Rust llm_transpile_function matches Python golden."""
+    golden_path = FIXTURE_DIR / "llm_transpile_function_golden.json"
+    if not golden_path.exists():
+        pytest.skip("golden fixture not found")
+    goldens = json.loads(golden_path.read_text())
+    rust_fn = getattr(xray_rustified, "llm_transpile_function", None)
+    if rust_fn is None:
+        pytest.skip("function not in Rust module")
+    for case in goldens:
+        if case.get("error"):
+            continue  # skip error cases
+        kwargs = case["input"]
+        expected = case["output"]
+        try:
+            result = repr(rust_fn(**kwargs))
+        except Exception as e:
+            pytest.fail(f"Rust raised {e} for input {kwargs}")
+        assert result == expected, (
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
+
+@pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
+def test_rust__chip():
+    """Verify Rust _chip matches Python golden."""
+    golden_path = FIXTURE_DIR / "_chip_golden.json"
+    if not golden_path.exists():
+        pytest.skip("golden fixture not found")
+    goldens = json.loads(golden_path.read_text())
+    rust_fn = getattr(xray_rustified, "_chip", None)
+    if rust_fn is None:
+        pytest.skip("function not in Rust module")
+    for case in goldens:
+        if case.get("error"):
+            continue  # skip error cases
+        kwargs = case["input"]
+        expected = case["output"]
+        try:
+            result = repr(rust_fn(**kwargs))
+        except Exception as e:
+            pytest.fail(f"Rust raised {e} for input {kwargs}")
+        assert result == expected, (
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )
+
+
+@pytest.mark.skipif(not HAS_RUST, reason="xray_rustified not compiled")
+def test_rust_run_duplicate_phase():
+    """Verify Rust run_duplicate_phase matches Python golden."""
+    golden_path = FIXTURE_DIR / "run_duplicate_phase_golden.json"
+    if not golden_path.exists():
+        pytest.skip("golden fixture not found")
+    goldens = json.loads(golden_path.read_text())
+    rust_fn = getattr(xray_rustified, "run_duplicate_phase", None)
+    if rust_fn is None:
+        pytest.skip("function not in Rust module")
+    for case in goldens:
+        if case.get("error"):
+            continue  # skip error cases
+        kwargs = case["input"]
+        expected = case["output"]
+        try:
+            result = repr(rust_fn(**kwargs))
+        except Exception as e:
+            pytest.fail(f"Rust raised {e} for input {kwargs}")
+        assert result == expected, (
+            f"Mismatch: Rust={result} vs Python={expected} for input={kwargs}"
+        )

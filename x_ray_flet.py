@@ -26,8 +26,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import subprocess  # nosec B404
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -39,7 +39,7 @@ _MIN_FLET = (0, 80, 0)
 
 
 def _check_flet_version() -> None:
-    """Ensure Flet >= 0.80.0 is installed; auto-upgrade if not."""
+    """Ensure Flet >= 0.80.0 is installed; exit with guidance if not."""
     from packaging.version import Version
 
     installed = Version(ft.__version__)
@@ -50,13 +50,10 @@ def _check_flet_version() -> None:
     print(
         f"\n[X-Ray] Flet {ft.__version__} is too old -- "
         f"minimum required is {required}.\n"
-        f"        Upgrading now ...\n"
+        f"        Please upgrade manually:\n"
+        f"          pip install flet>={required}\n"
     )
-    subprocess.check_call(  # nosec B603
-        [sys.executable, "-m", "pip", "install", f"flet>={required}"],
-    )
-    print("\n[X-Ray] Flet upgraded successfully.  Please restart the application.\n")
-    sys.exit(0)
+    sys.exit(1)
 
 
 _check_flet_version()
@@ -68,8 +65,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from Core.types import FunctionRecord, ClassRecord  # noqa: E402
-from Core.config import __version__, SMELL_THRESHOLDS  # noqa: E402
-from Core.i18n import t, set_locale, get_locale, LOCALES  # noqa: E402
+from Core.config import SMELL_THRESHOLDS  # noqa: E402
+from Core.i18n import t, LOCALES  # noqa: E402
 from Core.ui_bridge import set_bridge, get_bridge  # noqa: E402
 from Analysis.ast_utils import extract_functions_from_file, collect_py_files  # noqa: E402
 from Analysis.smells import CodeSmellDetector  # noqa: E402
@@ -78,32 +75,18 @@ from Analysis.reporting import compute_grade  # noqa: E402
 from Analysis.rust_advisor import RustAdvisor  # noqa: E402
 from UI.tabs.shared import (  # noqa: E402
     TH,
-    is_narrow,
     _show_snack,
-    metric_tile,
-    _build_markdown_report,
-    build_dimension_cards,
-    build_severity_bar,
-    build_trend_indicator,
-    build_sparkline,
     build_html_report,
+    SEV_COLORS,
+    MONO_FONT,
+    SZ_XS,
+    SZ_SM,
+    SZ_BODY,
+    SZ_MD,
+    SZ_SECTION,
+    SZ_H3,
+    SZ_H2,
 )
-from UI.tabs.smells_tab import _build_smells_tab  # noqa: E402
-from UI.tabs.duplicates_tab import _build_duplicates_tab  # noqa: E402
-from UI.tabs.lint_tab import _build_lint_tab  # noqa: E402
-from UI.tabs.security_tab import _build_security_tab  # noqa: E402
-from UI.tabs.heatmap_tab import _build_heatmap_tab  # noqa: E402
-from UI.tabs.complexity_tab import _build_complexity_tab  # noqa: E402
-from UI.tabs.graph_tab import _build_graph_tab  # noqa: E402
-from UI.tabs.nexus_tab import _build_nexus_tab  # noqa: E402
-from UI.tabs.auto_rustify_tab import _build_auto_rustify_tab  # noqa: E402
-from UI.tabs.rustify_tab import _build_rustify_tab  # noqa: E402
-from UI.tabs.ui_health_tab import _build_ui_health_tab  # noqa: E402
-from UI.tabs.ui_compat_tab import _build_ui_compat_tab  # noqa: E402
-from UI.tabs.verification_tab import _build_verification_tab  # noqa: E402
-from UI.tabs.release_readiness_tab import _build_release_readiness_tab  # noqa: E402
-from UI.tabs.debt_tab import _build_debt_tab  # noqa: E402
-from UI.tabs.diagrams_tab import _build_diagrams_tab  # noqa: E402
 from UI.shell_v2 import build_shell_v2  # noqa: E402 — v8.0 redesigned shell
 
 import concurrent.futures  # noqa: E402
@@ -163,7 +146,7 @@ class FletBridge:
                 )
                 self._page.update()
             except Exception:  # nosec
-                pass
+                logger.debug("FletBridge.log page.update failed", exc_info=True)
 
     def status(self, label: str) -> None:
         """Update current phase label; also emitted as a log line."""
@@ -181,7 +164,7 @@ class FletBridge:
                     -1,
                 )
             except Exception:
-                pass
+                logger.debug("FletBridge.status progress_cb failed", exc_info=True)
 
     def progress(self, done: int, total: int, label: str = "") -> None:
         """Forward progress to the Flet animated progress bar callback."""
@@ -194,61 +177,15 @@ class FletBridge:
             self._last_frac = frac  # type: ignore[attr-defined]
             self._progress_cb(frac, label or self._last_label, done, total, -1)
         except Exception:
-            pass
+            logger.debug("FletBridge.progress failed", exc_info=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  THEME ENGINE  —  Dynamic Light / Dark
-# ═══════════════════════════════════════════════════════════════════════════════
+# All theme constants (MONO_FONT, SZ_*, BTN_*, GRADE_COLORS, SEV_*)
+# are imported from UI.tabs.shared - single source of truth.
 
-MONO_FONT = "Cascadia Code, Consolas, SF Mono, monospace"
-
-# â”€â”€ Consistent sizing constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-SZ_XS = 11  # version numbers, copyright, tiny meta
-SZ_SM = 12  # captions, file paths, code blocks, subtitles
-SZ_BODY = 13  # secondary body, descriptions, meta info
-SZ_MD = 14  # list-item titles, expansion-tile titles, body
-SZ_LG = 15  # card titles, emphasized body
-SZ_SECTION = 17  # section headings
-SZ_H3 = 18  # panel titles, sub-headings
-SZ_H2 = 22  # dialog titles, major headings
-SZ_SIDEBAR = 24  # sidebar logo
-SZ_HERO = 34  # landing-page hero title
-SZ_DISPLAY = 40  # grade letter, decorative emoji
-
-BTN_H_SM = 36  # secondary / export buttons
-BTN_H_MD = 40  # normal action buttons
-BTN_RADIUS = 10  # consistent border-radius for all buttons
-
-# â”€â”€ Responsive breakpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-BP_NARROW = 900  # below this  single-column / drawer sidebar
-
-GRADE_COLORS = {
-    "A+": "#00c853",
-    "A": "#00c853",
-    "A-": "#00e676",
-    "B+": "#64dd17",
-    "B": "#aeea00",
-    "B-": "#ffd600",
-    "C+": "#ffab00",
-    "C": "#ff6d00",
-    "C-": "#ff3d00",
-    "D+": "#dd2c00",
-    "D": "#d50000",
-    "D-": "#b71c1c",
-    "F": "#880e4f",
-}
-
-SEV_ICONS = {"critical": "[!]", "warning": "[~]", "info": "[i]"}
-SEV_COLORS = {
-    "critical": ft.Colors.RED_400,
-    "warning": ft.Colors.AMBER_400,
-    "info": ft.Colors.GREEN_400,
-}
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  SCAN ENGINE  (reused from x_ray_ui.py logic)
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+#  SCAN ENGINE
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _scan_codebase(root: Path, exclude: List[str], progress_cb=None):
@@ -257,19 +194,23 @@ def _scan_codebase(root: Path, exclude: List[str], progress_cb=None):
     py_files = collect_py_files(root, exclude or None)
     total = len(py_files)
     funcs, classes, errors = [], [], []
+    _lock = threading.Lock()
     done = [0]
 
     def _parse_one(f):
         fn, cl, err = extract_functions_from_file(f, root)
-        done[0] += 1
+        with _lock:
+            done[0] += 1
+            _done = done[0]
         if progress_cb:
-            progress_cb(done[0], total, str(f))
+            progress_cb(_done, total, str(f))
         return fn, cl, err, f
 
     with concurrent.futures.ThreadPoolExecutor() as pool:
         futs = [pool.submit(_parse_one, f) for f in py_files]
         for fut in concurrent.futures.as_completed(futs):
             fn, cl, err, fpath = fut.result()
+            # as_completed yields one-at-a-time so extend is safe here
             funcs.extend(fn)
             classes.extend(cl)
             if err:
@@ -465,10 +406,12 @@ def _phase_release_readiness(root, exclude, results):
 
 # ── v8.0 New Analysis Phase Functions ────────────────────────────────────────
 
+
 def _phase_satd(root, results):
     """Run SATD scanner and store results in results['_satd']."""
     try:
         from Analysis.satd import SATDScanner
+
         scanner = SATDScanner()
         summary = scanner.scan_directory(root)
         results["_satd"] = summary.as_dict()
@@ -481,6 +424,7 @@ def _phase_hotspots(root, results):
     """Run git hotspot analysis and store results in results['_hotspots']."""
     try:
         from Analysis.git_hotspots import HotspotAnalyzer
+
         # Pass complexity map if available from smells/complexity data
         cx_map = {}
         for f in results.get("_functions", []):
@@ -500,6 +444,7 @@ def _phase_coupling(root, results):
     """Run temporal coupling analysis and store in results['_coupling']."""
     try:
         from Analysis.temporal_coupling import TemporalCouplingAnalyzer
+
         analyzer = TemporalCouplingAnalyzer(root)
         report = analyzer.analyze(days=180, min_commits=3, min_coupling=0.25)
         results["_coupling"] = report.as_dict()
@@ -511,6 +456,7 @@ def _phase_ai_debt(root, results):
     """Run AI-generated code detector and store in results['_ai_debt']."""
     try:
         from Analysis.ai_code_detector import AICodeDetector
+
         detector = AICodeDetector()
         report = detector.scan_directory(root)
         results["_ai_debt"] = report.as_dict()
@@ -522,6 +468,7 @@ def _phase_diagrams(root, results):
     """Generate Mermaid/C4 diagrams from import graph and store in results['_diagrams']."""
     try:
         from Analysis.diagram_export import DiagramExporter
+
         import_graph = results.get("import_graph", {})
         edges = [
             (e.get("source", ""), e.get("target", ""))
@@ -551,6 +498,7 @@ def _phase_quality_gate(root, results):
     """Evaluate quality gate and store result in results['_gate']."""
     try:
         from Analysis.quality_gate import QualityGate
+
         settings_path = root / "xray_settings.json"
         gate = QualityGate(settings_path=settings_path)
         satd_summary = results.get("_satd_summary")
@@ -785,384 +733,195 @@ def _run_scan(ctx: FletScanContext) -> Dict[str, Any]:
 #  ONBOARDING DIALOG
 # ════════════════════════════════════════════════════════════════════════════════════════════════════
 
-_ONBOARD_ICONS = ("1", "2", "3", "4", "5")
-
-
-def _make_step_dots(n, idx):
-    """Build the step-indicator dot row (— current, ○ others)."""
-    dots = [
-        ft.Text(
-            "" if i == idx else "",
-            size=SZ_SM if i == idx else SZ_XS,
-            color=TH.accent if i == idx else TH.muted,
-        )
-        for i in range(n)
-    ]
-    return ft.Row(dots, spacing=6, alignment=ft.MainAxisAlignment.CENTER)
-
-
-def _update_onboard(st, page):
-    """Refresh onboard dialog to reflect current step."""
-    i, steps, w = st["idx"], st["steps"], st["w"]
-    w["icon"].value = steps[i][2]
-    w["title"].value = steps[i][0]
-    w["desc"].value = steps[i][1]
-    w["label"].value = f"{i + 1} / {st['n']}"
-    w["dots"].controls = _make_step_dots(st["n"], i).controls
-    if i > 0:
-        w["back"].text = t("onboard_back")
-        w["back"].on_click = lambda e: _on_back_onboard(st, page)
-    else:
-        w["back"].text = t("onboard_skip")
-        w["back"].on_click = lambda e: (setattr(st.get("dlg"), "open", False), page.update()) if st.get("dlg") else None
-    w["next"].text = t("onboard_got_it") if i == st["n"] - 1 else t("onboard_next")
-    page.update()
-
-
-def _on_next_onboard(st, page):
-    """Advance onboarding by one step or close."""
-    if st["idx"] >= st["n"] - 1:
-        if st.get("dlg"):
-            st["dlg"].open = False
-            page.update()
-        return
-    st["idx"] += 1
-    _update_onboard(st, page)
-
-
-def _on_back_onboard(st, page):
-    """Go back one onboarding step."""
-    if st["idx"] > 0:
-        st["idx"] -= 1
-        _update_onboard(st, page)
-
-
-def _show_onboarding(page: ft.Page):
-    """Display the 5-step onboarding tutorial dialog."""
-    steps = [
-        (t(f"onboard_step{i}_title"), t(f"onboard_step{i}_desc"), _ONBOARD_ICONS[i - 1])
-        for i in range(1, 6)
-    ]
-    n = len(steps)
-    st = {"steps": steps, "n": n, "idx": 0, "w": {}}
-    w = st["w"]
-    w["icon"] = ft.Text(steps[0][2], size=SZ_H2, text_align=ft.TextAlign.CENTER)
-    w["title"] = ft.Text(
-        steps[0][0], size=SZ_LG, weight=ft.FontWeight.W_600, color=TH.accent
-    )
-    w["desc"] = ft.Text(steps[0][1], size=SZ_BODY, color=TH.dim, no_wrap=False)
-    w["dots"] = _make_step_dots(n, 0)
-    w["label"] = ft.Text(f"1 / {n}", size=SZ_XS, color=TH.muted)
-    w["back"] = ft.TextButton(
-        t("onboard_skip"),
-        on_click=lambda e: (setattr(st.get("dlg"), "open", False), page.update()) if st.get("dlg") else None,
-        style=ft.ButtonStyle(color=TH.muted),
-    )
-    w["next"] = ft.Button(
-        t("onboard_next"),
-        on_click=lambda e: _on_next_onboard(st, page),
-        bgcolor=TH.accent,
-        color=ft.Colors.WHITE,
-        height=BTN_H_SM,
-        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS)),
-    )
-
-    dlg = ft.AlertDialog(
-        modal=True,
-        title=ft.Row(
-            [
-                ft.Text("", size=SZ_H3),
-                ft.Text(
-                    t("onboard_title"),
-                    size=SZ_H3,
-                    weight=ft.FontWeight.BOLD,
-                    color=TH.accent,
-                ),
-            ],
-            spacing=8,
-        ),
-        content=ft.Container(
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [w["icon"], w["title"]],
-                        spacing=10,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    w["desc"],
-                    ft.Container(height=8),
-                    w["dots"],
-                    w["label"],
-                    ft.Container(height=4),
-                    ft.Row(
-                        [w["back"], w["next"]],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    ),
-                ],
-                spacing=6,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                tight=True,
-            ),
-            width=400,
-            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
-        ),
-        actions=[],
-        shape=ft.RoundedRectangleBorder(radius=14),
-    )
-    st["dlg"] = dlg
-    if dlg not in page.overlay: page.overlay.append(dlg)
-    dlg.open = True
-    page.update()
-
-
-# ════════════════════════════════════════════════════════════════════════════════════════════════════
-#  EXTRACTED HELPERS FOR main()
-# ═══════════════════════════════════════════════════════════════════════════════════════════════════
-
-
-def _build_grade_card(grade, narrow):
-    """Build the grade display card for the dashboard header."""
-    letter = grade.get("letter", "?")
-    score = grade.get("score", 0)
-    color = GRADE_COLORS.get(letter, "#888")
-    # Circular progress ring around the grade letter
-    ring = ft.Stack(
-        [
-            ft.Container(
-                content=ft.ProgressRing(
-                    value=score / 100.0,
-                    width=110,
-                    height=110,
-                    stroke_width=6,
-                    color=color,
-                    bgcolor=ft.Colors.with_opacity(0.15, color),
-                ),
-                alignment=ft.Alignment(0, 0),
-            ),
-            ft.Container(
-                content=ft.Text(
-                    letter,
-                    size=SZ_DISPLAY,
-                    weight=ft.FontWeight.BOLD,
-                    color=color,
-                    text_align=ft.TextAlign.CENTER,
-                    font_family=MONO_FONT,
-                ),
-                width=110,
-                height=110,
-                alignment=ft.Alignment(0, 0),
-            ),
-        ],
-        width=110,
-        height=110,
-    )
-    return ft.Container(
-        content=ft.Column(
-            [
-                ring,
-                ft.Text(
-                    f"{score:.1f} / 100",
-                    size=SZ_SECTION,
-                    color=ft.Colors.with_opacity(0.8, color),
-                    text_align=ft.TextAlign.CENTER,
-                ),
-                ft.Text(
-                    t("quality_score").upper(),
-                    size=SZ_SM,
-                    color=TH.muted,
-                    text_align=ft.TextAlign.CENTER,
-                ),
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=6,
-        ),
-        bgcolor=ft.Colors.with_opacity(0.06, color),
-        border=ft.Border.all(1, ft.Colors.with_opacity(0.3, color)),
-        border_radius=18,
-        padding=24,
-        width=None if narrow else 200,
-        expand=narrow,
-        shadow=ft.BoxShadow(blur_radius=24, color=ft.Colors.with_opacity(0.12, color)),
-        animate=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
-    )
-
-
-def _build_penalty_chips(breakdown):
-    """Build penalty chip controls from the grade breakdown."""
-    labels_map = {
-        "smells": "Smells",
-        "duplicates": "Dups",
-        "lint": "Lint",
-        "security": "Sec",
-        "typecheck": "Types",
-        "format": "Format",
-        "health": "Health",
-        "imports": "Imports",
-    }
-    chips = []
-    for k, d in breakdown.items():
-        p = d.get("penalty", 0)
-        if p > 0:
-            chips.append(
-                ft.Container(
-                    content=ft.Text(
-                        f"{labels_map.get(k, k)} -{p:.0f}", size=SZ_SM, color=TH.text
-                    ),
-                    bgcolor=TH.chip,
-                    border_radius=16,
-                    padding=ft.Padding.symmetric(horizontal=10, vertical=4),
-                    border=ft.Border.all(1, TH.border),
-                )
-            )
-    return chips
-
-
-_TAB_BUILDERS = [
-    ("smells", "tab_smells", lambda r, _p: _build_smells_tab(r)),
-    ("duplicates", "tab_duplicates", lambda r, _p: _build_duplicates_tab(r)),
-    ("lint", "tab_lint", lambda r, p: _build_lint_tab(r, p)),
-    ("security", "tab_security", lambda r, _p: _build_security_tab(r)),
-    ("rustify", "tab_rustify", lambda r, _p: _build_rustify_tab(r)),
-    ("ui_compat", "tab_ui_compat", lambda r, _p: _build_ui_compat_tab(r)),
-    ("ui_health", "UI Health", lambda r, _p: _build_ui_health_tab(r)),
-    ("verification", "Verification", lambda r, p: _build_verification_tab(r, p)),
-    (
-        "release_readiness",
-        "Release Readiness",
-        lambda r, p: _build_release_readiness_tab(r, p),
-    ),
-]
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 #  ALL ISSUES TAB — Global search & filter across all scan phases
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def _collect_all_issues(results):
     """Collect all issues from all scan phases into a unified list."""
     all_issues = []
     # Smell issues
     for s in results.get("_smell_issues", []):
-        all_issues.append({
-            "phase": "Smells", "severity": getattr(s, "severity", "info"),
-            "name": getattr(s, "name", ""), "message": getattr(s, "message", ""),
-            "file_path": getattr(s, "file_path", ""), "line": getattr(s, "line", 0),
-            "category": getattr(s, "category", ""),
-            "suggestion": getattr(s, "suggestion", ""),
-        })
+        all_issues.append(
+            {
+                "phase": "Smells",
+                "severity": getattr(s, "severity", "info"),
+                "name": getattr(s, "name", ""),
+                "message": getattr(s, "message", ""),
+                "file_path": getattr(s, "file_path", ""),
+                "line": getattr(s, "line", 0),
+                "category": getattr(s, "category", ""),
+                "suggestion": getattr(s, "suggestion", ""),
+            }
+        )
     # Lint issues
     for li in results.get("_lint_issues", []):
-        sev = "critical" if getattr(li, "severity", "") == "critical" else \
-              "warning" if getattr(li, "severity", "") == "warning" else "info"
-        all_issues.append({
-            "phase": "Lint", "severity": sev,
-            "name": getattr(li, "code", getattr(li, "name", "")),
-            "message": getattr(li, "message", str(li)),
-            "file_path": getattr(li, "file_path", getattr(li, "path", "")),
-            "line": getattr(li, "line", 0),
-            "category": "lint", "suggestion": getattr(li, "suggestion", ""),
-        })
+        sev = (
+            "critical"
+            if getattr(li, "severity", "") == "critical"
+            else "warning"
+            if getattr(li, "severity", "") == "warning"
+            else "info"
+        )
+        all_issues.append(
+            {
+                "phase": "Lint",
+                "severity": sev,
+                "name": getattr(li, "code", getattr(li, "name", "")),
+                "message": getattr(li, "message", str(li)),
+                "file_path": getattr(li, "file_path", getattr(li, "path", "")),
+                "line": getattr(li, "line", 0),
+                "category": "lint",
+                "suggestion": getattr(li, "suggestion", ""),
+            }
+        )
     # Security issues
     for si in results.get("_sec_issues", []):
-        sev = "critical" if getattr(si, "severity", "") in ("critical", "HIGH") else \
-              "warning" if getattr(si, "severity", "") in ("warning", "MEDIUM") else "info"
-        all_issues.append({
-            "phase": "Security", "severity": sev,
-            "name": getattr(si, "test_id", getattr(si, "name", "")),
-            "message": getattr(si, "message", getattr(si, "issue_text", str(si))),
-            "file_path": getattr(si, "file_path", getattr(si, "filename", "")),
-            "line": getattr(si, "line", getattr(si, "line_number", 0)),
-            "category": "security", "suggestion": getattr(si, "suggestion", ""),
-        })
+        sev = (
+            "critical"
+            if getattr(si, "severity", "") in ("critical", "HIGH")
+            else "warning"
+            if getattr(si, "severity", "") in ("warning", "MEDIUM")
+            else "info"
+        )
+        all_issues.append(
+            {
+                "phase": "Security",
+                "severity": sev,
+                "name": getattr(si, "test_id", getattr(si, "name", "")),
+                "message": getattr(si, "message", getattr(si, "issue_text", str(si))),
+                "file_path": getattr(si, "file_path", getattr(si, "filename", "")),
+                "line": getattr(si, "line", getattr(si, "line_number", 0)),
+                "category": "security",
+                "suggestion": getattr(si, "suggestion", ""),
+            }
+        )
     # UI compat issues
     for ui in results.get("_ui_compat_issues", []):
-        all_issues.append({
-            "phase": "UI Compat", "severity": getattr(ui, "severity", "info"),
-            "name": getattr(ui, "name", ""), "message": getattr(ui, "message", ""),
-            "file_path": getattr(ui, "file_path", ""), "line": getattr(ui, "line", 0),
-            "category": "ui_compat", "suggestion": getattr(ui, "suggestion", ""),
-        })
+        all_issues.append(
+            {
+                "phase": "UI Compat",
+                "severity": getattr(ui, "severity", "info"),
+                "name": getattr(ui, "name", ""),
+                "message": getattr(ui, "message", ""),
+                "file_path": getattr(ui, "file_path", ""),
+                "line": getattr(ui, "line", 0),
+                "category": "ui_compat",
+                "suggestion": getattr(ui, "suggestion", ""),
+            }
+        )
     # UI health issues
     for uh in results.get("_ui_health_issues", []):
-        all_issues.append({
-            "phase": "UI Health", "severity": getattr(uh, "severity", "info"),
-            "name": getattr(uh, "name", ""), "message": getattr(uh, "message", ""),
-            "file_path": getattr(uh, "file_path", ""), "line": getattr(uh, "line", 0),
-            "category": "ui_health", "suggestion": getattr(uh, "suggestion", ""),
-        })
+        all_issues.append(
+            {
+                "phase": "UI Health",
+                "severity": getattr(uh, "severity", "info"),
+                "name": getattr(uh, "name", ""),
+                "message": getattr(uh, "message", ""),
+                "file_path": getattr(uh, "file_path", ""),
+                "line": getattr(uh, "line", 0),
+                "category": "ui_health",
+                "suggestion": getattr(uh, "suggestion", ""),
+            }
+        )
     # Sort: critical first, then warning, then info
     sev_order = {"critical": 0, "warning": 1, "info": 2}
     all_issues.sort(key=lambda x: sev_order.get(x["severity"], 3))
     return all_issues
 
 
-def _build_all_issues_tab(all_issues, results, page):
-    """Build the unified All Issues tab with search/filter."""
+def _build_issue_row(issue, code_map):
+    """Build a single issue expansion tile for the All Issues list."""
     from UI.tabs.shared import _code_snippet_container
 
+    sev = issue["severity"]
+    color = SEV_COLORS.get(sev, TH.dim)
+    phase_colors = {
+        "Smells": "#00d4ff",
+        "Lint": "#64dd17",
+        "Security": "#ff6d00",
+        "UI Compat": "#7c4dff",
+        "UI Health": "#ffd600",
+    }
+    phase_color = phase_colors.get(issue["phase"], TH.dim)
+
+    code = code_map.get(f"{issue['file_path']}:{issue['line']}", "")
+
+    tile_controls = []
+    if issue["message"]:
+        tile_controls.append(
+            ft.Text(issue["message"], size=SZ_BODY, color=TH.dim, no_wrap=False)
+        )
+    if issue["suggestion"]:
+        tile_controls.append(
+            ft.Text(
+                f"Fix: {issue['suggestion']}",
+                size=SZ_SM,
+                color=ft.Colors.BLUE_200,
+                no_wrap=False,
+            )
+        )
+    if code:
+        tile_controls.append(_code_snippet_container(code, 300))
+
+    return ft.ExpansionTile(
+        title=ft.Row(
+            [
+                ft.Container(
+                    width=8,
+                    height=8,
+                    border_radius=4,
+                    bgcolor=color,
+                ),
+                ft.Container(
+                    content=ft.Text(
+                        issue["phase"],
+                        size=SZ_XS,
+                        color=phase_color,
+                        weight=ft.FontWeight.BOLD,
+                    ),
+                    bgcolor=ft.Colors.with_opacity(0.1, phase_color),
+                    border_radius=8,
+                    padding=ft.Padding.symmetric(horizontal=6, vertical=2),
+                ),
+                ft.Text(
+                    issue["name"] or issue["category"],
+                    size=SZ_MD,
+                    color=TH.text,
+                    expand=True,
+                ),
+            ],
+            spacing=8,
+        ),
+        subtitle=ft.Text(
+            f"{issue['file_path']}:{issue['line']}" if issue["file_path"] else "",
+            size=SZ_SM,
+            color=TH.muted,
+            italic=True,
+        ),
+        controls=[
+            ft.Container(
+                content=ft.Column(tile_controls),
+                padding=12,
+                bgcolor=ft.Colors.with_opacity(0.03, TH.text),
+                border_radius=8,
+            )
+        ]
+        if tile_controls
+        else [],
+        expanded=False,
+    )
+
+
+def _build_all_issues_tab(all_issues, results, page):
+    """Build the unified All Issues tab with search/filter."""
+
     code_map = results.get("_code_map", {})
-    filtered = list(all_issues)
     list_view = ft.ListView(spacing=4, expand=True, padding=10)
 
     severity_filter = [None]  # None = all
     search_text = [""]
-
-    def _build_issue_row(issue):
-        sev = issue["severity"]
-        color = SEV_COLORS.get(sev, TH.dim)
-        phase_colors = {
-            "Smells": "#00d4ff", "Lint": "#64dd17", "Security": "#ff6d00",
-            "UI Compat": "#7c4dff", "UI Health": "#ffd600",
-        }
-        phase_color = phase_colors.get(issue["phase"], TH.dim)
-
-        code = code_map.get(f"{issue['file_path']}:{issue['line']}", "")
-
-        tile_controls = []
-        if issue["message"]:
-            tile_controls.append(
-                ft.Text(issue["message"], size=SZ_BODY, color=TH.dim, no_wrap=False)
-            )
-        if issue["suggestion"]:
-            tile_controls.append(
-                ft.Text(f"Fix: {issue['suggestion']}", size=SZ_SM,
-                        color=ft.Colors.BLUE_200, no_wrap=False)
-            )
-        if code:
-            tile_controls.append(_code_snippet_container(code, 300))
-
-        return ft.ExpansionTile(
-            title=ft.Row(
-                [
-                    ft.Container(
-                        width=8, height=8, border_radius=4, bgcolor=color,
-                    ),
-                    ft.Container(
-                        content=ft.Text(issue["phase"], size=SZ_XS,
-                                        color=phase_color, weight=ft.FontWeight.BOLD),
-                        bgcolor=ft.Colors.with_opacity(0.1, phase_color),
-                        border_radius=8,
-                        padding=ft.Padding.symmetric(horizontal=6, vertical=2),
-                    ),
-                    ft.Text(issue["name"] or issue["category"], size=SZ_MD,
-                            color=TH.text, expand=True),
-                ],
-                spacing=8,
-            ),
-            subtitle=ft.Text(
-                f"{issue['file_path']}:{issue['line']}" if issue['file_path'] else "",
-                size=SZ_SM, color=TH.muted, italic=True,
-            ),
-            controls=[
-                ft.Container(
-                    content=ft.Column(tile_controls),
-                    padding=12,
-                    bgcolor=ft.Colors.with_opacity(0.03, TH.text),
-                    border_radius=8,
-                )
-            ] if tile_controls else [],
-            expanded=False,
-        )
 
     def _refresh_list():
         sf = severity_filter[0]
@@ -1176,7 +935,7 @@ def _build_all_issues_tab(all_issues, results, page):
                 if st not in searchable:
                     continue
             showing.append(issue)
-        list_view.controls = [_build_issue_row(i) for i in showing[:200]]
+        list_view.controls = [_build_issue_row(i, code_map) for i in showing[:200]]
         count_text.value = f"{len(showing)} of {len(all_issues)} issues"
         page.update()
 
@@ -1193,6 +952,7 @@ def _build_all_issues_tab(all_issues, results, page):
                 btn.bgcolor = SEV_COLORS.get(s, TH.card) if active else TH.card
                 btn.content.color = ft.Colors.WHITE if active else TH.dim
             _refresh_list()
+
         return handler
 
     search_box = ft.TextField(
@@ -1207,7 +967,9 @@ def _build_all_issues_tab(all_issues, results, page):
     )
 
     count_text = ft.Text(
-        f"{len(all_issues)} issues", size=SZ_SM, color=TH.muted,
+        f"{len(all_issues)} issues",
+        size=SZ_SM,
+        color=TH.muted,
     )
 
     sev_buttons = []
@@ -1223,7 +985,7 @@ def _build_all_issues_tab(all_issues, results, page):
         sev_buttons.append((btn, sev_name))
 
     # Initial render
-    list_view.controls = [_build_issue_row(i) for i in all_issues[:200]]
+    list_view.controls = [_build_issue_row(i, code_map) for i in all_issues[:200]]
 
     return ft.Column(
         [
@@ -1239,691 +1001,83 @@ def _build_all_issues_tab(all_issues, results, page):
     )
 
 
-def _build_result_tabs(results, page):
-    """Build the tab bar and tab panels for the results dashboard."""
-    tab_panels = []
-    tab_names = []
-
-    for key, label_key, builder in _TAB_BUILDERS:
-        data = results.get(key)
-        if data and not (isinstance(data, dict) and data.get("error")):
-            tab_names.append(t(label_key))
-            tab_panels.append(builder(results, page))
-
-    has_issues = (
-        results.get("_smell_issues")
-        or results.get("_lint_issues")
-        or results.get("_sec_issues")
-    )
-    if has_issues:
-        tab_names.append(t("tab_heatmap"))
-        tab_panels.append(_build_heatmap_tab(results))
-    if results.get("_functions"):
-        tab_names.append(t("tab_complexity"))
-        tab_panels.append(_build_complexity_tab(results))
-        tab_names.append("Graph")
-        tab_panels.append(_build_graph_tab(results, page))
-        tab_names.append(t("tab_auto_rustify"))
-        tab_panels.append(_build_auto_rustify_tab(results, page))
-        tab_names.append("Nexus Mode")
-        tab_panels.append(_build_nexus_tab(results, page))
-
-    # ── v8.0 new tabs ─────────────────────────────────────────────────
-    has_debt_data = any(results.get(k) for k in ("_satd", "_hotspots", "_coupling", "_ai_debt"))
-    if has_debt_data:
-        tab_names.append("💸 Debt Center")
-        tab_panels.append(_build_debt_tab(results))
-
-    if results.get("_diagrams", {}).get("mermaid_flowchart"):
-        tab_names.append("🗺️ Diagrams")
-        tab_panels.append(_build_diagrams_tab(results, page))
-
-
-    # Add the "All Issues" search/filter tab
-    all_issues = _collect_all_issues(results)
-    if all_issues:
-        tab_names.insert(0, f"All Issues ({len(all_issues)})")
-        tab_panels.insert(0, _build_all_issues_tab(all_issues, results, page))
-
-    panel_container = ft.Column(
-        [tab_panels[0]] if tab_panels else [], spacing=0, expand=True
-    )
-
-    selected = [0]
-
-    def _on_pill_click(idx):
-        def handler(e):
-            selected[0] = idx
-            panel_container.controls = [tab_panels[idx]]
-            # Update pill styles
-            for i, pill in enumerate(pill_row.controls):
-                is_sel = i == idx
-                pill.bgcolor = TH.accent if is_sel else TH.card
-                pill.content.color = ft.Colors.WHITE if is_sel else TH.dim
-            page.update()
-
-        return handler
-
-    pills = []
-    for i, name in enumerate(tab_names):
-        is_sel = i == 0
-        pill = ft.Container(
-            content=ft.Text(
-                name,
-                size=SZ_SM,
-                weight=ft.FontWeight.BOLD if is_sel else ft.FontWeight.NORMAL,
-                color=ft.Colors.WHITE if is_sel else TH.dim,
-            ),
-            bgcolor=TH.accent if is_sel else TH.card,
-            border_radius=20,
-            padding=ft.Padding.symmetric(horizontal=14, vertical=6),
-            on_click=_on_pill_click(i),
-            animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
-        )
-        pills.append(pill)
-
-    pill_row = ft.Row(pills, spacing=6, scroll=ft.ScrollMode.AUTO)
-
-    if not tab_names:
-        return ft.Container()
-    return ft.Column(
-        [
-            pill_row,
-            panel_container,
-        ],
-        expand=True,
-        spacing=8,
-    )
-
-
-def _build_export_bar(page, state, results):
-    """Build JSON and Markdown export buttons."""
-
-    def on_export_json(e):
-        try:
-            export = {k: v for k, v in results.items() if not k.startswith("_")}
-            path = Path(state["root_path"]) / "xray_report.json"
-            path.write_text(json.dumps(export, indent=2, default=str), encoding="utf-8")
-            _show_snack(page, f" Saved to {path}")
-        except Exception as exc:
-            _show_snack(page, f" Export failed: {exc}", bgcolor=ft.Colors.RED_400)
-
-    def on_export_md(e):
-        try:
-            md = _build_markdown_report(results)
-            path = Path(state["root_path"]) / "xray_report.md"
-            path.write_text(md, encoding="utf-8")
-            _show_snack(page, f" Saved to {path}")
-        except Exception as exc:
-            _show_snack(page, f" Export failed: {exc}", bgcolor=ft.Colors.RED_400)
-
-    def on_export_html(e):
-        try:
-            html = build_html_report(results)
-            path = Path(state["root_path"]) / "xray_report.html"
-            path.write_text(html, encoding="utf-8")
-            _show_snack(page, f" HTML report saved to {path}")
-        except Exception as exc:
-            _show_snack(page, f" Export failed: {exc}", bgcolor=ft.Colors.RED_400)
-
-    gen_test_status = ft.Text("", size=SZ_SM, color=TH.dim)
-
-    def on_gen_tests(e):
-        scan_path = state.get("root_path", "")
-        if not scan_path:
-            _show_snack(page, t("select_dir_first"), bgcolor=ft.Colors.RED_400)
-            return
-        gen_test_status.value = " Generating tests…"
-        gen_test_status.color = TH.dim
-        page.update()
-        try:
-            cmd = [
-                sys.executable,
-                str(ROOT / "x_ray_claude.py"),
-                "--path",
-                scan_path,
-                "--gen-tests",
-            ]
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)  # nosec B603
-            out_dir = Path(scan_path) / "tests" / "xray_generated"
-            if proc.returncode == 0:
-                gen_test_status.value = f"[ok] Tests generated  {out_dir}"
-                gen_test_status.color = ft.Colors.GREEN_400
-                _show_snack(page, f"[ok] Tests written to {out_dir}")
-            else:
-                gen_test_status.value = "[!] Generation finished with warnings"
-                gen_test_status.color = ft.Colors.AMBER_400
-        except subprocess.TimeoutExpired:
-            gen_test_status.value = "[X] Timed out (120 s)"
-            gen_test_status.color = ft.Colors.RED_400
-        except Exception as exc:
-            gen_test_status.value = f"[X] {exc}"
-            gen_test_status.color = ft.Colors.RED_400
-        page.update()
-
-    return ft.Column(
-        [
-            ft.Row(
-                [
-                    ft.Button(
-                        f"{t('export_json')}",
-                        on_click=on_export_json,
-                        bgcolor=TH.card,
-                        color=TH.text,
-                        height=BTN_H_SM,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS)
-                        ),
-                    ),
-                    ft.Button(
-                        f"{t('export_markdown')}",
-                        on_click=on_export_md,
-                        bgcolor=TH.card,
-                        color=TH.text,
-                        height=BTN_H_SM,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS)
-                        ),
-                    ),
-                    ft.Button(
-                        " HTML Report",
-                        on_click=on_export_html,
-                        bgcolor=TH.card,
-                        color=TH.accent,
-                        height=BTN_H_SM,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS),
-                            side=ft.BorderSide(1, TH.accent),
-                        ),
-                    ),
-                    ft.Button(
-                        " Generate Tests",
-                        on_click=on_gen_tests,
-                        bgcolor=TH.surface,
-                        color=TH.accent,
-                        height=BTN_H_SM,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS),
-                            side=ft.BorderSide(1, TH.accent),
-                        ),
-                    ),
-                ],
-                spacing=12,
-                scroll=ft.ScrollMode.AUTO,
-            ),
-            gen_test_status,
-        ],
-        spacing=4,
-    )
-
-
-def _build_dashboard_header(grade_card, stats, penalty_chips, narrow: bool,
-                            dimension_cards=None, severity_bar=None,
-                            trend_row=None, sparkline=None):
-    """Build the responsive header layout (narrow=stacked, wide=side-by-side)."""
-    # Build extra info rows
-    extra_rows = []
-    if dimension_cards:
-        extra_rows.append(dimension_cards)
-    if severity_bar:
-        extra_rows.append(severity_bar)
-    if trend_row or sparkline:
-        trend_items = []
-        if trend_row:
-            trend_items.append(trend_row)
-        if sparkline:
-            trend_items.append(sparkline)
-        extra_rows.append(
-            ft.Row(trend_items, spacing=16,
-                   vertical_alignment=ft.CrossAxisAlignment.CENTER)
-        )
-
-    if narrow:
-        return ft.Column(
-            [
-                grade_card,
-                stats,
-                (
-                    ft.Row(penalty_chips, spacing=6, scroll=ft.ScrollMode.AUTO)
-                    if penalty_chips
-                    else ft.Container()
-                ),
-                *extra_rows,
-            ],
-            spacing=12,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        )
-    return ft.Column(
-        [
-            ft.Row(
-                [
-                    grade_card,
-                    ft.Column(
-                        [
-                            stats,
-                            (
-                                ft.Row(penalty_chips, spacing=6, scroll=ft.ScrollMode.AUTO)
-                                if penalty_chips
-                                else ft.Container()
-                            ),
-                        ],
-                        expand=True,
-                        spacing=10,
-                    ),
-                ],
-                spacing=20,
-                vertical_alignment=ft.CrossAxisAlignment.START,
-            ),
-            *extra_rows,
-        ],
-        spacing=10,
-    )
-
-
-def _build_main_dashboard(page, state, main_content, results):
-    """Build the full results dashboard (grade card + tabs + export bar)."""
-    narrow = is_narrow(page)
-    grade = results.get("grade", {})
-    meta = results.get("meta", {})
-    breakdown = grade.get("breakdown", {})
-
-    grade_card = _build_grade_card(grade, narrow)
-
-    stats = ft.Row(
-        [
-            metric_tile(
-                ft.Icon(ft.Icons.DESCRIPTION, size=18, color=TH.accent),
-                meta.get("files", 0),
-                t("files"),
-            ),
-            metric_tile(
-                ft.Icon(ft.Icons.FUNCTIONS, size=18, color=TH.accent),
-                meta.get("functions", 0),
-                t("functions"),
-            ),
-            metric_tile(
-                ft.Icon(ft.Icons.INVENTORY_2, size=18, color=TH.accent),
-                meta.get("classes", 0),
-                t("classes"),
-            ),
-            metric_tile(
-                ft.Icon(ft.Icons.TIMER, size=18, color=TH.accent),
-                f"{meta.get('duration', 0):.1f}s",
-                t("duration"),
-            ),
-        ],
-        spacing=8,
-        scroll=ft.ScrollMode.AUTO,
-    )
-
-    penalty_chips = _build_penalty_chips(breakdown)
-
-    # SonarQube-style dimension rating cards
-    dimension_cards = build_dimension_cards(breakdown)
-
-    # Severity summary bar — aggregated across all phases
-    severity_bar = build_severity_bar(results)
-
-    # Trend indicator — compare with previous scan
-    history = _load_scan_history(state.get("root_path", ""))
-    prev_score = history[-2]["score"] if len(history) >= 2 else None
-    trend_row = build_trend_indicator(grade.get("score", 0), prev_score)
-    sparkline = build_sparkline(
-        [h["score"] for h in history[-10:]]
-    ) if len(history) >= 2 else ft.Container()
-
-    header = _build_dashboard_header(
-        grade_card, stats, penalty_chips, narrow,
-        dimension_cards=dimension_cards,
-        severity_bar=severity_bar,
-        trend_row=trend_row,
-        sparkline=sparkline,
-    )
-
-    result_tabs = _build_result_tabs(results, page)
-    export_bar = _build_export_bar(page, state, results)
-
-    # Switch main_content from scroll mode to expand mode for the dashboard.
-    # Tab panels handle their own internal scrolling via ListView.
-    main_content.scroll = None
-    main_content.controls = [
-        ft.Container(  # header block — natural height
-            content=ft.Column(
-                [
-                    header,
-                    ft.Divider(color=TH.divider, height=1),
-                ],
-                spacing=10,
-            ),
-            padding=ft.Padding.only(left=30, right=30, top=30, bottom=10),
-            bgcolor=TH.bg,
-        ),
-        ft.Container(  # tab block — expands to fill remaining space
-            content=result_tabs,
-            expand=True,
-            padding=ft.Padding.symmetric(horizontal=30),
-            bgcolor=TH.bg,
-        ),
-        ft.Container(  # export bar — natural height at bottom
-            content=export_bar,
-            padding=ft.Padding.only(left=30, right=30, bottom=20, top=10),
-            bgcolor=TH.bg,
-        ),
-    ]
-    page.update()
-
-
-def _landing_card(card_spec, width=240):
-    """Build one of the 3-step instruction cards on the landing page."""
-    icon, icon_color, step, title, desc = card_spec
-    return ft.Container(
-        content=ft.Column(
-            [
-                ft.Container(
-                    content=ft.Icon(icon, color=icon_color, size=28),
-                    bgcolor=ft.Colors.with_opacity(0.10, icon_color),
-                    border_radius=14,
-                    width=56,
-                    height=56,
-                    alignment=ft.Alignment(0, 0),
-                    shadow=ft.BoxShadow(
-                        blur_radius=12, color=ft.Colors.with_opacity(0.12, icon_color)
-                    ),
-                ),
-                ft.Container(
-                    content=ft.Text(
-                        str(step),
-                        size=SZ_XS,
-                        color=icon_color,
-                        weight=ft.FontWeight.BOLD,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    width=22,
-                    height=22,
-                    border_radius=11,
-                    bgcolor=ft.Colors.with_opacity(0.12, icon_color),
-                    alignment=ft.Alignment(0, 0),
-                ),
-                ft.Text(title, weight=ft.FontWeight.BOLD, size=SZ_LG, color=TH.text),
-                ft.Text(
-                    desc, size=SZ_BODY, color=TH.muted, text_align=ft.TextAlign.CENTER
-                ),
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=8,
-        ),
-        bgcolor=TH.card,
-        border=ft.Border.all(1, TH.border),
-        border_radius=16,
-        padding=24,
-        width=width,
-        shadow=ft.BoxShadow(blur_radius=10, color=TH.shadow),
-        animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
-    )
-
-
-def _build_landing_hero():
-    """Build the animated X-RAY logo + subtitle for the landing page."""
-    # Glow ring behind the icon
-    glow = ft.Container(
-        content=ft.Icon(ft.Icons.SEARCH, size=40, color=TH.accent),
-        width=90,
-        height=90,
-        border_radius=45,
-        alignment=ft.Alignment(0, 0),
-        bgcolor=ft.Colors.with_opacity(0.08, TH.accent),
-        border=ft.Border.all(2, ft.Colors.with_opacity(0.2, TH.accent)),
-        shadow=ft.BoxShadow(
-            blur_radius=30,
-            spread_radius=5,
-            color=ft.Colors.with_opacity(0.15, TH.accent),
-        ),
-    )
-
-    return ft.Container(
-        content=ft.Column(
-            [
-                glow,
-                ft.Text(
-                    "X-RAY",
-                    size=SZ_HERO,
-                    weight=ft.FontWeight.BOLD,
-                    color=TH.accent,
-                    font_family=MONO_FONT,
-                    text_align=ft.TextAlign.CENTER,
-                ),
-                ft.Text(
-                    t("app_subtitle"),
-                    size=SZ_LG,
-                    color=TH.muted,
-                    text_align=ft.TextAlign.CENTER,
-                ),
-                ft.Container(height=4),
-                ft.Text(
-                    f"v{__version__}",
-                    size=SZ_XS,
-                    color=TH.muted,
-                    text_align=ft.TextAlign.CENTER,
-                ),
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=4,
-        ),
-        animate=ft.Animation(600, ft.AnimationCurve.EASE_OUT),
-    )
-
-
-_LANDING_CARDS = [
-    (
-        ft.Icons.FOLDER_OPEN,
-        "accent",
-        1,
-        "Configure",
-        "Set project path &\nchoose analyzers",
-    ),
-    (
-        ft.Icons.PLAY_ARROW_ROUNDED,
-        "accent2",
-        2,
-        "Scan",
-        "One-click full\ncodebase analysis",
-    ),
-    (ft.Icons.INSIGHTS, "#00c853", 3, "Explore", "Graph, heatmap &\ninteractive tabs"),
-]
-
-_FEATURE_CHIPS = [
-    ("", "AST Smells"),
-    ("", "Ruff Lint"),
-    ("", "Bandit Security"),
-    ("", "Duplicates"),
-    ("", "Rust Advisor"),
-    ("", "Force Graph"),
-    ("", "Heatmap"),
-    ("", "Complexity"),
-]
-
-
-def _build_main_landing(page, main_content, on_start_scan):
-    """Build the welcome / landing page with feature showcase."""
-    narrow = is_narrow(page)
-    cw = 200 if narrow else 240
-    color_map = {"accent": TH.accent, "accent2": TH.accent2}
-    cards = []
-    for icon, clr, step, title, desc in _LANDING_CARDS:
-        real_clr = color_map.get(clr, clr)
-        real_desc = desc or f"Press '{t('scan_start')}'\nto analyze code"
-        cards.append(_landing_card((icon, real_clr, step, title, real_desc), cw))
-
-    cards_layout = (
-        ft.Column(cards, spacing=12, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-        if narrow
-        else ft.Row(cards, spacing=16, alignment=ft.MainAxisAlignment.CENTER)
-    )
-
-    # Feature chip row
-    chips = ft.Row(
-        [
-            ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Text(ic, size=SZ_SM),
-                        ft.Text(lbl, size=SZ_SM, color=TH.dim),
-                    ],
-                    spacing=4,
-                    tight=True,
-                ),
-                bgcolor=TH.chip,
-                border_radius=20,
-                border=ft.Border.all(1, TH.border),
-                padding=ft.Padding.symmetric(horizontal=10, vertical=5),
-            )
-            for ic, lbl in _FEATURE_CHIPS
-        ],
-        spacing=6,
-        scroll=ft.ScrollMode.AUTO,
-        alignment=ft.MainAxisAlignment.CENTER,
-    )
-
-    main_content.scroll = ft.ScrollMode.AUTO
-    main_content.controls = [
-        ft.Container(
-            content=ft.Column(
-                [
-                    ft.Container(height=20 if narrow else 40),
-                    _build_landing_hero(),
-                    ft.Container(height=20 if narrow else 30),
-                    cards_layout,
-                    ft.Container(height=20),
-                    chips,
-                    ft.Container(height=10),
-                    ft.Container(
-                        content=ft.Button(
-                            f"      {t('scan_start').upper()}      ",
-                            icon=ft.Icons.BOLT,
-                            height=56,
-                            color=ft.Colors.WHITE,
-                            bgcolor=TH.accent2,
-                            style=ft.ButtonStyle(
-                                shape=ft.RoundedRectangleBorder(radius=16),
-                                text_style=ft.TextStyle(size=16, weight=ft.FontWeight.BOLD, letter_spacing=1.5),
-                            ),
-                            on_click=on_start_scan,
-                        ),
-                        shadow=ft.BoxShadow(
-                            blur_radius=20,
-                            spread_radius=2,
-                            color=ft.Colors.with_opacity(0.3, TH.accent2),
-                        ),
-                    ),
-                    ft.Container(height=30),
-                    ft.TextButton(
-                        "– Show Tutorial", on_click=lambda _: _show_onboarding(page)
-                    ),
-                    ft.Container(height=30),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=8,
-            ),
-            padding=ft.Padding.symmetric(horizontal=20, vertical=0),
-            bgcolor=TH.bg,
-            alignment=ft.Alignment(0, -1),
-        )
-    ]
-
-
-def _build_phase_row(key, label, status, elapsed=0):
-    """Build a single phase row with icon, label, and status suffix."""
-    if status == PhaseStatus.RUNNING:
-        icon = ft.ProgressRing(width=14, height=14, stroke_width=2, color=TH.accent)
-        text_color = TH.accent
-        suffix = ""
-    elif status == PhaseStatus.DONE:
-        icon = ft.Icon(ft.Icons.CHECK_CIRCLE, size=16, color=ft.Colors.GREEN_400)
-        text_color = ft.Colors.GREEN_400
-        suffix = f"  {elapsed:.1f}s" if elapsed > 0 else ""
-    elif status == PhaseStatus.FAILED:
-        icon = ft.Icon(ft.Icons.ERROR, size=16, color=ft.Colors.RED_400)
-        text_color = ft.Colors.RED_400
-        suffix = "  failed"
-    elif status == PhaseStatus.SKIPPED:
-        icon = ft.Icon(ft.Icons.REMOVE, size=16, color=TH.muted)
-        text_color = TH.muted
-        suffix = "  skipped"
-    else:
-        icon = ft.Container(width=16, height=16)
-        text_color = TH.dim
-        suffix = ""
+def _build_phase_row_pending(label):
+    """Build a pending phase row (dimmed, in the queue)."""
     return ft.Container(
         content=ft.Row(
             [
-                icon,
-                ft.Text(label, size=SZ_SM, color=text_color),
-                ft.Container(expand=True),
-                ft.Text(suffix, size=SZ_XS, color=TH.muted)
-                if suffix
-                else ft.Container(),
+                ft.Icon(ft.Icons.CIRCLE_OUTLINED, size=12, color=TH.muted),
+                ft.Text(label, size=SZ_SM, color=TH.muted),
             ],
             spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        padding=ft.Padding.symmetric(horizontal=24, vertical=4),
-        animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+        padding=ft.Padding.symmetric(horizontal=24, vertical=3),
+        opacity=0.5,
+        animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+        animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+    )
+
+
+def _build_phase_active(label):
+    """Build the active phase row (prominent, centered, glowing)."""
+    return ft.Container(
+        content=ft.Row(
+            [
+                ft.ProgressRing(width=20, height=20, stroke_width=2.5, color="#00d4ff"),
+                ft.Text(
+                    label,
+                    size=SZ_H3,
+                    weight=ft.FontWeight.W_600,
+                    color="#00d4ff",
+                ),
+            ],
+            spacing=12,
+            alignment=ft.MainAxisAlignment.CENTER,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        padding=ft.Padding.symmetric(horizontal=24, vertical=12),
+        border_radius=12,
+        bgcolor=ft.Colors.with_opacity(0.08, "#00d4ff"),
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.2, "#00d4ff")),
+        animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+    )
+
+
+def _build_phase_done_counter(done_count, total_count):
+    """Build a compact counter showing completed phases."""
+    return ft.Container(
+        content=ft.Row(
+            [
+                ft.Icon(ft.Icons.CHECK_CIRCLE, size=16, color=ft.Colors.GREEN_400),
+                ft.Text(
+                    f"{done_count} of {total_count} complete",
+                    size=SZ_SM,
+                    color=ft.Colors.GREEN_400,
+                ),
+            ],
+            spacing=6,
+            alignment=ft.MainAxisAlignment.CENTER,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        padding=ft.Padding.symmetric(horizontal=16, vertical=6),
+        animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
     )
 
 
 def _build_phase_checklist(phase_rows_container, modes):
-    """Build the full scanning checklist screen."""
+    """Build the FIFO scanning queue screen."""
     return ft.Container(
         content=ft.Column(
             [
-                ft.Container(height=40),
-                ft.Text(
-                    "SCANNING",
-                    size=SZ_H2,
-                    weight=ft.FontWeight.BOLD,
-                    color=TH.accent,
-                    font_family=MONO_FONT,
-                    text_align=ft.TextAlign.CENTER,
-                ),
-                ft.Container(height=16),
+                ft.Container(height=20),
                 phase_rows_container,
                 ft.Container(height=20),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=4,
+            spacing=0,
         ),
         padding=ft.Padding.symmetric(horizontal=20, vertical=0),
-        bgcolor=TH.bg,
-        alignment=ft.Alignment(0, -1),
-    )
-
-
-def _build_scan_error_screen(exc):
-    """Build the scan-failed error panel."""
-    return ft.Container(
-        content=ft.Column(
-            [
-                ft.Container(height=80),
-                ft.Icon(ft.Icons.ERROR_OUTLINE, size=48, color=ft.Colors.RED_400),
-                ft.Text(
-                    "Scan Failed",
-                    size=SZ_H2,
-                    weight=ft.FontWeight.BOLD,
-                    color=ft.Colors.RED_400,
-                    text_align=ft.TextAlign.CENTER,
-                ),
-                ft.Text(
-                    str(exc)[:300],
-                    size=SZ_BODY,
-                    color=TH.dim,
-                    text_align=ft.TextAlign.CENTER,
-                    no_wrap=False,
-                ),
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=8,
-        ),
-        padding=30,
         bgcolor=TH.bg,
         alignment=ft.Alignment(0, -1),
     )
@@ -1964,352 +1118,6 @@ def _build_scan_complete_screen(results):
         alignment=ft.Alignment(0, -1),
         animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT),
     )
-
-
-def _prepare_scan_ui(page, state, main_content, phase_rows_container, modes):
-    """Set sidebar status to scanning and show phase checklist."""
-    sidebar_status = state.get("_sidebar_status")
-    if sidebar_status:
-        sidebar_status.content = ft.Row(
-            [
-                ft.ProgressRing(width=16, height=16, stroke_width=2, color=TH.accent),
-                ft.Text(t("scanning"), size=SZ_SM, color=TH.accent, italic=True),
-            ],
-            spacing=6,
-        )
-
-    main_content.controls = [_build_phase_checklist(phase_rows_container, modes)]
-    page.update()
-
-
-def _finalize_scan_ui(page, state, main_content, results):
-    """Store results and show scan-complete screen."""
-    results["_scan_path"] = state["root_path"]
-    state["results"] = results
-
-    # Save to history for trend tracking
-    grade = results.get("grade", {})
-    meta = results.get("meta", {})
-    if state["root_path"] and grade:
-        _save_scan_to_history(state["root_path"], grade, meta)
-
-    sidebar_status = state.get("_sidebar_status")
-    if sidebar_status:
-        sidebar_status.content = None
-
-    main_content.controls = [_build_scan_complete_screen(results)]
-    page.update()
-
-
-async def _start_scan_handler(page, state, main_content, build_dashboard_fn):
-    """Run scan with phase checklist, then show dashboard."""
-    if not state["root_path"]:
-        _show_snack(page, t("select_dir_first"), bgcolor=ft.Colors.RED_400)
-        return
-
-    modes = state["modes"]
-    # Build phase state tracking
-    phase_states: Dict[str, tuple] = {}
-    for key, _label in PHASE_REGISTRY:
-        phase_states[key] = (PhaseStatus.PENDING, 0)
-    phase_states["_parse"] = (PhaseStatus.PENDING, 0)
-
-    phase_rows_container = ft.Column([], spacing=0)
-
-    def _refresh_phase_rows():
-        """Rebuild phase row controls from current phase_states."""
-        rows = []
-        # AST parse row
-        ps, el = phase_states.get("_parse", (PhaseStatus.PENDING, 0))
-        rows.append(_build_phase_row("_parse", "AST Parsing", ps, el))
-        for key, label in PHASE_REGISTRY:
-            ps, el = phase_states.get(key, (PhaseStatus.PENDING, 0))
-            rows.append(_build_phase_row(key, label, ps, el))
-        phase_rows_container.controls = rows
-
-    def phase_cb(key, status, elapsed):
-        phase_states[key] = (status, elapsed)
-        _refresh_phase_rows()
-        try:
-            page.update()
-        except Exception:
-            pass
-
-    _refresh_phase_rows()
-    _prepare_scan_ui(page, state, main_content, phase_rows_container, modes)
-
-    try:
-        loop = asyncio.get_event_loop()
-        ctx = FletScanContext(
-            root=Path(state["root_path"]),
-            modes=state["modes"],
-            exclude=state["exclude"],
-            thresholds=state["thresholds"],
-            progress_cb=None,
-            phase_cb=phase_cb,
-            page=page,
-            log_list=state.get("log_list"),
-        )
-        results = await loop.run_in_executor(None, lambda: _run_scan(ctx))
-    except Exception as exc:
-        sidebar_status = state.get("_sidebar_status")
-        if sidebar_status:
-            sidebar_status.content = None
-        main_content.controls = [_build_scan_error_screen(exc)]
-        page.update()
-        return
-
-    if "error" in results:
-        sidebar_status = state.get("_sidebar_status")
-        if sidebar_status:
-            sidebar_status.content = None
-        main_content.controls = [
-            _build_scan_error_screen(results.get("error", "Unknown error"))
-        ]
-        page.update()
-        return
-
-    _finalize_scan_ui(page, state, main_content, results)
-
-    await asyncio.sleep(0.8)
-    build_dashboard_fn(results)
-
-
-def _sidebar_header(theme_icon, lang_dd):
-    """Build the sidebar logo + theme/language row."""
-    glow_logo = ft.Container(
-        content=ft.Text(
-            "X-RAY",
-            size=SZ_SIDEBAR,
-            weight=ft.FontWeight.BOLD,
-            color=TH.accent,
-            font_family=MONO_FONT,
-            text_align=ft.TextAlign.CENTER,
-        ),
-        bgcolor=ft.Colors.with_opacity(0.05, TH.accent),
-        border_radius=12,
-        padding=ft.Padding.symmetric(horizontal=10, vertical=6),
-    )
-    return [
-        ft.Container(
-            content=ft.Column(
-                [
-                    glow_logo,
-                    ft.Text(
-                        t("app_subtitle").upper(),
-                        size=SZ_XS,
-                        color=TH.muted,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    ft.Text(
-                        f"v{__version__}",
-                        size=SZ_XS,
-                        color=TH.muted,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=2,
-            ),
-            padding=ft.Padding.only(top=16, bottom=4),
-        ),
-        ft.Row(
-            [
-                theme_icon,
-                ft.Container(expand=True),
-                ft.Icon(ft.Icons.LANGUAGE, size=SZ_LG, color=TH.muted),
-                lang_dd,
-            ],
-            spacing=4,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        ),
-        ft.Divider(color=TH.divider, height=16),
-    ]
-
-
-def _sidebar_footer():
-    """Build the sidebar footer with credits link."""
-    return [
-        ft.Container(expand=True),
-        ft.Divider(color=TH.divider),
-        ft.Text(
-            "AST \u00b7 Ruff \u00b7 Bandit \u00b7 Rust \u00b7 UI",
-            size=SZ_XS,
-            color=TH.muted,
-            text_align=ft.TextAlign.CENTER,
-        ),
-        ft.TextButton(
-            "github.com/GeoHaber/X_Ray",
-            url="https://github.com/GeoHaber/X_Ray",
-            style=ft.ButtonStyle(color=TH.muted),
-        ),
-    ]
-
-
-def _build_app_sidebar(sidebar_cfg):
-    """Build the left sidebar Container from *sidebar_cfg* dict."""
-    p = sidebar_cfg
-    header = _sidebar_header(p["theme_icon"], p["lang_dd"])
-    footer = _sidebar_footer()
-    return ft.Container(
-        content=ft.Column(
-            header
-            + [
-                ft.Text(
-                    t("project_scope").upper(),
-                    size=SZ_SM,
-                    weight=ft.FontWeight.BOLD,
-                    color=TH.muted,
-                ),
-                ft.Container(height=2),
-                ft.Button(
-                    t("select_directory"),
-                    icon=ft.Icons.FOLDER_OPEN,
-                    on_click=p["pick_directory"],
-                    width=260,
-                    color=TH.accent,
-                    bgcolor=TH.card,
-                    style=ft.ButtonStyle(
-                        shape=ft.RoundedRectangleBorder(radius=BTN_RADIUS)
-                    ),
-                ),
-                p["path_text"],
-                *([p["recent_dd"]] if p.get("recent_dd") is not None else []),
-                ft.Divider(color=TH.divider, height=12),
-                ft.Text(
-                    t("scan_modes").upper(),
-                    size=SZ_SM,
-                    weight=ft.FontWeight.BOLD,
-                    color=TH.muted,
-                ),
-                p["mode_checks"],
-                ft.Divider(color=TH.divider, height=12),
-                ft.Container(height=4),
-                p["sidebar_status"],
-            ]
-            + footer,
-            scroll=ft.ScrollMode.AUTO,
-            spacing=6,
-        ),
-        width=280,
-        bgcolor=TH.surface,
-        border=ft.Border.only(right=ft.BorderSide(1, TH.border)),
-        padding=ft.Padding.symmetric(horizontal=12, vertical=8),
-    )
-
-
-def _build_mode_checks(state):
-    """Build the mode-toggle checkboxes column with grouped sections."""
-
-    def on_mode(e):
-        state["modes"][e.control.data] = e.control.value
-
-    _m = state["modes"]
-
-    def _cb(key, label):
-        return ft.Checkbox(
-            label=label,
-            value=_m.get(key, True),
-            on_change=on_mode,
-            data=key,
-            fill_color=TH.accent,
-            check_color=ft.Colors.WHITE,
-        )
-
-    def _header(text):
-        return ft.Text(text, size=SZ_XS, weight=ft.FontWeight.BOLD, color=TH.muted)
-
-    all_keys = list(_m.keys())
-    checkboxes_ref: list = []
-
-    def _toggle_all(e):
-        val = e.control.value
-        for k in all_keys:
-            _m[k] = val
-        for cb in checkboxes_ref:
-            cb.value = val
-        e.control.page.update()
-
-    toggle = ft.Checkbox(
-        label="All / None",
-        value=all(v for v in _m.values()),
-        on_change=_toggle_all,
-        fill_color=TH.accent2,
-        check_color=ft.Colors.WHITE,
-    )
-
-    cbs_quality = [
-        _cb("smells", t("smells")),
-        _cb("duplicates", t("duplicates")),
-        _cb("lint", t("lint")),
-    ]
-    cbs_sec = [
-        _cb("security", t("security")),
-        _cb("typecheck", "Type Check"),
-        _cb("format", "Format"),
-    ]
-    cbs_arch = [
-        _cb("health", "Project Health"),
-        _cb("imports", "Import Health"),
-        _cb("rustify", t("rustify")),
-        _cb("ui_compat", t("ui_compat")),
-        _cb("ui_health", "UI Health"),
-        _cb("design_oracle", "Architectural Review (AI)"),
-        _cb("verification", "Verification"),
-        _cb("release_readiness", "Release Readiness"),
-    ]
-
-    checkboxes_ref.extend(cbs_quality + cbs_sec + cbs_arch)
-
-    return ft.Column(
-        [
-            toggle,
-            ft.Divider(color=TH.divider, height=4),
-            _header("Code Quality"),
-            *cbs_quality,
-            _header("Security & Types"),
-            *cbs_sec,
-            _header("Architecture"),
-            *cbs_arch,
-        ],
-        spacing=0,
-    )
-
-
-def _build_theme_lang_controls(page, main_fn):
-    """Build theme toggle icon and language dropdown."""
-    theme_icon = ft.IconButton(
-        icon=(ft.Icons.LIGHT_MODE if TH.is_dark() else ft.Icons.DARK_MODE),
-        icon_color=TH.accent,
-        tooltip="Toggle Light / Dark",
-        icon_size=20,
-    )
-
-    def on_theme_toggle(e):
-        TH.toggle()
-        page.data["_onboarded"] = True
-        page.controls.clear()
-        page.run_task(main_fn, page)
-
-    theme_icon.on_click = on_theme_toggle
-
-    def on_lang_change(e):
-        set_locale(e.control.value)
-        page.data = page.data or {}
-        page.data["_onboarded"] = True
-        page.controls.clear()
-        page.run_task(main_fn, page)
-
-    lang_dd = ft.Dropdown(
-        value=get_locale(),
-        width=120,
-        dense=True,
-        border_color=TH.border,
-        color=TH.text,
-        options=[ft.dropdown.Option(key=k, text=f"{v}") for k, v in LOCALES.items()],
-        on_select=on_lang_change,
-    )
-    return theme_icon, lang_dd
 
 
 def _setup_page(page):
@@ -2428,14 +1236,17 @@ def _save_scan_to_history(project_path: str, grade: dict, meta: dict) -> None:
         data = {}
     history = data.get(project_path, [])
     import datetime
-    history.append({
-        "score": grade.get("score", 0),
-        "letter": grade.get("letter", "?"),
-        "files": meta.get("files", 0),
-        "functions": meta.get("functions", 0),
-        "duration": meta.get("duration", 0),
-        "timestamp": datetime.datetime.now().isoformat(),
-    })
+
+    history.append(
+        {
+            "score": grade.get("score", 0),
+            "letter": grade.get("letter", "?"),
+            "files": meta.get("files", 0),
+            "functions": meta.get("functions", 0),
+            "duration": meta.get("duration", 0),
+            "timestamp": datetime.datetime.now().isoformat(),
+        }
+    )
     data[project_path] = history[-_MAX_HISTORY:]
     try:
         _HISTORY_FILE.write_text(
@@ -2479,78 +1290,6 @@ def _init_state(page):
     return page.data["_state"]
 
 
-def _build_responsive_layout(page, sidebar, main_content, theme_icon):
-    """Return (layout_control, narrow_flag) for the current viewport."""
-    narrow = is_narrow(page)
-    main_area = ft.Container(content=main_content, bgcolor=TH.bg, expand=True)
-    if narrow:
-        drawer = ft.NavigationDrawer(controls=[sidebar], bgcolor=TH.surface)
-        page.drawer = drawer
-
-        def open_drawer(e):
-            page.show_drawer(drawer)
-
-        hamburger = ft.IconButton(
-            icon=ft.Icons.MENU,
-            icon_color=TH.accent,
-            icon_size=28,
-            tooltip="Menu",
-            on_click=open_drawer,
-        )
-        top_bar = ft.Container(
-            content=ft.Row(
-                [
-                    hamburger,
-                    ft.Text(
-                        "X-RAY",
-                        size=SZ_H3,
-                        weight=ft.FontWeight.BOLD,
-                        color=TH.accent,
-                        font_family=MONO_FONT,
-                    ),
-                    ft.Container(expand=True),
-                    theme_icon,
-                ],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            bgcolor=TH.surface,
-            border=ft.Border.only(bottom=ft.BorderSide(1, TH.border)),
-            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
-        )
-        layout = ft.Column([top_bar, main_area], expand=True, spacing=0)
-    else:
-        layout = ft.Row([sidebar, main_area], expand=True, spacing=0)
-    return layout, narrow
-
-
-def _install_resize_handler(page, main_fn):
-    """Wire up a responsive-resize handler that rebuilds on breakpoint change."""
-    narrow = is_narrow(page)
-    page.data["_was_narrow"] = narrow
-    _resize_guard = {"busy": False}
-
-    def on_resize(e):
-        if _resize_guard["busy"]:
-            return
-        try:
-            new_narrow = is_narrow(page)
-            old_narrow = page.data.get("_was_narrow")
-            if old_narrow is not None and new_narrow != old_narrow:
-                _resize_guard["busy"] = True
-                page.data["_onboarded"] = True
-                page.data["_was_narrow"] = new_narrow
-                page.controls.clear()
-                page.run_task(main_fn, page)
-                return
-            page.data["_was_narrow"] = new_narrow
-        except Exception:  # nosec B110
-            pass
-        finally:
-            _resize_guard["busy"] = False
-
-    page.on_resized = on_resize
-
-
 async def _setup_main_state(page: ft.Page):
     """Initialize state and file picker for the main app."""
     state = _init_state(page)
@@ -2589,23 +1328,29 @@ async def _setup_main_state(page: ft.Page):
             def _close_dlg(e):
                 dlg.open = False
                 page.update()
-            
+
             def _apply_dlg(e):
                 if d_path.value:
                     _apply_path(d_path.value)
                 dlg.open = False
                 page.update()
 
-            d_path = ft.TextField(label="Enter Directory Path", value=state.get("root_path", ""), autofocus=True, expand=True)
+            d_path = ft.TextField(
+                label="Enter Directory Path",
+                value=state.get("root_path", ""),
+                autofocus=True,
+                expand=True,
+            )
             dlg = ft.AlertDialog(
                 title=ft.Text("Select Directory (Web Mode)"),
                 content=d_path,
                 actions=[
                     ft.TextButton("Cancel", on_click=_close_dlg),
-                    ft.TextButton("Apply", on_click=_apply_dlg)
-                ]
+                    ft.TextButton("Apply", on_click=_apply_dlg),
+                ],
             )
-            if dlg not in page.overlay: page.overlay.append(dlg)
+            if dlg not in page.overlay:
+                page.overlay.append(dlg)
             dlg.open = True
             page.update()
         else:
@@ -2615,13 +1360,13 @@ async def _setup_main_state(page: ft.Page):
                 if type(s).__name__ == "FilePicker":
                     f_picker = s
                     break
-            
+
             if not f_picker:
                 # ONLY create FilePicker on non-web clients
                 f_picker = ft.FilePicker()
                 page.overlay.append(f_picker)
                 page.update()
-            
+
             try:
                 result = await f_picker.get_directory_path(
                     dialog_title=t("select_directory")
@@ -2631,6 +1376,7 @@ async def _setup_main_state(page: ft.Page):
                     page.update()
             except Exception as exc:
                 import logging
+
                 logging.error(f"Error opening directory picker: {exc}")
 
     return state, path_text, pick_directory, _apply_path
@@ -2639,6 +1385,7 @@ async def _setup_main_state(page: ft.Page):
 def _phase_design_oracle(results):
     try:
         from Analysis.design_oracle import _default_oracle
+
         functions = results.get("_functions", [])
         file_count = results.get("meta", {}).get("files", 1) or 1
         oracle_res = _default_oracle.analyze(functions, file_count)
@@ -2661,9 +1408,15 @@ def _show_keyboard_help(page):
         ft.Row(
             [
                 ft.Container(
-                    content=ft.Text(key, size=SZ_SM, color=TH.accent,
-                                    font_family=MONO_FONT, weight=ft.FontWeight.BOLD),
-                    bgcolor=TH.card, border_radius=6,
+                    content=ft.Text(
+                        key,
+                        size=SZ_SM,
+                        color=TH.accent,
+                        font_family=MONO_FONT,
+                        weight=ft.FontWeight.BOLD,
+                    ),
+                    bgcolor=TH.card,
+                    border_radius=6,
                     padding=ft.Padding.symmetric(horizontal=8, vertical=3),
                     border=ft.Border.all(1, TH.border),
                     width=120,
@@ -2675,86 +1428,130 @@ def _show_keyboard_help(page):
         for key, desc in shortcuts
     ]
     dlg = ft.AlertDialog(
-        title=ft.Text("Keyboard Shortcuts", size=SZ_H3,
-                       weight=ft.FontWeight.BOLD, color=TH.accent),
+        title=ft.Text(
+            "Keyboard Shortcuts", size=SZ_H3, weight=ft.FontWeight.BOLD, color=TH.accent
+        ),
         content=ft.Container(
             content=ft.Column(rows, spacing=8, tight=True),
-            width=340, padding=8,
+            width=340,
+            padding=8,
         ),
         actions=[
-            ft.TextButton("Close", on_click=lambda e: (setattr(dlg, "open", False), page.update())),
+            ft.TextButton(
+                "Close", on_click=lambda e: (setattr(dlg, "open", False), page.update())
+            ),
         ],
         shape=ft.RoundedRectangleBorder(radius=14),
     )
-    if dlg not in page.overlay: page.overlay.append(dlg)
+    if dlg not in page.overlay:
+        page.overlay.append(dlg)
     dlg.open = True
     page.update()
 
 
-def _build_main_ui(page: ft.Page, state: dict, path_text, pick_directory, apply_path):
-    """Build the top-level Flet UI layout and wire up scan events."""
-    mode_checks = _build_mode_checks(state)
-    theme_icon, lang_dd = _build_theme_lang_controls(page, main)
-    main_content = ft.Column(
-        [],
+def _build_scan_progress_shell(phase_rows_container, modes):
+    """Build the scan-in-progress shell with phase checklist."""
+    return ft.Row(
+        [
+            ft.Container(
+                width=64,
+                bgcolor=TH.surface,
+                border=ft.Border.only(right=ft.BorderSide(1, TH.divider)),
+                content=ft.Column(
+                    [
+                        ft.Container(
+                            content=ft.Text(
+                                "☢",
+                                size=22,
+                                text_align=ft.TextAlign.CENTER,
+                                color="#00d4ff",
+                            ),
+                            width=64,
+                            height=48,
+                            alignment=ft.Alignment(0, 0),
+                        ),
+                    ],
+                    spacing=2,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                padding=ft.Padding.symmetric(vertical=8),
+            ),
+            ft.Container(
+                expand=True,
+                content=ft.Column(
+                    [
+                        ft.Container(expand=True),
+                        ft.Column(
+                            [
+                                ft.Text(
+                                    "☢  Scanning…",
+                                    size=28,
+                                    weight=ft.FontWeight.BOLD,
+                                    color="#00d4ff",
+                                    font_family=MONO_FONT,
+                                    text_align=ft.TextAlign.CENTER,
+                                ),
+                                ft.Container(height=16),
+                                _build_phase_checklist(phase_rows_container, modes),
+                            ],
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=8,
+                        ),
+                        ft.Container(expand=True),
+                    ],
+                    expand=True,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                padding=ft.Padding.symmetric(horizontal=60, vertical=20),
+                bgcolor=TH.bg,
+            ),
+        ],
         expand=True,
-        scroll=ft.ScrollMode.AUTO,
-        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+        spacing=0,
+        vertical_alignment=ft.CrossAxisAlignment.STRETCH,
     )
 
-    sidebar_status = ft.Container(content=None)
-    state["_sidebar_status"] = sidebar_status
 
-    def build_dashboard(results):
-        _build_main_dashboard(page, state, main_content, results)
-
-    async def start_scan(e):
-        await _start_scan_handler(page, state, main_content, build_dashboard)
-
-    # Build recent-paths dropdown (only if we have any history)
-    recent = state.get("recent_paths", [])
-    if recent:
-
-        def _on_recent_pick(e):
-            chosen = e.control.value
-            if chosen:
-                apply_path(chosen)
-                page.update()
-
-        recent_dd = ft.Dropdown(
-            label="Recent paths",
-            options=[
-                ft.dropdown.Option(
-                    key=p, text=p if len(p) <= 38 else "\u2026" + p[-35:]
-                )
-                for p in recent
-            ],
-            value=state["root_path"] if state["root_path"] in recent else None,
-            on_select=_on_recent_pick,
-            bgcolor=TH.card,
-            border_color=TH.border,
-            width=260,
-        )
-    else:
-        recent_dd = None
-
-    sidebar = _build_app_sidebar(
-        {
-            "pick_directory": pick_directory,
-            "path_text": path_text,
-            "recent_dd": recent_dd,
-            "mode_checks": mode_checks,
-            "start_scan": start_scan,
-            "theme_icon": theme_icon,
-            "lang_dd": lang_dd,
-            "sidebar_status": sidebar_status,
-        }
-    )
-
-    layout, _narrow = _build_responsive_layout(page, sidebar, main_content, theme_icon)
-
-    return layout, main_content, build_dashboard, start_scan
-
+async def _handle_keyboard(e, state, page, do_scan_fn):
+    """Handle keyboard shortcuts for the main page."""
+    if e.ctrl:
+        if e.key == "S":
+            await do_scan_fn(e)
+        elif e.key == "E":
+            if state.get("results"):
+                try:
+                    export = {
+                        k: v
+                        for k, v in state["results"].items()
+                        if not k.startswith("_")
+                    }
+                    path = Path(state["root_path"]) / "xray_report.json"
+                    path.write_text(
+                        json.dumps(export, indent=2, default=str), encoding="utf-8"
+                    )
+                    _show_snack(page, f"✓ Saved to {path}")
+                except Exception as exc:
+                    _show_snack(
+                        page, f"Export failed: {exc}", bgcolor=ft.Colors.RED_400
+                    )
+        elif e.key == "H":
+            if state.get("results"):
+                try:
+                    html = build_html_report(state["results"])
+                    path = Path(state["root_path"]) / "xray_report.html"
+                    path.write_text(html, encoding="utf-8")
+                    _show_snack(page, f"✓ HTML report saved to {path}")
+                except Exception as exc:
+                    _show_snack(
+                        page, f"Export failed: {exc}", bgcolor=ft.Colors.RED_400
+                    )
+        elif e.key == "D":
+            TH.toggle()
+            page.data["_onboarded"] = True
+            page.controls.clear()
+            page.run_task(main, page)
+    elif e.key == "F1":
+        _show_keyboard_help(page)
 
 
 async def main(page: ft.Page):
@@ -2763,8 +1560,8 @@ async def main(page: ft.Page):
     state, path_text, pick_directory, apply_path = await _setup_main_state(page)
 
     # ── Path helpers ───────────────────────────────────────────────────────
-    def on_pick_dir(e):
-        pick_directory(e)
+    async def on_pick_dir(e):
+        await pick_directory(e)
 
     def on_apply_path(path_str: str):
         apply_path(path_str)
@@ -2774,6 +1571,7 @@ async def main(page: ft.Page):
 
     def _rebuild_shell(results=None):
         """Rebuild the full shell, optionally with results."""
+
         async def on_scan(e):
             await _do_scan(e)
 
@@ -2794,36 +1592,50 @@ async def main(page: ft.Page):
             _show_snack(page, t("select_dir_first"), bgcolor=ft.Colors.RED_400)
             return
 
-        # Show a minimal progress overlay inside the content area
-        progress_col = ft.Column(
-            [
-                ft.Container(expand=True),
-                ft.Column([
-                    ft.Text("☢", size=60, text_align=ft.TextAlign.CENTER),
-                    ft.Text("Scanning…", size=20, color="#00d4ff",
-                            text_align=ft.TextAlign.CENTER),
-                    ft.ProgressBar(width=320, color="#00d4ff", bgcolor="#1e293b"),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=16),
-                ft.Container(expand=True),
-            ],
-            expand=True,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        )
-
         # Phase checklist
         phase_rows_container = ft.Column([], spacing=0)
         phase_states: Dict[str, tuple] = {"_parse": (PhaseStatus.PENDING, 0)}
         for key, _label in PHASE_REGISTRY:
             phase_states[key] = (PhaseStatus.PENDING, 0)
 
+        # Build full ordered list of (key, label) for FIFO display
+        _all_phases = [("_parse", "AST Parsing")] + list(PHASE_REGISTRY)
+
         def _refresh_phase_rows():
-            rows = []
-            ps, el = phase_states.get("_parse", (PhaseStatus.PENDING, 0))
-            rows.append(_build_phase_row("_parse", "AST Parsing", ps, el))
-            for key, label in PHASE_REGISTRY:
-                ps, el = phase_states.get(key, (PhaseStatus.PENDING, 0))
-                rows.append(_build_phase_row(key, label, ps, el))
-            phase_rows_container.controls = rows
+            done_count = 0
+            active_label = None
+            pending_labels = []
+            total = len(_all_phases)
+
+            for key, label in _all_phases:
+                ps, _el = phase_states.get(key, (PhaseStatus.PENDING, 0))
+                if ps in (PhaseStatus.DONE, PhaseStatus.SKIPPED, PhaseStatus.FAILED):
+                    done_count += 1
+                elif ps == PhaseStatus.RUNNING:
+                    active_label = label
+                else:
+                    pending_labels.append(label)
+
+            controls = []
+            # Completed counter (only show when at least 1 done)
+            if done_count > 0:
+                controls.append(_build_phase_done_counter(done_count, total))
+                controls.append(ft.Container(height=12))
+            # Active task (prominent)
+            if active_label:
+                controls.append(_build_phase_active(active_label))
+                controls.append(ft.Container(height=12))
+            # Remaining queue (dimmed)
+            if pending_labels:
+                controls.append(
+                    ft.Text("QUEUE", size=SZ_XS, color=TH.muted,
+                            font_family=MONO_FONT, text_align=ft.TextAlign.CENTER)
+                )
+                controls.append(ft.Container(height=4))
+                for lbl in pending_labels:
+                    controls.append(_build_phase_row_pending(lbl))
+
+            phase_rows_container.controls = controls
 
         def phase_cb(key, status, elapsed):
             phase_states[key] = (status, elapsed)
@@ -2836,40 +1648,9 @@ async def main(page: ft.Page):
         _refresh_phase_rows()
 
         # Replace shell content with scan progress
-        scan_progress_shell = ft.Row([
-            ft.Container(
-                width=64,
-                bgcolor=TH.surface,
-                border=ft.Border.only(right=ft.BorderSide(1, TH.divider)),
-                content=ft.Column([
-                    ft.Container(
-                        content=ft.Text("☢", size=22, text_align=ft.TextAlign.CENTER,
-                                        color="#00d4ff"),
-                        width=64, height=48, alignment=ft.Alignment(0, 0),
-                    ),
-                ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                padding=ft.Padding.symmetric(vertical=8),
-            ),
-            ft.Container(
-                expand=True,
-                content=ft.Column([
-                    ft.Container(expand=True),
-                    ft.Column([
-                        ft.Text("☢  Scanning…", size=28, weight=ft.FontWeight.BOLD,
-                                color="#00d4ff", font_family=MONO_FONT,
-                                text_align=ft.TextAlign.CENTER),
-                        ft.Container(height=16),
-                        _build_phase_checklist(phase_rows_container, state.get("modes", {})),
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
-                    ft.Container(expand=True),
-                ], expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                padding=ft.Padding.symmetric(horizontal=60, vertical=20),
-                bgcolor=TH.bg,
-            ),
-        ], expand=True, spacing=0,
-           vertical_alignment=ft.CrossAxisAlignment.STRETCH)
-
-        page_container.content = scan_progress_shell
+        page_container.content = _build_scan_progress_shell(
+            phase_rows_container, state.get("modes", {})
+        )
         page.update()
 
         try:
@@ -2891,7 +1672,9 @@ async def main(page: ft.Page):
             return
 
         if "error" in results:
-            _show_snack(page, f"Scan error: {results['error']}", bgcolor=ft.Colors.RED_400)
+            _show_snack(
+                page, f"Scan error: {results['error']}", bgcolor=ft.Colors.RED_400
+            )
             _rebuild_shell(None)
             return
 
@@ -2900,7 +1683,7 @@ async def main(page: ft.Page):
 
         # Save to history
         grade = results.get("grade", {})
-        meta  = results.get("meta", {})
+        meta = results.get("meta", {})
         if state["root_path"] and grade:
             _save_scan_to_history(state["root_path"], grade, meta)
 
@@ -2918,38 +1701,7 @@ async def main(page: ft.Page):
 
     # ── Keyboard shortcuts (preserved from v7) ─────────────────────────────
     async def on_keyboard(e: ft.KeyboardEvent):
-        if e.ctrl:
-            if e.key == "S":
-                await _do_scan(e)
-            elif e.key == "E":
-                if state.get("results"):
-                    try:
-                        export = {k: v for k, v in state["results"].items()
-                                  if not k.startswith("_")}
-                        path = Path(state["root_path"]) / "xray_report.json"
-                        path.write_text(json.dumps(export, indent=2, default=str),
-                                        encoding="utf-8")
-                        _show_snack(page, f"✓ Saved to {path}")
-                    except Exception as exc:
-                        _show_snack(page, f"Export failed: {exc}",
-                                    bgcolor=ft.Colors.RED_400)
-            elif e.key == "H":
-                if state.get("results"):
-                    try:
-                        html = build_html_report(state["results"])
-                        path = Path(state["root_path"]) / "xray_report.html"
-                        path.write_text(html, encoding="utf-8")
-                        _show_snack(page, f"✓ HTML report saved to {path}")
-                    except Exception as exc:
-                        _show_snack(page, f"Export failed: {exc}",
-                                    bgcolor=ft.Colors.RED_400)
-            elif e.key == "D":
-                TH.toggle()
-                page.data["_onboarded"] = True
-                page.controls.clear()
-                page.run_task(main, page)
-        elif e.key == "F1":
-            _show_keyboard_help(page)
+        await _handle_keyboard(e, state, page, _do_scan)
 
     page.on_keyboard_event = on_keyboard
 
@@ -2957,9 +1709,6 @@ async def main(page: ft.Page):
         page.data["_onboarded"] = True
 
 
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     ft.run(main)
-

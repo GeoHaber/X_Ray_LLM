@@ -464,19 +464,19 @@ def hybrid_transpile(
 # Module-level API for test compatibility
 _default_analyzer = LLMTranspiler()
 
-def available(extensions: List = None):
-    """Wrapper for LLMTranspiler.available()."""
-    if extensions is None:
-        raise ValueError("extensions cannot be None")
-    return _default_analyzer.available(extensions)
 
-def stats(*args, **kwargs):
-    """Wrapper for LLMTranspiler.stats()."""
-    return _default_analyzer.stats(*args, **kwargs)
+def available():
+    """Wrapper for LLMTranspiler.available property."""
+    return _default_analyzer.available
+
+
+def stats():
+    """Wrapper for LLMTranspiler.stats property."""
+    return _default_analyzer.stats
+
 
 def transpile(node):
     """Wrapper for LLMTranspiler.transpile()."""
     if node is None:
         raise ValueError("node cannot be None")
     return _default_analyzer.transpile(node)
-

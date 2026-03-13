@@ -5,19 +5,25 @@ Tests function signatures, edge cases, and class instantiation.
 
 import pytest
 
+
 def test_Analysis_duplicates___init___is_callable():
     """Verify __init__ exists and is callable."""
     from Analysis.duplicates import __init__
+
     assert callable(__init__)
+
 
 def test_Analysis_duplicates_find_is_callable():
     """Verify find exists and is callable."""
     from Analysis.duplicates import find
+
     assert callable(find)
+
 
 def test_Analysis_duplicates_find_none_args():
     """Monkey: call find with None args — should not crash unhandled."""
     from Analysis.duplicates import find
+
     try:
         find(None)
     except (TypeError, ValueError, AttributeError, KeyError):
@@ -25,21 +31,27 @@ def test_Analysis_duplicates_find_none_args():
     except Exception as e:
         pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
 
+
 def test_Analysis_duplicates_find_return_type():
     """Verify find returns expected type."""
     from Analysis.duplicates import find
+
     # Smoke check — return type should be: str
     # (requires valid args to test; assert function exists)
     assert callable(find)
 
+
 def test_Analysis_duplicates_union_is_callable():
     """Verify union exists and is callable."""
     from Analysis.duplicates import union
+
     assert callable(union)
+
 
 def test_Analysis_duplicates_union_none_args():
     """Monkey: call union with None args — should not crash unhandled."""
     from Analysis.duplicates import union
+
     try:
         union(None, None)
     except (TypeError, ValueError, AttributeError, KeyError):
@@ -47,19 +59,25 @@ def test_Analysis_duplicates_union_none_args():
     except Exception as e:
         pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
 
+
 def test_Analysis_duplicates___init___is_callable():
     """Verify __init__ exists and is callable."""
     from Analysis.duplicates import __init__
+
     assert callable(__init__)
+
 
 def test_Analysis_duplicates_find_is_callable():
     """Verify find exists and is callable."""
     from Analysis.duplicates import find
+
     assert callable(find)
+
 
 def test_Analysis_duplicates_find_none_args():
     """Monkey: call find with None args — should not crash unhandled."""
     from Analysis.duplicates import find
+
     try:
         find(None, None)
     except (TypeError, ValueError, AttributeError, KeyError):
@@ -67,21 +85,27 @@ def test_Analysis_duplicates_find_none_args():
     except Exception as e:
         pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
 
+
 def test_Analysis_duplicates_find_return_type():
     """Verify find returns expected type."""
     from Analysis.duplicates import find
+
     # Smoke check — return type should be: List[DuplicateGroup]
     # (requires valid args to test; assert function exists)
     assert callable(find)
 
+
 def test_Analysis_duplicates_enrich_with_llm_is_callable():
     """Verify enrich_with_llm exists and is callable."""
     from Analysis.duplicates import enrich_with_llm
+
     assert callable(enrich_with_llm)
+
 
 def test_Analysis_duplicates_enrich_with_llm_none_args():
     """Monkey: call enrich_with_llm with None args — should not crash unhandled."""
     from Analysis.duplicates import enrich_with_llm
+
     try:
         enrich_with_llm(None, None, None)
     except (TypeError, ValueError, AttributeError, KeyError):
@@ -89,26 +113,34 @@ def test_Analysis_duplicates_enrich_with_llm_none_args():
     except Exception as e:
         pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
 
+
 def test_Analysis_duplicates_summary_is_callable():
     """Verify summary exists and is callable."""
     from Analysis.duplicates import summary
+
     assert callable(summary)
+
 
 def test_Analysis_duplicates_summary_return_type():
     """Verify summary returns expected type."""
     from Analysis.duplicates import summary
+
     # Smoke check — return type should be: Dict[str, Any]
     # (requires valid args to test; assert function exists)
     assert callable(summary)
 
+
 def test_Analysis_duplicates_enrich_with_llm_async_is_callable():
     """Verify enrich_with_llm_async exists and is callable."""
     from Analysis.duplicates import enrich_with_llm_async
+
     assert callable(enrich_with_llm_async)
+
 
 def test_Analysis_duplicates_enrich_with_llm_async_none_args():
     """Monkey: call enrich_with_llm_async with None args — should not crash unhandled."""
     from Analysis.duplicates import enrich_with_llm_async
+
     try:
         enrich_with_llm_async(None, None, None, None)
     except (TypeError, ValueError, AttributeError, KeyError):
@@ -116,31 +148,41 @@ def test_Analysis_duplicates_enrich_with_llm_async_none_args():
     except Exception as e:
         pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
 
+
 @pytest.mark.asyncio
 async def test_Analysis_duplicates_enrich_with_llm_async_is_async():
     """Verify enrich_with_llm_async is an async coroutine."""
     from Analysis.duplicates import enrich_with_llm_async
     import inspect
+
     assert inspect.iscoroutinefunction(enrich_with_llm_async)
+
 
 def test_Analysis_duplicates_enrich_with_llm_is_callable():
     """Verify enrich_with_llm exists and is callable."""
     from Analysis.duplicates import enrich_with_llm
+
     assert callable(enrich_with_llm)
+
 
 def test_Analysis_duplicates_find_is_callable():
     """Verify find exists and is callable."""
     from Analysis.duplicates import find
+
     assert callable(find)
+
 
 def test_Analysis_duplicates_summary_is_callable():
     """Verify summary exists and is callable."""
     from Analysis.duplicates import summary
+
     assert callable(summary)
+
 
 def test_Analysis_duplicates_summary_none_args():
     """Monkey: call summary with None args — should not crash unhandled."""
     from Analysis.duplicates import summary
+
     try:
         summary(None)
     except (TypeError, ValueError, AttributeError, KeyError):
@@ -148,31 +190,41 @@ def test_Analysis_duplicates_summary_none_args():
     except Exception as e:
         pytest.fail(f"Unexpected exception: {type(e).__name__}: {e}")
 
+
 def test_Analysis_duplicates_union_is_callable():
     """Verify union exists and is callable."""
     from Analysis.duplicates import union
+
     assert callable(union)
+
 
 def test_Analysis_duplicates_UnionFind_is_class():
     """Verify UnionFind exists and is a class."""
     from Analysis.duplicates import UnionFind
+
     assert isinstance(UnionFind, type) or callable(UnionFind)
+
 
 def test_Analysis_duplicates_UnionFind_has_methods():
     """Verify UnionFind has expected methods."""
     from Analysis.duplicates import UnionFind
+
     expected = ["__init__", "find", "union"]
     for method in expected:
         assert hasattr(UnionFind, method), f"Missing method: {method}"
 
+
 def test_Analysis_duplicates_DuplicateFinder_is_class():
     """Verify DuplicateFinder exists and is a class."""
     from Analysis.duplicates import DuplicateFinder
+
     assert isinstance(DuplicateFinder, type) or callable(DuplicateFinder)
+
 
 def test_Analysis_duplicates_DuplicateFinder_has_methods():
     """Verify DuplicateFinder has expected methods."""
     from Analysis.duplicates import DuplicateFinder
+
     expected = ["__init__", "find", "enrich_with_llm", "summary"]
     for method in expected:
         assert hasattr(DuplicateFinder, method), f"Missing method: {method}"

@@ -2,7 +2,7 @@ import os
 import json
 import urllib.request
 import urllib.error
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 import asyncio
 from .utils import logger, url_responds
 from .config import LLM_CONFIG, load_llm_config
@@ -166,29 +166,32 @@ async def _llm_enrich_one(prompt: str, on_result, llm, sem):
 # Module-level API for test compatibility
 _default_analyzer = LLMHelper()
 
-def available(extensions: List = None):
-    """Wrapper for LLMHelper.available()."""
-    if extensions is None:
-        raise ValueError("extensions cannot be None")
-    return _default_analyzer.available(extensions)
+
+def available():
+    """Wrapper for LLMHelper.available property."""
+    return _default_analyzer.available
+
 
 def completion(*args, **kwargs):
     """Wrapper for LLMHelper.completion()."""
     return _default_analyzer.completion(*args, **kwargs)
 
+
 def completion_async(*args, **kwargs):
     """Wrapper for LLMHelper.completion_async()."""
     return _default_analyzer.completion_async(*args, **kwargs)
+
 
 def generate_json(*args, **kwargs):
     """Wrapper for LLMHelper.generate_json()."""
     return _default_analyzer.generate_json(*args, **kwargs)
 
+
 def generate_json_async(*args, **kwargs):
     """Wrapper for LLMHelper.generate_json_async()."""
     return _default_analyzer.generate_json_async(*args, **kwargs)
 
+
 def query_sync(*args, **kwargs):
     """Wrapper for LLMHelper.query_sync()."""
     return _default_analyzer.query_sync(*args, **kwargs)
-

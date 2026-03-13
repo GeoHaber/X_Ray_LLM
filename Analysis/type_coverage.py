@@ -160,9 +160,9 @@ class TypeCoverageAnalyzer:
 # Module-level API for test compatibility
 _default_analyzer = TypeCoverageAnalyzer()
 
+
 def analyze(source_code: str, project_root: str = None):
     """Wrapper for TypeCoverageAnalyzer.analyze()."""
     if source_code is None:
         raise ValueError("source_code cannot be None")
     return _default_analyzer.analyze(source_code)
-

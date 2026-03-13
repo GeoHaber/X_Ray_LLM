@@ -1,5 +1,120 @@
 # Changelog
 
+## v7.2.2 — Design Review, Force-Graph Rewrite & FIFO Scan Queue (2026-03-13)
+
+### Overview
+Comprehensive design review of `x_ray_flet.py` resolving all P0–P3 issues,
+replacing the vis-network graph viewer with **force-graph** (Canvas-based,
+handles 75K+ elements), redesigning scan progress as a **FIFO queue**, and
+driving lint/type/security scans to **zero issues**.
+
+---
+
+### 1 · P0–P3 Design Review Fixes (`x_ray_flet.py`)
+
+| Priority | Issue | Fix |
+|----------|-------|-----|
+| **P0** | No thread safety on shared `results` dict | Added `threading.Lock` around all `results` access |
+| **P1** | ~1355 lines of dead v7-legacy code | Removed deprecated functions, unused branches, orphan helpers |
+| **P1** | 9 silent `except: pass` blocks | Replaced with specific exceptions + logging |
+| **P1** | Auto `pip install` at startup | Replaced with warning + `sys.exit(1)` |
+| **P2** | Duplicated color/style constants | Consolidated into shared constants |
+| **P2** | 7 functions exceeding 150-line limit | Refactored into focused helpers |
+| **P3** | Unused imports | Removed dead imports across the module |
+
+**Net result:** `x_ray_flet.py` reduced from ~2960 lines to ~1670 lines (−44%).
+
+---
+
+### 2 · Graph Viewer Rewrite: vis-network → force-graph
+
+**Problem:** vis-network hierarchical layout froze the browser on 1400+ node
+codebases (entire JS thread blocked).
+
+**Solution:** Replaced with [force-graph](https://github.com/vasturiano/force-graph)
+v1.51.1 by Vasturiano — a Canvas/WebGL renderer using d3-force physics,
+capable of 75K+ elements at 60 fps.
+
+| Feature | Detail |
+|---------|--------|
+| Vendor library | `UI/_vendor_force_graph.min.js` (173 KB, inlined at build time) |
+| Data transport | `<script type="application/json">` + `JSON.parse()` — avoids 2.5 MB inline JS literal parsing |
+| Layout modes | Tree (DAG top-down), Force (physics), Radial |
+| Zoom-aware labels | Function names appear at `globalScale > 1.2` or on hover |
+| Node sizing | `nodeVal` capped at 20, `nodeRelSize(3)` for readability |
+| Color mapping | JS `transformDataset()` converts vis-network color objects → force-graph strings |
+
+#### Files changed:
+- `UI/tabs/graph_tab.py` — complete template rewrite (+511 lines net)
+- `UI/_vendor_force_graph.min.js` — new file (force-graph v1.51.1)
+- `Analysis/smart_graph.py` — all node colors as `{background, border, highlight, hover}` objects
+
+---
+
+### 3 · FIFO Scan Queue UX
+
+Replaced the static phase checklist with a scrolling **FIFO queue** showing
+done / active / pending phases in a compact strip.
+
+| New function | Purpose |
+|--------------|---------|
+| `_build_phase_row_pending(label)` | Dimmed pending row |
+| `_build_phase_active(label)` | Animated active row with spinner |
+| `_build_phase_done_counter(done, total)` | Collapsed completed count |
+| `_refresh_phase_rows()` | Categorizes phases → FIFO layout |
+
+#### File changed:
+- `x_ray_flet.py` — 3 new builder functions + refresh logic
+
+---
+
+### 4 · Automated Code Quality Sweep (D+ → B+)
+
+Three rounds of self-scan drove the score from **67.3 (D+)** to **87.2 (B+)**:
+
+| Round | Score | Key fixes |
+|-------|-------|-----------|
+| 1 | 67.3 → 78 | 64 Ruff auto-fixes, 138 files formatted, version sync |
+| 2 | 78 → 84.1 | 9 critical type errors, unused coroutine |
+| 3 | 84.1 → 87.2 | 5 Pyright type errors, 7 long-function refactors |
+
+---
+
+### 5 · Pre-Release Scan Results
+
+| Tool | Result |
+|------|--------|
+| **Ruff** (F + W rules) | 0 errors (1 trailing whitespace fixed in `transpile_with_llm.py`) |
+| **Pyright** | 0 type errors in production code |
+| **Bandit** (medium+ severity) | 0 security issues across 51,841 LOC |
+
+---
+
+### 6 · UI Polish
+
+- **Oracle text:** Added `scroll=ft.ScrollMode.AUTO` for long oracle output
+- **Graph canvas:** Added `on_click` handler + tooltip for fullscreen access
+- **Flet 0.80 border fix:** `ft.Border.all(width, color)` positional args
+
+---
+
+### Files Changed Summary (139 files, +6369 / −3398)
+
+**Core changes:**
+- `x_ray_flet.py` — P0–P3 fixes, FIFO queue, −44% lines
+- `UI/tabs/graph_tab.py` — force-graph template rewrite
+- `UI/_vendor_force_graph.min.js` — new vendor library (force-graph v1.51.1)
+- `Analysis/smart_graph.py` — vis-network color objects for all nodes
+- `Core/config.py` — version bump to 7.2.2
+- `transpile_with_llm.py` — trailing whitespace fix
+
+**Bulk auto-fixes (Ruff + formatter):**
+- 30+ `Analysis/*.py` modules — lint fixes, formatting
+- 10+ `tests/*.py` — lint fixes, formatting
+- 60+ `tests/xray_generated/*.py` — auto-generated test updates
+
+---
+
 ## v7.2.1 — Self-Scan Hardening & Checklist Bug Fix (2026-03-08)
 
 ### Overview

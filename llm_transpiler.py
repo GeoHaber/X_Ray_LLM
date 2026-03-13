@@ -11,10 +11,8 @@ Usage:
 """
 
 import asyncio
-import json
 import logging
 import os
-import platform
 import re
 import subprocess
 import sys
@@ -48,12 +46,12 @@ MAX_TOKENS = 2048
 # ── Model discovery (borrowed from chat.py) ────────────────────────────────
 
 _PREFERRED_MODELS = [
-    r"qwen3[\.\-_]?5",            # Qwen 3.5 — latest & fastest
-    r"qwen3(?![\.\-_]?5)",        # Qwen 3
-    r"llama-3\.2-3b",             # Llama 3.2 3B — compact
-    r"phi-3\.5-mini",             # Phi 3.5 mini
-    r"mistral-7b-instruct",       # Mistral 7B
-    r"qwen2\.5",                  # Qwen 2.5
+    r"qwen3[\.\-_]?5",  # Qwen 3.5 — latest & fastest
+    r"qwen3(?![\.\-_]?5)",  # Qwen 3
+    r"llama-3\.2-3b",  # Llama 3.2 3B — compact
+    r"phi-3\.5-mini",  # Phi 3.5 mini
+    r"mistral-7b-instruct",  # Mistral 7B
+    r"qwen2\.5",  # Qwen 2.5
 ]
 
 
@@ -74,12 +72,12 @@ def find_best_model() -> Optional[Path]:
     for pattern in _PREFERRED_MODELS:
         for model in all_models:
             if re.search(pattern, model.name, re.IGNORECASE):
-                size_gb = model.stat().st_size / (1024 ** 3)
+                size_gb = model.stat().st_size / (1024**3)
                 log.info(f"Selected: {model.name} ({size_gb:.1f} GB)")
                 return model
 
     # Fallback: smallest model >= 3GB
-    balanced = [m for m in all_models if 3 <= m.stat().st_size / (1024 ** 3) <= 15]
+    balanced = [m for m in all_models if 3 <= m.stat().st_size / (1024**3) <= 15]
     if balanced:
         return min(balanced, key=lambda m: m.stat().st_size)
 
@@ -116,17 +114,22 @@ class LlamaServer:
             self._proc = subprocess.Popen(
                 [
                     str(SERVER_BIN),
-                    "-m", str(model_path),
-                    "--port", str(LLAMA_PORT),
-                    "--ctx-size", str(CONTEXT_SIZE),
-                    "--threads", str(max(4, os.cpu_count() or 8)),
-                    "-ngl", "100",  # GPU acceleration if available
+                    "-m",
+                    str(model_path),
+                    "--port",
+                    str(LLAMA_PORT),
+                    "--ctx-size",
+                    str(CONTEXT_SIZE),
+                    "--threads",
+                    str(max(4, os.cpu_count() or 8)),
+                    "-ngl",
+                    "100",  # GPU acceleration if available
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
             self._started_by_us = True
-            
+
             # Wait for server to be ready with retry logic
             log.info("Waiting for llama-server to initialize...")
             for attempt in range(15):  # 15 * 1sec = up to 15 seconds
@@ -135,7 +138,7 @@ class LlamaServer:
                     log.info("llama-server ready ✓")
                     return True
                 if attempt % 3 == 0:
-                    log.info(f"  Initializing... ({attempt+1}s)")
+                    log.info(f"  Initializing... ({attempt + 1}s)")
 
             log.error("llama-server initialization timeout")
             return False
@@ -181,17 +184,17 @@ Do NOT use <think> tags. Do NOT explain. Just output Rust code.
             )
             elapsed = time.time() - t0
             log.info(f"  Response in {elapsed:.1f}s (HTTP {resp.status_code})")
-            
+
             if resp.status_code != 200:
                 log.error(f"HTTP {resp.status_code}: {resp.text[:200]}")
                 return ""
-                
+
             data = resp.json()
-            
+
             if "choices" not in data or not data["choices"]:
-                log.error(f"No choices in response")
+                log.error("No choices in response")
                 return ""
-                
+
             rust_code = data["choices"][0]["message"]["content"].strip()
 
             # Strip <think>...</think> blocks (Qwen3.5 reasoning)
@@ -203,7 +206,9 @@ Do NOT use <think> tags. Do NOT explain. Just output Rust code.
 
         except httpx.ReadTimeout:
             elapsed = time.time() - t0
-            log.error(f"  Timeout after {elapsed:.0f}s — model too slow for this prompt")
+            log.error(
+                f"  Timeout after {elapsed:.0f}s — model too slow for this prompt"
+            )
             return ""
         except Exception as e:
             log.error(f"Transpile failed for {func_name}: {type(e).__name__}: {e}")
@@ -239,7 +244,6 @@ async def main():
     if n <= 1:
         return n
     return fibonacci(n - 1) + fibonacci(n - 2)""",
-
             "matrix_multiply": """def matrix_multiply(a, b):
     result = [[0] * len(b[0]) for _ in range(len(a))]
     for i in range(len(a)):
@@ -247,7 +251,6 @@ async def main():
             for k in range(len(b)):
                 result[i][j] += a[i][k] * b[k][j]
     return result""",
-
             "parse_csv": """def parse_csv(content: str):
     lines = content.strip().split('\\n')
     headers = lines[0].split(',')

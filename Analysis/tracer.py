@@ -307,27 +307,34 @@ class FunctionTracer:
 def avg_time_us(*args, **kwargs):
     raise NotImplementedError("Use FunctionTracer or IOSample directly")
 
+
 def dominant_return_type(*args, **kwargs):
     raise NotImplementedError("Use FunctionTracer or IOSample directly")
+
 
 def load(*args, **kwargs):
     raise NotImplementedError("Use FunctionTracer or IOSample directly")
 
+
 def profile_for(*args, **kwargs):
     raise NotImplementedError("Use FunctionTracer or IOSample directly")
+
 
 def profiles(*args, **kwargs):
     raise NotImplementedError("Use FunctionTracer or IOSample directly")
 
+
 def reset(*args, **kwargs):
     raise NotImplementedError("Use FunctionTracer or IOSample directly")
+
 
 def save(*args, **kwargs):
     raise NotImplementedError("Use FunctionTracer or IOSample directly")
 
+
 def to_dict(*args, **kwargs):
     raise NotImplementedError("Use FunctionTracer or IOSample directly")
 
+
 def wrap(*args, **kwargs):
     raise NotImplementedError("Use FunctionTracer or IOSample directly")
-

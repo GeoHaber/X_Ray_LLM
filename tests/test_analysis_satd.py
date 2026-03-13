@@ -1,14 +1,15 @@
 """
 tests/test_analysis_satd.py — Unit tests for Analysis/satd.py (v8.0)
 """
+
 import textwrap
 from pathlib import Path
-import pytest
 
-from Analysis.satd import SATDScanner, SATDItem, SATDSummary, SATDScanner
+from Analysis.satd import SATDScanner
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _write(tmp_path: Path, filename: str, code: str) -> Path:
     p = tmp_path / filename
@@ -17,6 +18,7 @@ def _write(tmp_path: Path, filename: str, code: str) -> Path:
 
 
 # ── SATDScanner._classify ─────────────────────────────────────────────────────
+
 
 class TestClassify:
     def test_todo_classified_as_design(self):
@@ -36,7 +38,9 @@ class TestClassify:
         assert item.category == "design"
 
     def test_debt_classified_as_debt(self):
-        item = SATDScanner._classify("f.py", 4, "DEBT: this entire module needs rewrite")
+        item = SATDScanner._classify(
+            "f.py", 4, "DEBT: this entire module needs rewrite"
+        )
         assert item is not None
         assert item.category == "debt"
 
@@ -70,24 +74,33 @@ class TestClassify:
 
 # ── SATDScanner.scan_directory ────────────────────────────────────────────────
 
+
 class TestScanDirectory:
     def test_finds_todos_in_py_file(self, tmp_path):
-        _write(tmp_path, "main.py", """\
+        _write(
+            tmp_path,
+            "main.py",
+            """\
             def foo():
                 # TODO: implement this
                 pass
-        """)
+        """,
+        )
         scanner = SATDScanner()
         summary = scanner.scan_directory(tmp_path)
         assert summary.total >= 1
 
     def test_finds_multiple_markers(self, tmp_path):
-        _write(tmp_path, "app.py", """\
+        _write(
+            tmp_path,
+            "app.py",
+            """\
             # FIXME: broken
             # TODO: add tests
             # HACK: quick fix
             x = 1
-        """)
+        """,
+        )
         scanner = SATDScanner()
         summary = scanner.scan_directory(tmp_path)
         assert summary.total == 3

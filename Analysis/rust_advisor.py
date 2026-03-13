@@ -490,25 +490,27 @@ class RustAdvisor:
 # Module-level API for test compatibility
 _default_analyzer = RustAdvisor()
 
+
 def generate_golden(*args, **kwargs):
     """Wrapper for RustAdvisor.generate_golden()."""
     return _default_analyzer.generate_golden(*args, **kwargs)
+
 
 def print_candidates(*args, **kwargs):
     """Wrapper for RustAdvisor.print_candidates()."""
     return _default_analyzer.print_candidates(*args, **kwargs)
 
+
 def score(*args, **kwargs):
     """Wrapper for RustAdvisor.score()."""
     return _default_analyzer.score(*args, **kwargs)
+
 
 def to_dict(*args, **kwargs):
     """Wrapper for RustAdvisor.to_dict()."""
     return _default_analyzer.to_dict(*args, **kwargs)
 
-def verify_golden(results: List):
-    """Wrapper for RustAdvisor.verify_golden()."""
-    if results is None:
-        raise ValueError("results cannot be None")
-    return _default_analyzer.verify_golden(results)
 
+def verify_golden(rust_fn, golden_path: str):
+    """Wrapper for RustAdvisor.verify_golden()."""
+    return RustAdvisor.verify_golden(rust_fn, golden_path)

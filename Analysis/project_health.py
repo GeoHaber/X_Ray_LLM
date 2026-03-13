@@ -521,15 +521,17 @@ class ProjectHealthAnalyzer:
 # Module-level convenience functions for test compatibility
 # (HealthCheck is a dataclass — no singleton needed)
 
+
 def analyze(source_code: str, project_root: str = None):
     """Placeholder — use ProjectHealthAnalyzer.analyze() directly."""
     raise NotImplementedError("Use ProjectHealthAnalyzer.analyze() instead")
+
 
 def summary(issues):
     """Placeholder — use ProjectHealthAnalyzer for summaries."""
     raise NotImplementedError("Use ProjectHealthAnalyzer directly")
 
+
 def to_dict(*args, **kwargs):
     """Placeholder — use HealthReport.to_dict() instead."""
     raise NotImplementedError("Use HealthReport.to_dict() instead")
-

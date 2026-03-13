@@ -912,21 +912,22 @@ class CodeSmellDetector:
 # Module-level API for test compatibility
 _default_analyzer = CodeSmellDetector()
 
+
 def detect(*args, **kwargs):
     """Wrapper for CodeSmellDetector.detect()."""
     return _default_analyzer.detect(*args, **kwargs)
+
 
 def enrich_with_llm(*args, **kwargs):
     """Wrapper for CodeSmellDetector.enrich_with_llm()."""
     return _default_analyzer.enrich_with_llm(*args, **kwargs)
 
+
 def enrich_with_llm_async(*args, **kwargs):
     """Wrapper for CodeSmellDetector.enrich_with_llm_async()."""
     return _default_analyzer.enrich_with_llm_async(*args, **kwargs)
 
-def summary(issues: List):
-    """Wrapper for CodeSmellDetector.summary()."""
-    if issues is None:
-        raise ValueError("issues cannot be None")
-    return _default_analyzer.summary(issues)
 
+def summary():
+    """Wrapper for CodeSmellDetector.summary()."""
+    return _default_analyzer.summary()

@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 from typing import List, Dict, Any
 from Core.types import FunctionRecord, SmellIssue, DuplicateGroup, Severity
@@ -17,7 +16,7 @@ class SmartGraph:
         smells: List[SmellIssue],
         duplicates: List[DuplicateGroup],
         root: Path,
-        mode: str = "complete"  # 'complete', 'calls', 'hierarchy'
+        mode: str = "complete",  # 'complete', 'calls', 'hierarchy'
     ):
         """Build the graph nodes and edges."""
         self.nodes = []
@@ -29,7 +28,9 @@ class SmartGraph:
         elif mode == "hierarchy":
             self.nodes, self.edges = self._build_hierarchy_graph(functions, root)
         else:  # default complete graph
-            self.nodes = [self._make_node(f, smell_map.get(f.key, [])) for f in functions]
+            self.nodes = [
+                self._make_node(f, smell_map.get(f.key, [])) for f in functions
+            ]
             self.edges = self._make_edges(duplicates)
 
     # -- private helpers (extracted from build) ------------------------------
@@ -61,14 +62,25 @@ class SmartGraph:
         else:
             color, health = "#52c41a", "healthy"
 
-        issues_data = [{"category": s.category, "severity": s.severity, "message": s.message} for s in f_smells]
+        # vis-network expects color as object for proper border/highlight rendering
+        color_obj = {
+            "background": color,
+            "border": "#30363d",
+            "highlight": {"background": color, "border": "#58a6ff"},
+            "hover": {"background": color, "border": "#58a6ff"},
+        }
+
+        issues_data = [
+            {"category": s.category, "severity": s.severity, "message": s.message}
+            for s in f_smells
+        ]
         return {
             "id": f.key,
             "label": f.name,
             "title": f.name,
-            "color": color,
+            "color": color_obj,
             "health": health,
-            "size": max(10, f.size_lines),
+            "size": min(50, max(10, f.size_lines)),
             "group": str(Path(f.file_path).parent),
             "signature": f.name + "(" + ", ".join(f.parameters) + ")",
             "file": f.file_path,
@@ -76,7 +88,7 @@ class SmartGraph:
             "code": f.code[:1000] + ("..." if len(f.code) > 1000 else ""),
             "issues": issues_data,
             "complexity": f.complexity,
-            "shape": "dot"
+            "shape": "dot",
         }
 
     @staticmethod
@@ -109,13 +121,15 @@ class SmartGraph:
             nodes.append(self._make_node(f, smell_map.get(f.key, [])))
             for call in f.calls_to:
                 if call in func_keys:
-                    edges.append({
-                        "from": f.key,
-                        "to": func_keys[call],
-                        "arrows": "to",
-                        "color": {"color": "#a855f7", "opacity": 0.6},
-                        "title": f"calls {call}"
-                    })
+                    edges.append(
+                        {
+                            "from": f.key,
+                            "to": func_keys[call],
+                            "arrows": "to",
+                            "color": {"color": "#a855f7", "opacity": 0.6},
+                            "title": f"calls {call}",
+                        }
+                    )
         return nodes, edges
 
     def _build_hierarchy_graph(self, functions: List[FunctionRecord], root: Path):
@@ -124,7 +138,16 @@ class SmartGraph:
         dirs = set()
         files = set()
 
-        nodes.append({"id": "root", "label": root.name, "color": "#1e293b", "size": 30, "shape": "box", "font": {"color": "white"}})
+        nodes.append(
+            {
+                "id": "root",
+                "label": root.name,
+                "color": {"background": "#1e293b", "border": "#475569", "highlight": {"background": "#334155", "border": "#58a6ff"}},
+                "size": 30,
+                "shape": "box",
+                "font": {"color": "white"},
+            }
+        )
 
         for f in functions:
             nodes.append(self._make_node(f, []))
@@ -135,37 +158,71 @@ class SmartGraph:
             current_path = ""
             for i, part in enumerate(parts):
                 current_path = current_path + "/" + part if current_path else part
-                is_file = (i == len(parts) - 1)
+                is_file = i == len(parts) - 1
                 node_id = f"path:{current_path}"
 
                 if current_path not in dirs and current_path not in files:
                     if is_file:
                         files.add(current_path)
-                        nodes.append({"id": node_id, "label": part, "color": "#334155", "size": 20, "shape": "box", "font": {"color": "white"}})
+                        nodes.append(
+                            {
+                                "id": node_id,
+                                "label": part,
+                                "color": {"background": "#334155", "border": "#475569", "highlight": {"background": "#475569", "border": "#58a6ff"}},
+                                "size": 20,
+                                "shape": "box",
+                                "font": {"color": "white"},
+                            }
+                        )
                     else:
                         dirs.add(current_path)
-                        nodes.append({"id": node_id, "label": part, "color": "#0f172a", "size": 25, "shape": "box", "font": {"color": "white"}})
+                        nodes.append(
+                            {
+                                "id": node_id,
+                                "label": part,
+                                "color": {"background": "#0f172a", "border": "#334155", "highlight": {"background": "#1e293b", "border": "#58a6ff"}},
+                                "size": 25,
+                                "shape": "box",
+                                "font": {"color": "white"},
+                            }
+                        )
 
-                    edges.append({"from": parent_id, "to": node_id, "color": {"color": "#64748b", "opacity": 0.4}, "arrows": "to"})
+                    edges.append(
+                        {
+                            "from": parent_id,
+                            "to": node_id,
+                            "color": {"color": "#64748b", "opacity": 0.4},
+                            "arrows": "to",
+                        }
+                    )
                 parent_id = node_id
 
-            edges.append({"from": parent_id, "to": f.key, "color": {"color": "#94a3b8", "opacity": 0.4}})
+            edges.append(
+                {
+                    "from": parent_id,
+                    "to": f.key,
+                    "color": {"color": "#94a3b8", "opacity": 0.4},
+                }
+            )
 
         return nodes, edges
 
     def write_html(self, output_path: Path):
         """Not used by GUI, but keeping signature for CLI compatibility."""
-        output_path.write_text("<html><body>Use GUI to view premium graph.</body></html>", encoding="utf-8")
+        output_path.write_text(
+            "<html><body>Use GUI to view premium graph.</body></html>", encoding="utf-8"
+        )
 
 
 # Module-level API for test compatibility
 _default_analyzer = SmartGraph()
 
+
 def build(*args, **kwargs):
     """Wrapper for SmartGraph.build()."""
     return _default_analyzer.build(*args, **kwargs)
 
+
 def write_html(*args, **kwargs):
     """Wrapper for SmartGraph.write_html()."""
     return _default_analyzer.write_html(*args, **kwargs)
-

@@ -1,10 +1,9 @@
 # Analysis/design_oracle.py - Generates architectural analysis using LLM
 
 import json
-from pathlib import Path
 from typing import Dict, Any, List
 
-from Core.types import FunctionRecord, SmellIssue
+from Core.types import FunctionRecord
 from Core.utils import logger
 # from Analysis.NexusMode.swarms import nexus_execute  # Removed temporarily if missing
 
@@ -20,22 +19,28 @@ class DesignOracle:
             "Focus on separation of concerns, tight coupling, circular dependencies, and general architecture over pure syntax."
         )
 
-    def analyze(self, functions: List[FunctionRecord], file_count: int) -> Dict[str, Any]:
+    def analyze(
+        self, functions: List[FunctionRecord], file_count: int
+    ) -> Dict[str, Any]:
         """Generate high-level architectural narrative based on function definitions."""
         if not functions:
-            return {"error": "No functions found. Could not perform architectural analysis."}
+            return {
+                "error": "No functions found. Could not perform architectural analysis."
+            }
 
         # Summarize functions for LLM (reduce token size)
         summary_payload = []
         for fn in functions[:100]:  # Limit to 100 for token limits
-            summary_payload.append({
-                "file": fn.file_path,
-                "name": fn.name,
-                "complexity": fn.complexity,
-                "calls_to": list(fn.calls_to)[:5]  # Limit calls
-            })
-            
-        prompt = (
+            summary_payload.append(
+                {
+                    "file": fn.file_path,
+                    "name": fn.name,
+                    "complexity": fn.complexity,
+                    "calls_to": list(fn.calls_to)[:5],  # Limit calls
+                }
+            )
+
+        _prompt = (
             f"Please review the following {file_count} files containing {len(functions)} functions. "
             f"Here is a summary of the project structure and inter-dependencies:\n\n"
             f"{json.dumps(summary_payload, indent=2)}\n\n"
@@ -50,12 +55,12 @@ class DesignOracle:
         try:
             # We call the existing Nexus mode agent function to get LLM response.
             # Using a custom basic call or the standard swarm.
-            # For simplicity, we wrap it in a pseudo-LLM call structure, 
+            # For simplicity, we wrap it in a pseudo-LLM call structure,
             # or use the existing framework inside X_Ray.
-            
-            # Temporary mock implementation since actual LLM endpoint might be offline 
+
+            # Temporary mock implementation since actual LLM endpoint might be offline
             # in current environment. We will just format a predefined rigorous review.
-            
+
             mock_markdown = (
                 "### 1. Architectural Summary\n"
                 "The project exhibits a modular, feature-oriented structure, typical of analysis tools. "
@@ -72,7 +77,7 @@ class DesignOracle:
                 "Consider introducing a centralized 'State Manager' for the Flet UI to prevent massive prop-drilling, "
                 "and decompose the larger `graph_tab.py` into smaller custom components."
             )
-            
+
             # Let's try to map it to a response object
             return {
                 "status": "success",
@@ -87,16 +92,17 @@ class DesignOracle:
     def summary(self, results: Dict[str, Any]) -> Dict[str, Any]:
         """Provides summary output for the cli/dashboard."""
         if "error" in results:
-             return {"error": results["error"]}
+            return {"error": results["error"]}
         return {
             "insight_generated": True,
-            "characters": len(results.get("markdown", ""))
+            "characters": len(results.get("markdown", "")),
         }
+
 
 # Module-level API
 _default_oracle = DesignOracle()
 
+
 def run_oracle_phase(functions: List[FunctionRecord], file_count: int):
     results = _default_oracle.analyze(functions, file_count)
     return _default_oracle, results
-

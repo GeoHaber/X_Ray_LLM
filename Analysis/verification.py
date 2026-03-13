@@ -75,4 +75,3 @@ class VerificationAnalyzer:
 
 def verify_project(results: List):
     raise NotImplementedError("Use VerificationAnalyzer directly")
-

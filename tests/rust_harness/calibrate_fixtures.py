@@ -21,10 +21,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from Analysis.duplicates import DuplicateFinder
-from Core.types import FunctionRecord
-from Lang.python_ast import _extract_functions_from_file
-from Analysis.similarity import (
+from Analysis.duplicates import DuplicateFinder  # noqa: E402
+from Core.types import FunctionRecord  # noqa: E402
+from Lang.python_ast import _extract_functions_from_file  # noqa: E402
+from Analysis.similarity import (  # noqa: E402
     callgraph_overlap,
     code_similarity,
     cosine_similarity,

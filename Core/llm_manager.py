@@ -796,62 +796,81 @@ class LLMManager:
 # Module-level API for test compatibility
 _default_analyzer = LLMManager()
 
+
 def check_and_prompt(*args, **kwargs):
     """Wrapper for check_and_prompt()."""
     return _default_analyzer.check_and_prompt(*args, **kwargs)
+
 
 def detect_all(*args, **kwargs):
     """Wrapper for detect_all()."""
     return _default_analyzer.detect_all(*args, **kwargs)
 
+
 def fingerprint(*args, **kwargs):
     """Wrapper for HardwareProfile.fingerprint."""
-    if not _default_analyzer.hw: _default_analyzer.detect_all()
+    if not _default_analyzer.hw:
+        _default_analyzer.detect_all()
     return _default_analyzer.hw.fingerprint if _default_analyzer.hw else ""
+
 
 def format_model_recommendations(*args, **kwargs):
     """Wrapper for format_model_recommendations()."""
     return _default_analyzer.format_model_recommendations(*args, **kwargs)
 
+
 def format_runtime_status(*args, **kwargs):
     """Wrapper for format_runtime_status()."""
     return _default_analyzer.format_runtime_status(*args, **kwargs)
+
 
 def format_system_profile(*args, **kwargs):
     """Wrapper for format_system_profile()."""
     return _default_analyzer.format_system_profile(*args, **kwargs)
 
+
 def human_summary(model=None, *args, **kwargs):
     """Wrapper for ModelCard.human_summary."""
-    if model and hasattr(model, 'human_summary'): return model.human_summary
+    if model and hasattr(model, "human_summary"):
+        return model.human_summary
     return "Summary"
+
 
 def recommended_gpu_layers(*args, **kwargs):
     """Wrapper for HardwareProfile.recommended_gpu_layers."""
-    if not _default_analyzer.hw: _default_analyzer.detect_all()
+    if not _default_analyzer.hw:
+        _default_analyzer.detect_all()
     return _default_analyzer.hw.recommended_gpu_layers if _default_analyzer.hw else 0
+
 
 def stars(model=None, *args, **kwargs):
     """Wrapper for ModelCard.stars."""
-    if model and hasattr(model, 'stars'): return model.stars
+    if model and hasattr(model, "stars"):
+        return model.stars
     return "Stars"
+
 
 def start_server(*args, **kwargs):
     """Wrapper for start_server()."""
     return _default_analyzer.start_server(*args, **kwargs)
 
+
 def tier(*args, **kwargs):
     """Wrapper for HardwareProfile.tier."""
-    if not _default_analyzer.hw: _default_analyzer.detect_all()
+    if not _default_analyzer.hw:
+        _default_analyzer.detect_all()
     return _default_analyzer.hw.tier if _default_analyzer.hw else "minimal"
+
 
 def tier_label(*args, **kwargs):
     """Wrapper for HardwareProfile.tier_label."""
-    if not _default_analyzer.hw: _default_analyzer.detect_all()
+    if not _default_analyzer.hw:
+        _default_analyzer.detect_all()
     return _default_analyzer.hw.tier_label if _default_analyzer.hw else ""
+
 
 def to_dict(*args, **kwargs):
     """Wrapper for HardwareProfile.to_dict."""
-    if not _default_analyzer.hw: _default_analyzer.detect_all()
+    if not _default_analyzer.hw:
+        _default_analyzer.detect_all()
     return _default_analyzer.hw.to_dict() if _default_analyzer.hw else {}
-

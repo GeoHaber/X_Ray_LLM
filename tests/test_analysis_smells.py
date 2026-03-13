@@ -327,7 +327,9 @@ class TestClassSmellsExtended:
 
     def test_dataclass_not_flagged_with_base(self):
         det = CodeSmellDetector()
-        det.detect([], [_cls(method_count=2, base_classes=["BaseModel"], has_init=True)])
+        det.detect(
+            [], [_cls(method_count=2, base_classes=["BaseModel"], has_init=True)]
+        )
         cats = [s.category for s in det.smells]
         assert "dataclass-candidate" not in cats
 

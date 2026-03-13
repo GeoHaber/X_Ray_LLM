@@ -26,19 +26,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-_LOW_COVERAGE_THRESHOLD = 0.60   # < 60% = low
-_HIGH_COMPLEXITY_THRESHOLD = 8   # CC >= 8 = high
+_LOW_COVERAGE_THRESHOLD = 0.60  # < 60% = low
+_HIGH_COMPLEXITY_THRESHOLD = 8  # CC >= 8 = high
 
 
 @dataclass
 class FileCoverage:
     """Coverage data for a single file."""
 
-    path: str                     # Relative file path
+    path: str  # Relative file path
     covered_lines: int
     total_lines: int
-    coverage_pct: float           # 0–1
-    complexity: float = 0.0       # Will be populated by caller if available
+    coverage_pct: float  # 0–1
+    complexity: float = 0.0  # Will be populated by caller if available
 
     @property
     def is_low_coverage(self) -> bool:
@@ -176,10 +176,14 @@ class CoverageRunner:
         try:
             subprocess.run(
                 [
-                    "python", "-m", "pytest",
+                    "python",
+                    "-m",
+                    "pytest",
                     "--cov=.",
                     "--cov-report=json:" + str(output_path),
-                    "-q", "--tb=no", "--no-header",
+                    "-q",
+                    "--tb=no",
+                    "--no-header",
                 ],
                 cwd=self.root,
                 capture_output=True,

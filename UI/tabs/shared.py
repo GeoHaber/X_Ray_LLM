@@ -435,8 +435,8 @@ def build_html_report(results: dict) -> str:
         if p > 0:
             breakdown_rows += f"""
             <tr>
-                <td>{k.replace('_', ' ').title()}</td>
-                <td style="color: {'#ff6d00' if p > 5 else '#ffd600' if p > 2 else '#00c853'}">
+                <td>{k.replace("_", " ").title()}</td>
+                <td style="color: {"#ff6d00" if p > 5 else "#ffd600" if p > 2 else "#00c853"}">
                     -{p:.1f}
                 </td>
             </tr>"""
@@ -524,19 +524,19 @@ def build_html_report(results: dict) -> str:
   <div class="dimensions">{dim_html}</div>
 
   <div class="severity-bar">
-    <span class="sev-badge sev-critical">&#9679; {totals['critical']} critical</span>
-    <span class="sev-badge sev-warning">&#9679; {totals['warning']} warning</span>
-    <span class="sev-badge sev-info">&#9679; {totals['info']} info</span>
+    <span class="sev-badge sev-critical">&#9679; {totals["critical"]} critical</span>
+    <span class="sev-badge sev-warning">&#9679; {totals["warning"]} warning</span>
+    <span class="sev-badge sev-info">&#9679; {totals["info"]} info</span>
   </div>
 
   <div class="stats">
-    <div class="stat-card"><div class="value">{meta.get('files', 0)}</div>
+    <div class="stat-card"><div class="value">{meta.get("files", 0)}</div>
         <div class="label">Files</div></div>
-    <div class="stat-card"><div class="value">{meta.get('functions', 0)}</div>
+    <div class="stat-card"><div class="value">{meta.get("functions", 0)}</div>
         <div class="label">Functions</div></div>
-    <div class="stat-card"><div class="value">{meta.get('classes', 0)}</div>
+    <div class="stat-card"><div class="value">{meta.get("classes", 0)}</div>
         <div class="label">Classes</div></div>
-    <div class="stat-card"><div class="value">{meta.get('duration', 0):.1f}s</div>
+    <div class="stat-card"><div class="value">{meta.get("duration", 0):.1f}s</div>
         <div class="label">Duration</div></div>
   </div>
 
@@ -722,8 +722,17 @@ def build_dimension_cards(breakdown: dict) -> ft.Row:
 def _aggregate_severities(results: dict) -> dict:
     """Aggregate critical/warning/info counts across all scan phases."""
     totals = {"critical": 0, "warning": 0, "info": 0}
-    for key in ("smells", "lint", "security", "typecheck", "format",
-                "imports", "ui_compat", "ui_health", "release_readiness"):
+    for key in (
+        "smells",
+        "lint",
+        "security",
+        "typecheck",
+        "format",
+        "imports",
+        "ui_compat",
+        "ui_health",
+        "release_readiness",
+    ):
         data = results.get(key, {})
         if isinstance(data, dict) and not data.get("error"):
             for sev in totals:
@@ -746,13 +755,18 @@ def build_severity_bar(results: dict) -> ft.Container:
                 content=ft.Row(
                     [
                         ft.Container(
-                            width=8, height=8, border_radius=4, bgcolor=color,
+                            width=8,
+                            height=8,
+                            border_radius=4,
+                            bgcolor=color,
                         ),
                         ft.Text(
                             f"{count} {sev}",
                             size=SZ_SM,
                             color=TH.text,
-                            weight=ft.FontWeight.BOLD if count > 0 else ft.FontWeight.NORMAL,
+                            weight=ft.FontWeight.BOLD
+                            if count > 0
+                            else ft.FontWeight.NORMAL,
                         ),
                     ],
                     spacing=4,
@@ -775,7 +789,9 @@ def build_severity_bar(results: dict) -> ft.Container:
         )
     )
     return ft.Container(
-        content=ft.Row(badges, spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+        content=ft.Row(
+            badges, spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER
+        ),
         padding=ft.Padding.symmetric(vertical=4),
     )
 
@@ -826,13 +842,25 @@ def build_sparkline(scores: list, width: int = 160, height: int = 32) -> ft.Cont
         x = i * step_x
         y = height - ((s - min_s) / rng) * height
         color = GRADE_COLORS.get(
-            "A" if s >= 90 else "B" if s >= 75 else "C" if s >= 60 else "D" if s >= 40 else "F",
+            "A"
+            if s >= 90
+            else "B"
+            if s >= 75
+            else "C"
+            if s >= 60
+            else "D"
+            if s >= 40
+            else "F",
             "#888",
         )
         dots.append(
             ft.Container(
-                width=6, height=6, border_radius=3, bgcolor=color,
-                left=x - 3, top=y - 3,
+                width=6,
+                height=6,
+                border_radius=3,
+                bgcolor=color,
+                left=x - 3,
+                top=y - 3,
             )
         )
         # Connect dots with a line segment (thin container)
@@ -841,9 +869,11 @@ def build_sparkline(scores: list, width: int = 160, height: int = 32) -> ft.Cont
             prev_y = height - ((scores[i - 1] - min_s) / rng) * height
             dots.append(
                 ft.Container(
-                    width=step_x + 2, height=2,
+                    width=step_x + 2,
+                    height=2,
                     bgcolor=ft.Colors.with_opacity(0.3, color),
-                    left=prev_x, top=(prev_y + y) / 2 - 1,
+                    left=prev_x,
+                    top=(prev_y + y) / 2 - 1,
                 )
             )
 
@@ -860,7 +890,7 @@ def is_dark(*args, **kwargs):
     """Wrapper for TH.is_dark()."""
     return TH.is_dark(*args, **kwargs)
 
+
 def toggle(*args, **kwargs):
     """Wrapper for TH.toggle()."""
     return TH.toggle(*args, **kwargs)
-

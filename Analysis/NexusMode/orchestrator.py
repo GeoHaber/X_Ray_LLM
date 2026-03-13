@@ -330,7 +330,7 @@ def identify_targets(files: List[Path], progress_cb=None) -> List[TargetNode]:
     """
     Module-level wrapper for Analyzer.identify_targets().
     Scans Python files to extract structural bottlenecks (FunctionDefs).
-    
+
     :param files: List of Python file paths to analyze
     :param progress_cb: Optional callback(current, total) for progress reporting
     :return: List of TargetNode objects representing identified bottlenecks
@@ -344,7 +344,7 @@ def translate(
     """
     Module-level wrapper for TranslatorBridge.translate().
     Routes AST nodes through pluggable transpiler adapters.
-    
+
     :param targets: List of TargetNode objects to transpile
     :param target_adapter: Name of adapter to use ('x-ray', 'depyler', 'pyrs')
     :param progress_cb: Optional callback(current, total) for progress reporting
@@ -360,7 +360,7 @@ async def verify_all_async(
     """
     Module-level wrapper for CargoVerifier.verify_all_async().
     Asynchronously verifies generated Rust code using Cargo.
-    
+
     :param translations: List of TranslationResult objects from translate()
     :param progress_cb: Optional callback(current, total) for progress reporting
     :return: List of VerifiedResult objects
@@ -374,7 +374,7 @@ def verify_all(
     """
     Module-level synchronous wrapper for CargoVerifier.verify_all().
     Verifies generated Rust code using Cargo (runs async verification in event loop).
-    
+
     :param translations: List of TranslationResult objects from translate()
     :param progress_cb: Optional callback(current, total) for progress reporting
     :return: List of VerifiedResult objects
@@ -389,7 +389,7 @@ _default_orchestrator: Optional[NexusOrchestrator] = None
 def build_context_graph(files: List[Path], progress_cb=None) -> Dict[str, Any]:
     """
     Build a context graph of Python bottlenecks in a project.
-    
+
     :param files: List of Python file paths to analyze
     :param progress_cb: Optional callback(current, total) for progress reporting
     :return: Dictionary mapping bottleneck info
@@ -406,7 +406,7 @@ def run_transpilation_pipeline(
     """
     Run the full transpilation pipeline on previously identified targets.
     Requires build_context_graph() to have been called first.
-    
+
     :param target_adapter: Name of adapter to use
     :param progress_cb: Optional callback(current, total) for progress reporting
     :return: List of transpilation result dictionaries
@@ -424,7 +424,7 @@ def verify_and_build(
 ) -> List[Dict[str, Any]]:
     """
     Verify translated Rust code and report build status.
-    
+
     :param transpilation_results: List of transpilation result dicts from run_transpilation_pipeline()
     :param progress_cb: Optional callback(current, total) for progress reporting
     :return: List of verified result dictionaries
