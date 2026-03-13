@@ -124,8 +124,8 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
         
         #sidebar {
             width: 400px;
-            background: rgba(22, 27, 34, 0.9);
-            backdrop-filter: blur(16px);
+            background: rgba(22, 27, 34, 0.95);
+            backdrop-filter: blur(20px);
             border-left: 1px solid #30363d;
             display: flex;
             flex-direction: column;
@@ -138,6 +138,7 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
             padding: 25px;
             padding-top: 90px;
             overflow-y: auto;
+            color: #ffffff;
         }
         #sidebar.open { transform: translateX(0); }
         .node-title { font-size: 24px; font-weight: 600; color: #ffffff; margin-bottom: 8px; word-break: break-all; line-height: 1.2; }
@@ -157,9 +158,9 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
             padding: 16px;
             border-radius: 8px;
             border: 1px solid #30363d;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
+            white-space: pre;
+            overflow: auto;
+            max-height: 600px;
             color: #e6edf3;
             margin-bottom: 20px;
         }
@@ -339,7 +340,12 @@ def _generate_graph_html(graph_complete: SmartGraph, graph_calls: SmartGraph, gr
     </script>
 </body>
 </html>"""
-    return template.replace("DATA_JSON_PLACEHOLDER", data_json)
+    # Template split for robust injection
+    parts = template.split("DATA_JSON_PLACEHOLDER")
+    if len(parts) != 2:
+        return template # Fallback if placeholder missing
+
+    return parts[0] + data_json + parts[1]
 
 
 def _build_graph_canvas(graph: SmartGraph) -> ft.Control:
