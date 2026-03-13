@@ -634,7 +634,8 @@ def _build_graph_tab(results: Dict[str, Any], page: ft.Page) -> ft.Control:
         e.control.disabled = True
         e.control.text = " Analyzing..."
         page.update()
-        result = _default_oracle.analyze(functions, len(results.get("meta", {}).get("files", [])) or 1)
+        file_count = results.get("meta", {}).get("files", 1) or 1
+        result = _default_oracle.analyze(functions, file_count)
         if "error" in result:
              oracle_container.content.controls[1].value = f"**Error**: {result['error']}"
         else:

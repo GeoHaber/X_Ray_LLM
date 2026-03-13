@@ -2640,7 +2640,7 @@ def _phase_design_oracle(results):
     try:
         from Analysis.design_oracle import _default_oracle
         functions = results.get("_functions", [])
-        file_count = len(results.get("meta", {}).get("files", [])) or 1
+        file_count = results.get("meta", {}).get("files", 1) or 1
         oracle_res = _default_oracle.analyze(functions, file_count)
         results["design_oracle"] = _default_oracle.summary(oracle_res)
         results["_design_oracle_full"] = oracle_res
