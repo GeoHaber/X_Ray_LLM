@@ -17,7 +17,7 @@ SECURITY_RULES = [
         "id": "SEC-002",
         "severity": "HIGH",
         "lang": ["javascript", "html"],
-        "pattern": r"\.innerHTML\s*=\s*['\"][^'\"]*\+\s*\w+",
+        "pattern": r"\.innerHTML\s*=\s*['\"][^'\"]*['\"]\s*\+\s*\w+",
         "description": "XSS: String concatenation with variable injected into innerHTML",
         "fix_hint": "Use textContent or sanitize the variable before injection",
         "test_hint": "Check that no unsanitized variables are concatenated into innerHTML",

@@ -177,7 +177,7 @@ def scan_directory(root: str, rules: list[dict] | None = None,
 
         for filename in filenames:
             filepath = os.path.join(dirpath, filename)
-            rel_path = os.path.relpath(filepath, root)
+            rel_path = os.path.relpath(filepath, root).replace(os.sep, "/")
 
             # Check exclude patterns
             if any(r.search(rel_path) for r in exclude_res):

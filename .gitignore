@@ -7,3 +7,4 @@ target/
 *.egg-info/
 dist/
 build/
+rust_scan.json

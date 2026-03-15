@@ -103,7 +103,10 @@ class XRayAgent:
         """Log a message to both stdout and internal log."""
         self._log_lines.append(msg)
         if not self._quiet:
-            print(msg)
+            try:
+                print(msg)
+            except UnicodeEncodeError:
+                print(msg.encode("ascii", errors="replace").decode("ascii"))
 
     # ── Step 1: SCAN ────────────────────────────────────────────────────────
 

@@ -1,10 +1,12 @@
 [package]
 name = "xray-scanner"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "High-performance code scanner for X-Ray LLM agent"
 
 [dependencies]
+# fancy-regex supports lookaheads/lookbehinds for Python parity
+fancy-regex = "0.14"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -13,4 +15,15 @@ clap = { version = "4", features = ["derive"] }
 
 [lib]
 name = "xray_scanner"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "xray-scanner"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[dev-dependencies]
+tempfile = "3"

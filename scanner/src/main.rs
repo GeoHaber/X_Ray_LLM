@@ -4,10 +4,11 @@
 //!   xray-scanner ./path/to/project
 //!   xray-scanner ./src --severity HIGH
 //!   xray-scanner . --json
+//!   xray-scanner . --exclude "vendor/" "test/"
 
 use clap::Parser;
 use std::path::PathBuf;
-use xray_scanner::{scan_directory, rules::get_all_rules};
+use xray_scanner::{scan_directory_with_excludes, rules::get_all_rules};
 
 #[derive(Parser)]
 #[command(name = "xray-scanner")]
@@ -24,13 +25,17 @@ struct Cli {
     /// Output as JSON
     #[arg(long)]
     json: bool,
+
+    /// Regex patterns to exclude from scan
+    #[arg(long, num_args = 0..)]
+    exclude: Vec<String>,
 }
 
 fn main() {
     let cli = Cli::parse();
     let rules = get_all_rules();
 
-    let result = scan_directory(&cli.path, &rules);
+    let result = scan_directory_with_excludes(&cli.path, &rules, &cli.exclude);
 
     // Filter by severity
     let severity_levels: Vec<&str> = match cli.severity.as_str() {
@@ -46,24 +51,39 @@ fn main() {
         .collect();
 
     if cli.json {
-        let json = serde_json::to_string_pretty(&filtered).unwrap();
-        println!("{json}");
+        let output = serde_json::json!({
+            "files_scanned": result.files_scanned,
+            "rules_checked": result.rules_checked,
+            "findings": filtered,
+            "summary": {
+                "total": filtered.len(),
+                "high": filtered.iter().filter(|f| f.severity == "HIGH").count(),
+                "medium": filtered.iter().filter(|f| f.severity == "MEDIUM").count(),
+                "low": filtered.iter().filter(|f| f.severity == "LOW").count(),
+            }
+        });
+        println!("{}", serde_json::to_string_pretty(&output).unwrap());
     } else {
+        println!("{}", result.summary());
         println!(
-            "Scanned {} files against {} rules",
-            result.files_scanned, result.rules_checked
-        );
-        println!(
-            "Found {} issues ({} after severity filter)\n",
-            result.findings.len(),
+            "After severity filter (>={}): {} issues\n",
+            cli.severity,
             filtered.len()
         );
 
         for f in &filtered {
             println!(
-                "[{}] {} — {}:{} — {}",
+                "  [{}] {} -- {}:{} -- {}",
                 f.severity, f.rule_id, f.file, f.line, f.description
             );
+            println!("         Fix: {}", f.fix_hint);
+        }
+
+        if !result.errors.is_empty() {
+            println!("\nErrors:");
+            for e in &result.errors {
+                println!("  {e}");
+            }
         }
     }
 }
