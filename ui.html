@@ -340,6 +340,75 @@ body.light {
 .arch-warnings { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .arch-warning { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
   background: rgba(248,81,73,0.1); border: 1px solid var(--high); border-radius: var(--radius); font-size: 13px; }
+
+/* ── CHAT FAB + DRAWER ── */
+.chat-fab{position:fixed;bottom:24px;right:24px;width:48px;height:48px;border-radius:50%;
+  background:var(--accent);color:#fff;border:none;cursor:pointer;z-index:50;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 16px rgba(0,0,0,.4);transition:transform .15s,background .2s}
+.chat-fab:hover{transform:scale(1.08)}
+.chat-fab svg{width:22px;height:22px}
+.chat-fab .badge{position:absolute;top:-2px;right:-2px;width:12px;height:12px;
+  border-radius:50%;background:var(--green);border:2px solid var(--bg)}
+
+.chat-ov{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:55;
+  opacity:0;pointer-events:none;transition:opacity .2s}
+.chat-ov.on{opacity:1;pointer-events:auto}
+
+.chat-dr{position:fixed;right:24px;bottom:80px;width:380px;max-height:55vh;z-index:56;
+  background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;
+  transform:translateY(10px);opacity:0;pointer-events:none;
+  transition:transform .25s cubic-bezier(.4,0,.2,1),opacity .25s}
+.chat-dr.on{transform:translateY(0);opacity:1;pointer-events:auto}
+
+.cd-hdr{padding:12px 16px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--border);flex-shrink:0}
+.cd-hdr .cd-ava{width:32px;height:32px;border-radius:50%;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cd-hdr .cd-ava svg{width:18px;height:18px;color:#fff}
+.cd-hdr .cd-info{flex:1}
+.cd-hdr .cd-name{font-size:14px;font-weight:700;color:var(--text)}
+.cd-hdr .cd-status{font-size:10px;color:var(--green);font-weight:600}
+.cd-hdr .cd-close{width:28px;height:28px;border-radius:var(--radius);
+  border:1px solid var(--border);background:var(--bg3);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all .15s}
+.cd-hdr .cd-close:hover{background:var(--accent);color:#fff}
+.cd-hdr .cd-close svg{width:14px;height:14px}
+
+.cd-msgs{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+.bbl{max-width:82%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.45;word-break:break-word}
+.bbl.bot{align-self:flex-start;background:var(--bg3);color:var(--text);border-bottom-left-radius:2px}
+.bbl.usr{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:2px}
+.bbl .ts{font-size:9px;margin-top:3px;opacity:.45}
+.bbl code{background:rgba(255,255,255,.1);padding:1px 4px;border-radius:3px;font-size:12px}
+.bbl strong{font-weight:700}
+
+.typing{align-self:flex-start;display:none;gap:4px;padding:12px 14px;
+  background:var(--bg3);border-radius:12px;border-bottom-left-radius:2px}
+.typing.on{display:flex}
+.typing span{width:5px;height:5px;border-radius:50%;background:var(--text2);
+  animation:typBounce .6s infinite alternate}
+.typing span:nth-child(2){animation-delay:.15s}
+.typing span:nth-child(3){animation-delay:.3s}
+@keyframes typBounce{to{transform:translateY(-3px);opacity:.4}}
+
+.cd-input{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0}
+.cd-input input{flex:1;height:36px;border:1px solid var(--border);border-radius:9999px;
+  padding:0 14px;font-size:12px;font-family:inherit;background:var(--bg);color:var(--text);outline:none}
+.cd-input input:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(88,166,255,.2)}
+.cd-input .cd-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);
+  background:var(--bg3);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--text2);transition:all .15s;flex-shrink:0}
+.cd-input .cd-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.cd-input .cd-btn svg{width:14px;height:14px}
+.cd-input .cd-send{background:var(--accent);color:#fff;border-color:var(--accent)}
+.cd-input .cd-send:hover{opacity:.85}
+
+@media(max-width:600px){
+  .chat-dr{right:8px;left:8px;width:auto;bottom:72px;max-height:65vh}
+  .chat-fab{bottom:16px;right:16px}
+}
 </style>
 <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
 </head>
@@ -472,6 +541,52 @@ body.light {
     </div>
   </div>
 </div>
+
+<!-- Chat Overlay -->
+<div class="chat-ov" id="chatOv" onclick="chatClose()"></div>
+
+<!-- Chat Drawer -->
+<div class="chat-dr" id="chatDr">
+  <div class="cd-hdr">
+    <div class="cd-ava">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+    </div>
+    <div class="cd-info">
+      <div class="cd-name">X-Ray Assistant</div>
+      <div class="cd-status">&#9679; Online &middot; 28 rules loaded</div>
+    </div>
+    <button style="border:none;background:none;color:var(--text2);font-size:11px;cursor:pointer;padding:4px 8px;border-radius:4px"
+            onclick="clearChat()" title="Clear history">Clear</button>
+    <button class="cd-close" onclick="chatClose()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+  <div class="cd-msgs" id="chatMsgs">
+    <div class="bbl bot">Hi! I'm the <strong>X-Ray Assistant</strong>. Ask me about scan rules, how to fix issues, PM Dashboard features, or anything about the tool.<div class="ts">ready</div></div>
+    <div class="typing" id="chatTyping"><span></span><span></span><span></span></div>
+  </div>
+  <div class="cd-input">
+    <input type="text" id="chatInput" placeholder="Ask about rules, fixes, tools..."
+           onkeydown="if(event.key==='Enter')chatSend()">
+    <button class="cd-btn cd-send" onclick="chatSend()" aria-label="Send">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- Chat FAB -->
+<button class="chat-fab" id="chatFab" onclick="chatToggle()" title="Ask X-Ray Assistant">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+  <div class="badge"></div>
+</button>
 
 <script>
 // ── State ────────────────────────────────────────────────────────
@@ -2372,6 +2487,125 @@ function initCallGraph() {
     layout: { hierarchical: { direction: 'UD', sortMethod: 'directed', levelSeparation: 80, nodeSpacing: 30 } },
   });
 }
+
+// ── Chat Bot ────────────────────────────────────────────────────
+function chatToggle() {
+  document.getElementById('chatDr').classList.contains('on') ? chatClose() : chatOpen();
+}
+function chatOpen() {
+  document.getElementById('chatDr').classList.add('on');
+  document.getElementById('chatOv').classList.add('on');
+  setTimeout(() => { document.getElementById('chatInput').focus(); scrollChat(); }, 200);
+}
+function chatClose() {
+  document.getElementById('chatDr').classList.remove('on');
+  document.getElementById('chatOv').classList.remove('on');
+}
+function scrollChat() {
+  const m = document.getElementById('chatMsgs');
+  m.scrollTop = m.scrollHeight;
+}
+function chatTs() {
+  const d = new Date();
+  return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+}
+function addBubble(role, html) {
+  const ms = document.getElementById('chatMsgs');
+  const typ = document.getElementById('chatTyping');
+  const b = document.createElement('div');
+  b.className = 'bbl ' + (role === 'user' ? 'usr' : 'bot');
+  b.innerHTML = html + '<div class="ts">' + chatTs() + '</div>';
+  ms.insertBefore(b, typ);
+  scrollChat();
+  // persist
+  try {
+    const hx = JSON.parse(localStorage.getItem('xray_chat') || '[]');
+    hx.push({ role, html, time: chatTs() });
+    if (hx.length > 100) hx.splice(0, hx.length - 100);
+    localStorage.setItem('xray_chat', JSON.stringify(hx));
+  } catch(e) {}
+}
+function clearChat() {
+  localStorage.removeItem('xray_chat');
+  const ms = document.getElementById('chatMsgs');
+  ms.querySelectorAll('.bbl').forEach(b => b.remove());
+  addBubble('bot', 'Chat cleared. How can I help?');
+}
+function loadChatHistory() {
+  try {
+    const hx = JSON.parse(localStorage.getItem('xray_chat') || '[]');
+    if (!hx.length) return;
+    const ms = document.getElementById('chatMsgs');
+    const typ = document.getElementById('chatTyping');
+    // Remove the default welcome bubble
+    ms.querySelectorAll('.bbl').forEach(b => b.remove());
+    hx.forEach(m => {
+      const b = document.createElement('div');
+      b.className = 'bbl ' + (m.role === 'user' ? 'usr' : 'bot');
+      b.innerHTML = m.html + '<div class="ts">' + (m.time || '') + '</div>';
+      ms.insertBefore(b, typ);
+    });
+    scrollChat();
+  } catch(e) {}
+}
+function chatSend() {
+  const inp = document.getElementById('chatInput');
+  const txt = inp.value.trim();
+  if (!txt) return;
+  inp.value = '';
+  addBubble('user', esc(txt));
+  const typ = document.getElementById('chatTyping');
+  typ.classList.add('on');
+  scrollChat();
+
+  // Call backend
+  fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: txt,
+      has_results: !!scanResults,
+      findings_count: scanResults ? scanResults.summary.total : 0,
+      directory: selectedDir
+    })
+  })
+  .then(r => r.json())
+  .then(d => {
+    typ.classList.remove('on');
+    addBubble('bot', d.reply || 'No response.');
+  })
+  .catch(() => {
+    typ.classList.remove('on');
+    addBubble('bot', chatLocalReply(txt));
+  });
+}
+
+// Offline fallback — keyword-based
+function chatLocalReply(text) {
+  const lo = text.toLowerCase();
+  if (lo.match(/rule|sec-|qual-|py-/))
+    return 'X-Ray has <strong>28 rules</strong>: 10 Security (SEC-001–010), 10 Quality (QUAL-001–010), 8 Python (PY-001–008). Run a scan to check them all!';
+  if (lo.match(/fix|auto.?fix|fixer/))
+    return '<strong>7 auto-fixers</strong> work without LLM: SEC-003, SEC-009, QUAL-001, QUAL-003, PY-001, PY-002, PY-003. Click the &#x1F527; wrench icon on any fixable finding.';
+  if (lo.match(/pm|dashboard|heatmap|sprint|confidence|architect/))
+    return 'The <strong>PM Dashboard</strong> has 6 tools: Risk Heatmap, Module Cards, Confidence Meter, Sprint Batches, Architecture Map, and Call Graph. Find them in the sidebar.';
+  if (lo.match(/scan|how.*start|begin/))
+    return 'To scan: <strong>1)</strong> Browse to a directory in the left sidebar, <strong>2)</strong> Choose engine &amp; severity, <strong>3)</strong> Click "Scan Project". Results appear on the right.';
+  if (lo.match(/api|endpoint|rest/))
+    return 'X-Ray has <strong>31 API endpoints</strong> under <code>/api/</code>. Key ones: <code>/api/scan</code>, <code>/api/preview-fix</code>, <code>/api/apply-fix</code>, <code>/api/dead-code</code>, <code>/api/smells</code>, <code>/api/risk-heatmap</code>.';
+  if (lo.match(/tool|analy|dead.?code|smell|duplicate|format|bandit|ruff|type/))
+    return '<strong>16 analysis tools</strong> in the sidebar: Dead Code, Smells, Duplicates, Formatting, Type Check, Bandit, Ruff, Imports, Hotspots, Health, SATD, Release Readiness, AI Detect, Web Smells, Test Gen, Remediation Time.';
+  if (lo.match(/grade|score|a\+|letter/))
+    return 'Grades: <strong>A+</strong> (0 issues) → <strong>F</strong> (21+). Weighted formula: High×3 + Medium×1 + Low×0.3. Quality Gate in sidebar sets pass/fail thresholds.';
+  if (lo.match(/rust|engine|fast|perf/))
+    return 'Two engines: <strong>Python</strong> (cross-platform, always available) and <strong>Rust</strong> (~10× faster, optional). Build Rust with: <code>python build.py</code>';
+  if (lo.match(/hello|hi|hey|help/))
+    return 'Hello! I can help with: <strong>rules</strong>, <strong>auto-fix</strong>, <strong>PM Dashboard</strong>, <strong>tools</strong>, <strong>API endpoints</strong>, <strong>scanning</strong>, and <strong>grading</strong>. What would you like to know?';
+  return 'I know about X-Ray\'s 28 rules, 7 auto-fixers, 16 tools, PM Dashboard, grading, and API. Try asking about any of those!';
+}
+
+// Load history on startup
+setTimeout(loadChatHistory, 500);
 
 init();
 </script>

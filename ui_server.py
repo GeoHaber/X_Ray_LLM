@@ -390,6 +390,179 @@ def get_drives() -> list[dict]:
         return [{"name": "/", "path": "/", "is_dir": True}]
 
 
+# ── Chat Bot (knowledge-based) ──────────────────────────────────────────
+
+_GUIDE_TEXT = ""
+
+def _load_guide():
+    """Load X_RAY_LLM_GUIDE.md once at startup for chat context."""
+    global _GUIDE_TEXT
+    guide_path = ROOT / "X_RAY_LLM_GUIDE.md"
+    if guide_path.exists():
+        _GUIDE_TEXT = guide_path.read_text(encoding="utf-8", errors="ignore")
+
+# Rule knowledge base
+_RULES = {
+    "SEC-001": ("XSS: Template literal in innerHTML", "HIGH", False),
+    "SEC-002": ("XSS: String concat to innerHTML", "HIGH", False),
+    "SEC-003": ("Command injection: shell=True", "HIGH", True),
+    "SEC-004": ("SQL injection: Query formatting", "HIGH", False),
+    "SEC-005": ("SSRF: URL from user input", "MEDIUM", False),
+    "SEC-006": ("CORS misconfiguration: wildcard", "MEDIUM", False),
+    "SEC-007": ("Code injection: eval/exec", "HIGH", False),
+    "SEC-008": ("Hardcoded secret", "MEDIUM", False),
+    "SEC-009": ("Unsafe deserialization", "HIGH", True),
+    "SEC-010": ("Path traversal", "MEDIUM", False),
+    "QUAL-001": ("Bare except clause", "MEDIUM", True),
+    "QUAL-002": ("Silent exception swallowing", "LOW", False),
+    "QUAL-003": ("Unchecked int() on user input", "MEDIUM", True),
+    "QUAL-004": ("Mutable default argument", "MEDIUM", False),
+    "QUAL-005": ("Global variable mutation", "LOW", False),
+    "QUAL-006": ("Nested callbacks / pyramid of doom", "LOW", False),
+    "QUAL-007": ("Magic number", "LOW", False),
+    "QUAL-008": ("String constant duplication", "LOW", False),
+    "QUAL-009": ("Too many function parameters", "LOW", False),
+    "QUAL-010": ("Function too long", "LOW", False),
+    "PY-001": ("print() left in production", "LOW", True),
+    "PY-002": ("assert in production", "LOW", True),
+    "PY-003": ("Wildcard import", "MEDIUM", True),
+    "PY-004": ("Bare return None", "LOW", False),
+    "PY-005": ("f-string without placeholder", "LOW", False),
+    "PY-006": ("Type hint uses old-style Union", "LOW", False),
+    "PY-007": ("Dict comprehension instead of dict()", "LOW", False),
+    "PY-008": ("Unnecessary else after return", "LOW", False),
+}
+
+_TOOLS_LIST = [
+    "Dead Code", "Code Smells", "Duplicates", "Formatting (ruff)", "Type Check (pyright)",
+    "Bandit (security)", "Ruff --fix", "Import Graph", "Git Hotspots", "Project Health",
+    "SATD (tech debt)", "Release Readiness", "AI-Generated Code Detection", "Web Smells",
+    "Test Stub Generator", "Remediation Time Estimate",
+]
+
+_PM_FEATURES = {
+    "risk heatmap": "Color-coded grid of files by risk score — red = urgent, green = clean. Uses findings severity × density.",
+    "module cards": "Per-directory grade cards (A+ through F) showing issue breakdown for each module.",
+    "confidence meter": "Large percentage showing release confidence based on quality gate thresholds.",
+    "sprint batches": "Groups findings into 4 work packages: Critical, Security, Quality, Cleanup — ready for sprint planning.",
+    "architecture map": "Visualizes project layers (API, core, utils, tests) with dependency arrows.",
+    "call graph": "Interactive vis.js graph of function call relationships — shows entry points, leaves, and call chains.",
+}
+
+
+def _chat_reply(message: str, context: dict) -> str:
+    """Generate a knowledge-based reply about X-Ray features."""
+    lo = message.lower().strip()
+
+    # Direct rule lookup: "SEC-003", "QUAL-001", etc.
+    for rule_id, (name, severity, fixable) in _RULES.items():
+        if rule_id.lower() in lo:
+            fix_str = "✅ Auto-fixable" if fixable else "❌ No auto-fix (manual or LLM)"
+            return (f"<strong>{rule_id}: {name}</strong><br>"
+                    f"Severity: <strong>{severity}</strong><br>"
+                    f"Fix: {fix_str}")
+
+    # PM Dashboard features
+    for feature, desc in _PM_FEATURES.items():
+        if feature in lo or feature.replace(" ", "") in lo.replace(" ", ""):
+            return f"<strong>{feature.title()}</strong>: {desc}"
+
+    # Category-based responses
+    if _re.search(r"\brule|all rule|28 rule|list rule", lo):
+        sec = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("SEC")]
+        qual = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("QUAL")]
+        py = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("PY")]
+        return ("<strong>28 Scan Rules:</strong><br><br>"
+                "<strong>Security (10):</strong><br>" + "<br>".join(sec) +
+                "<br><br><strong>Quality (10):</strong><br>" + "<br>".join(qual) +
+                "<br><br><strong>Python (8):</strong><br>" + "<br>".join(py))
+
+    if _re.search(r"\bfix|auto.?fix|fixable|fixer", lo):
+        fixable = [f"<strong>{k}</strong>: {v[0]}" for k, v in _RULES.items() if v[2]]
+        return ("<strong>7 Auto-Fixable Rules</strong> (no LLM needed):<br>" +
+                "<br>".join(fixable) +
+                "<br><br>Click the 🔧 wrench icon on any finding, or use <code>/api/apply-fix</code>.")
+
+    if _re.search(r"\bpm|dashboard|project.?manag", lo):
+        items = [f"• <strong>{k.title()}</strong>: {v}" for k, v in _PM_FEATURES.items()]
+        return "<strong>PM Dashboard — 6 Features:</strong><br><br>" + "<br>".join(items)
+
+    if _re.search(r"\btool|analys|analyzer", lo):
+        numbered = [f"{i+1}. {t}" for i, t in enumerate(_TOOLS_LIST)]
+        return "<strong>16 Analysis Tools:</strong><br>" + "<br>".join(numbered)
+
+    if _re.search(r"\bscan|how.*start|begin|quick.?start", lo):
+        return ("<strong>How to Scan:</strong><br>"
+                "1. Browse to a directory in the left sidebar<br>"
+                "2. Choose engine (Python or Rust) and severity filter<br>"
+                "3. Click <strong>Scan Project</strong><br>"
+                "4. Results appear on the right with severity badges<br><br>"
+                "CLI: <code>python -m xray.agent /path --dry-run</code>")
+
+    if _re.search(r"\bgrade|score|letter|a\+|rating", lo):
+        return ("<strong>Grading System:</strong><br>"
+                "• A+ = 0 issues<br>• A = 1–3<br>• B = 4–7<br>• C = 8–12<br>"
+                "• D = 13–20<br>• F = 21+<br><br>"
+                "Weighted: High×3 + Medium×1 + Low×0.3<br>"
+                "Quality Gate in sidebar sets pass/fail thresholds.")
+
+    if _re.search(r"\bapi|endpoint|rest|http", lo):
+        return ("<strong>31 API Endpoints</strong> on <code>localhost:8077/api/</code>:<br><br>"
+                "Core: <code>/api/scan</code>, <code>/api/browse</code>, <code>/api/info</code>, <code>/api/progress</code><br>"
+                "Fix: <code>/api/preview-fix</code>, <code>/api/apply-fix</code>, <code>/api/apply-fixes-bulk</code><br>"
+                "Analysis: <code>/api/dead-code</code>, <code>/api/smells</code>, <code>/api/duplicates</code>, "
+                "<code>/api/format</code>, <code>/api/typecheck</code>, <code>/api/bandit</code>, <code>/api/ruff</code><br>"
+                "PM: <code>/api/risk-heatmap</code>, <code>/api/module-cards</code>, <code>/api/confidence</code>, "
+                "<code>/api/sprint-batches</code>, <code>/api/architecture</code>, <code>/api/call-graph</code>")
+
+    if _re.search(r"\brust|engine|fast|performance|speed", lo):
+        return ("<strong>Dual Engines:</strong><br>"
+                "• <strong>Python</strong>: Cross-platform, always available, full feature set<br>"
+                "• <strong>Rust</strong>: ~10× faster, optional. Build: <code>python build.py</code><br><br>"
+                "Switch in the sidebar Settings → Engine dropdown.")
+
+    if _re.search(r"\bsecurity|vuln|xss|inject|sql|ssrf|cors|eval|pickle|secret|password", lo):
+        sec = [f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
+               for k, v in _RULES.items() if k.startswith("SEC")]
+        return "<strong>Security Rules (10):</strong><br>" + "<br>".join(sec)
+
+    if _re.search(r"\bquality|smell|except|magic|dup|long func|param", lo):
+        qual = [f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
+                for k, v in _RULES.items() if k.startswith("QUAL")]
+        return "<strong>Quality Rules (10):</strong><br>" + "<br>".join(qual)
+
+    if _re.search(r"\bpython rule|py rule|print|assert|wildcard|import\b", lo):
+        py = [f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
+              for k, v in _RULES.items() if k.startswith("PY")]
+        return "<strong>Python Rules (8):</strong><br>" + "<br>".join(py)
+
+    if _re.search(r"\bhello|hi\b|hey|help|what can you", lo):
+        return ("Hello! I'm the <strong>X-Ray Assistant</strong>. I can help with:<br><br>"
+                "• <strong>rules</strong> — all 28 scan rules<br>"
+                "• <strong>auto-fix</strong> — which rules have automatic fixes<br>"
+                "• <strong>tools</strong> — 16 analysis tools<br>"
+                "• <strong>PM Dashboard</strong> — 6 project management features<br>"
+                "• <strong>scanning</strong> — how to scan a project<br>"
+                "• <strong>grading</strong> — score and letter grade system<br>"
+                "• <strong>API</strong> — all 31 REST endpoints<br>"
+                "• <strong>engines</strong> — Python vs Rust<br><br>"
+                "Or ask about a specific rule like <code>SEC-003</code>!")
+
+    # Scan context
+    has_results = context.get("has_results", False)
+    findings = context.get("findings_count", 0)
+    if has_results and _re.search(r"\bresult|finding|current|status|summary", lo):
+        return (f"Current scan: <strong>{findings} findings</strong> in "
+                f"<code>{context.get('directory', 'unknown')}</code>. "
+                "Use the filter tabs above the results to sort by severity or rule.")
+
+    # Default
+    return ("I know about X-Ray's <strong>28 rules</strong>, <strong>7 auto-fixers</strong>, "
+            "<strong>16 tools</strong>, <strong>PM Dashboard</strong>, <strong>grading</strong>, "
+            "and <strong>31 API endpoints</strong>. "
+            "Try asking about any of those, or a specific rule like <code>SEC-003</code>!")
+
+
 # ── HTTP Handler ─────────────────────────────────────────────────────────
 
 class XRayHandler(BaseHTTPRequestHandler):
@@ -726,6 +899,15 @@ class XRayHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(compute_call_graph(str(Path(directory).resolve())))
 
+        elif path == "/api/chat":
+            body = self._read_body()
+            message = body.get("message", "").strip()
+            if not message:
+                self._send_json({"reply": "Please type a message."})
+                return
+            reply = _chat_reply(message, body)
+            self._send_json({"reply": reply})
+
         else:
             self.send_error(404)
 
@@ -739,6 +921,8 @@ def main():
     parser.add_argument("--host", type=str, default="127.0.0.1",
                         help="Host to bind to (default: 127.0.0.1)")
     args = parser.parse_args()
+
+    _load_guide()  # Load knowledge base for chat bot
 
     server = type('ThreadedHTTPServer', (ThreadingMixIn, HTTPServer), {'daemon_threads': True})(
         (args.host, args.port), XRayHandler
