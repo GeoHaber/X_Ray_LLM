@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>X-Ray Scanner</title>
+<style>
+:root {
+  --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d;
+  --text: #e6edf3; --text2: #8b949e; --accent: #58a6ff;
+  --high: #f85149; --medium: #d29922; --low: #58a6ff;
+  --green: #3fb950; --radius: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+a { color: var(--accent); text-decoration: none; }
+
+/* ── Layout ─── */
+.app { display: grid; grid-template-columns: 320px 1fr; grid-template-rows: auto 1fr; height: 100vh; }
+header { grid-column: 1 / -1; background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+header h1 { font-size: 20px; font-weight: 600; }
+header h1 span { color: var(--accent); }
+.header-info { margin-left: auto; font-size: 12px; color: var(--text2); display: flex; gap: 16px; }
+.header-info .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+.dot-green { background: var(--green); }
+.dot-gray { background: var(--text2); }
+
+/* ── Sidebar ─── */
+.sidebar { background: var(--bg2); border-right: 1px solid var(--border); overflow-y: auto;
+  display: flex; flex-direction: column; }
+.section { padding: 16px; border-bottom: 1px solid var(--border); }
+.section h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text2); margin-bottom: 10px; }
+
+/* ── Path Input ─── */
+.path-input-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.path-input-row input { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 10px; font-size: 13px; font-family: monospace; }
+.path-input-row input:focus { outline: none; border-color: var(--accent); }
+
+/* ── File Browser ─── */
+.browser { max-height: 280px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); }
+.browser-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+  cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border); }
+.browser-item:last-child { border-bottom: none; }
+.browser-item:hover { background: var(--bg3); }
+.browser-item.selected { background: rgba(88,166,255,0.15); }
+.browser-item .icon { width: 16px; text-align: center; flex-shrink: 0; }
+.browser-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-item .size { color: var(--text2); font-size: 11px; }
+.browser-up { color: var(--accent); font-weight: 600; }
+
+/* ── Settings ─── */
+.setting-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.setting-row label { font-size: 13px; color: var(--text2); min-width: 70px; }
+.setting-row select, .setting-row input[type=text] {
+  flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 6px 8px; font-size: 13px; }
+.setting-row select:focus, .setting-row input[type=text]:focus { outline: none; border-color: var(--accent); }
+
+/* ── Buttons ─── */
+.btn { background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
+  padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%;
+  transition: opacity .15s; }
+.btn:hover { opacity: 0.9; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: 12px; width: auto; }
+
+/* ── Main Content ─── */
+.main { overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Summary Cards ─── */
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; text-align: center; }
+.card .value { font-size: 28px; font-weight: 700; }
+.card .label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+.card.high .value { color: var(--high); }
+.card.medium .value { color: var(--medium); }
+.card.low .value { color: var(--low); }
+.card.total .value { color: var(--text); }
+.card.files .value { color: var(--green); }
+.card.speed .value { color: var(--accent); font-size: 20px; }
+
+/* ── Findings Table ─── */
+.findings-header { display: flex; align-items: center; gap: 12px; }
+.findings-header h2 { font-size: 16px; }
+.findings-header .count { background: var(--bg3); color: var(--text2); border-radius: 12px;
+  padding: 2px 10px; font-size: 12px; }
+.filter-btns { margin-left: auto; display: flex; gap: 4px; }
+.filter-btn { background: var(--bg3); border: 1px solid transparent; color: var(--text2);
+  border-radius: 4px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+.filter-btn:hover, .filter-btn.active { border-color: var(--accent); color: var(--accent); }
+
+.findings-list { display: flex; flex-direction: column; gap: 8px; }
+.finding { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 16px; cursor: pointer; transition: border-color .15s; }
+.finding:hover { border-color: var(--accent); }
+.finding-top { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.sev-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; }
+.sev-HIGH { background: rgba(248,81,73,0.2); color: var(--high); }
+.sev-MEDIUM { background: rgba(210,153,34,0.2); color: var(--medium); }
+.sev-LOW { background: rgba(88,166,255,0.2); color: var(--low); }
+.finding-rule { font-weight: 600; font-size: 13px; }
+.finding-file { color: var(--text2); font-size: 12px; font-family: monospace; margin-left: auto; }
+.finding-desc { font-size: 13px; color: var(--text2); }
+.finding-detail { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.finding.open .finding-detail { display: block; }
+.detail-row { display: flex; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+.detail-label { color: var(--text2); min-width: 80px; }
+.detail-value { color: var(--text); font-family: monospace; word-break: break-all; }
+.detail-value.fix { color: var(--green); }
+
+/* ── Welcome / Empty ─── */
+.welcome { text-align: center; padding: 80px 40px; color: var(--text2); }
+.welcome h2 { font-size: 24px; color: var(--text); margin-bottom: 12px; }
+.welcome p { max-width: 400px; margin: 0 auto 8px; }
+.welcome .icon-large { font-size: 64px; margin-bottom: 20px; }
+
+/* ── Spinner ─── */
+.spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.scanning-msg { display: flex; align-items: center; gap: 10px; padding: 20px;
+  justify-content: center; font-size: 14px; color: var(--text2); }
+
+/* ── Scrollbar ─── */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border); }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <header>
+    <h1>&#x1F50D; X-Ray <span>Scanner</span></h1>
+    <div class="header-info">
+      <span><span class="dot dot-green"></span>Python</span>
+      <span id="rustStatus"><span class="dot dot-gray"></span>Rust</span>
+      <span id="platformInfo"></span>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <!-- Directory Picker -->
+    <div class="section">
+      <h3>&#128193; Target Directory</h3>
+      <div class="path-input-row">
+        <input type="text" id="pathInput" placeholder="Enter path or browse below..." spellcheck="false">
+        <button class="btn btn-sm btn-outline" onclick="goToPath()">Go</button>
+      </div>
+      <div class="browser" id="browser"></div>
+    </div>
+
+    <!-- Settings -->
+    <div class="section">
+      <h3>&#9881; Settings</h3>
+      <div class="setting-row">
+        <label>Engine</label>
+        <select id="engine">
+          <option value="python">Python</option>
+          <option value="rust">Rust (fast)</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label>Severity</label>
+        <select id="severity">
+          <option value="LOW">All (Low+)</option>
+          <option value="MEDIUM">Medium+</option>
+          <option value="HIGH">High only</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label>Exclude</label>
+        <input type="text" id="excludes" placeholder="test_.*, vendor/.*" spellcheck="false">
+      </div>
+    </div>
+
+    <!-- Scan Button -->
+    <div class="section">
+      <button class="btn" id="scanBtn" onclick="runScan()" disabled>
+        &#9654; Scan Project
+      </button>
+      <div style="margin-top:8px; font-size:11px; color:var(--text2); text-align:center;" id="selectedPath">
+        No directory selected
+      </div>
+    </div>
+
+    <!-- Recent Scans -->
+    <div class="section" style="flex:1;">
+      <h3>&#128337; Recent</h3>
+      <div id="recentList" style="font-size:12px; color:var(--text2);">No scans yet</div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main" id="mainContent">
+    <div class="welcome">
+      <div class="icon-large">&#128269;</div>
+      <h2>Welcome to X-Ray Scanner</h2>
+      <p>Select a directory from the file browser on the left, configure your scan settings, and click <b>Scan Project</b>.</p>
+      <p style="font-size:12px; margin-top:16px;">28 rules &middot; Security + Quality + Python &middot; Python &amp; Rust engines</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────
+let currentDir = '';
+let selectedDir = '';
+let scanResults = null;
+let activeFilter = 'ALL';
+let recentScans = JSON.parse(localStorage.getItem('xray_recent') || '[]');
+
+// ── Init ─────────────────────────────────────────────────────────
+async function init() {
+  const info = await api('/api/info');
+  document.getElementById('platformInfo').textContent = info.platform;
+  if (info.rust_available) {
+    document.getElementById('rustStatus').innerHTML = '<span class="dot dot-green"></span>Rust';
+  }
+  // Start browsing from home
+  await browse(info.home || '');
+  renderRecent();
+}
+
+// ── API helper ───────────────────────────────────────────────────
+async function api(url, opts) {
+  const resp = await fetch(url, opts);
+  return resp.json();
+}
+
+// ── Directory Browser ────────────────────────────────────────────
+async function browse(path) {
+  const url = path ? `/api/browse?path=${encodeURIComponent(path)}` : '/api/browse';
+  const data = await api(url);
+
+  if (data.error) {
+    alert(data.error);
+    return;
+  }
+
+  if (data.drives) {
+    renderDrives(data.drives);
+    return;
+  }
+
+  currentDir = data.current;
+  document.getElementById('pathInput').value = currentDir;
+  renderBrowser(data);
+}
+
+function renderDrives(drives) {
+  const el = document.getElementById('browser');
+  el.innerHTML = drives.map(d => `
+    <div class="browser-item" ondblclick="browse('${esc(d.path)}')">
+      <span class="icon">&#128187;</span>
+      <span class="name">${esc(d.name)}</span>
+    </div>
+  `).join('');
+}
+
+function renderBrowser(data) {
+  const el = document.getElementById('browser');
+  let html = '';
+
+  if (data.parent) {
+    html += `<div class="browser-item browser-up" ondblclick="browse('${esc(data.parent)}')">
+      <span class="icon">&#11014;</span><span class="name">..</span>
+    </div>`;
+  }
+
+  for (const item of data.items) {
+    if (item.is_dir) {
+      html += `<div class="browser-item" onclick="selectDir('${esc(item.path)}')" ondblclick="browse('${esc(item.path)}')">
+        <span class="icon">&#128193;</span>
+        <span class="name">${esc(item.name)}</span>
+      </div>`;
+    } else {
+      const size = item.size ? formatSize(item.size) : '';
+      html += `<div class="browser-item">
+        <span class="icon">&#128196;</span>
+        <span class="name">${esc(item.name)}</span>
+        <span class="size">${size}</span>
+      </div>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+function selectDir(path) {
+  selectedDir = path;
+  document.getElementById('selectedPath').textContent = shortenPath(path);
+  document.getElementById('scanBtn').disabled = false;
+  // Highlight
+  document.querySelectorAll('.browser-item').forEach(el => el.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+}
+
+function goToPath() {
+  const val = document.getElementById('pathInput').value.trim();
+  if (val) browse(val);
+}
+
+document.getElementById('pathInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') goToPath();
+});
+
+// ── Scan ─────────────────────────────────────────────────────────
+async function runScan() {
+  if (!selectedDir) return;
+
+  const engine = document.getElementById('engine').value;
+  const severity = document.getElementById('severity').value;
+  const excludeStr = document.getElementById('excludes').value.trim();
+  const excludes = excludeStr ? excludeStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  // Show scanning indicator
+  document.getElementById('scanBtn').disabled = true;
+  document.getElementById('mainContent').innerHTML = `
+    <div class="scanning-msg"><div class="spinner"></div>Scanning with ${engine} engine...</div>`;
+
+  const result = await api('/api/scan', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ directory: selectedDir, engine, severity, excludes })
+  });
+
+  document.getElementById('scanBtn').disabled = false;
+
+  if (result.error) {
+    document.getElementById('mainContent').innerHTML = `
+      <div class="welcome"><h2>Error</h2><p>${esc(result.error)}</p></div>`;
+    return;
+  }
+
+  scanResults = result;
+  activeFilter = 'ALL';
+  renderResults();
+  addRecent(selectedDir, result);
+}
+
+// ── Render Results ───────────────────────────────────────────────
+function renderResults() {
+  if (!scanResults) return;
+  const r = scanResults;
+  const findings = filterFindings(r.findings || []);
+
+  let html = `
+  <div class="summary">
+    <div class="card total"><div class="value">${r.summary.total}</div><div class="label">Total</div></div>
+    <div class="card high"><div class="value">${r.summary.high}</div><div class="label">High</div></div>
+    <div class="card medium"><div class="value">${r.summary.medium}</div><div class="label">Medium</div></div>
+    <div class="card low"><div class="value">${r.summary.low}</div><div class="label">Low</div></div>
+    <div class="card files"><div class="value">${r.files_scanned}</div><div class="label">Files</div></div>
+    <div class="card speed"><div class="value">${r.elapsed_ms}ms</div><div class="label">${r.engine} engine</div></div>
+  </div>
+
+  <div class="findings-header">
+    <h2>Findings</h2>
+    <span class="count">${findings.length}</span>
+    <div class="filter-btns">
+      ${['ALL','HIGH','MEDIUM','LOW'].map(f =>
+        `<button class="filter-btn ${activeFilter===f?'active':''}" onclick="setFilter('${f}')">${f}</button>`
+      ).join('')}
+    </div>
+  </div>
+
+  <div class="findings-list">`;
+
+  if (findings.length === 0) {
+    html += `<div style="text-align:center; padding:40px; color:var(--text2);">
+      ${r.summary.total === 0 ? '&#10004; No issues found!' : 'No findings match this filter.'}
+    </div>`;
+  }
+
+  for (let i = 0; i < findings.length; i++) {
+    const f = findings[i];
+    const shortFile = shortenPath(f.file);
+    html += `
+    <div class="finding" onclick="toggleFinding(this)">
+      <div class="finding-top">
+        <span class="sev-badge sev-${f.severity}">${f.severity}</span>
+        <span class="finding-rule">${esc(f.rule_id)}</span>
+        <span class="finding-file">${esc(shortFile)}:${f.line}</span>
+      </div>
+      <div class="finding-desc">${esc(f.description)}</div>
+      <div class="finding-detail">
+        <div class="detail-row"><span class="detail-label">File</span><span class="detail-value">${esc(f.file)}</span></div>
+        <div class="detail-row"><span class="detail-label">Line:Col</span><span class="detail-value">${f.line}:${f.col}</span></div>
+        <div class="detail-row"><span class="detail-label">Match</span><span class="detail-value">${esc(f.matched_text)}</span></div>
+        <div class="detail-row"><span class="detail-label">Fix</span><span class="detail-value fix">${esc(f.fix_hint)}</span></div>
+        <div class="detail-row"><span class="detail-label">Test</span><span class="detail-value">${esc(f.test_hint)}</span></div>
+      </div>
+    </div>`;
+  }
+
+  html += `</div>`;
+  document.getElementById('mainContent').innerHTML = html;
+}
+
+function filterFindings(findings) {
+  if (activeFilter === 'ALL') return findings;
+  return findings.filter(f => f.severity === activeFilter);
+}
+
+function setFilter(f) {
+  activeFilter = f;
+  renderResults();
+}
+
+function toggleFinding(el) {
+  el.classList.toggle('open');
+}
+
+// ── Recent Scans ─────────────────────────────────────────────────
+function addRecent(path, result) {
+  const entry = {
+    path: shortenPath(path),
+    fullPath: path,
+    total: result.summary.total,
+    engine: result.engine,
+    time: new Date().toLocaleTimeString(),
+  };
+  recentScans.unshift(entry);
+  if (recentScans.length > 10) recentScans.pop();
+  try { localStorage.setItem('xray_recent', JSON.stringify(recentScans)); } catch(e) {}
+  renderRecent();
+}
+
+function renderRecent() {
+  const el = document.getElementById('recentList');
+  if (recentScans.length === 0) { el.textContent = 'No scans yet'; return; }
+  el.innerHTML = recentScans.map(r => `
+    <div style="padding:4px 0; cursor:pointer; border-bottom:1px solid var(--border);"
+         onclick="selectDir('${esc(r.fullPath)}'); browse('${esc(r.fullPath)}');">
+      <span style="color:var(--text);">${esc(r.path)}</span>
+      <span style="float:right;">${r.total} &#x26A0; ${r.time}</span>
+    </div>
+  `).join('');
+}
+
+// ── Utilities ────────────────────────────────────────────────────
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(0) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function shortenPath(p) {
+  if (!p) return '';
+  const parts = p.replace(/\\/g, '/').split('/');
+  if (parts.length <= 3) return p;
+  return '.../' + parts.slice(-2).join('/');
+}
+
+// ── Start ────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
