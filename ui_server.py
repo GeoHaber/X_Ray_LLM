@@ -161,6 +161,13 @@ class XRayHandler(BaseHTTPRequestHandler):
         """Suppress default request logging noise."""
         pass
 
+    def handle(self):
+        """Silence connection reset/abort errors (normal browser behavior)."""
+        try:
+            super().handle()
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            pass
+
     def _send_json(self, data: dict, status: int = 200):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -193,6 +200,10 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         if path == "/" or path == "/ui.html":
             self._send_html(ROOT / "ui.html")
+
+        elif path == "/favicon.ico":
+            self.send_response(204)
+            self.end_headers()
 
         elif path == "/api/browse":
             params = parse_qs(parsed.query)
