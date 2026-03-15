@@ -1,66 +1,25 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
 [project]
-name = "x-ray"
-version = "7.2.2"
-description = "Smart AI-Powered Code Analyzer & Rustifier"
+name = "xray-llm"
+version = "0.1.0"
+description = "Self-improving code quality agent — SCAN → TEST → FIX → VERIFY → LOOP"
 requires-python = ">=3.10"
-
-[tool.pyright]
-# Start permissive — ratchet up over time (remove diagnostics as you fix)
-pythonVersion = "3.10"
-typeCheckingMode = "basic"
-reportMissingImports = true
-reportMissingTypeStubs = false
-reportUnusedImport = "warning"
-reportUnusedVariable = "warning"
-# AST-heavy code accesses .name/.lineno on ast.AST — safe but untyped; informational only
-reportAttributeAccessIssue = "information"
-reportOptionalMemberAccess = "information"
-# Test files use redeclaration patterns for mock/fixture overrides
-reportRedeclaration = "warning"
-# Flet UI uses list[Text] where list[Control] is expected — correct at runtime (covariance)
-# Also covers Optional→required param patterns that are guarded at runtime
-reportArgumentType = "information"
-
-# Exclude non-source paths
-exclude = [
-    "venv",
-    ".venv",
-    "build",
-    "dist",
-    "target",
-    "_archive",
-    "_scratch",
-    "X_Ray_Rust_Full",
-    "_generated_tests",
-    "tests/xray_generated",
-    "tests",
-    "_OLD",
+license = "MIT"
+dependencies = [
+    "llama-cpp-python>=0.3.0",
+    "pytest>=7.0",
 ]
 
-# Ruff: lint + format (Black-compatible, PEP 8 aligned)
-[tool.ruff]
-line-length = 88
-target-version = "py310"
+[project.optional-dependencies]
+dev = ["ruff", "mypy"]
 
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-skip-magic-trailing-comma = false
-line-ending = "auto"
+[project.scripts]
+xray = "xray.agent:main"
 
-[tool.ruff.lint.per-file-ignores]
-"x_ray_flet.py" = ["E402"]
-# Generated test files have intentional redefinitions (auto-generated mocks/stubs)
-"tests/xray_generated/*.py" = ["F811"]
-
-# Bandit: security best practices (severity via -l, use # nosec for reviewed FPs)
-[tool.bandit]
-exclude_dirs = [".venv", "venv", "__pycache__", "node_modules", ".git", "target", "dist", "build", "_scratch"]
-skips = ["B101", "B404"]
-
-[dependency-groups]
-dev = [
-    "ruff>=0.15.2",
-    "bandit>=1.7",
-    "pyright>=1.1.0",
-]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::pytest.PytestCollectionWarning"]
