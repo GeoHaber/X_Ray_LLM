@@ -100,6 +100,11 @@ def scan_with_rust(directory: str, severity: str, excludes: list[str]) -> dict:
     return data
 
 
+def _fwd(path: str) -> str:
+    """Normalize path to forward slashes (works on all OSes, safe in JS strings)."""
+    return path.replace("\\", "/")
+
+
 def browse_directory(path: str) -> dict:
     """List directory contents for the file browser."""
     try:
@@ -117,16 +122,16 @@ def browse_directory(path: str) -> dict:
                     continue
                 items.append({
                     "name": name,
-                    "path": str(entry),
+                    "path": _fwd(str(entry)),
                     "is_dir": entry.is_dir(),
                     "size": entry.stat().st_size if entry.is_file() else None,
                 })
         except PermissionError:
             return {"error": f"Permission denied: {path}"}
 
-        parent = str(p.parent) if p.parent != p else None
+        parent = _fwd(str(p.parent)) if p.parent != p else None
         return {
-            "current": str(p),
+            "current": _fwd(str(p)),
             "parent": parent,
             "items": items,
         }
@@ -139,7 +144,7 @@ def get_drives() -> list[dict]:
     if platform.system() == "Windows":
         drives = []
         for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ":
-            drive = f"{letter}:\\"
+            drive = f"{letter}:/"
             if os.path.exists(drive):
                 drives.append({"name": f"{letter}:", "path": drive, "is_dir": True})
         return drives
@@ -205,7 +210,7 @@ class XRayHandler(BaseHTTPRequestHandler):
                 "rust_available": rust_bin is not None,
                 "rust_binary": rust_bin,
                 "rules_count": 28,
-                "home": str(Path.home()),
+                "home": _fwd(str(Path.home())),
             })
 
         else:
