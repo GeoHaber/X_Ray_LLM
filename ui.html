@@ -130,12 +130,218 @@ header h1 span { color: var(--accent); }
 .scanning-msg { display: flex; align-items: center; gap: 10px; padding: 20px;
   justify-content: center; font-size: 14px; color: var(--text2); }
 
+/* ── Grade Card ─── */
+.grade-card { background: var(--bg2); border: 2px solid var(--border); border-radius: var(--radius);
+  padding: 16px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.grade-letter { font-size: 52px; font-weight: 900; line-height: 1; }
+.grade-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+.grade-score { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.grade-A { color: #3fb950; border-color: #3fb950; }
+.grade-B { color: #58a6ff; border-color: #58a6ff; }
+.grade-C { color: #d29922; border-color: #d29922; }
+.grade-D { color: #f0883e; border-color: #f0883e; }
+.grade-F { color: #f85149; border-color: #f85149; }
+
+/* ── View Tabs ─── */
+.view-tabs { display: flex; gap: 4px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 3px; }
+.view-tab { padding: 6px 14px; border-radius: 5px; font-size: 12px; cursor: pointer;
+  color: var(--text2); border: none; background: none; font-weight: 500; transition: all .15s; }
+.view-tab:hover { color: var(--text); }
+.view-tab.active { background: var(--accent); color: #fff; }
+
+/* ── Fix Plan ─── */
+.rule-group { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 18px; margin-bottom: 8px; }
+.rule-group-header { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.rule-group-count { background: var(--bg3); border-radius: 12px; padding: 2px 10px;
+  font-size: 12px; color: var(--text2); }
+.rule-group-fix { margin-top: 10px; padding: 10px 14px; background: var(--bg); border-radius: 6px;
+  font-size: 12px; color: var(--green); border-left: 3px solid var(--green); }
+.rule-group-files { margin-top: 8px; font-size: 11px; color: var(--text2); max-height: 120px; overflow-y: auto; }
+.rule-group-files div { padding: 2px 0; font-family: monospace; }
+
+/* ── File Heat ─── */
+.file-heat { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 16px; margin-bottom: 6px; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.file-heat:hover { border-color: var(--accent); }
+.file-heat-bar { height: 6px; border-radius: 3px; background: var(--border); flex: 1; position: relative; overflow: hidden; }
+.file-heat-fill { height: 100%; border-radius: 3px; position: absolute; left: 0; top: 0; }
+.file-heat-count { font-size: 14px; font-weight: 700; min-width: 36px; text-align: right; }
+.file-heat-name { font-size: 12px; font-family: monospace; color: var(--text2); flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Search Box ─── */
+.search-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 12px; font-size: 13px; color: var(--text); width: 220px; font-family: inherit; }
+.search-box:focus { outline: none; border-color: var(--accent); }
+
+/* ── Toolbar ─── */
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.toolbar-right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
 /* ── Scrollbar ─── */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+/* ── Fix Buttons ─── */
+.btn-fix { background: var(--accent) !important; color: #fff !important; }
+.btn-fix:hover { filter: brightness(1.15); }
+.btn-apply { background: var(--green) !important; color: #fff !important; }
+.btn-apply:hover { filter: brightness(1.15); }
+.diff-block { background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 12px; font-family: monospace; font-size: 12px; line-height: 1.6;
+  max-height: 400px; overflow: auto; white-space: pre; }
+
+/* ── Delta Indicators (Before/After) ─── */
+.delta { font-size: 11px; margin-top: 2px; }
+.delta-better { color: var(--green); }
+.delta-worse { color: var(--high); }
+.delta-same { color: var(--text2); }
+
+/* ── Quality Gate ─── */
+.gate-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px;
+  border-radius: var(--radius); font-size: 16px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 1px; }
+.gate-pass { background: rgba(63,185,80,0.15); color: var(--green); border: 2px solid var(--green); }
+.gate-fail { background: rgba(248,81,73,0.15); color: var(--high); border: 2px solid var(--high); }
+.gate-violations { margin-top: 12px; }
+.gate-violation { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+.gate-violation .icon { font-size: 18px; }
+.gate-threshold-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 12px; }
+.gate-threshold-row label { color: var(--text2); min-width: 100px; }
+.gate-threshold-row input { width: 60px; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 4px; padding: 3px 6px; font-size: 12px; text-align: center; }
+
+/* ── Multi-Dimension Grades ─── */
+.dim-grades { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.dim-grade { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px; text-align: center; }
+.dim-grade .letter { font-size: 28px; font-weight: 900; line-height: 1; }
+.dim-grade .dim-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+.dim-grade .dim-score { font-size: 11px; color: var(--text2); }
+
+/* ── SATD Debt View ─── */
+.debt-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.debt-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px; text-align: center; }
+.debt-card .val { font-size: 22px; font-weight: 700; }
+.debt-card .lbl { font-size: 11px; color: var(--text2); text-transform: uppercase; }
+.debt-item { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 14px; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.debt-cat { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.debt-defect { background: rgba(248,81,73,0.2); color: var(--high); }
+.debt-design { background: rgba(210,153,34,0.2); color: var(--medium); }
+.debt-debt { background: rgba(240,136,62,0.2); color: #f0883e; }
+.debt-test { background: rgba(88,166,255,0.2); color: var(--low); }
+.debt-documentation { background: rgba(139,148,158,0.2); color: var(--text2); }
+
+/* ── Git Hotspots View ─── */
+.hotspot-item { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 16px; margin-bottom: 6px; display: flex; align-items: center; gap: 12px; }
+.hotspot-item:hover { border-color: var(--accent); }
+.hotspot-badge { font-size: 20px; }
+.hotspot-churn { font-size: 14px; font-weight: 700; min-width: 36px; text-align: center; }
+.hotspot-priority { font-size: 11px; color: var(--text2); }
+.hotspot-bar { height: 4px; border-radius: 2px; background: var(--border); flex: 1; position: relative; overflow: hidden; }
+.hotspot-fill { height: 100%; border-radius: 2px; position: absolute; left: 0; top: 0; }
+
+/* ── Dependency Graph ─── */
+.graph-container { width: 100%; height: 500px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); position: relative; }
+.graph-controls { display: flex; gap: 8px; margin-bottom: 8px; }
+
+/* ── Density Minimap ─── */
+.density-chart { display: flex; align-items: flex-end; gap: 1px; height: 40px; margin-bottom: 12px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; overflow: hidden; }
+.density-bar { flex: 1; min-width: 2px; border-radius: 1px 1px 0 0; transition: height 0.3s; }
+
+/* ── Light Theme ─── */
+body.light {
+  --bg: #ffffff; --bg2: #f6f8fa; --bg3: #e1e4e8; --border: #d0d7de;
+  --text: #1f2328; --text2: #656d76; --accent: #0969da;
+  --high: #cf222e; --medium: #bf8700; --low: #0969da;
+  --green: #1a7f37;
+}
+
+/* ── Theme Toggle ─── */
+.theme-toggle { background: none; border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; font-size: 18px; padding: 4px 8px; color: var(--text); }
+.theme-toggle:hover { border-color: var(--accent); }
+
+/* ── Health Checks ─── */
+.health-check { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 4px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
+.health-check .icon { font-size: 16px; flex-shrink: 0; }
+.health-check .name { font-weight: 600; min-width: 120px; }
+
+/* ── Inline Code Preview ─── */
+.code-preview { background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 12px; font-family: monospace; font-size: 11px; line-height: 1.6;
+  margin-top: 8px; max-height: 120px; overflow: auto; white-space: pre; color: var(--text2); }
+.code-preview .highlight { background: rgba(248,81,73,0.15); display: block; color: var(--text); }
+
+/* ── Trend Chart ─── */
+.trend-chart { width: 100%; height: 200px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); position: relative; }
+
+/* ── Duplicates ─── */
+.dup-group { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 16px; margin-bottom: 8px; }
+.dup-group-header { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.dup-locations { margin-top: 8px; font-size: 12px; font-family: monospace; color: var(--text2); }
+
+/* ── Smells ─── */
+.smell-item { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.smell-type { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  background: rgba(210,153,34,0.2); color: var(--medium); }
+
+/* ── Release Readiness ─── */
+.ready-badge { display: inline-flex; padding: 8px 24px; border-radius: var(--radius); font-size: 18px; font-weight: 800; }
+.ready-yes { background: rgba(63,185,80,0.15); color: var(--green); border: 2px solid var(--green); }
+.ready-no { background: rgba(248,81,73,0.15); color: var(--high); border: 2px solid var(--high); }
+
+/* ── Sidebar Extended Tools ─── */
+.tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tool-grid .btn-sm { font-size: 11px; padding: 5px 4px; text-align: center; }
+
+/* ── PM Dashboard ─── */
+.confidence-meter { text-align: center; padding: 24px; }
+.confidence-number { font-size: 72px; font-weight: 900; line-height: 1; }
+.confidence-bar { width: 100%; height: 16px; background: var(--bg3); border-radius: 8px; overflow: hidden; margin: 12px 0; }
+.confidence-fill { height: 100%; border-radius: 8px; transition: width 0.6s; }
+.conf-check { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 4px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
+.conf-check .weight { font-size: 11px; color: var(--text2); min-width: 24px; text-align: center; }
+.module-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.module-card { background: var(--bg2); border: 2px solid var(--border); border-radius: var(--radius);
+  padding: 16px; text-align: center; }
+.module-card .mod-grade { font-size: 36px; font-weight: 900; line-height: 1; }
+.module-card .mod-name { font-size: 13px; font-family: monospace; margin-top: 4px; color: var(--text2); }
+.module-card .mod-stats { display: flex; justify-content: center; gap: 12px; margin-top: 8px; font-size: 11px; }
+.batch-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  margin-bottom: 12px; overflow: hidden; }
+.batch-header { display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer; }
+.batch-header:hover { background: var(--bg3); }
+.batch-items { padding: 0 18px 14px; }
+.batch-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px;
+  border-bottom: 1px solid var(--border); }
+.batch-item:last-child { border-bottom: none; }
+.risk-treemap { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--radius); min-height: 120px; }
+.risk-rect { border-radius: 3px; cursor: pointer; position: relative; min-width: 16px; min-height: 16px;
+  display: flex; align-items: center; justify-content: center; font-size: 9px; color: rgba(255,255,255,0.8);
+  overflow: hidden; transition: opacity 0.15s; }
+.risk-rect:hover { opacity: 0.8; outline: 2px solid var(--accent); }
+.arch-warnings { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.arch-warning { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  background: rgba(248,81,73,0.1); border: 1px solid var(--high); border-radius: var(--radius); font-size: 13px; }
 </style>
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -143,6 +349,7 @@ header h1 span { color: var(--accent); }
   <header>
     <h1>&#x1F50D; X-Ray <span>Scanner</span></h1>
     <div class="header-info">
+      <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark mode">&#127769;</button>
       <span><span class="dot dot-green"></span>Python</span>
       <span id="rustStatus"><span class="dot dot-gray"></span>Rust</span>
       <span id="platformInfo"></span>
@@ -185,13 +392,63 @@ header h1 span { color: var(--accent); }
       </div>
     </div>
 
-    <!-- Scan Button -->
+    <!-- Quality Gate Thresholds -->
     <div class="section">
-      <button class="btn" id="scanBtn" onclick="runScan()" disabled>
-        &#9654; Scan Project
-      </button>
+      <h3>&#128678; Quality Gate</h3>
+      <div class="gate-threshold-row">
+        <label>Max High</label>
+        <input type="number" id="gateMaxHigh" value="0" min="0" />
+      </div>
+      <div class="gate-threshold-row">
+        <label>Max Medium</label>
+        <input type="number" id="gateMaxMedium" value="50" min="0" />
+      </div>
+      <div class="gate-threshold-row">
+        <label>Min Score</label>
+        <input type="number" id="gateMinScore" value="70" min="0" max="100" />
+      </div>
+      <div class="gate-threshold-row">
+        <label>Max Debt (h)</label>
+        <input type="number" id="gateMaxDebt" value="80" min="0" />
+      </div>
+    </div>
+
+    <!-- Tools -->
+    <div class="section">
+      <h3>&#x1F6E0; Tools</h3>
+      <div class="tool-grid">
+        <button class="btn btn-sm btn-outline" onclick="runRuff()" id="ruffBtn" disabled>&#x1F9F9; Ruff Fix</button>
+        <button class="btn btn-sm btn-outline" onclick="runSATD()" id="satdBtn" disabled>&#x1F4CB; Scan Debt</button>
+        <button class="btn btn-sm btn-outline" onclick="runGitHotspots()" id="gitBtn" disabled>&#x1F525; Git Hotspots</button>
+        <button class="btn btn-sm btn-outline" onclick="runImports()" id="graphBtn" disabled>&#x1F517; Dep Graph</button>
+        <button class="btn btn-sm btn-outline" onclick="runFormat()" id="fmtBtn" disabled>&#x1F4D0; Format</button>
+        <button class="btn btn-sm btn-outline" onclick="runHealth()" id="healthBtn" disabled>&#x1FA7A; Health</button>
+        <button class="btn btn-sm btn-outline" onclick="runBandit()" id="banditBtn" disabled>&#x1F6E1; Bandit</button>
+        <button class="btn btn-sm btn-outline" onclick="runDeadCode()" id="deadBtn" disabled>&#x1F480; Dead Code</button>
+        <button class="btn btn-sm btn-outline" onclick="runSmells()" id="smellsBtn" disabled>&#x1F443; Smells</button>
+        <button class="btn btn-sm btn-outline" onclick="runDuplicates()" id="dupsBtn" disabled>&#x1F4CB; Duplicates</button>
+        <button class="btn btn-sm btn-outline" onclick="runTemporal()" id="temporalBtn" disabled>&#x1F4C5; Coupling</button>
+        <button class="btn btn-sm btn-outline" onclick="runTypecheck()" id="typeBtn" disabled>&#x1F50E; Types</button>
+        <button class="btn btn-sm btn-outline" onclick="runRelease()" id="releaseBtn" disabled>&#x1F680; Release</button>
+        <button class="btn btn-sm btn-outline" onclick="runAiDetect()" id="aiBtn" disabled>&#x1F916; AI Detect</button>
+        <button class="btn btn-sm btn-outline" onclick="runWebSmells()" id="webBtn" disabled>&#x1F310; Web Smells</button>
+        <button class="btn btn-sm btn-outline" onclick="runTestGen()" id="testGenBtn" disabled>&#x1F9EA; Test Gen</button>
+      </div>
       <div style="margin-top:8px; font-size:11px; color:var(--text2); text-align:center;" id="selectedPath">
         No directory selected
+      </div>
+    </div>
+
+    <!-- PM Dashboard -->
+    <div class="section">
+      <h3>&#x1F4CA; PM Dashboard</h3>
+      <div class="tool-grid">
+        <button class="btn btn-sm btn-outline" onclick="runRiskMap()" id="riskBtn" disabled>&#x1F3AF; Risk Map</button>
+        <button class="btn btn-sm btn-outline" onclick="runModuleCards()" id="modBtn" disabled>&#x1F4CA; Modules</button>
+        <button class="btn btn-sm btn-outline" onclick="runConfidence()" id="confBtn" disabled>&#x1F3AF; Confidence</button>
+        <button class="btn btn-sm btn-outline" onclick="runBatches()" id="batchBtn" disabled>&#x1F4CB; Batches</button>
+        <button class="btn btn-sm btn-outline" onclick="runArchMap()" id="archBtn" disabled>&#x1F3D7; Arch Map</button>
+        <button class="btn btn-sm btn-outline" onclick="runCallGraph()" id="cgBtn" disabled>&#x1F4DE; Call Graph</button>
       </div>
     </div>
 
@@ -209,6 +466,9 @@ header h1 span { color: var(--accent); }
       <h2>Welcome to X-Ray Scanner</h2>
       <p>Select a directory from the file browser on the left, configure your scan settings, and click <b>Scan Project</b>.</p>
       <p style="font-size:12px; margin-top:16px;">28 rules &middot; Security + Quality + Python &middot; Python &amp; Rust engines</p>
+      <button class="btn" id="scanBtn" onclick="runScan()" disabled style="margin-top:24px; max-width:280px;">
+        &#9654; Scan Project
+      </button>
     </div>
   </div>
 </div>
@@ -218,8 +478,46 @@ header h1 span { color: var(--accent); }
 let currentDir = '';
 let selectedDir = '';
 let scanResults = null;
+let previousScan = JSON.parse(localStorage.getItem('xray_prev_scan') || 'null');
 let activeFilter = 'ALL';
 let recentScans = JSON.parse(localStorage.getItem('xray_recent') || '[]');
+let fixableRules = new Set();
+let satdData = null;
+let gitHotspotsData = null;
+let importsData = null;
+let formatData = null;
+let healthData = null;
+let banditData = null;
+let deadCodeData = null;
+let smellsData = null;
+let duplicatesData = null;
+let temporalData = null;
+let typecheckData = null;
+let releaseData = null;
+let aiDetectData = null;
+let webSmellsData = null;
+let testGenData = null;
+let scanHistory = JSON.parse(localStorage.getItem('xray_history') || '[]');
+let riskMapData = null;
+let moduleCardsData = null;
+let confidenceData = null;
+let batchesData = null;
+let architectureData = null;
+let callGraphData = null;
+
+// ── Theme ────────────────────────────────────────────────────────
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light');
+  localStorage.setItem('xray_theme', isLight ? 'light' : 'dark');
+  document.getElementById('themeBtn').innerHTML = isLight ? '&#9728;' : '&#127769;';
+}
+(function initTheme() {
+  if (localStorage.getItem('xray_theme') === 'light') {
+    document.body.classList.add('light');
+    const btn = document.getElementById('themeBtn');
+    if (btn) btn.innerHTML = '&#9728;';
+  }
+})();
 
 // ── Init ─────────────────────────────────────────────────────────
 async function init() {
@@ -228,6 +526,7 @@ async function init() {
   if (info.rust_available) {
     document.getElementById('rustStatus').innerHTML = '<span class="dot dot-green"></span>Rust';
   }
+  if (info.fixable_rules) fixableRules = new Set(info.fixable_rules);
   // Start browsing from home
   await browse(info.home || '');
   renderRecent();
@@ -274,7 +573,7 @@ function renderBrowser(data) {
   let html = '';
 
   if (data.parent) {
-    html += `<div class="browser-item browser-up" ondblclick="browse('${esc(data.parent)}')">
+    html += `<div class="browser-item browser-up" onclick="browse('${esc(data.parent)}')" style="cursor:pointer;">
       <span class="icon">&#11014;</span><span class="name">..</span>
     </div>`;
   }
@@ -300,7 +599,7 @@ function renderBrowser(data) {
 function selectDir(path) {
   selectedDir = path;
   document.getElementById('selectedPath').textContent = shortenPath(path);
-  document.getElementById('scanBtn').disabled = false;
+  document.querySelectorAll('.tool-grid .btn-sm, #scanBtn').forEach(b => b.disabled = false);
   // Highlight
   document.querySelectorAll('.browser-item').forEach(el => el.classList.remove('selected'));
   event.currentTarget.classList.add('selected');
@@ -316,18 +615,77 @@ document.getElementById('pathInput').addEventListener('keydown', e => {
 });
 
 // ── Scan ─────────────────────────────────────────────────────────
+let progressInterval = null;
+
+async function pollProgress() {
+  try {
+    const p = await api('/api/progress');
+    if (!p.active) return;
+    const el = document.getElementById('progressInfo');
+    if (!el) return;
+
+    const elapsed = (p.elapsed_ms / 1000).toFixed(1);
+    const shortDir = shortenPath(p.directory);
+    const shortFile = p.current_file ? shortenPath(p.current_file) : '';
+
+    el.innerHTML = `
+      <div style="font-size:14px; font-weight:600; margin-bottom:8px;">
+        Scanning: ${esc(shortDir)}
+      </div>
+      <div style="display:flex; gap:24px; margin-bottom:8px;">
+        <span><b>${p.files_scanned}</b> files scanned</span>
+        <span><b>${p.findings_count}</b> findings</span>
+        <span>${elapsed}s elapsed</span>
+      </div>
+      <div style="font-size:12px; color:var(--text2); font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+        ${esc(shortFile)}
+      </div>
+    `;
+  } catch(e) {}
+}
+
+function startProgress(engine) {
+  document.getElementById('scanBtn').disabled = true;
+  document.getElementById('mainContent').innerHTML = `
+    <div style="padding:40px; text-align:center;">
+      <div class="scanning-msg"><div class="spinner"></div>Scanning with ${engine} engine...</div>
+      <div id="progressInfo" style="margin-top:16px; color:var(--text2);"></div>
+      <button id="abortBtn" onclick="abortScan()"
+        style="margin-top:20px; padding:10px 28px; background:var(--high); color:#fff; border:none;
+               border-radius:var(--radius); font-size:14px; font-weight:600; cursor:pointer;
+               transition:opacity .2s;">
+        &#x25A0; Stop Scan
+      </button>
+    </div>`;
+  progressInterval = setInterval(pollProgress, 400);
+}
+
+async function abortScan() {
+  const btn = document.getElementById('abortBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Stopping...'; }
+  try { await api('/api/abort', { method: 'POST' }); } catch(e) {}
+}
+
+function stopProgress() {
+  if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
+  document.getElementById('scanBtn').disabled = false;
+}
+
 async function runScan() {
   if (!selectedDir) return;
+
+  // Save current scan as previous for before/after comparison
+  if (scanResults) {
+    previousScan = { summary: scanResults.summary, files_scanned: scanResults.files_scanned, directory: scanResults.directory || selectedDir };
+    try { localStorage.setItem('xray_prev_scan', JSON.stringify(previousScan)); } catch(e) {}
+  }
 
   const engine = document.getElementById('engine').value;
   const severity = document.getElementById('severity').value;
   const excludeStr = document.getElementById('excludes').value.trim();
   const excludes = excludeStr ? excludeStr.split(',').map(s => s.trim()).filter(Boolean) : [];
 
-  // Show scanning indicator
-  document.getElementById('scanBtn').disabled = true;
-  document.getElementById('mainContent').innerHTML = `
-    <div class="scanning-msg"><div class="spinner"></div>Scanning with ${engine} engine...</div>`;
+  startProgress(engine);
 
   const result = await api('/api/scan', {
     method: 'POST',
@@ -335,7 +693,15 @@ async function runScan() {
     body: JSON.stringify({ directory: selectedDir, engine, severity, excludes })
   });
 
-  document.getElementById('scanBtn').disabled = false;
+  stopProgress();
+
+  if (result.aborted) {
+    document.getElementById('mainContent').innerHTML = `
+      <div class="welcome"><h2>Scan Aborted</h2>
+        <p>Stopped after ${result.files_scanned || 0} files, ${result.findings_count || 0} findings.</p>
+      </div>`;
+    return;
+  }
 
   if (result.error) {
     document.getElementById('mainContent').innerHTML = `
@@ -345,27 +711,219 @@ async function runScan() {
 
   scanResults = result;
   activeFilter = 'ALL';
+
+  // Save to history for trend chart
+  const grade = calcDimensionGrades(result.findings || [], result.files_scanned).overall;
+  scanHistory.push({
+    time: new Date().toISOString(),
+    total: result.summary.total,
+    high: result.summary.high,
+    medium: result.summary.medium,
+    low: result.summary.low,
+    score: grade.score,
+    letter: grade.letter,
+    files: result.files_scanned,
+  });
+  if (scanHistory.length > 50) scanHistory.shift();
+  try { localStorage.setItem('xray_history', JSON.stringify(scanHistory)); } catch(e) {}
+
+  // Fetch remediation time
+  api('/api/remediation-time', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ findings: result.findings || [] })
+  }).then(t => { scanResults._remTime = t; renderResults(); }).catch(() => {});
+
   renderResults();
   addRecent(selectedDir, result);
 }
+
+// ── Grade Calculation ─────────────────────────────────────────────
+function calcGrade(summary, filesScanned) {
+  if (filesScanned === 0) return { letter: '?', score: 0, label: 'No files' };
+  const weighted = (summary.high * 5 + summary.medium * 2 + summary.low * 0.5);
+  const per100 = (weighted / filesScanned) * 100;
+  if (per100 <= 5)   return { letter: 'A', score: Math.round(100 - per100), label: 'Excellent' };
+  if (per100 <= 15)  return { letter: 'B', score: Math.round(100 - per100 * 0.8), label: 'Good' };
+  if (per100 <= 40)  return { letter: 'C', score: Math.round(100 - per100 * 0.6), label: 'Fair' };
+  if (per100 <= 80)  return { letter: 'D', score: Math.max(20, Math.round(100 - per100 * 0.5)), label: 'Poor' };
+  return { letter: 'F', score: Math.max(5, Math.round(100 - per100 * 0.4)), label: 'Critical' };
+}
+
+// ── Multi-Dimension Grading ──────────────────────────────────────
+function calcDimensionGrades(findings, filesScanned) {
+  if (filesScanned === 0) return { security: {letter:'?',score:0}, reliability: {letter:'?',score:0}, style: {letter:'?',score:0}, overall: {letter:'?',score:0} };
+  const sec = { high:0, medium:0, low:0 };
+  const rel = { high:0, medium:0, low:0 };
+  const sty = { high:0, medium:0, low:0 };
+  for (const f of findings) {
+    const s = f.severity;
+    if (f.rule_id && f.rule_id.startsWith('SEC-')) { sec[s.toLowerCase()]++; }
+    else if (f.rule_id && f.rule_id.startsWith('PY-')) { rel[s.toLowerCase()]++; }
+    else { sty[s.toLowerCase()]++; }
+  }
+  return {
+    security: calcGrade(sec, filesScanned),
+    reliability: calcGrade(rel, filesScanned),
+    style: calcGrade(sty, filesScanned),
+    overall: calcGrade({ high: sec.high+rel.high+sty.high, medium: sec.medium+rel.medium+sty.medium, low: sec.low+rel.low+sty.low }, filesScanned)
+  };
+}
+
+function gradeColor(letter) {
+  const m = {A:'#3fb950',B:'#58a6ff',C:'#d29922',D:'#f0883e',F:'#f85149'};
+  return m[letter] || '#8b949e';
+}
+
+// ── Quality Gate Evaluation ──────────────────────────────────────
+function evaluateQualityGate(summary, grade, debtHours) {
+  const maxHigh = parseInt(document.getElementById('gateMaxHigh').value) || 0;
+  const maxMedium = parseInt(document.getElementById('gateMaxMedium').value) || 50;
+  const minScore = parseInt(document.getElementById('gateMinScore').value) || 70;
+  const maxDebt = parseInt(document.getElementById('gateMaxDebt').value) || 80;
+  const violations = [];
+  if (summary.high > maxHigh) violations.push({ rule: 'Max High Issues', expected: `≤ ${maxHigh}`, actual: summary.high });
+  if (summary.medium > maxMedium) violations.push({ rule: 'Max Medium Issues', expected: `≤ ${maxMedium}`, actual: summary.medium });
+  if (grade.score < minScore) violations.push({ rule: 'Min Quality Score', expected: `≥ ${minScore}`, actual: grade.score });
+  if (debtHours > maxDebt) violations.push({ rule: 'Max Debt Hours', expected: `≤ ${maxDebt}h`, actual: `${debtHours}h` });
+  return { passed: violations.length === 0, violations };
+}
+
+// ── Before/After Delta ───────────────────────────────────────────
+function deltaHtml(current, previous, lowerIsBetter) {
+  if (previous === undefined || previous === null) return '';
+  const diff = current - previous;
+  if (diff === 0) return '<div class="delta delta-same">&#x2194; same</div>';
+  const better = lowerIsBetter ? diff < 0 : diff > 0;
+  const arrow = diff > 0 ? '&#x25B2;' : '&#x25BC;';
+  const cls = better ? 'delta-better' : 'delta-worse';
+  return `<div class="delta ${cls}">${arrow} ${Math.abs(diff)} (was ${previous})</div>`;
+}
+
+// ── View State ───────────────────────────────────────────────────
+let activeView = 'findings';  // findings | fixplan | files | gate | satd | git | graph | smells | bandit | dead | dups | health | format | temporal | typecheck | release | aidetect | websmells | testgen | trend
+let searchQuery = '';
 
 // ── Render Results ───────────────────────────────────────────────
 function renderResults() {
   if (!scanResults) return;
   const r = scanResults;
+  const dims = calcDimensionGrades(r.findings || [], r.files_scanned);
+  const grade = dims.overall;
+  const gate = evaluateQualityGate(r.summary, grade, satdData ? satdData.total_hours : 0);
+  const prev = previousScan;
+
+  let html = `
+  <div style="display:flex; gap:12px; align-items:stretch; flex-wrap:wrap;">
+    <div class="grade-card grade-${grade.letter}" style="min-width:100px;">
+      <div class="grade-letter">${grade.letter}</div>
+      <div class="grade-label">${grade.label}</div>
+      <div class="grade-score">${grade.score}/100</div>
+    </div>
+    <div class="dim-grades" style="flex:1; min-width:280px;">
+      ${['security','reliability','style','overall'].map(d => `
+        <div class="dim-grade">
+          <div class="letter" style="color:${gradeColor(dims[d].letter)}">${dims[d].letter}</div>
+          <div class="dim-label">${d}</div>
+          <div class="dim-score">${dims[d].score}/100</div>
+        </div>`).join('')}
+    </div>
+    <div class="gate-badge ${gate.passed ? 'gate-pass' : 'gate-fail'}">
+      ${gate.passed ? '&#x2705; PASS' : '&#x274C; FAIL'}
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="card total"><div class="value">${r.summary.total}</div><div class="label">Total</div>${prev ? deltaHtml(r.summary.total, prev.summary.total, true) : ''}</div>
+    <div class="card high"><div class="value">${r.summary.high}</div><div class="label">High</div>${prev ? deltaHtml(r.summary.high, prev.summary.high, true) : ''}</div>
+    <div class="card medium"><div class="value">${r.summary.medium}</div><div class="label">Medium</div>${prev ? deltaHtml(r.summary.medium, prev.summary.medium, true) : ''}</div>
+    <div class="card low"><div class="value">${r.summary.low}</div><div class="label">Low</div>${prev ? deltaHtml(r.summary.low, prev.summary.low, true) : ''}</div>
+    <div class="card files"><div class="value">${r.files_scanned}</div><div class="label">Files</div>${prev ? deltaHtml(r.files_scanned, prev.files_scanned, false) : ''}</div>
+    <div class="card speed"><div class="value">${r.elapsed_ms}ms</div><div class="label">${r.engine} engine</div></div>
+    ${r._remTime ? `<div class="card"><div class="value" style="color:var(--medium); font-size:20px;">${r._remTime.total_hours}h</div><div class="label">Est. Fix Time</div></div>` : ''}
+  </div>
+
+  <div class="toolbar">
+    <div class="view-tabs" style="flex-wrap:wrap;">
+      <button class="view-tab ${activeView==='findings'?'active':''}" onclick="switchView('findings')">&#128270; Findings</button>
+      <button class="view-tab ${activeView==='fixplan'?'active':''}" onclick="switchView('fixplan')">&#128295; Fix Plan</button>
+      <button class="view-tab ${activeView==='files'?'active':''}" onclick="switchView('files')">&#128196; By File</button>
+      <button class="view-tab ${activeView==='gate'?'active':''}" onclick="switchView('gate')">&#128678; Gate</button>
+      <button class="view-tab ${activeView==='trend'?'active':''}" onclick="switchView('trend')">&#128200; Trend</button>
+      <button class="view-tab ${activeView==='smells'?'active':''}" onclick="switchView('smells')">&#128067; Smells</button>
+      <button class="view-tab ${activeView==='bandit'?'active':''}" onclick="switchView('bandit')">&#128737; Bandit</button>
+      <button class="view-tab ${activeView==='dead'?'active':''}" onclick="switchView('dead')">&#128128; Dead</button>
+      <button class="view-tab ${activeView==='dups'?'active':''}" onclick="switchView('dups')">&#128203; Dups</button>
+      <button class="view-tab ${activeView==='satd'?'active':''}" onclick="switchView('satd')">&#128203; Debt</button>
+      <button class="view-tab ${activeView==='git'?'active':''}" onclick="switchView('git')">&#x1F525; Git</button>
+      <button class="view-tab ${activeView==='graph'?'active':''}" onclick="switchView('graph')">&#x1F517; Graph</button>
+      <button class="view-tab ${activeView==='health'?'active':''}" onclick="switchView('health')">&#x1FA7A; Health</button>
+      <button class="view-tab ${activeView==='temporal'?'active':''}" onclick="switchView('temporal')">&#x1F4C5; Coupling</button>
+      <button class="view-tab ${activeView==='release'?'active':''}" onclick="switchView('release')">&#x1F680; Release</button>
+      <button class="view-tab ${activeView==='riskmap'?'active':''}" onclick="switchView('riskmap')">&#x1F3AF; Risk</button>
+      <button class="view-tab ${activeView==='modules'?'active':''}" onclick="switchView('modules')">&#x1F4CA; Modules</button>
+      <button class="view-tab ${activeView==='confidence'?'active':''}" onclick="switchView('confidence')">&#x1F3AF; Confidence</button>
+      <button class="view-tab ${activeView==='batches'?'active':''}" onclick="switchView('batches')">&#x1F4CB; Batches</button>
+      <button class="view-tab ${activeView==='arch'?'active':''}" onclick="switchView('arch')">&#x1F3D7; Arch</button>
+      <button class="view-tab ${activeView==='callgraph'?'active':''}" onclick="switchView('callgraph')">&#x1F4DE; Calls</button>
+    </div>
+    <div class="toolbar-right">
+      <input class="search-box" type="text" placeholder="Search findings..." value="${esc(searchQuery)}" oninput="searchQuery=this.value; renderViewContent();" />
+      <button class="btn btn-sm btn-outline" onclick="exportJSON()" title="Export JSON">&#x2B07; JSON</button>
+      <button class="btn btn-sm btn-outline" onclick="exportHTML()" title="Export HTML Report">&#x2B07; Report</button>
+      <button class="btn btn-sm btn-outline" onclick="exportGateJSON()" title="Export Gate Result">&#x2B07; Gate</button>
+      <button class="btn btn-sm btn-outline" onclick="runScan()" title="Re-scan">&#x21BB; Re-scan</button>
+    </div>
+  </div>
+
+  <div id="viewContent"></div>`;
+
+  document.getElementById('mainContent').innerHTML = html;
+  renderViewContent();
+}
+
+function switchView(view) {
+  activeView = view;
+  renderResults();
+}
+
+function renderViewContent() {
+  const el = document.getElementById('viewContent');
+  if (!el) return;
+  if (activeView === 'fixplan')   { el.innerHTML = renderFixPlan(); return; }
+  if (activeView === 'files')     { el.innerHTML = renderByFile(); return; }
+  if (activeView === 'gate')      { el.innerHTML = renderGateView(); return; }
+  if (activeView === 'satd')      { el.innerHTML = renderSATDView(); return; }
+  if (activeView === 'git')       { el.innerHTML = renderGitView(); return; }
+  if (activeView === 'graph')     { el.innerHTML = renderGraphView(); initGraph(); return; }
+  if (activeView === 'trend')     { el.innerHTML = renderTrendView(); drawTrendChart(); return; }
+  if (activeView === 'smells')    { el.innerHTML = renderSmellsView(); return; }
+  if (activeView === 'bandit')    { el.innerHTML = renderBanditView(); return; }
+  if (activeView === 'dead')      { el.innerHTML = renderDeadCodeView(); return; }
+  if (activeView === 'dups')      { el.innerHTML = renderDuplicatesView(); return; }
+  if (activeView === 'health')    { el.innerHTML = renderHealthView(); return; }
+  if (activeView === 'format')    { el.innerHTML = renderFormatView(); return; }
+  if (activeView === 'temporal')  { el.innerHTML = renderTemporalView(); return; }
+  if (activeView === 'typecheck') { el.innerHTML = renderTypecheckView(); return; }
+  if (activeView === 'release')   { el.innerHTML = renderReleaseView(); return; }
+  if (activeView === 'aidetect')  { el.innerHTML = renderAiDetectView(); return; }
+  if (activeView === 'websmells') { el.innerHTML = renderWebSmellsView(); return; }
+  if (activeView === 'testgen')   { el.innerHTML = renderTestGenView(); return; }
+  if (activeView === 'riskmap')    { el.innerHTML = renderRiskMapView(); return; }
+  if (activeView === 'modules')    { el.innerHTML = renderModuleCardsView(); return; }
+  if (activeView === 'confidence') { el.innerHTML = renderConfidenceView(); return; }
+  if (activeView === 'batches')    { el.innerHTML = renderBatchesView(); return; }
+  if (activeView === 'arch')       { el.innerHTML = renderArchView(); initArchGraph(); return; }
+  if (activeView === 'callgraph')  { el.innerHTML = renderCallGraphView(); initCallGraph(); return; }
+  el.innerHTML = renderFindingsList();
+}
+
+// ── Findings List View ───────────────────────────────────────────
+function renderFindingsList() {
+  const r = scanResults;
   const findings = filterFindings(r.findings || []);
 
   let html = `
-  <div class="summary">
-    <div class="card total"><div class="value">${r.summary.total}</div><div class="label">Total</div></div>
-    <div class="card high"><div class="value">${r.summary.high}</div><div class="label">High</div></div>
-    <div class="card medium"><div class="value">${r.summary.medium}</div><div class="label">Medium</div></div>
-    <div class="card low"><div class="value">${r.summary.low}</div><div class="label">Low</div></div>
-    <div class="card files"><div class="value">${r.files_scanned}</div><div class="label">Files</div></div>
-    <div class="card speed"><div class="value">${r.elapsed_ms}ms</div><div class="label">${r.engine} engine</div></div>
-  </div>
-
-  <div class="findings-header">
+  <div class="findings-header" style="margin-top:12px;">
     <h2>Findings</h2>
     <span class="count">${findings.length}</span>
     <div class="filter-btns">
@@ -400,26 +958,466 @@ function renderResults() {
         <div class="detail-row"><span class="detail-label">Match</span><span class="detail-value">${esc(f.matched_text)}</span></div>
         <div class="detail-row"><span class="detail-label">Fix</span><span class="detail-value fix">${esc(f.fix_hint)}</span></div>
         <div class="detail-row"><span class="detail-label">Test</span><span class="detail-value">${esc(f.test_hint)}</span></div>
+        <div class="detail-row" style="margin-top:8px;">
+          ${fixableRules.has(f.rule_id)
+            ? `<button class="btn btn-sm btn-fix" onclick="event.stopPropagation(); previewFix(${i})">&#128295; Preview Fix</button>
+               <button class="btn btn-sm btn-apply" onclick="event.stopPropagation(); applyFixDirect(${i})">&#x26A1; Apply Fix</button>`
+            : `<span style="color:var(--text2); font-size:12px;">&#x2139; Manual fix required</span>`}
+        </div>
       </div>
     </div>`;
   }
 
   html += `</div>`;
-  document.getElementById('mainContent').innerHTML = html;
+  return html;
 }
 
 function filterFindings(findings) {
-  if (activeFilter === 'ALL') return findings;
-  return findings.filter(f => f.severity === activeFilter);
+  let filtered = findings;
+  if (activeFilter !== 'ALL') filtered = filtered.filter(f => f.severity === activeFilter);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter(f =>
+      (f.file && f.file.toLowerCase().includes(q)) ||
+      (f.rule_id && f.rule_id.toLowerCase().includes(q)) ||
+      (f.description && f.description.toLowerCase().includes(q)) ||
+      (f.matched_text && f.matched_text.toLowerCase().includes(q))
+    );
+  }
+  return filtered;
 }
 
 function setFilter(f) {
   activeFilter = f;
-  renderResults();
+  renderViewContent();
 }
 
 function toggleFinding(el) {
   el.classList.toggle('open');
+}
+
+// ── Fix Plan View ────────────────────────────────────────────────
+function renderFixPlan() {
+  const findings = scanResults.findings || [];
+  // Group by rule_id
+  const groups = {};
+  for (const f of findings) {
+    if (!groups[f.rule_id]) groups[f.rule_id] = { severity: f.severity, desc: f.description, fix: f.fix_hint, test: f.test_hint, files: [] };
+    groups[f.rule_id].files.push(`${shortenPath(f.file)}:${f.line}`);
+  }
+  // Sort by count descending
+  const sorted = Object.entries(groups).sort((a, b) => b[1].files.length - a[1].files.length);
+
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    const filtered = sorted.filter(([id, g]) =>
+      id.toLowerCase().includes(q) || g.desc.toLowerCase().includes(q) || g.fix.toLowerCase().includes(q)
+    );
+    return renderFixPlanGroups(filtered);
+  }
+  return renderFixPlanGroups(sorted);
+}
+
+function renderFixPlanGroups(sorted) {
+  let html = `<div style="margin-top:12px;"><h2 style="margin-bottom:12px;">Fix Plan &mdash; ${sorted.length} rule${sorted.length!==1?'s':''}</h2>`;
+  for (const [ruleId, g] of sorted) {
+    html += `
+    <div class="rule-group">
+      <div class="rule-group-header" onclick="var fl=this.parentElement.querySelector('.rule-group-files'); fl.style.display=fl.style.display==='none'?'block':'none'">
+        <span class="sev-badge sev-${g.severity}">${g.severity}</span>
+        <b>${esc(ruleId)}</b>
+        <span style="color:var(--text2); font-size:13px;">${esc(g.desc)}</span>
+        <span class="rule-group-count">${g.files.length} occurrence${g.files.length!==1?'s':''}</span>
+      </div>
+      <div class="rule-group-fix">&#128295; ${esc(g.fix)}</div>
+      <div style="margin-top:6px; font-size:11px; color:var(--text2);">&#x1F9EA; ${esc(g.test)}</div>
+      ${fixableRules.has(ruleId)
+        ? `<button class="btn btn-sm btn-apply" style="margin-top:8px;" onclick="event.stopPropagation(); fixAllRule('${esc(ruleId)}')">&#x26A1; Fix All ${g.files.length} Occurrences</button>`
+        : ''}
+      <div class="rule-group-files" style="display:none;">
+        ${g.files.map(f => `<div>${esc(f)}</div>`).join('')}
+      </div>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── By File View (Enhanced Heatmap + Density Chart) ──────────────
+let fileSortMode = 'total'; // total | high | name
+function renderByFile() {
+  const findings = scanResults.findings || [];
+  const byFile = {};
+  for (const f of findings) {
+    const key = f.file;
+    if (!byFile[key]) byFile[key] = { high: 0, medium: 0, low: 0, total: 0 };
+    byFile[key].total++;
+    if (f.severity === 'HIGH') byFile[key].high++;
+    else if (f.severity === 'MEDIUM') byFile[key].medium++;
+    else byFile[key].low++;
+  }
+  let sorted = Object.entries(byFile);
+  if (fileSortMode === 'high') sorted.sort((a, b) => b[1].high - a[1].high || b[1].total - a[1].total);
+  else if (fileSortMode === 'name') sorted.sort((a, b) => a[0].localeCompare(b[0]));
+  else sorted.sort((a, b) => b[1].total - a[1].total);
+
+  const maxCount = sorted.length ? Math.max(...sorted.map(s => s[1].total)) : 1;
+
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    sorted = sorted.filter(([path]) => path.toLowerCase().includes(q));
+  }
+
+  // Density minimap
+  const densityBars = sorted.slice(0, 100).map(([, c]) => {
+    const pct = Math.max(5, (c.total / maxCount) * 100);
+    const color = c.high > 0 ? 'var(--high)' : c.medium > 0 ? 'var(--medium)' : 'var(--low)';
+    return `<div class="density-bar" style="height:${pct}%; background:${color};" title="${c.total} issues"></div>`;
+  }).join('');
+
+  let html = `<div style="margin-top:12px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+      <h2>Hottest Files &mdash; ${sorted.length} files</h2>
+      <div style="margin-left:auto; display:flex; gap:4px;">
+        <button class="filter-btn ${fileSortMode==='total'?'active':''}" onclick="fileSortMode='total'; renderViewContent();">By Count</button>
+        <button class="filter-btn ${fileSortMode==='high'?'active':''}" onclick="fileSortMode='high'; renderViewContent();">By Severity</button>
+        <button class="filter-btn ${fileSortMode==='name'?'active':''}" onclick="fileSortMode='name'; renderViewContent();">By Name</button>
+      </div>
+    </div>
+    <div class="density-chart">${densityBars}</div>`;
+
+  for (const [filePath, counts] of sorted.slice(0, 200)) {
+    const pct = (counts.total / maxCount) * 100;
+    const color = counts.high > 0 ? 'var(--high)' : counts.medium > 0 ? 'var(--medium)' : 'var(--low)';
+    html += `
+    <div class="file-heat" onclick="searchQuery='${esc(filePath.split('/').pop()||filePath.split('\\\\').pop())}'; activeView='findings'; activeFilter='ALL'; renderResults();">
+      <div class="file-heat-count" style="color:${color}">${counts.total}</div>
+      <div style="flex:1; min-width:0;">
+        <div class="file-heat-name">${esc(shortenPath(filePath))}</div>
+        <div class="file-heat-bar"><div class="file-heat-fill" style="width:${pct}%; background:linear-gradient(90deg, ${color}, ${color}88);"></div></div>
+      </div>
+      <div style="font-size:11px; color:var(--text2); white-space:nowrap;">
+        ${counts.high?'<span style="color:var(--high)">'+counts.high+'H</span> ':''}
+        ${counts.medium?'<span style="color:var(--medium)">'+counts.medium+'M</span> ':''}
+        ${counts.low?'<span style="color:var(--low)">'+counts.low+'L</span>':''}
+      </div>
+    </div>`;
+  }
+  if (sorted.length > 200) html += `<div style="padding:12px; color:var(--text2); text-align:center;">Showing top 200 of ${sorted.length} files</div>`;
+  html += `</div>`;
+  return html;
+}
+
+// ── Quality Gate View ─────────────────────────────────────────────
+function renderGateView() {
+  const r = scanResults;
+  const grade = calcDimensionGrades(r.findings || [], r.files_scanned).overall;
+  const gate = evaluateQualityGate(r.summary, grade, satdData ? satdData.total_hours : 0);
+
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:16px;">Quality Gate</h2>
+    <div style="text-align:center; margin-bottom:24px;">
+      <div class="gate-badge ${gate.passed ? 'gate-pass' : 'gate-fail'}" style="font-size:24px; padding:16px 40px;">
+        ${gate.passed ? '&#x2705; GATE PASSED' : '&#x274C; GATE FAILED'}
+      </div>
+    </div>`;
+
+  if (gate.violations.length > 0) {
+    html += `<h3 style="color:var(--high); margin-bottom:8px;">Violations (${gate.violations.length})</h3>
+    <div class="gate-violations">`;
+    for (const v of gate.violations) {
+      html += `<div class="gate-violation">
+        <div class="icon">&#x274C;</div>
+        <div style="flex:1;"><b>${esc(v.rule)}</b></div>
+        <div style="color:var(--text2);">Expected: ${v.expected}</div>
+        <div style="color:var(--high); font-weight:700; margin-left:12px;">Actual: ${v.actual}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  } else {
+    html += `<div style="text-align:center; color:var(--green); padding:24px;">
+      &#x2705; All thresholds met. Ready for CI/CD deployment.
+    </div>`;
+  }
+
+  html += `<div style="margin-top:24px; padding:16px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);">
+    <h3 style="margin-bottom:8px;">Current Thresholds</h3>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; font-size:13px;">
+      <div>Max High: <b>${document.getElementById('gateMaxHigh').value}</b></div>
+      <div>Max Medium: <b>${document.getElementById('gateMaxMedium').value}</b></div>
+      <div>Min Score: <b>${document.getElementById('gateMinScore').value}</b></div>
+      <div>Max Debt: <b>${document.getElementById('gateMaxDebt').value}h</b></div>
+    </div>
+  </div></div>`;
+  return html;
+}
+
+// ── SATD / Debt View ─────────────────────────────────────────────
+async function runSATD() {
+  if (!selectedDir) return;
+  document.getElementById('satdBtn').disabled = true;
+  document.getElementById('satdBtn').textContent = 'Scanning...';
+  try {
+    satdData = await api('/api/satd', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir })
+    });
+    if (scanResults) { activeView = 'satd'; renderResults(); }
+    else { renderSATDStandalone(); }
+  } catch(e) { showToast('SATD scan failed', true); }
+  document.getElementById('satdBtn').disabled = false;
+  document.getElementById('satdBtn').textContent = '\u{1F4CB} Scan Debt';
+}
+
+function renderSATDStandalone() {
+  if (!satdData) return;
+  document.getElementById('mainContent').innerHTML = `
+    <div style="padding:20px;">
+      <h2 style="margin-bottom:16px;">&#128203; Technical Debt (SATD)</h2>
+      ${renderSATDContent()}
+    </div>`;
+}
+
+function renderSATDView() {
+  if (!satdData) return `<div style="padding:40px; text-align:center; color:var(--text2);">
+    Click <b>Scan Debt</b> in the sidebar to analyze TODO/FIXME/HACK comments.
+  </div>`;
+  return `<div style="margin-top:12px;"><h2 style="margin-bottom:12px;">Technical Debt (SATD)</h2>${renderSATDContent()}</div>`;
+}
+
+function renderSATDContent() {
+  const d = satdData;
+  if (d.error) return `<div style="color:var(--high);">${esc(d.error)}</div>`;
+
+  const cats = d.by_category || {};
+  let html = `<div class="debt-summary">
+    <div class="debt-card"><div class="val" style="color:var(--medium)">${d.total_items || 0}</div><div class="lbl">Debt Items</div></div>
+    <div class="debt-card"><div class="val" style="color:var(--high)">${(d.total_hours || 0).toFixed(1)}h</div><div class="lbl">Est. Hours</div></div>
+    ${Object.entries(cats).map(([cat, items]) =>
+      `<div class="debt-card"><div class="val">${items.length}</div><div class="lbl">${cat}</div></div>`
+    ).join('')}
+  </div>`;
+
+  // Items list
+  const items = d.items || [];
+  const filtered = searchQuery ? items.filter(i =>
+    i.file.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    i.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    i.marker.toLowerCase().includes(searchQuery.toLowerCase())
+  ) : items;
+
+  for (const item of filtered.slice(0, 200)) {
+    html += `<div class="debt-item">
+      <span class="debt-cat debt-${item.category}">${item.marker}</span>
+      <span style="flex:1;">${esc(item.text)}</span>
+      <span style="font-family:monospace; font-size:11px; color:var(--text2);">${esc(shortenPath(item.file))}:${item.line}</span>
+      <span style="color:var(--medium); font-size:12px;">${item.hours}h</span>
+    </div>`;
+  }
+  if (filtered.length > 200) html += `<div style="padding:8px; text-align:center; color:var(--text2);">Showing 200 of ${filtered.length}</div>`;
+  return html;
+}
+
+// ── Git Hotspots View ────────────────────────────────────────────
+async function runGitHotspots() {
+  if (!selectedDir) return;
+  document.getElementById('gitBtn').disabled = true;
+  document.getElementById('gitBtn').textContent = 'Analyzing...';
+  try {
+    gitHotspotsData = await api('/api/git-hotspots', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir })
+    });
+    if (scanResults) { activeView = 'git'; renderResults(); }
+    else { renderGitStandalone(); }
+  } catch(e) { showToast('Git analysis failed', true); }
+  document.getElementById('gitBtn').disabled = false;
+  document.getElementById('gitBtn').textContent = '\u{1F525} Git Hotspots';
+}
+
+function renderGitStandalone() {
+  if (!gitHotspotsData) return;
+  document.getElementById('mainContent').innerHTML = `
+    <div style="padding:20px;">
+      <h2 style="margin-bottom:16px;">&#x1F525; Git Hotspots</h2>
+      ${renderGitContent()}
+    </div>`;
+}
+
+function renderGitView() {
+  if (!gitHotspotsData) return `<div style="padding:40px; text-align:center; color:var(--text2);">
+    Click <b>Git Hotspots</b> in the sidebar to analyze file churn from git history.
+  </div>`;
+  return `<div style="margin-top:12px;"><h2 style="margin-bottom:12px;">Git Hotspots</h2>${renderGitContent()}</div>`;
+}
+
+function renderGitContent() {
+  const g = gitHotspotsData;
+  if (g.error) return `<div style="color:var(--high);">${esc(g.error)}</div>`;
+
+  const hotspots = g.hotspots || [];
+  const maxPriority = hotspots.length ? Math.max(...hotspots.map(h => h.priority)) : 1;
+
+  let html = `<div class="debt-summary">
+    <div class="debt-card"><div class="val">${hotspots.length}</div><div class="lbl">Files Changed</div></div>
+    <div class="debt-card"><div class="val" style="color:var(--high)">${hotspots.filter(h => h.priority >= 20).length}</div><div class="lbl">&#x1F525; Hot</div></div>
+    <div class="debt-card"><div class="val" style="color:var(--medium)">${hotspots.filter(h => h.priority >= 10 && h.priority < 20).length}</div><div class="lbl">&#x26A0; Warm</div></div>
+    <div class="debt-card"><div class="val">${g.days || 90}</div><div class="lbl">Days Window</div></div>
+  </div>`;
+
+  const filtered = searchQuery ? hotspots.filter(h => h.path.toLowerCase().includes(searchQuery.toLowerCase())) : hotspots;
+
+  for (const h of filtered.slice(0, 100)) {
+    const pct = (h.priority / maxPriority) * 100;
+    const badge = h.priority >= 20 ? '&#x1F525;' : h.priority >= 10 ? '&#x26A0;' : '&#x1F4C4;';
+    const color = h.priority >= 20 ? 'var(--high)' : h.priority >= 10 ? 'var(--medium)' : 'var(--low)';
+    html += `<div class="hotspot-item">
+      <div class="hotspot-badge">${badge}</div>
+      <div class="hotspot-churn" style="color:${color}">${h.churn}</div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:13px; font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(h.path)}</div>
+        <div class="hotspot-bar"><div class="hotspot-fill" style="width:${pct}%; background:${color};"></div></div>
+      </div>
+      <div class="hotspot-priority">priority: ${h.priority.toFixed(1)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+// ── Dependency Graph View ────────────────────────────────────────
+async function runImports() {
+  if (!selectedDir) return;
+  document.getElementById('graphBtn').disabled = true;
+  document.getElementById('graphBtn').textContent = 'Parsing...';
+  try {
+    importsData = await api('/api/imports', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir })
+    });
+    if (scanResults) { activeView = 'graph'; renderResults(); }
+    else { document.getElementById('mainContent').innerHTML = renderGraphView(); initGraph(); }
+  } catch(e) { showToast('Import analysis failed', true); }
+  document.getElementById('graphBtn').disabled = false;
+  document.getElementById('graphBtn').textContent = '\u{1F517} Dep Graph';
+}
+
+function renderGraphView() {
+  if (!importsData) return `<div style="padding:40px; text-align:center; color:var(--text2);">
+    Click <b>Dep Graph</b> in the sidebar to visualize import dependencies.
+  </div>`;
+  if (importsData.error) return `<div style="color:var(--high); padding:20px;">${esc(importsData.error)}</div>`;
+  return `<div style="margin-top:12px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+      <h2>Dependency Graph</h2>
+      <span class="count">${(importsData.nodes||[]).length} modules, ${(importsData.edges||[]).length} imports</span>
+    </div>
+    <div id="graphContainer" class="graph-container"></div>
+  </div>`;
+}
+
+function initGraph() {
+  const container = document.getElementById('graphContainer');
+  if (!container || !importsData || !window.vis) return;
+  const nodes = new vis.DataSet((importsData.nodes || []).map(n => ({
+    id: n.id, label: n.label,
+    color: { background: n.external ? '#30363d' : '#1f6feb', border: n.external ? '#484f58' : '#58a6ff' },
+    font: { color: '#e6edf3', size: 11 },
+    shape: n.external ? 'diamond' : 'dot',
+    size: Math.min(8 + (n.imports_count || 0) * 2, 30),
+  })));
+  const edges = new vis.DataSet((importsData.edges || []).map(e => ({
+    from: e.from, to: e.to,
+    arrows: 'to', color: { color: '#30363d', highlight: '#58a6ff' }, smooth: { type: 'cubicBezier' },
+  })));
+  new vis.Network(container, { nodes, edges }, {
+    physics: { solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -40, springLength: 100 } },
+    interaction: { hover: true, tooltipDelay: 100 },
+    layout: { improvedLayout: true },
+  });
+}
+
+// ── Ruff Integration ─────────────────────────────────────────────
+async function runRuff() {
+  if (!selectedDir) return;
+  document.getElementById('ruffBtn').disabled = true;
+  document.getElementById('ruffBtn').textContent = 'Running...';
+  try {
+    const result = await api('/api/ruff', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir })
+    });
+    if (result.error) {
+      showToast(result.error, true);
+    } else {
+      showToast(`Ruff: ${result.fixed || 0} fixes applied, ${result.remaining || 0} remaining`);
+    }
+  } catch(e) { showToast('Ruff failed', true); }
+  document.getElementById('ruffBtn').disabled = false;
+  document.getElementById('ruffBtn').textContent = '\u{1F9F9} Ruff Fix';
+}
+
+// ── Export Gate JSON ──────────────────────────────────────────────
+function exportGateJSON() {
+  if (!scanResults) return;
+  const grade = calcDimensionGrades(scanResults.findings || [], scanResults.files_scanned).overall;
+  const gate = evaluateQualityGate(scanResults.summary, grade, satdData ? satdData.total_hours : 0);
+  const blob = new Blob([JSON.stringify({ ...gate, summary: scanResults.summary, grade, timestamp: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `xray-gate-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Export ────────────────────────────────────────────────────────
+function exportJSON() {
+  if (!scanResults) return;
+  const blob = new Blob([JSON.stringify(scanResults, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `xray-scan-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportHTML() {
+  if (!scanResults) return;
+  const r = scanResults;
+  const grade = calcGrade(r.summary, r.files_scanned);
+  let rows = '';
+  for (const f of r.findings) {
+    const sevColor = f.severity === 'HIGH' ? '#f85149' : f.severity === 'MEDIUM' ? '#d29922' : '#58a6ff';
+    rows += `<tr><td style="color:${sevColor};font-weight:700">${f.severity}</td><td>${f.rule_id}</td><td style="font-family:monospace;font-size:12px">${f.file}:${f.line}</td><td>${f.description}</td><td style="color:#3fb950">${f.fix_hint}</td></tr>\n`;
+  }
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>X-Ray Report</title>
+<style>body{font-family:system-ui;background:#0d1117;color:#e6edf3;padding:40px;max-width:1200px;margin:0 auto}
+table{width:100%;border-collapse:collapse;margin-top:20px}th,td{padding:8px 12px;border-bottom:1px solid #30363d;text-align:left;font-size:13px}
+th{background:#161b22;color:#8b949e;text-transform:uppercase;font-size:11px}
+.grade{font-size:64px;font-weight:900}.summary{display:flex;gap:24px;margin:16px 0}
+.stat{text-align:center}.stat .n{font-size:28px;font-weight:700}.stat .l{font-size:11px;color:#8b949e;text-transform:uppercase}
+</style></head><body>
+<h1>&#128269; X-Ray Scan Report</h1>
+<p style="color:#8b949e">${new Date().toLocaleString()} &middot; ${r.engine} engine &middot; ${r.elapsed_ms}ms</p>
+<div class="summary">
+  <div class="stat"><div class="grade" style="color:${grade.letter==='A'?'#3fb950':grade.letter==='B'?'#58a6ff':grade.letter==='C'?'#d29922':grade.letter==='D'?'#f0883e':'#f85149'}">${grade.letter}</div><div class="l">${grade.label} (${grade.score}/100)</div></div>
+  <div class="stat"><div class="n">${r.summary.total}</div><div class="l">Total</div></div>
+  <div class="stat"><div class="n" style="color:#f85149">${r.summary.high}</div><div class="l">High</div></div>
+  <div class="stat"><div class="n" style="color:#d29922">${r.summary.medium}</div><div class="l">Medium</div></div>
+  <div class="stat"><div class="n" style="color:#58a6ff">${r.summary.low}</div><div class="l">Low</div></div>
+  <div class="stat"><div class="n" style="color:#3fb950">${r.files_scanned}</div><div class="l">Files</div></div>
+</div>
+<table><thead><tr><th>Severity</th><th>Rule</th><th>File</th><th>Description</th><th>Fix</th></tr></thead><tbody>${rows}</tbody></table>
+</body></html>`;
+  const blob = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `xray-report-${new Date().toISOString().slice(0,10)}.html`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ── Recent Scans ─────────────────────────────────────────────────
@@ -470,7 +1468,911 @@ function shortenPath(p) {
   return '.../' + parts.slice(-2).join('/');
 }
 
+// ── Fix Preview & Apply ──────────────────────────────────────────
+async function previewFix(findingIdx) {
+  const f = filterFindings(scanResults.findings)[findingIdx];
+  if (!f) return;
+  const result = await api('/api/preview-fix', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(f)
+  });
+  showDiffModal(f, result);
+}
+
+async function applyFixDirect(findingIdx) {
+  const f = filterFindings(scanResults.findings)[findingIdx];
+  if (!f) return;
+  const result = await api('/api/apply-fix', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(f)
+  });
+  if (result.ok) {
+    showToast(`Fixed ${f.rule_id} in ${shortenPath(f.file)}:${f.line}`);
+  } else {
+    showToast(result.error || 'Fix failed', true);
+  }
+}
+
+async function fixAllRule(ruleId) {
+  const findings = (scanResults.findings || []).filter(f => f.rule_id === ruleId);
+  if (!findings.length) return;
+  if (!confirm(`Apply auto-fix to ${findings.length} ${ruleId} finding(s)?`)) return;
+
+  const result = await api('/api/apply-fixes-bulk', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ findings })
+  });
+  let msg = `${result.applied} fixed, ${result.skipped} skipped`;
+  if (result.errors && result.errors.length) msg += `\n${result.errors[0]}`;
+  showToast(msg, result.skipped > 0);
+}
+
+function showDiffModal(finding, result) {
+  const existing = document.getElementById('diffModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'diffModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;display:flex;align-items:center;justify-content:center;';
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+
+  const shortFile = shortenPath(finding.file);
+  let body;
+  if (result.fixable) {
+    const diffHtml = colorDiff(result.diff);
+    body = `
+      <div style="margin-bottom:12px;"><b>${finding.rule_id}</b> at ${esc(shortFile)}:${finding.line}</div>
+      <div style="margin-bottom:8px; color:var(--green);">${esc(result.description)}</div>
+      <pre class="diff-block">${diffHtml}</pre>
+      <div style="margin-top:16px; display:flex; gap:12px; justify-content:flex-end;">
+        <button class="btn btn-outline" onclick="document.getElementById('diffModal').remove()">Cancel</button>
+        <button class="btn btn-apply" onclick="applyFromModal(this)">&#x26A1; Apply Fix</button>
+      </div>`;
+  } else {
+    body = `
+      <div style="margin-bottom:12px;"><b>${finding.rule_id}</b> at ${esc(shortFile)}:${finding.line}</div>
+      <div style="color:var(--medium);">${esc(result.error)}</div>
+      <div style="margin-top:16px;"><button class="btn btn-outline" onclick="document.getElementById('diffModal').remove()">Close</button></div>`;
+  }
+
+  modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:700px;width:90%;max-height:80vh;overflow-y:auto;">${body}</div>`;
+  // Store finding data on the modal for apply
+  modal._finding = finding;
+  document.body.appendChild(modal);
+}
+
+async function applyFromModal(btn) {
+  const modal = document.getElementById('diffModal');
+  if (!modal || !modal._finding) return;
+  btn.disabled = true; btn.textContent = 'Applying...';
+  const result = await api('/api/apply-fix', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(modal._finding)
+  });
+  modal.remove();
+  if (result.ok) showToast('Fix applied!');
+  else showToast(result.error || 'Fix failed', true);
+}
+
+function colorDiff(diff) {
+  if (!diff) return '(no diff)';
+  return diff.split('\n').map(line => {
+    if (line.startsWith('+++') || line.startsWith('---')) return `<span style="color:var(--text2)">${esc(line)}</span>`;
+    if (line.startsWith('+')) return `<span style="color:var(--green)">${esc(line)}</span>`;
+    if (line.startsWith('-')) return `<span style="color:var(--high)">${esc(line)}</span>`;
+    if (line.startsWith('@@')) return `<span style="color:var(--accent)">${esc(line)}</span>`;
+    return esc(line);
+  }).join('\n');
+}
+
+function showToast(msg, isError) {
+  const el = document.createElement('div');
+  el.style.cssText = `position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;z-index:1000;
+    font-size:14px;font-weight:500;color:#fff;background:${isError ? 'var(--high)' : 'var(--green)'};
+    box-shadow:0 4px 16px rgba(0,0,0,0.4);transition:opacity 0.3s;`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+
 // ── Start ────────────────────────────────────────────────────────
+
+// ── Tool Runners (Phase 1-4) ─────────────────────────────────────
+async function runTool(btnId, endpoint, dataKey, btnLabel, viewName) {
+  if (!selectedDir) return;
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.disabled = true; btn.textContent = 'Running...'; }
+  try {
+    const result = await api(endpoint, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir })
+    });
+    window[dataKey] = result;
+    if (scanResults) { activeView = viewName; renderResults(); }
+    else { renderStandalone(viewName); }
+  } catch(e) { showToast(`${btnLabel} failed`, true); }
+  if (btn) { btn.disabled = false; btn.textContent = btnLabel; }
+}
+
+function renderStandalone(viewName) {
+  document.getElementById('mainContent').innerHTML = `<div style="padding:20px;" id="viewContent"></div>`;
+  activeView = viewName;
+  renderViewContent();
+}
+
+async function runFormat()     { await runTool('fmtBtn',      '/api/format',            'formatData',      '\u{1F4D0} Format',     'format'); }
+async function runHealth()     { await runTool('healthBtn',    '/api/health',            'healthData',      '\u{1FA7A} Health',     'health'); }
+async function runBandit()     { await runTool('banditBtn',    '/api/bandit',            'banditData',      '\u{1F6E1} Bandit',     'bandit'); }
+async function runDeadCode()   { await runTool('deadBtn',      '/api/dead-code',         'deadCodeData',    '\u{1F480} Dead Code',  'dead'); }
+async function runSmells()     { await runTool('smellsBtn',    '/api/smells',            'smellsData',      '\u{1F443} Smells',     'smells'); }
+async function runDuplicates() { await runTool('dupsBtn',      '/api/duplicates',        'duplicatesData',  '\u{1F4CB} Duplicates', 'dups'); }
+async function runTemporal()   { await runTool('temporalBtn',  '/api/temporal-coupling',  'temporalData',   '\u{1F4C5} Coupling',   'temporal'); }
+async function runTypecheck()  { await runTool('typeBtn',      '/api/typecheck',         'typecheckData',   '\u{1F50E} Types',      'typecheck'); }
+async function runRelease()    { await runTool('releaseBtn',   '/api/release-readiness',  'releaseData',    '\u{1F680} Release',    'release'); }
+async function runAiDetect()   { await runTool('aiBtn',        '/api/ai-detect',         'aiDetectData',    '\u{1F916} AI Detect',  'aidetect'); }
+async function runWebSmells()  { await runTool('webBtn',       '/api/web-smells',        'webSmellsData',   '\u{1F310} Web Smells', 'websmells'); }
+async function runTestGen()    { await runTool('testGenBtn',   '/api/test-gen',          'testGenData',     '\u{1F9EA} Test Gen',   'testgen'); }
+
+// ── Trend Chart View ─────────────────────────────────────────────
+function renderTrendView() {
+  if (scanHistory.length === 0) return `<div style="padding:40px; text-align:center; color:var(--text2);">
+    No scan history yet. Run multiple scans to see trends.
+  </div>`;
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Quality Trend (${scanHistory.length} scans)</h2>
+    <canvas id="trendCanvas" class="trend-chart"></canvas>
+    <div style="margin-top:16px;">
+      <table style="width:100%; font-size:12px; border-collapse:collapse;">
+        <tr style="color:var(--text2); border-bottom:1px solid var(--border);">
+          <th style="text-align:left; padding:4px;">Date</th>
+          <th>Grade</th><th>Score</th><th>Total</th><th>High</th><th>Medium</th><th>Low</th><th>Files</th>
+        </tr>`;
+  for (const s of [...scanHistory].reverse().slice(0, 20)) {
+    html += `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:4px; font-family:monospace;">${new Date(s.time).toLocaleDateString()} ${new Date(s.time).toLocaleTimeString()}</td>
+      <td style="text-align:center; font-weight:900; color:${gradeColor(s.letter)}">${s.letter}</td>
+      <td style="text-align:center;">${s.score}</td>
+      <td style="text-align:center;">${s.total}</td>
+      <td style="text-align:center; color:var(--high)">${s.high}</td>
+      <td style="text-align:center; color:var(--medium)">${s.medium}</td>
+      <td style="text-align:center; color:var(--low)">${s.low}</td>
+      <td style="text-align:center;">${s.files}</td>
+    </tr>`;
+  }
+  html += `</table></div></div>`;
+  return html;
+}
+
+function drawTrendChart() {
+  const canvas = document.getElementById('trendCanvas');
+  if (!canvas || scanHistory.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = 200;
+
+  const data = scanHistory;
+  const maxScore = 100;
+  const pad = { top: 20, right: 20, bottom: 30, left: 50 };
+  const w = canvas.width - pad.left - pad.right;
+  const h = canvas.height - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Grid
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border').trim() || '#30363d';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (h / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + w, y); ctx.stroke();
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text2').trim() || '#8b949e';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(Math.round(maxScore - (maxScore / 4) * i), 5, y + 4);
+  }
+
+  // Score line
+  ctx.beginPath();
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#58a6ff';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < data.length; i++) {
+    const x = pad.left + (i / (data.length - 1)) * w;
+    const y = pad.top + ((maxScore - data[i].score) / maxScore) * h;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Dots
+  for (let i = 0; i < data.length; i++) {
+    const x = pad.left + (i / (data.length - 1)) * w;
+    const y = pad.top + ((maxScore - data[i].score) / maxScore) * h;
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = gradeColor(data[i].letter);
+    ctx.fill();
+  }
+}
+
+// ── Format View ──────────────────────────────────────────────────
+function renderFormatView() {
+  if (!formatData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Format</b> in the sidebar to check code formatting.</div>`;
+  if (formatData.error) return `<div style="color:var(--high); padding:20px;">${esc(formatData.error)}</div>`;
+  const d = formatData;
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Format Check</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val" style="color:${d.all_formatted?'var(--green)':'var(--medium)'}">${d.all_formatted?'&#x2705;':'&#x26A0;'}</div><div class="lbl">${d.all_formatted?'All Formatted':'Needs Fix'}</div></div>
+      <div class="debt-card"><div class="val">${d.needs_format}</div><div class="lbl">Files Need Format</div></div>
+    </div>`;
+  for (const f of (d.files || []).slice(0, 200)) {
+    html += `<div class="debt-item"><span style="color:var(--medium);">&#x26A0;</span><span style="font-family:monospace; flex:1;">${esc(f)}</span></div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── Health View ──────────────────────────────────────────────────
+function renderHealthView() {
+  if (!healthData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Health</b> in the sidebar to check project health.</div>`;
+  const d = healthData;
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Project Health &mdash; ${d.score}%</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val" style="color:${d.score>=80?'var(--green)':d.score>=50?'var(--medium)':'var(--high)'}">${d.score}%</div><div class="lbl">Health Score</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--green)">${d.passed}</div><div class="lbl">Passed</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--high)">${d.total - d.passed}</div><div class="lbl">Missing</div></div>
+    </div>`;
+  for (const c of d.checks) {
+    const icon = c.status === 'pass' ? '&#x2705;' : '&#x274C;';
+    html += `<div class="health-check">
+      <div class="icon">${icon}</div>
+      <div class="name">${esc(c.name)}</div>
+      <div style="flex:1; color:var(--text2);">${esc(c.description)}</div>
+      <span class="sev-badge sev-${c.severity}">${c.severity}</span>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── Bandit / Security View ───────────────────────────────────────
+function renderBanditView() {
+  if (!banditData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Bandit</b> in the sidebar to run security analysis.</div>`;
+  if (banditData.error) return `<div style="color:var(--high); padding:20px;">${esc(banditData.error)}</div>`;
+  const d = banditData;
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Security Analysis &mdash; ${d.total_issues} issues</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val">${d.bandit_issues.length}</div><div class="lbl">Bandit Issues</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--high)">${d.secrets.length}</div><div class="lbl">Secrets Found</div></div>
+      <div class="debt-card"><div class="val">${d.total_issues}</div><div class="lbl">Total</div></div>
+    </div>`;
+
+  if (d.secrets.length > 0) {
+    html += `<h3 style="color:var(--high); margin:12px 0 8px;">&#x1F6A8; Secrets & API Keys</h3>`;
+    for (const s of d.secrets.slice(0, 100)) {
+      html += `<div class="finding"><div class="finding-top">
+        <span class="sev-badge sev-${s.severity}">${s.severity}</span>
+        <span class="finding-rule">${esc(s.rule_id)}</span>
+        <span class="finding-file">${esc(s.file)}:${s.line}</span>
+      </div><div class="finding-desc">${esc(s.description)}</div></div>`;
+    }
+  }
+
+  if (d.bandit_issues.length > 0) {
+    html += `<h3 style="margin:16px 0 8px;">&#x1F6E1; Bandit Findings</h3>`;
+    for (const b of d.bandit_issues.slice(0, 200)) {
+      html += `<div class="finding"><div class="finding-top">
+        <span class="sev-badge sev-${b.severity}">${b.severity}</span>
+        <span class="finding-rule">${esc(b.test_id || b.rule_id)} ${esc(b.rule_name)}</span>
+        <span class="finding-file">${esc(b.file)}:${b.line}</span>
+      </div><div class="finding-desc">${esc(b.description)}</div>
+      ${b.cwe ? `<div style="font-size:11px; color:var(--text2); margin-top:4px;">CWE-${b.cwe}</div>` : ''}</div>`;
+    }
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── Dead Code View ───────────────────────────────────────────────
+function renderDeadCodeView() {
+  if (!deadCodeData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Dead Code</b> in the sidebar to detect uncalled functions.</div>`;
+  const d = deadCodeData;
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Dead Code &mdash; ${d.total_dead} uncalled functions</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val">${d.total_defined}</div><div class="lbl">Defined</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--green)">${d.total_called}</div><div class="lbl">Called</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--high)">${d.total_dead}</div><div class="lbl">Dead</div></div>
+    </div>`;
+  for (const f of (d.dead_functions || []).slice(0, 200)) {
+    html += `<div class="debt-item">
+      <span class="sev-badge sev-MEDIUM">DEAD</span>
+      <span style="font-weight:600; font-family:monospace;">${esc(f.name)}</span>
+      <span style="flex:1; font-family:monospace; font-size:11px; color:var(--text2);">${esc(f.file)}:${f.line}</span>
+      <span style="color:var(--text2); font-size:12px;">${f.lines} lines</span>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── Code Smells View ─────────────────────────────────────────────
+function renderSmellsView() {
+  if (!smellsData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Smells</b> in the sidebar to detect code smells.</div>`;
+  const d = smellsData;
+  const types = d.by_type || {};
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Code Smells &mdash; ${d.total} found</h2>
+    <div class="debt-summary">
+      ${Object.entries(types).map(([type, count]) =>
+        `<div class="debt-card"><div class="val">${count}</div><div class="lbl">${type.replace(/_/g,' ')}</div></div>`
+      ).join('')}
+    </div>`;
+
+  const filtered = searchQuery ? (d.smells || []).filter(s =>
+    s.file.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.smell.toLowerCase().includes(searchQuery.toLowerCase())
+  ) : (d.smells || []);
+
+  for (const s of filtered.slice(0, 300)) {
+    html += `<div class="smell-item">
+      <span class="sev-badge sev-${s.severity}">${s.severity}</span>
+      <span class="smell-type">${s.smell.replace(/_/g,' ')}</span>
+      <span style="flex:1;">${esc(s.description)}</span>
+      <span style="font-family:monospace; font-size:11px; color:var(--text2);">${esc(s.file)}:${s.line}</span>
+    </div>`;
+  }
+  if (filtered.length > 300) html += `<div style="padding:8px; text-align:center; color:var(--text2);">Showing 300 of ${filtered.length}</div>`;
+  html += `</div>`;
+  return html;
+}
+
+// ── Duplicates View ──────────────────────────────────────────────
+function renderDuplicatesView() {
+  if (!duplicatesData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Duplicates</b> to detect duplicate code blocks.</div>`;
+  const d = duplicatesData;
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Duplicate Code &mdash; ${d.total_groups} groups</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val" style="color:var(--medium)">${d.total_groups}</div><div class="lbl">Duplicate Groups</div></div>
+      <div class="debt-card"><div class="val">${d.total_duplicated_blocks}</div><div class="lbl">Total Blocks</div></div>
+    </div>`;
+  for (const g of (d.duplicate_groups || []).slice(0, 100)) {
+    html += `<div class="dup-group">
+      <div class="dup-group-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        <span class="sev-badge sev-MEDIUM">${g.occurrences}x</span>
+        <span style="font-weight:600;">${g.lines}-line block duplicated ${g.occurrences} times</span>
+        <span style="color:var(--text2); font-size:11px; margin-left:auto;">${g.hash.slice(0,8)}</span>
+      </div>
+      <div class="dup-locations" style="display:none;">
+        ${g.locations.map(l => `<div>${esc(l.file)}:${l.line}</div>`).join('')}
+      </div>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── Temporal Coupling View ───────────────────────────────────────
+function renderTemporalView() {
+  if (!temporalData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Coupling</b> to analyze temporal coupling.</div>`;
+  if (temporalData.error) return `<div style="color:var(--high); padding:20px;">${esc(temporalData.error)}</div>`;
+  const d = temporalData;
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Temporal Coupling &mdash; ${d.total_pairs} pairs</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val">${d.total_commits}</div><div class="lbl">Commits Analyzed</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--medium)">${d.total_pairs}</div><div class="lbl">Coupled Pairs</div></div>
+    </div>`;
+  for (const c of (d.couplings || []).slice(0, 100)) {
+    const barW = Math.min(100, c.strength);
+    html += `<div class="hotspot-item">
+      <div style="font-weight:700; color:var(--medium); min-width:36px; text-align:center;">${c.co_changes}</div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:12px; font-family:monospace;">
+          ${esc(c.file_a)} <span style="color:var(--accent);">&#x21C4;</span> ${esc(c.file_b)}
+        </div>
+        <div class="hotspot-bar"><div class="hotspot-fill" style="width:${barW}%; background:var(--medium);"></div></div>
+      </div>
+      <div style="font-size:11px; color:var(--text2);">${c.strength}%</div>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── Typecheck View ───────────────────────────────────────────────
+function renderTypecheckView() {
+  if (!typecheckData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Types</b> to run pyright type checker.</div>`;
+  if (typecheckData.error) return `<div style="color:var(--high); padding:20px;">${esc(typecheckData.error)}</div>`;
+  const d = typecheckData;
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Type Checking &mdash; ${d.total} issues</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val" style="color:var(--high)">${d.errors}</div><div class="lbl">Errors</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--medium)">${d.warnings}</div><div class="lbl">Warnings</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--low)">${d.informations}</div><div class="lbl">Info</div></div>
+    </div>`;
+  for (const i of (d.issues || []).slice(0, 200)) {
+    html += `<div class="finding"><div class="finding-top">
+      <span class="sev-badge sev-${i.severity === 'ERROR' ? 'HIGH' : i.severity === 'WARNING' ? 'MEDIUM' : 'LOW'}">${i.severity}</span>
+      <span class="finding-rule">${esc(i.rule)}</span>
+      <span class="finding-file">${esc(i.file)}:${i.line}</span>
+    </div><div class="finding-desc">${esc(i.message)}</div></div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── Release Readiness View ───────────────────────────────────────
+function renderReleaseView() {
+  if (!releaseData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Release</b> to check release readiness.</div>`;
+  const d = releaseData;
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Release Readiness</h2>
+    <div style="text-align:center; margin-bottom:20px;">
+      <div class="ready-badge ${d.ready ? 'ready-yes' : 'ready-no'}">${d.ready ? '&#x2705; READY TO SHIP' : '&#x274C; NOT READY'} &mdash; ${d.score}%</div>
+    </div>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val" style="color:var(--green)">${d.passed}</div><div class="lbl">Passed</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--high)">${d.total - d.passed}</div><div class="lbl">Failed</div></div>
+      <div class="debt-card"><div class="val">${d.score}%</div><div class="lbl">Score</div></div>
+    </div>`;
+  for (const c of d.checks) {
+    const icon = c.pass ? '&#x2705;' : '&#x274C;';
+    html += `<div class="health-check">
+      <div class="icon">${icon}</div>
+      <div class="name" style="flex:1;">${esc(c.name)}</div>
+      <span class="sev-badge sev-${c.severity}">${c.severity}</span>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── AI Code Detection View ───────────────────────────────────────
+function renderAiDetectView() {
+  if (!aiDetectData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>AI Detect</b> to scan for AI-generated code patterns.</div>`;
+  const d = aiDetectData;
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">AI Code Detection &mdash; ${d.total} indicators</h2>
+    <div style="margin-bottom:12px; padding:10px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); font-size:12px; color:var(--text2);">
+      &#x2139; ${esc(d.note)}
+    </div>`;
+  for (const i of (d.indicators || []).slice(0, 200)) {
+    html += `<div class="debt-item">
+      <span class="sev-badge sev-LOW">AI</span>
+      <span style="font-weight:600;">${esc(i.pattern)}</span>
+      <span style="flex:1; font-family:monospace; font-size:11px; color:var(--text2);">${esc(i.file)}:${i.line}</span>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── Web Smells View ──────────────────────────────────────────────
+function renderWebSmellsView() {
+  if (!webSmellsData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Web Smells</b> to detect JS/TS/HTML anti-patterns.</div>`;
+  if (webSmellsData.error) return `<div style="color:var(--high); padding:20px;">${esc(webSmellsData.error)}</div>`;
+  const d = webSmellsData;
+  const bySev = d.by_severity || {};
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Web Smells &mdash; ${d.total} issues</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val" style="color:var(--high)">${bySev.HIGH||0}</div><div class="lbl">High</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--medium)">${bySev.MEDIUM||0}</div><div class="lbl">Medium</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--low)">${bySev.LOW||0}</div><div class="lbl">Low</div></div>
+    </div>`;
+  for (const s of (d.smells || []).slice(0, 300)) {
+    html += `<div class="finding"><div class="finding-top">
+      <span class="sev-badge sev-${s.severity}">${s.severity}</span>
+      <span class="finding-file">${esc(s.file)}:${s.line}</span>
+    </div><div class="finding-desc">${esc(s.description)}</div></div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── Test Gen View ────────────────────────────────────────────────
+function renderTestGenView() {
+  if (!testGenData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Test Gen</b> to generate test stubs.</div>`;
+  const d = testGenData;
+  let html = `<div style="margin-top:12px;">
+    <h2 style="margin-bottom:12px;">Test Coverage &amp; Generation</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val">${d.total_functions}</div><div class="lbl">Functions</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--green)">${d.tested}</div><div class="lbl">Tested</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--high)">${d.untested}</div><div class="lbl">Untested</div></div>
+      <div class="debt-card"><div class="val" style="color:${d.coverage_pct >= 70 ? 'var(--green)' : 'var(--medium)'}">${d.coverage_pct}%</div><div class="lbl">Coverage</div></div>
+    </div>`;
+
+  if ((d.stubs || []).length > 0) {
+    html += `<h3 style="margin:16px 0 8px;">Generated Test Stubs</h3>
+    <button class="btn btn-sm btn-outline" style="margin-bottom:12px;" onclick="copyAllStubs()">&#x1F4CB; Copy All Stubs</button>`;
+    for (const s of d.stubs.slice(0, 50)) {
+      html += `<div class="dup-group">
+        <div class="dup-group-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+          <span class="sev-badge sev-LOW">STUB</span>
+          <span style="font-weight:600; font-family:monospace;">${esc(s.function)}</span>
+          <span style="color:var(--text2); font-size:11px; margin-left:auto;">${esc(s.file)}</span>
+        </div>
+        <div class="code-preview" style="display:none;">${esc(s.stub)}</div>
+      </div>`;
+    }
+  }
+  html += `</div>`;
+  return html;
+}
+
+function copyAllStubs() {
+  if (!testGenData || !testGenData.stubs) return;
+  const text = testGenData.stubs.map(s => s.stub).join('\n\n');
+  navigator.clipboard.writeText(text).then(() => showToast('Stubs copied to clipboard!'));
+}
+
+// ── PM Dashboard: Tool Runners ───────────────────────────────────
+async function runRiskMap() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('riskBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  try {
+    riskMapData = await api('/api/risk-heatmap', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir, findings: scanResults?.findings || [] })
+    });
+    if (scanResults) { activeView = 'riskmap'; renderResults(); }
+    else { renderStandalone('riskmap'); }
+  } catch(e) { showToast('Risk map failed', true); }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F3AF} Risk Map'; }
+}
+
+async function runModuleCards() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('modBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  try {
+    moduleCardsData = await api('/api/module-cards', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir, findings: scanResults?.findings || [] })
+    });
+    if (scanResults) { activeView = 'modules'; renderResults(); }
+    else { renderStandalone('modules'); }
+  } catch(e) { showToast('Module cards failed', true); }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F4CA} Modules'; }
+}
+
+async function runConfidence() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('confBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  try {
+    confidenceData = await api('/api/confidence', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir, findings: scanResults?.findings || [] })
+    });
+    if (scanResults) { activeView = 'confidence'; renderResults(); }
+    else { renderStandalone('confidence'); }
+  } catch(e) { showToast('Confidence analysis failed', true); }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F3AF} Confidence'; }
+}
+
+async function runBatches() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('batchBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  try {
+    batchesData = await api('/api/sprint-batches', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ findings: scanResults?.findings || [], smells: smellsData?.smells || [] })
+    });
+    if (scanResults) { activeView = 'batches'; renderResults(); }
+    else { renderStandalone('batches'); }
+  } catch(e) { showToast('Sprint batches failed', true); }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F4CB} Batches'; }
+}
+
+async function runArchMap() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('archBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  try {
+    architectureData = await api('/api/architecture', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir })
+    });
+    if (scanResults) { activeView = 'arch'; renderResults(); }
+    else { document.getElementById('mainContent').innerHTML = '<div style="padding:20px;" id="viewContent"></div>'; activeView = 'arch'; renderViewContent(); }
+  } catch(e) { showToast('Architecture analysis failed', true); }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F3D7} Arch Map'; }
+}
+
+async function runCallGraph() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('cgBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  try {
+    callGraphData = await api('/api/call-graph', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir })
+    });
+    if (scanResults) { activeView = 'callgraph'; renderResults(); }
+    else { document.getElementById('mainContent').innerHTML = '<div style="padding:20px;" id="viewContent"></div>'; activeView = 'callgraph'; renderViewContent(); }
+  } catch(e) { showToast('Call graph failed', true); }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F4DE} Call Graph'; }
+}
+
+// ── PM Dashboard: Risk Map View ──────────────────────────────────
+function renderRiskMapView() {
+  if (!riskMapData) return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Risk Map</b> in PM Dashboard to analyze composite risk per file.</div>';
+  if (riskMapData.error) return '<div style="color:var(--high); padding:20px;">' + esc(riskMapData.error) + '</div>';
+  const d = riskMapData;
+  const maxR = d.max_risk || 1;
+  function rc(s) { const p = Math.min(s / maxR, 1); return p > 0.6 ? 'var(--high)' : p > 0.2 ? 'var(--medium)' : 'var(--green)'; }
+  const maxLoc = Math.max(...(d.files || []).map(f => f.loc || 1), 1);
+
+  let html = '<div style="margin-top:12px;"><h2 style="margin-bottom:12px;">Risk Heatmap &mdash; ' + d.total_files + ' files</h2>';
+  html += '<div class="debt-summary"><div class="debt-card"><div class="val" style="color:var(--high)">' + d.high_risk + '</div><div class="lbl">&#x1F534; High Risk</div></div>';
+  html += '<div class="debt-card"><div class="val" style="color:var(--medium)">' + d.medium_risk + '</div><div class="lbl">&#x1F7E1; Medium</div></div>';
+  html += '<div class="debt-card"><div class="val" style="color:var(--green)">' + d.low_risk + '</div><div class="lbl">&#x1F7E2; Low Risk</div></div></div>';
+  html += '<div style="margin:8px 0; font-size:11px; color:var(--text2);">Size = lines of code &middot; Color = composite risk (security&times;5 + quality&times;2 + smells&times;2 + churn&times;3 + duplicates)</div>';
+  html += '<div class="risk-treemap">';
+  for (const f of (d.files || []).slice(0, 200)) {
+    if (f.loc === 0 && f.risk_score === 0) continue;
+    const w = Math.max(24, Math.min(180, (f.loc / maxLoc) * 180));
+    const h = Math.max(18, Math.min(60, 18 + (f.loc / maxLoc) * 42));
+    const name = f.file.split('/').pop() || f.file;
+    html += '<div class="risk-rect" style="width:' + w + 'px; height:' + h + 'px; background:' + rc(f.risk_score) + ';"'
+      + ' title="' + esc(f.file) + '\nRisk: ' + f.risk_score + ' | LOC: ' + f.loc + '\nSec:' + f.security + ' Qual:' + f.quality + ' Smells:' + f.smells + ' Churn:' + f.churn + ' Dups:' + f.duplicates + '">'
+      + (name.length <= 10 ? esc(name) : '') + '</div>';
+  }
+  html += '</div><h3 style="margin:16px 0 8px;">Top Risk Files</h3>';
+  for (const f of (d.files || []).slice(0, 30)) {
+    if (f.risk_score === 0) continue;
+    const barPct = Math.min(100, (f.risk_score / maxR) * 100);
+    html += '<div class="file-heat"><div class="file-heat-count" style="color:' + rc(f.risk_score) + '">' + f.risk_score + '</div>'
+      + '<div style="flex:1; min-width:0;"><div class="file-heat-name">' + esc(f.file) + '</div>'
+      + '<div class="file-heat-bar"><div class="file-heat-fill" style="width:' + barPct + '%; background:' + rc(f.risk_score) + ';"></div></div></div>'
+      + '<div style="font-size:11px; color:var(--text2); white-space:nowrap;">' + f.loc + ' LOC'
+      + (f.security ? ' <span style="color:var(--high)">S:' + f.security + '</span>' : '')
+      + (f.smells ? ' <span style="color:var(--medium)">Sm:' + f.smells + '</span>' : '')
+      + (f.churn ? ' <span style="color:var(--accent)">Ch:' + f.churn + '</span>' : '')
+      + '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// ── PM Dashboard: Module Cards View ──────────────────────────────
+function renderModuleCardsView() {
+  if (!moduleCardsData) return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Modules</b> in PM Dashboard for per-directory grade cards.</div>';
+  const d = moduleCardsData;
+  let html = '<div style="margin-top:12px;"><h2 style="margin-bottom:12px;">Module Report Cards &mdash; ' + d.total_modules + ' modules</h2>';
+  html += '<div class="module-grid">';
+  for (const m of d.modules) {
+    const color = gradeColor(m.grade);
+    html += '<div class="module-card" style="border-color:' + color + '40;">'
+      + '<div class="mod-grade" style="color:' + color + '">' + m.grade + '</div>'
+      + '<div style="font-size:13px; color:' + color + ';">' + m.score + '/100</div>'
+      + '<div class="mod-name">' + esc(m.module) + '</div>'
+      + '<div class="mod-stats"><span>' + m.files + ' files</span><span>' + m.loc + ' LOC</span></div>'
+      + '<div class="mod-stats">'
+      + (m.high ? '<span style="color:var(--high)">' + m.high + 'H</span>' : '')
+      + (m.medium ? '<span style="color:var(--medium)">' + m.medium + 'M</span>' : '')
+      + (m.low ? '<span style="color:var(--low)">' + m.low + 'L</span>' : '')
+      + (m.smells ? '<span style="color:var(--medium)">' + m.smells + ' smells</span>' : '')
+      + (m.untested ? '<span style="color:var(--text2)">' + m.untested + ' untested</span>' : '')
+      + '</div></div>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
+// ── PM Dashboard: Confidence Meter View ──────────────────────────
+function renderConfidenceView() {
+  if (!confidenceData) return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Confidence</b> in PM Dashboard for the release confidence meter.</div>';
+  const d = confidenceData;
+  const conf = d.confidence;
+  const color = conf >= 80 ? 'var(--green)' : conf >= 60 ? 'var(--medium)' : conf >= 40 ? '#f0883e' : 'var(--high)';
+
+  let html = '<div style="margin-top:12px;"><div class="confidence-meter">'
+    + '<div class="confidence-number" style="color:' + color + '">' + conf + '%</div>'
+    + '<div style="font-size:16px; color:var(--text2); margin:4px 0;">Release Confidence</div>'
+    + '<div class="confidence-bar"><div class="confidence-fill" style="width:' + conf + '%; background:' + color + ';"></div></div>'
+    + '<div style="font-size:14px; margin:12px auto; color:var(--text); max-width:500px;">' + esc(d.recommendation) + '</div></div>';
+
+  if (d.top_risks && d.top_risks.length > 0) {
+    html += '<h3 style="color:var(--high); margin:20px 0 8px;">&#x1F6A8; Top Risks</h3>';
+    for (const r of d.top_risks) {
+      html += '<div class="arch-warning"><span style="font-weight:700;">[' + r.weight + 'pt]</span>'
+        + '<span style="flex:1;"><b>' + esc(r.name) + '</b> &mdash; ' + esc(r.detail) + '</span></div>';
+    }
+  }
+
+  html += '<h3 style="margin:20px 0 8px;">Checks (' + d.passed + '/' + d.total + ' passed)</h3>';
+  for (const c of d.checks) {
+    html += '<div class="conf-check"><span style="font-size:16px;">' + (c.passed ? '&#x2705;' : '&#x274C;') + '</span>'
+      + '<span style="flex:1;">' + esc(c.name) + '</span>'
+      + '<span class="weight">+' + c.weight + '</span>'
+      + '<span style="font-size:12px; color:var(--text2);">' + esc(c.detail) + '</span></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// ── PM Dashboard: Sprint Batches View ────────────────────────────
+function renderBatchesView() {
+  if (!batchesData) return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Batches</b> in PM Dashboard to plan sprint-sized work packages.<br><br><span style="font-size:12px;">Tip: Run <b>Scan</b> + <b>Smells</b> first for full data.</span></div>';
+  const d = batchesData;
+  const colors = ['var(--green)', 'var(--accent)', 'var(--medium)', 'var(--text2)'];
+  let html = '<div style="margin-top:12px;"><h2 style="margin-bottom:4px;">Sprint Action Batches</h2>'
+    + '<div style="margin-bottom:16px; color:var(--text2); font-size:13px;">'
+    + d.total_items + ' items &middot; ' + d.total_hours + 'h total &middot; Sorted by ROI (impact &divide; effort)</div>';
+
+  for (let bi = 0; bi < d.batches.length; bi++) {
+    const b = d.batches[bi];
+    if (b.items.length === 0) continue;
+    html += '<div class="batch-card"><div class="batch-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">'
+      + '<span style="font-size:18px; color:' + colors[bi] + ';">&#x25CF;</span>'
+      + '<span style="font-weight:700; flex:1;">' + esc(b.name) + '</span>'
+      + '<span style="color:var(--text2); font-size:13px;">' + b.items.length + ' items &middot; ' + b.total_hours + 'h</span>'
+      + '<span style="font-size:13px; color:' + colors[bi] + ';">' + b.pct_resolved + '% resolved after</span></div>'
+      + '<div class="batch-items"' + (bi > 0 ? ' style="display:none"' : '') + '>';
+    for (const item of b.items) {
+      html += '<div class="batch-item"><span class="sev-badge sev-' + item.severity + '" style="font-size:9px;">' + item.severity + '</span>'
+        + '<span style="font-weight:600; font-size:11px; min-width:55px;">' + esc(item.id) + '</span>'
+        + '<span style="flex:1; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(item.description) + '</span>'
+        + '<span style="color:var(--text2); font-size:10px; font-family:monospace;">' + esc((item.file||'').split('/').pop()) + '</span>'
+        + '<span style="color:var(--medium); font-size:11px; min-width:35px; text-align:right;">' + item.minutes + 'm</span>'
+        + '<span style="color:var(--accent); font-size:11px; min-width:50px; text-align:right;">ROI:' + item.roi + '</span></div>';
+    }
+    html += '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// ── PM Dashboard: Architecture Map View ──────────────────────────
+function renderArchView() {
+  if (!architectureData) return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Arch Map</b> in PM Dashboard to visualize architecture layers.</div>';
+  if (architectureData.error) return '<div style="color:var(--high); padding:20px;">' + esc(architectureData.error) + '</div>';
+  const d = architectureData;
+
+  let html = '<div style="margin-top:12px;"><div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">'
+    + '<h2>Architecture Map</h2>'
+    + '<span class="count">' + (d.nodes||[]).length + ' modules, ' + (d.edges||[]).length + ' imports</span>'
+    + '<span style="margin-left:8px; font-size:11px;">'
+    + '<span style="color:#3fb950;">&#x25CF; app</span> '
+    + '<span style="color:#58a6ff;">&#x25CF; lib</span> '
+    + '<span style="color:#d29922;">&#x25CF; test</span> '
+    + '<span style="color:#8b949e;">&#x25CF; external</span></span></div>';
+
+  if ((d.circular_deps||[]).length > 0 || (d.god_modules||[]).length > 0) {
+    html += '<div class="arch-warnings">';
+    for (const cycle of (d.circular_deps||[]).slice(0, 5)) {
+      html += '<div class="arch-warning"><span style="font-size:18px;">&#x1F534;</span>'
+        + '<span><b>Circular dependency:</b> ' + cycle.map(c => esc(c)).join(' &#x2192; ') + '</span></div>';
+    }
+    for (const g of (d.god_modules||[]).slice(0, 5)) {
+      html += '<div class="arch-warning" style="border-color:var(--medium); background:rgba(210,153,34,0.1);">'
+        + '<span style="font-size:18px;">&#x1F7E1;</span>'
+        + '<span><b>God module:</b> ' + esc(g.module) + ' &mdash; ' + g.dependents + ' dependents, ' + g.loc + ' LOC</span></div>';
+    }
+    html += '</div>';
+  }
+
+  html += '<div id="archGraphContainer" class="graph-container" style="height:600px;"></div>'
+    + '<div style="margin-top:12px;">'
+    + '<h3>Layer Summary</h3><div class="debt-summary">'
+    + '<div class="debt-card"><div class="val" style="color:#3fb950">' + (d.layers?.app||[]).length + '</div><div class="lbl">App Layer</div></div>'
+    + '<div class="debt-card"><div class="val" style="color:#58a6ff">' + (d.layers?.lib||[]).length + '</div><div class="lbl">Lib Layer</div></div>'
+    + '<div class="debt-card"><div class="val" style="color:#d29922">' + (d.layers?.test||[]).length + '</div><div class="lbl">Test Layer</div></div>'
+    + '<div class="debt-card"><div class="val" style="color:#8b949e">' + (d.layers?.external||[]).length + '</div><div class="lbl">External</div></div>'
+    + '</div></div></div>';
+  return html;
+}
+
+function initArchGraph() {
+  const container = document.getElementById('archGraphContainer');
+  if (!container || !architectureData || !window.vis) return;
+  const d = architectureData;
+  const circularSet = new Set();
+  for (const cycle of (d.circular_deps||[])) {
+    for (let i = 0; i < cycle.length - 1; i++) circularSet.add(cycle[i] + '->' + cycle[i+1]);
+  }
+  const layerColors = {
+    app: {background:'#238636', border:'#3fb950'},
+    lib: {background:'#1f6feb', border:'#58a6ff'},
+    test: {background:'#9e6a03', border:'#d29922'},
+    external: {background:'#30363d', border:'#484f58'},
+  };
+  const godSet = new Set((d.god_modules||[]).map(g => g.module));
+  const nodes = new vis.DataSet((d.nodes||[]).map(n => ({
+    id: n.id, label: n.label,
+    color: layerColors[n.layer] || layerColors.external,
+    font: { color: '#e6edf3', size: godSet.has(n.id) ? 14 : 11 },
+    shape: n.external ? 'diamond' : 'dot',
+    size: godSet.has(n.id) ? 25 : Math.min(8 + (n.imports_count||0) * 2, 20),
+    borderWidth: godSet.has(n.id) ? 3 : 1,
+    title: n.id + '\nLayer: ' + n.layer + '\nLOC: ' + n.loc + '\nImports: ' + n.imports_count,
+  })));
+  const edges = new vis.DataSet((d.edges||[]).map(e => {
+    const isCirc = circularSet.has(e.from + '->' + e.to);
+    return { from: e.from, to: e.to, arrows: 'to',
+      color: { color: isCirc ? '#f85149' : '#30363d', highlight: '#58a6ff' },
+      width: isCirc ? 3 : 1, smooth: { type: 'cubicBezier' }, dashes: isCirc ? [5,5] : false };
+  }));
+  new vis.Network(container, { nodes, edges }, {
+    physics: { solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -50, springLength: 120 } },
+    interaction: { hover: true, tooltipDelay: 100 }, layout: { improvedLayout: true },
+  });
+}
+
+// ── PM Dashboard: Call Graph View ────────────────────────────────
+function renderCallGraphView() {
+  if (!callGraphData) return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Call Graph</b> in PM Dashboard to visualize function call relationships.</div>';
+  if (callGraphData.error) return '<div style="color:var(--high); padding:20px;">' + esc(callGraphData.error) + '</div>';
+  const d = callGraphData;
+  let html = '<div style="margin-top:12px;"><div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">'
+    + '<h2>Call Graph</h2><span class="count">' + d.total_functions + ' functions, ' + d.total_edges + ' calls</span>'
+    + '<span style="margin-left:8px; font-size:11px;">'
+    + '<span style="color:#3fb950;">&#x25B2; entry</span> '
+    + '<span style="color:#58a6ff;">&#x25CF; function</span> '
+    + '<span style="color:#8b949e;">&#x25CB; leaf</span></span></div>'
+    + '<div id="callGraphContainer" class="graph-container" style="height:600px;"></div>'
+    + '<div style="margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:12px;"><div>'
+    + '<h3 style="margin-bottom:8px;">Entry Points (' + (d.entries||[]).length + ')</h3>';
+  for (const e of (d.entries||[]).slice(0, 20)) {
+    const p = e.split('::');
+    html += '<div class="debt-item" style="padding:6px 10px;">'
+      + '<span style="color:var(--green); font-size:14px;">&#x25B6;</span>'
+      + '<span style="font-family:monospace; font-size:12px; font-weight:600;">' + esc(p[1]||e) + '</span>'
+      + '<span style="color:var(--text2); font-size:11px; margin-left:auto;">' + esc(p[0]||'') + '</span></div>';
+  }
+  html += '</div><div><h3 style="margin-bottom:8px;">Leaf Functions (' + (d.leaves||[]).length + ')</h3>';
+  for (const l of (d.leaves||[]).slice(0, 20)) {
+    const p = l.split('::');
+    html += '<div class="debt-item" style="padding:6px 10px;">'
+      + '<span style="color:var(--text2); font-size:14px;">&#x25CB;</span>'
+      + '<span style="font-family:monospace; font-size:12px;">' + esc(p[1]||l) + '</span>'
+      + '<span style="color:var(--text2); font-size:11px; margin-left:auto;">' + esc(p[0]||'') + '</span></div>';
+  }
+  html += '</div></div></div>';
+  return html;
+}
+
+function initCallGraph() {
+  const container = document.getElementById('callGraphContainer');
+  if (!container || !callGraphData || !window.vis) return;
+  const d = callGraphData;
+  const entrySet = new Set(d.entries||[]);
+  const leafSet = new Set(d.leaves||[]);
+  const nodeSlice = (d.nodes||[]).slice(0, 200);
+  const nodeIds = new Set(nodeSlice.map(n => n.id));
+  const nodes = new vis.DataSet(nodeSlice.map(n => ({
+    id: n.id, label: n.name,
+    color: { background: entrySet.has(n.id) ? '#238636' : leafSet.has(n.id) ? '#30363d' : '#1f6feb',
+             border: entrySet.has(n.id) ? '#3fb950' : leafSet.has(n.id) ? '#484f58' : '#58a6ff' },
+    font: { color: '#e6edf3', size: 11 },
+    shape: entrySet.has(n.id) ? 'triangle' : 'dot',
+    size: Math.min(8 + n.caller_count * 2, 25),
+    title: n.name + '\n' + n.file + ':' + n.line + '\n' + n.lines + ' lines\n' + n.call_count + ' calls, ' + n.caller_count + ' callers',
+  })));
+  const edges = new vis.DataSet((d.edges||[]).filter(e => nodeIds.has(e.from) && nodeIds.has(e.to)).slice(0, 500).map(e => ({
+    from: e.from, to: e.to, arrows: 'to',
+    color: { color: '#30363d', highlight: '#58a6ff' }, smooth: { type: 'cubicBezier' },
+  })));
+  new vis.Network(container, { nodes, edges }, {
+    physics: { solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -60, springLength: 100 } },
+    interaction: { hover: true, tooltipDelay: 100 },
+    layout: { hierarchical: { direction: 'UD', sortMethod: 'directed', levelSeparation: 80, nodeSpacing: 30 } },
+  });
+}
+
 init();
 </script>
 </body>

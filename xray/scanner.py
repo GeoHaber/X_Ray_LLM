@@ -156,8 +156,13 @@ def scan_file(filepath: str, rules: list[dict] | None = None) -> list[Finding]:
 
 
 def scan_directory(root: str, rules: list[dict] | None = None,
-                   exclude_patterns: list[str] | None = None) -> ScanResult:
-    """Recursively scan a directory for code issues."""
+                   exclude_patterns: list[str] | None = None,
+                   on_progress: callable = None) -> ScanResult:
+    """Recursively scan a directory for code issues.
+
+    Args:
+        on_progress: Optional callback(files_scanned, findings_count, current_file)
+    """
     result = ScanResult()
     if rules is None:
         rules = ALL_RULES
@@ -190,6 +195,9 @@ def scan_directory(root: str, rules: list[dict] | None = None,
             result.files_scanned += 1
             file_findings = scan_file(filepath, rules)
             result.findings.extend(file_findings)
+
+            if on_progress:
+                on_progress(result.files_scanned, len(result.findings), rel_path)
 
     return result
 
