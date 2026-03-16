@@ -734,6 +734,10 @@ class XRayHandler(BaseHTTPRequestHandler):
             # Resolve to absolute path
             directory = str(Path(directory).resolve())
 
+            # Clear previous result so polling failsafe won't find stale data
+            global _last_scan_result
+            _last_scan_result = None
+
             # --- SSE streaming scan ---
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -797,7 +801,6 @@ class XRayHandler(BaseHTTPRequestHandler):
                 print(f"[De_Bug] findings list length: {len(result.get('findings', []))}")
 
             # Store full result server-side (findings can be 1000s of items = MBs)
-            global _last_scan_result
             _last_scan_result = result
 
             # Send only a lightweight summary via SSE — client fetches full

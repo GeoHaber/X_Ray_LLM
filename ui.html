@@ -819,8 +819,69 @@ async function runScan() {
 
   showScanUI(engine);
 
+  const De_Bug = true;
+  let _scanRendered = false;  // Guard: only one path renders results
+  let _pollId = null;
+
+  // ── Helper: render scan result (called by SSE path OR polling failsafe) ──
+  function finishWithResult(result) {
+    if (_scanRendered) return;
+    _scanRendered = true;
+    if (_pollId) { clearInterval(_pollId); _pollId = null; }
+    document.getElementById('scanBtn').disabled = false;
+
+    if (!result) {
+      document.getElementById('mainContent').innerHTML = `
+        <div class="welcome"><h2>Scan Failed</h2>
+          <p style="color:var(--high);">No result received from server.</p>
+        </div>`;
+      return;
+    }
+    if (result.aborted) {
+      document.getElementById('mainContent').innerHTML = `
+        <div class="welcome"><h2>Scan Aborted</h2>
+          <p>Stopped after ${result.files_scanned || 0} files, ${result.findings_count || 0} findings.</p>
+        </div>`;
+      return;
+    }
+    if (result.error) {
+      document.getElementById('mainContent').innerHTML = `
+        <div class="welcome"><h2>Error</h2><p>${esc(result.error)}</p></div>`;
+      return;
+    }
+
+    scanResults = result;
+    activeFilter = 'ALL';
+    if (De_Bug) console.log('[De_Bug] === RENDERING RESULTS ===', {
+      files: result.files_scanned,
+      findings: (result.findings || []).length,
+      summary: result.summary
+    });
+
+    const grade = calcDimensionGrades(result.findings || [], result.files_scanned).overall;
+    scanHistory.push({
+      time: new Date().toISOString(),
+      total: result.summary.total,
+      high: result.summary.high,
+      medium: result.summary.medium,
+      low: result.summary.low,
+      score: grade.score,
+      letter: grade.letter,
+      files: result.files_scanned,
+    });
+    if (scanHistory.length > 50) scanHistory.shift();
+    try { localStorage.setItem('xray_history', JSON.stringify(scanHistory)); } catch(e) {}
+
+    api('/api/remediation-time', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ findings: result.findings || [] })
+    }).then(t => { scanResults._remTime = t; renderResults(); }).catch(() => {});
+
+    renderResults();
+    addRecent(selectedDir, result);
+  }
+
   try {
-    const De_Bug = true;  // Toggle verbose SSE debug logging
     if (De_Bug) console.log('[De_Bug] === SCAN START ===', {directory: selectedDir, engine, severity});
 
     const response = await fetch('/api/scan', {
@@ -837,15 +898,30 @@ async function runScan() {
     let buffer = '';
     let result = null;
     let lastProgress = null;
-    let scanAt100Since = 0;   // timestamp when progress first hit 100%
-    let lastDataTime = Date.now(); // timestamp of last data chunk received
+    let scanAt100Since = 0;
+    let lastDataTime = Date.now();
     let chunkCount = 0;
     let sseEventCount = 0;
 
+    // ── POLLING FAILSAFE ───────────────────────────────────────
+    // Every 2s, check if the server has results ready.  If the SSE
+    // ReadableStream loop is stuck (browser bug), polling catches it.
+    _pollId = setInterval(async () => {
+      if (_scanRendered) { clearInterval(_pollId); _pollId = null; return; }
+      try {
+        const r = await fetch('/api/scan-result');
+        if (!r.ok) return;
+        const full = await r.json();
+        if (full && full.findings && !_scanRendered) {
+          console.log('[FAILSAFE] Polling got results — SSE loop was stuck');
+          try { reader.cancel(); } catch(e) {}
+          finishWithResult(full);
+        }
+      } catch(e) {}
+    }, 2000);
+
+    // ── SSE STREAM READING ─────────────────────────────────────
     while (true) {
-      // Always race reader.read() against a timeout:
-      //  - After 100%: 3s max for done event
-      //  - Otherwise:  8s idle timeout (no data received)
       const readPromise = reader.read();
       let timeoutMs;
       if (scanAt100Since > 0) {
@@ -862,7 +938,7 @@ async function runScan() {
       }
       const { value, done } = raced;
       if (done) {
-        if (De_Bug) console.log('[De_Bug] reader.read() returned done=true (stream EOF)', {chunkCount, sseEventCount});
+        if (De_Bug) console.log('[De_Bug] reader.read() done=true (stream EOF)', {chunkCount, sseEventCount});
         break;
       }
 
@@ -872,7 +948,6 @@ async function runScan() {
       if (De_Bug && chunkCount <= 5) console.log(`[De_Bug] chunk #${chunkCount} (${chunk.length} bytes):`, chunk.slice(0, 200));
       buffer += chunk;
 
-      // Parse SSE events from buffer
       let idx;
       while ((idx = buffer.indexOf('\n\n')) !== -1) {
         const block = buffer.slice(0, idx);
@@ -893,7 +968,6 @@ async function runScan() {
             updateProgressUI(parsed);
             lastProgress = parsed;
             if (De_Bug && sseEventCount % 50 === 0) console.log(`[De_Bug] progress #${sseEventCount}: ${parsed.files_scanned}/${parsed.total_files} files`);
-            // Detect scan finished: progress hit 100%
             if (parsed.total_files > 0 && parsed.files_scanned >= parsed.total_files && !scanAt100Since) {
               scanAt100Since = Date.now();
               if (De_Bug) console.log('[De_Bug] 100% reached!', {files_scanned: parsed.files_scanned, total_files: parsed.total_files});
@@ -908,10 +982,8 @@ async function runScan() {
           console.warn('SSE parse error:', e, 'on data:', data.slice(0, 200));
         }
       }
-      // Break immediately once we have the done result — don't wait for stream EOF
       if (result) break;
     }
-    // Close the stream reader if still open
     try { reader.cancel(); } catch(e) {}
 
     if (De_Bug) console.log('[De_Bug] SSE loop ended.', {
@@ -919,13 +991,15 @@ async function runScan() {
       chunkCount, sseEventCount, bufferRemaining: buffer.length
     });
 
-    document.getElementById('scanBtn').disabled = false;
+    // If polling already rendered results, we're done
+    if (_scanRendered) return;
 
-    // Always try REST fallback for full results (SSE done event may be lost)
+    // SSE done event is lightweight (no findings) — fetch full results via REST
     if (!result || !result.findings) {
       if (De_Bug) console.log('[De_Bug] fetching full results via REST /api/scan-result...');
       for (let attempt = 0; attempt < 3; attempt++) {
         await new Promise(r => setTimeout(r, attempt === 0 ? 300 : 1000));
+        if (_scanRendered) return;  // Polling may have caught it
         try {
           const full = await api('/api/scan-result');
           if (De_Bug) console.log(`[De_Bug] REST attempt ${attempt+1}:`, {
@@ -940,61 +1014,11 @@ async function runScan() {
       }
     }
 
-    if (!result) {
-      document.getElementById('mainContent').innerHTML = `
-        <div class="welcome"><h2>Scan Failed</h2>
-          <p style="color:var(--high);">No result received from server.</p>
-        </div>`;
-      return;
-    }
-
-    if (result.aborted) {
-      document.getElementById('mainContent').innerHTML = `
-        <div class="welcome"><h2>Scan Aborted</h2>
-          <p>Stopped after ${result.files_scanned || 0} files, ${result.findings_count || 0} findings.</p>
-        </div>`;
-      return;
-    }
-
-    if (result.error) {
-      document.getElementById('mainContent').innerHTML = `
-        <div class="welcome"><h2>Error</h2><p>${esc(result.error)}</p></div>`;
-      return;
-    }
-
-    scanResults = result;
-    activeFilter = 'ALL';
-    if (De_Bug) console.log('[De_Bug] === RENDERING RESULTS ===', {
-      files: result.files_scanned,
-      findings: (result.findings || []).length,
-      summary: result.summary
-    });
-
-    // Save to history for trend chart
-    const grade = calcDimensionGrades(result.findings || [], result.files_scanned).overall;
-    scanHistory.push({
-      time: new Date().toISOString(),
-      total: result.summary.total,
-      high: result.summary.high,
-      medium: result.summary.medium,
-      low: result.summary.low,
-      score: grade.score,
-      letter: grade.letter,
-      files: result.files_scanned,
-    });
-    if (scanHistory.length > 50) scanHistory.shift();
-    try { localStorage.setItem('xray_history', JSON.stringify(scanHistory)); } catch(e) {}
-
-    // Fetch remediation time
-    api('/api/remediation-time', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ findings: result.findings || [] })
-    }).then(t => { scanResults._remTime = t; renderResults(); }).catch(() => {});
-
-    renderResults();
-    addRecent(selectedDir, result);
+    finishWithResult(result);
 
   } catch(e) {
+    if (_pollId) { clearInterval(_pollId); _pollId = null; }
+    if (_scanRendered) return;  // Polling already handled it
     document.getElementById('scanBtn').disabled = false;
     document.getElementById('mainContent').innerHTML = `
       <div class="welcome"><h2>Scan Failed</h2>
