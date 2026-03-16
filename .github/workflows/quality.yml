@@ -43,7 +43,7 @@ jobs:
     
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
         name: test-results-${{ matrix.python-version }}
         path: test-results.xml
@@ -77,7 +77,7 @@ jobs:
     
     - name: Upload quality report
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
         name: code-quality-report
         path: |
