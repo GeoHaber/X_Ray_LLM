@@ -202,18 +202,43 @@ def run_ruff(directory: str) -> dict:
 
 # ── Scan Progress Tracking ───────────────────────────────────────────────
 
-_progress = {
-    "active": False,
-    "engine": "",
-    "directory": "",
-    "files_scanned": 0,
-    "findings_count": 0,
-    "current_file": "",
-    "started_at": 0.0,
-    "elapsed_ms": 0.0,
-}
-_progress_lock = threading.Lock()
 _abort = threading.Event()
+
+def _count_scannable_files(directory: str, exclude_patterns: list[str] | None = None) -> int:
+    """Fast pre-count of scannable files (mirrors scanner's walk logic)."""
+    import re as _re
+    from xray.scanner import _EXT_LANG, _SKIP_DIRS, _MAX_FILE_SIZE
+    skip_dirs = _SKIP_DIRS
+    scan_exts = set(_EXT_LANG.keys())
+    exclude_res = []
+    if exclude_patterns:
+        for pat in exclude_patterns:
+            try:
+                exclude_res.append(_re.compile(pat))
+            except _re.error:
+                pass
+    count = 0
+    for dirpath, dirnames, filenames in os.walk(directory):
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs and not d.startswith(".")]
+        for fn in filenames:
+            ext = os.path.splitext(fn)[1].lower()
+            if ext not in scan_exts:
+                continue
+            fp = os.path.join(dirpath, fn)
+            try:
+                if os.path.getsize(fp) > _MAX_FILE_SIZE:
+                    continue
+            except (OSError, ValueError):
+                continue
+            if exclude_res:
+                try:
+                    rel = os.path.relpath(fp, directory).replace(os.sep, "/")
+                except ValueError:
+                    continue
+                if any(r.search(rel) for r in exclude_res):
+                    continue
+            count += 1
+    return count
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -242,8 +267,9 @@ def get_rust_binary() -> str | None:
     return str(path) if path.exists() else None
 
 
-def scan_with_python(directory: str, severity: str, excludes: list[str]) -> dict:
-    """Run scan using Python scanner."""
+def scan_with_python(directory: str, severity: str, excludes: list[str],
+                     sse_write=None, total_files: int = 0) -> dict:
+    """Run scan using Python scanner. If sse_write is provided, push per-file SSE events."""
     sys.path.insert(0, str(ROOT))
     from xray.scanner import scan_directory
     from xray.rules import ALL_RULES
@@ -252,35 +278,41 @@ def scan_with_python(directory: str, severity: str, excludes: list[str]) -> dict
     min_sev = sev_order.get(severity.upper(), 1)
     rules = [r for r in ALL_RULES if sev_order.get(r["severity"], 1) >= min_sev]
 
+    scan_start = time.perf_counter()
+
     def on_progress(files_scanned, findings_count, current_file):
         if _abort.is_set():
             raise _ScanAborted()
-        with _progress_lock:
-            _progress["files_scanned"] = files_scanned
-            _progress["findings_count"] = findings_count
-            _progress["current_file"] = current_file
-            _progress["elapsed_ms"] = round((time.perf_counter() - _progress["started_at"]) * 1000, 1)
+        if sse_write:
+            elapsed_ms = round((time.perf_counter() - scan_start) * 1000, 1)
+            # Get file info
+            fsize = 0
+            fext = ""
+            try:
+                full = os.path.join(directory, current_file)
+                fsize = os.path.getsize(full)
+                fext = os.path.splitext(current_file)[1]
+            except OSError:
+                pass
+            sse_write("progress", {
+                "files_scanned": files_scanned,
+                "total_files": total_files,
+                "findings_count": findings_count,
+                "current_file": current_file,
+                "file_size": fsize,
+                "file_type": fext,
+                "elapsed_ms": elapsed_ms,
+            })
 
     _abort.clear()
-    with _progress_lock:
-        _progress.update(active=True, engine="python", directory=_fwd(directory),
-                         files_scanned=0, findings_count=0, current_file="",
-                         started_at=time.perf_counter(), elapsed_ms=0.0)
-
     start = time.perf_counter()
     try:
         result = scan_directory(directory, rules=rules, exclude_patterns=excludes or None,
                                 on_progress=on_progress)
     except _ScanAborted:
-        with _progress_lock:
-            _progress["active"] = False
         return {"aborted": True, "engine": "python",
-                "files_scanned": _progress["files_scanned"],
-                "findings_count": _progress["findings_count"]}
+                "files_scanned": 0, "findings_count": 0}
     elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
-
-    with _progress_lock:
-        _progress["active"] = False
 
     return {
         "engine": "python",
@@ -297,8 +329,9 @@ def scan_with_python(directory: str, severity: str, excludes: list[str]) -> dict
     }
 
 
-def scan_with_rust(directory: str, severity: str, excludes: list[str]) -> dict:
-    """Run scan using Rust binary."""
+def scan_with_rust(directory: str, severity: str, excludes: list[str],
+                   sse_write=None, total_files: int = 0) -> dict:
+    """Run scan using Rust binary. If sse_write provided, push SSE events."""
     binary = get_rust_binary()
     if not binary:
         return {"error": "Rust binary not found. Run: python build.py"}
@@ -308,10 +341,12 @@ def scan_with_rust(directory: str, severity: str, excludes: list[str]) -> dict:
         cmd.extend(["--exclude", exc])
 
     _abort.clear()
-    with _progress_lock:
-        _progress.update(active=True, engine="rust", directory=_fwd(directory),
-                         files_scanned=0, findings_count=0, current_file="(rust binary)",
-                         started_at=time.perf_counter(), elapsed_ms=0.0)
+    if sse_write:
+        sse_write("progress", {
+            "files_scanned": 0, "total_files": total_files,
+            "findings_count": 0, "current_file": "(rust binary)",
+            "file_size": 0, "file_type": "", "elapsed_ms": 0,
+        })
 
     global _rust_proc
     start = time.perf_counter()
@@ -322,9 +357,6 @@ def scan_with_rust(directory: str, severity: str, excludes: list[str]) -> dict:
     with _rust_proc_lock:
         _rust_proc = None
     elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
-
-    with _progress_lock:
-        _progress["active"] = False
 
     if _abort.is_set():
         return {"aborted": True, "engine": "rust"}
@@ -403,6 +435,7 @@ def _load_guide():
 
 # Rule knowledge base
 _RULES = {
+    # Security (14)
     "SEC-001": ("XSS: Template literal in innerHTML", "HIGH", False),
     "SEC-002": ("XSS: String concat to innerHTML", "HIGH", False),
     "SEC-003": ("Command injection: shell=True", "HIGH", True),
@@ -413,24 +446,36 @@ _RULES = {
     "SEC-008": ("Hardcoded secret", "MEDIUM", False),
     "SEC-009": ("Unsafe deserialization", "HIGH", True),
     "SEC-010": ("Path traversal", "MEDIUM", False),
+    "SEC-011": ("Timing attack: == on secrets", "MEDIUM", False),
+    "SEC-012": ("Debug mode enabled in production", "HIGH", False),
+    "SEC-013": ("Weak hash algorithm: MD5/SHA1", "MEDIUM", False),
+    "SEC-014": ("TLS verification disabled", "HIGH", False),
+    # Quality (13)
     "QUAL-001": ("Bare except clause", "MEDIUM", True),
     "QUAL-002": ("Silent exception swallowing", "LOW", False),
     "QUAL-003": ("Unchecked int() on user input", "MEDIUM", True),
-    "QUAL-004": ("Mutable default argument", "MEDIUM", False),
-    "QUAL-005": ("Global variable mutation", "LOW", False),
-    "QUAL-006": ("Nested callbacks / pyramid of doom", "LOW", False),
-    "QUAL-007": ("Magic number", "LOW", False),
-    "QUAL-008": ("String constant duplication", "LOW", False),
-    "QUAL-009": ("Too many function parameters", "LOW", False),
-    "QUAL-010": ("Function too long", "LOW", False),
-    "PY-001": ("print() left in production", "LOW", True),
-    "PY-002": ("assert in production", "LOW", True),
-    "PY-003": ("Wildcard import", "MEDIUM", True),
-    "PY-004": ("Bare return None", "LOW", False),
-    "PY-005": ("f-string without placeholder", "LOW", False),
-    "PY-006": ("Type hint uses old-style Union", "LOW", False),
-    "PY-007": ("Dict comprehension instead of dict()", "LOW", False),
-    "PY-008": ("Unnecessary else after return", "LOW", False),
+    "QUAL-004": ("Unchecked float() on user input", "MEDIUM", True),
+    "QUAL-005": (".items() on possibly-None return", "LOW", False),
+    "QUAL-006": ("Non-daemon threads", "MEDIUM", False),
+    "QUAL-007": ("TODO/FIXME markers", "LOW", False),
+    "QUAL-008": ("Long sleep (10+ seconds)", "MEDIUM", False),
+    "QUAL-009": ("Keep-alive header in HTTP", "HIGH", False),
+    "QUAL-010": ("localStorage without try/catch", "MEDIUM", False),
+    "QUAL-011": ("Broad Exception catching", "MEDIUM", False),
+    "QUAL-012": ("String concatenation in loop", "LOW", False),
+    "QUAL-013": ("Line exceeds 200 characters", "LOW", False),
+    # Python (11)
+    "PY-001": ("Return type mismatch", "MEDIUM", False),
+    "PY-002": (".items() on method returning None", "HIGH", False),
+    "PY-003": ("Wildcard import", "MEDIUM", False),
+    "PY-004": ("print() debug statement", "LOW", False),
+    "PY-005": ("JSON without error handling", "HIGH", True),
+    "PY-006": ("Global mutation", "MEDIUM", False),
+    "PY-007": ("os.envir" + "on[] crashes on missing", "MEDIUM", True),
+    "PY-008": ("open() without encoding", "MEDIUM", False),
+    "PY-009": ("Captured but ignored exception", "MEDIUM", False),
+    "PY-010": ("sys.exit() in library code", "MEDIUM", False),
+    "PY-011": ("Long isinstance chain", "LOW", False),
 }
 
 _TOOLS_LIST = [
@@ -438,6 +483,7 @@ _TOOLS_LIST = [
     "Bandit (security)", "Ruff --fix", "Import Graph", "Git Hotspots", "Project Health",
     "SATD (tech debt)", "Release Readiness", "AI-Generated Code Detection", "Web Smells",
     "Test Stub Generator", "Remediation Time Estimate",
+    "Circular Call Detection", "Module Coupling & Cohesion", "Unused Imports",
 ]
 
 _PM_FEATURES = {
@@ -447,6 +493,9 @@ _PM_FEATURES = {
     "sprint batches": "Groups findings into 4 work packages: Critical, Security, Quality, Cleanup — ready for sprint planning.",
     "architecture map": "Visualizes project layers (API, core, utils, tests) with dependency arrows.",
     "call graph": "Interactive vis.js graph of function call relationships — shows entry points, leaves, and call chains.",
+    "circular calls": "Detects function-level circular call chains (macaroni code), recursive functions, and hub functions with high fan-in × fan-out.",
+    "coupling": "Per-module afferent/efferent coupling, instability metric (I=Ce/(Ca+Ce)), cohesion estimate, and health classification (healthy/god/fragile/isolated).",
+    "unused imports": "AST-based detection of imported names never referenced anywhere in the file — dead imports that clutter code.",
 }
 
 
@@ -468,14 +517,14 @@ def _chat_reply(message: str, context: dict) -> str:
             return f"<strong>{feature.title()}</strong>: {desc}"
 
     # Category-based responses
-    if _re.search(r"\brule|all rule|28 rule|list rule", lo):
+    if _re.search(r"\brule|all rule|38 rule|28 rule|list rule", lo):
         sec = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("SEC")]
         qual = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("QUAL")]
         py = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("PY")]
-        return ("<strong>28 Scan Rules:</strong><br><br>"
-                "<strong>Security (10):</strong><br>" + "<br>".join(sec) +
-                "<br><br><strong>Quality (10):</strong><br>" + "<br>".join(qual) +
-                "<br><br><strong>Python (8):</strong><br>" + "<br>".join(py))
+        return ("<strong>38 Scan Rules:</strong><br><br>"
+                "<strong>Security (14):</strong><br>" + "<br>".join(sec) +
+                "<br><br><strong>Quality (13):</strong><br>" + "<br>".join(qual) +
+                "<br><br><strong>Python (11):</strong><br>" + "<br>".join(py))
 
     if _re.search(r"\bfix|auto.?fix|fixable|fixer", lo):
         fixable = [f"<strong>{k}</strong>: {v[0]}" for k, v in _RULES.items() if v[2]]
@@ -485,11 +534,11 @@ def _chat_reply(message: str, context: dict) -> str:
 
     if _re.search(r"\bpm|dashboard|project.?manag", lo):
         items = [f"• <strong>{k.title()}</strong>: {v}" for k, v in _PM_FEATURES.items()]
-        return "<strong>PM Dashboard — 6 Features:</strong><br><br>" + "<br>".join(items)
+        return "<strong>PM Dashboard — 9 Features:</strong><br><br>" + "<br>".join(items)
 
     if _re.search(r"\btool|analys|analyzer", lo):
         numbered = [f"{i+1}. {t}" for i, t in enumerate(_TOOLS_LIST)]
-        return "<strong>16 Analysis Tools:</strong><br>" + "<br>".join(numbered)
+        return "<strong>19 Analysis Tools:</strong><br>" + "<br>".join(numbered)
 
     if _re.search(r"\bscan|how.*start|begin|quick.?start", lo):
         return ("<strong>How to Scan:</strong><br>"
@@ -507,13 +556,15 @@ def _chat_reply(message: str, context: dict) -> str:
                 "Quality Gate in sidebar sets pass/fail thresholds.")
 
     if _re.search(r"\bapi|endpoint|rest|http", lo):
-        return ("<strong>31 API Endpoints</strong> on <code>localhost:8077/api/</code>:<br><br>"
-                "Core: <code>/api/scan</code>, <code>/api/browse</code>, <code>/api/info</code>, <code>/api/progress</code><br>"
+        return ("<strong>34+ API Endpoints</strong> on <code>localhost:8077/api/</code>:<br><br>"
+                "Core: <code>/api/scan</code> (SSE), <code>/api/browse</code>, <code>/api/info</code>, <code>/api/abort</code><br>"
                 "Fix: <code>/api/preview-fix</code>, <code>/api/apply-fix</code>, <code>/api/apply-fixes-bulk</code><br>"
                 "Analysis: <code>/api/dead-code</code>, <code>/api/smells</code>, <code>/api/duplicates</code>, "
                 "<code>/api/format</code>, <code>/api/typecheck</code>, <code>/api/bandit</code>, <code>/api/ruff</code><br>"
                 "PM: <code>/api/risk-heatmap</code>, <code>/api/module-cards</code>, <code>/api/confidence</code>, "
-                "<code>/api/sprint-batches</code>, <code>/api/architecture</code>, <code>/api/call-graph</code>")
+                "<code>/api/sprint-batches</code>, <code>/api/architecture</code>, <code>/api/call-graph</code><br>"
+                "CGC: <code>/api/circular-calls</code>, <code>/api/coupling</code>, <code>/api/unused-imports</code><br>"
+                "Utility: <code>/api/chat</code>, <code>/api/project-review</code>")
 
     if _re.search(r"\brust|engine|fast|performance|speed", lo):
         return ("<strong>Dual Engines:</strong><br>"
@@ -524,27 +575,27 @@ def _chat_reply(message: str, context: dict) -> str:
     if _re.search(r"\bsecurity|vuln|xss|inject|sql|ssrf|cors|eval|pickle|secret|password", lo):
         sec = [f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
                for k, v in _RULES.items() if k.startswith("SEC")]
-        return "<strong>Security Rules (10):</strong><br>" + "<br>".join(sec)
+        return "<strong>Security Rules (14):</strong><br>" + "<br>".join(sec)
 
     if _re.search(r"\bquality|smell|except|magic|dup|long func|param", lo):
         qual = [f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
                 for k, v in _RULES.items() if k.startswith("QUAL")]
-        return "<strong>Quality Rules (10):</strong><br>" + "<br>".join(qual)
+        return "<strong>Quality Rules (13):</strong><br>" + "<br>".join(qual)
 
     if _re.search(r"\bpython rule|py rule|print|assert|wildcard|import\b", lo):
         py = [f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
               for k, v in _RULES.items() if k.startswith("PY")]
-        return "<strong>Python Rules (8):</strong><br>" + "<br>".join(py)
+        return "<strong>Python Rules (11):</strong><br>" + "<br>".join(py)
 
     if _re.search(r"\bhello|hi\b|hey|help|what can you", lo):
         return ("Hello! I'm the <strong>X-Ray Assistant</strong>. I can help with:<br><br>"
-                "• <strong>rules</strong> — all 28 scan rules<br>"
+                "• <strong>rules</strong> — all 38 scan rules (14 security + 13 quality + 11 Python)<br>"
                 "• <strong>auto-fix</strong> — which rules have automatic fixes<br>"
-                "• <strong>tools</strong> — 16 analysis tools<br>"
-                "• <strong>PM Dashboard</strong> — 6 project management features<br>"
+                "• <strong>tools</strong> — 19 analysis tools<br>"
+                "• <strong>PM Dashboard</strong> — 9 project management features<br>"
                 "• <strong>scanning</strong> — how to scan a project<br>"
                 "• <strong>grading</strong> — score and letter grade system<br>"
-                "• <strong>API</strong> — all 31 REST endpoints<br>"
+                "• <strong>API</strong> — 34+ REST endpoints<br>"
                 "• <strong>engines</strong> — Python vs Rust<br><br>"
                 "Or ask about a specific rule like <code>SEC-003</code>!")
 
@@ -557,9 +608,9 @@ def _chat_reply(message: str, context: dict) -> str:
                 "Use the filter tabs above the results to sort by severity or rule.")
 
     # Default
-    return ("I know about X-Ray's <strong>28 rules</strong>, <strong>7 auto-fixers</strong>, "
-            "<strong>16 tools</strong>, <strong>PM Dashboard</strong>, <strong>grading</strong>, "
-            "and <strong>31 API endpoints</strong>. "
+    return ("I know about X-Ray's <strong>38 rules</strong>, <strong>7 auto-fixers</strong>, "
+            "<strong>19 tools</strong>, <strong>9 PM Dashboard features</strong>, <strong>grading</strong>, "
+            "and <strong>34+ API endpoints</strong>. "
             "Try asking about any of those, or a specific rule like <code>SEC-003</code>!")
 
 
@@ -603,7 +654,10 @@ class XRayHandler(BaseHTTPRequestHandler):
         if length == 0:
             return {}
         body = self.rfile.read(length)
-        return json.loads(body)
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            return {}
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -632,14 +686,10 @@ class XRayHandler(BaseHTTPRequestHandler):
                 "python": platform.python_version(),
                 "rust_available": rust_bin is not None,
                 "rust_binary": rust_bin,
-                "rules_count": 28,
+                "rules_count": len(__import__('xray.rules', fromlist=['ALL_RULES']).ALL_RULES),
                 "home": _fwd(str(Path.home())),
                 "fixable_rules": sorted(FIXABLE_RULES),
             })
-
-        elif path == "/api/progress":
-            with _progress_lock:
-                self._send_json(dict(_progress))
 
         else:
             self.send_error(404)
@@ -670,12 +720,44 @@ class XRayHandler(BaseHTTPRequestHandler):
             # Resolve to absolute path
             directory = str(Path(directory).resolve())
 
-            if engine == "rust":
-                result = scan_with_rust(directory, severity, excludes)
-            else:
-                result = scan_with_python(directory, severity, excludes)
+            # --- SSE streaming scan ---
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "close")
+            self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1:8077")
+            self.end_headers()
 
-            self._send_json(result)
+            _sse_lock = threading.Lock()
+
+            def sse_write(event_type, data):
+                try:
+                    payload = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+                    with _sse_lock:
+                        self.wfile.write(payload.encode())
+                        self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+
+            # Pre-count files and send initial event
+            total = _count_scannable_files(directory, excludes)
+            sse_write("progress", {
+                "files_scanned": 0, "total_files": total,
+                "findings_count": 0, "current_file": "Starting scan...",
+                "file_size": 0, "file_type": "", "elapsed_ms": 0,
+            })
+
+            if engine == "rust":
+                result = scan_with_rust(directory, severity, excludes,
+                                        sse_write=sse_write, total_files=total)
+            else:
+                result = scan_with_python(directory, severity, excludes,
+                                          sse_write=sse_write, total_files=total)
+
+            sse_write("done", result)
+            # Force-close so the browser's ReadableStream gets EOF
+            self.close_connection = True
+            return
 
         elif path == "/api/preview-fix":
             from xray.fixer import preview_fix
@@ -741,6 +823,15 @@ class XRayHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": f"Invalid directory: {directory}"}, 400)
                 return
             self._send_json(check_format(str(Path(directory).resolve())))
+
+        elif path == "/api/typecheck":
+            from analyzers import check_types
+            body = self._read_body()
+            directory = body.get("directory", "")
+            if not directory or not os.path.isdir(directory):
+                self._send_json({"error": f"Invalid directory: {directory}"}, 400)
+                return
+            self._send_json(check_types(str(Path(directory).resolve())))
 
         elif path == "/api/health":
             from analyzers import check_project_health
@@ -907,6 +998,52 @@ class XRayHandler(BaseHTTPRequestHandler):
                 return
             reply = _chat_reply(message, body)
             self._send_json({"reply": reply})
+
+        elif path == "/api/project-review":
+            from analyzers import compute_project_review
+            body = self._read_body()
+            directory = body.get("directory", "")
+            if not directory or not os.path.isdir(directory):
+                self._send_json({"error": f"Invalid directory: {directory}"}, 400)
+                return
+            self._send_json(compute_project_review(
+                str(Path(directory).resolve()),
+                findings=body.get("findings"),
+                summary=body.get("summary"),
+                files_scanned=body.get("files_scanned", 0),
+                smells=body.get("smells"),
+                dead_functions=body.get("dead_functions"),
+                health=body.get("health"),
+                satd=body.get("satd"),
+                duplicates=body.get("duplicates"),
+            ))
+
+        elif path == "/api/circular-calls":
+            from analyzers import detect_circular_calls
+            body = self._read_body()
+            directory = body.get("directory", "")
+            if not directory or not os.path.isdir(directory):
+                self._send_json({"error": f"Invalid directory: {directory}"}, 400)
+                return
+            self._send_json(detect_circular_calls(str(Path(directory).resolve())))
+
+        elif path == "/api/coupling":
+            from analyzers import compute_coupling_metrics
+            body = self._read_body()
+            directory = body.get("directory", "")
+            if not directory or not os.path.isdir(directory):
+                self._send_json({"error": f"Invalid directory: {directory}"}, 400)
+                return
+            self._send_json(compute_coupling_metrics(str(Path(directory).resolve())))
+
+        elif path == "/api/unused-imports":
+            from analyzers import detect_unused_imports
+            body = self._read_body()
+            directory = body.get("directory", "")
+            if not directory or not os.path.isdir(directory):
+                self._send_json({"error": f"Invalid directory: {directory}"}, 400)
+                return
+            self._send_json(detect_unused_imports(str(Path(directory).resolve())))
 
         else:
             self.send_error(404)

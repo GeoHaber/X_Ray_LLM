@@ -262,7 +262,11 @@ def step_cross_validate(target: str, scan_path: str):
         print(f"ERROR: Rust scanner failed:\n{proc.stderr}", file=sys.stderr)
         sys.exit(1)
 
-    rust_data = json.loads(proc.stdout)
+    try:
+        rust_data = json.loads(proc.stdout)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Failed to parse Rust scanner output: {e}", file=sys.stderr)
+        sys.exit(1)
 
     rust_by_rule = {}
     for finding in rust_data["findings"]:

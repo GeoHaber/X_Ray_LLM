@@ -8,3 +8,6 @@ target/
 dist/
 build/
 rust_scan.json
+_python_scan_log.txt
+_python_scan_results.json
+scan_output.json

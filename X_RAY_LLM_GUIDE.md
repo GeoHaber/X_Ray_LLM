@@ -11,12 +11,12 @@
 1. [What Is X-Ray LLM?](#1-what-is-x-ray-llm)
 2. [Quick Start](#2-quick-start)
 3. [Architecture Overview](#3-architecture-overview)
-4. [The 28 Scan Rules](#4-the-28-scan-rules)
+4. [The 38 Scan Rules](#4-the-38-scan-rules)
 5. [The Web UI](#5-the-web-ui)
 6. [How To: Scan a Project](#6-how-to-scan-a-project)
 7. [How To: Read & Filter Results](#7-how-to-read--filter-results)
 8. [How To: Auto-Fix Issues](#8-how-to-auto-fix-issues)
-9. [How To: Use the 16 Analysis Tools](#9-how-to-use-the-16-analysis-tools)
+9. [How To: Use the 19 Analysis Tools](#9-how-to-use-the-19-analysis-tools)
 10. [How To: Use the PM Dashboard](#10-how-to-use-the-pm-dashboard)
 11. [How To: Use the CLI & Agent Loop](#11-how-to-use-the-cli--agent-loop)
 12. [How To: Build & Use the Rust Scanner](#12-how-to-build--use-the-rust-scanner)
@@ -42,12 +42,12 @@ It scans codebases for security vulnerabilities, quality issues, and Python-spec
 **28 pattern-based rules** sourced from real bugs found in real projects — not synthetic patterns.
 
 **Key capabilities:**
-- **Dual scan engines** — Python (cross-platform) + Rust (optional, ~10× faster)
+- **Dual scan engines** — Python (38 rules, cross-platform) + Rust (28 rules, optional, ~10× faster)
 - **7 deterministic auto-fixers** — no LLM needed for common fixes
 - **LLM-powered fixes** — uses local models (Qwen, DeepSeek, Codestral) via llama-cpp-python
-- **Rich web UI** — 25+ views, interactive graphs, one-click tools
-- **16 analysis tools** — dead code, smells, duplicates, formatting, type checking, and more
-- **6 PM Dashboard features** — risk heatmaps, module grades, release confidence, sprint planning, architecture mapping, call graphs
+- **Rich web UI** — 28+ views, interactive graphs, one-click tools
+- **19 analysis tools** — dead code, smells, duplicates, formatting, type checking, circular calls, coupling, unused imports, and more
+- **9 PM Dashboard features** — risk heatmaps, module grades, release confidence, sprint planning, architecture mapping, call graphs, circular call detection, coupling metrics, unused import analysis
 - **Export** — all data available as JSON via REST API
 
 ---
@@ -92,7 +92,7 @@ Only `pytest` is strictly required for scanning. The rest unlock additional anal
 ```
   ┌───────────┐
   │   SCAN    │  28 rules (10 Security + 10 Quality + 8 Python)
-  └─────┬─────┘  Python regex scanner + optional Rust scanner
+  └─────┬─────┘  Python scanner (38 rules) + Rust scanner (28 rules)
         │
   ┌─────▼─────┐
   │   TEST    │  Auto-generate pytest tests for each finding
@@ -119,24 +119,28 @@ Only `pytest` is strictly required for scanning. The rest unlock additional anal
 
 | Component | File(s) | Role |
 |-----------|---------|------|
-| Scanner (Python) | `xray/scanner.py`, `xray/rules/*.py` | Pattern-based scanning engine |
-| Scanner (Rust) | `scanner/src/` | Optional high-performance scanner |
+| Scanner (Python) | `xray/scanner.py`, `xray/rules/*.py` | Pattern-based scanning engine (38 rules) |
+| Scanner (Rust) | `scanner/src/` | Optional high-performance scanner (28 rules) |
 | Agent Loop | `xray/agent.py` | Orchestrates SCAN→TEST→FIX→VERIFY→LOOP |
 | LLM Interface | `xray/llm.py` | Local LLM inference via llama-cpp-python |
 | Test Runner | `xray/runner.py` | Executes pytest, parses results |
 | Auto-Fixer | `xray/fixer.py` | 7 deterministic fixers + LLM fallback |
-| Web Server | `ui_server.py` | HTTP API (30+ endpoints) on port 8077 |
-| Web UI | `ui.html` | Single-page app with 25+ views |
-| Analyzers | `analyzers.py` | 18 analysis functions (smells, dead code, PM Dashboard, etc.) |
+| Web Server | `ui_server.py` | HTTP API (34+ endpoints) on port 8077 |
+| Web UI | `ui.html` | Single-page app with 28+ views |
+| Analyzers | `analyzers.py` | 21 analysis functions (smells, dead code, coupling, circular calls, PM Dashboard, etc.) |
 | Build System | `build.py` | Rust cross-compilation + validation |
 
 ---
 
-## 4. The 28 Scan Rules
+## 4. The 38 Scan Rules
 
 Every rule was sourced from a real bug found in a real project.
 
-### Security Rules (10) — Prefix: SEC
+> **Note:** The Python scanner implements all 38 rules. The Rust scanner currently has the
+> original 28 rules (SEC-001–010, QUAL-001–010, PY-001–008). Run `python generate_rust_rules.py`
+> to sync the 10 new rules to Rust.
+
+### Security Rules (14) — Prefix: SEC
 
 | ID | Name | Severity | What It Detects | Auto-Fix? |
 |----|------|----------|-----------------|-----------|
@@ -150,8 +154,12 @@ Every rule was sourced from a real bug found in a real project.
 | SEC-008 | Hardcoded secret | MEDIUM | `password = 'hunter2'` | No |
 | SEC-009 | Unsafe deserialization | HIGH | `pickle.loads(data)`, `yaml.load(...)` | **Yes** → `yaml.safe_load()` |
 | SEC-010 | Path traversal | MEDIUM | `os.path.join(dir, '../etc')` | No |
+| SEC-011 | Timing attack: == on secrets | MEDIUM | `password == user_input` | No |
+| SEC-012 | Debug mode enabled | HIGH | `DEBUG=True`, `app.debug=True` | No |
+| SEC-013 | Weak hash: MD5/SHA1 | MEDIUM | `hashlib.md5()`, `hashlib.sha1()` | No |
+| SEC-014 | TLS verification disabled | HIGH | `requests.get(url, verify=False)` | No |
 
-### Quality Rules (10) — Prefix: QUAL
+### Quality Rules (13) — Prefix: QUAL
 
 | ID | Name | Severity | What It Detects | Auto-Fix? |
 |----|------|----------|-----------------|-----------|
@@ -165,8 +173,11 @@ Every rule was sourced from a real bug found in a real project.
 | QUAL-008 | Long sleep (10+ seconds) | MEDIUM | `time.sleep(30)` | No |
 | QUAL-009 | Explicit keep-alive in HTTP | HIGH | `send_header('Connection', 'keep-alive')` | No |
 | QUAL-010 | localStorage without try/catch | MEDIUM | `localStorage.setItem(...)` | No |
+| QUAL-011 | Broad Exception catching | MEDIUM | `except Exception:` (too broad) | No |
+| QUAL-012 | String concat in loop | LOW | `s += "..."` in loop (O(n²)) | No |
+| QUAL-013 | Line exceeds 200 chars | LOW | Lines >200 characters | No |
 
-### Python Rules (8) — Prefix: PY
+### Python Rules (11) — Prefix: PY
 
 | ID | Name | Severity | What It Detects | Auto-Fix? |
 |----|------|----------|-----------------|-----------|
@@ -178,6 +189,9 @@ Every rule was sourced from a real bug found in a real project.
 | PY-006 | Global mutation | MEDIUM | `global x; x = 5` | No |
 | PY-007 | os.environ[] crashes on missing | MEDIUM | `os.environ['API_KEY']` | **Yes** → `os.environ.get('KEY', '')` |
 | PY-008 | open() without encoding | MEDIUM | `open('file.txt')` | No |
+| PY-009 | Captured but ignored exception | MEDIUM | `except SomeError as e: pass` | No |
+| PY-010 | sys.exit() in library code | MEDIUM | `sys.exit(1)` (kills process) | No |
+| PY-011 | Long isinstance chain | LOW | `isinstance(x, (A,B,C,D,E,...))` | No |
 
 ---
 
@@ -217,10 +231,10 @@ The web UI is a single-page application served at **http://127.0.0.1:8077**.
 
 1. **Directory Browser** — navigate folders, select project to scan
 2. **Scan Controls** — Scan button (engine selector: Python/Rust), Abort button
-3. **Analysis Tools** — 16 buttons (2-column grid), each runs one analysis
-4. **PM Dashboard** — 6 buttons (2-column grid), each runs a PM-level analysis
+3. **Analysis Tools** — 19 buttons (2-column grid), each runs one analysis
+4. **PM Dashboard** — 9 buttons (2-column grid), each runs a PM-level analysis
 
-### View Tabs (25+)
+### View Tabs (28+)
 
 After running a scan or analysis, results appear in tabbed views:
 
@@ -252,6 +266,9 @@ After running a scan or analysis, results appear in tabbed views:
 | PM: Batches | Sprint Batches | 4 collapsible work-package cards |
 | PM: Arch | Arch Map | vis.js architecture graph + warnings |
 | PM: Calls | Call Graph | Hierarchical vis.js call graph |
+| PM: Circular | Circular Calls | Function-level cycle detection, hub functions |
+| PM: Coupling | Coupling | Module afferent/efferent coupling, instability, health |
+| PM: Imports | Unused Imports | AST-based dead import detection |
 
 ---
 
@@ -291,7 +308,7 @@ python -m xray.agent /path/to/project --dry-run --exclude vendor/ node_modules/
 
 1. The scanner traverses the directory (skipping `__pycache__`, `.git`, `node_modules`, `venv`)
 2. For each file, it detects the language (`.py` → Python, `.js/.ts` → JavaScript, `.html` → HTML)
-3. Each line is tested against all 28 rules' regex patterns
+3. Each line is tested against all applicable rules' regex patterns (Python scanner: 38 rules; Rust scanner: 28 rules)
 4. Matches are collected as **findings** with: rule ID, severity, file, line, description, fix hint
 5. Results are returned with a summary (total, high, medium, low counts)
 
@@ -374,7 +391,7 @@ Via API: `POST /api/preview-fix` with `{rule_id, file, line}` — returns a diff
 
 ---
 
-## 9. How To: Use the 16 Analysis Tools
+## 9. How To: Use the 19 Analysis Tools
 
 All analysis tools are accessible from the **sidebar tool grid** in the Web UI. Each tool
 works on the currently selected directory. Most tools work independently — you don't need
@@ -539,7 +556,7 @@ to run a scan first (though some tools produce richer results if scan data is av
 The PM Dashboard provides **project-manager-level insights** — the kind of analysis a wise,
 experienced release manager would do before making ship/no-ship decisions.
 
-All 6 PM Dashboard tools are in the sidebar under **"PM Dashboard"**.
+All 9 PM Dashboard tools are in the sidebar under **"PM Dashboard"**.
 
 ### PM Tool 1: Risk Heatmap 🎯
 
@@ -684,6 +701,58 @@ ROI = impact / effort
 
 **Use case**: "What are the main entry points? What's the call flow? Where are the dead ends?"
 
+### PM Tool 7: Circular Call Detection 🌀
+
+**Button**: Circular  
+**What it does**: Detects function-level circular call chains (macaroni code) using DFS cycle detection on the call graph  
+**Analysis includes**:
+- **Circular call chains** — functions that call each other in cycles (A→B→C→A)
+- **Recursive functions** — functions that call themselves directly
+- **Hub functions** — functions with high fan-in × fan-out scores (coordination smell)
+
+**Output**:
+- **Summary cards** — total functions, call edges, cycles, recursive, hubs
+- **Circular chain list** — each cycle with arrow visualization and affected files
+- **Hub functions table** — name, file, line, fan-in, fan-out, hub score
+- **Recursive functions table** — function name, file, line
+
+**Use case**: "Is our code tangled? Are there functions that endlessly call each other? Where are the spaghetti junctions?"
+
+### PM Tool 8: Module Coupling & Cohesion 🔗
+
+**Button**: Coupling  
+**What it does**: Computes per-module coupling metrics and health classification  
+**Metrics per module**:
+- **Afferent coupling (Ca)** — how many other modules depend on this one
+- **Efferent coupling (Ce)** — how many modules this one depends on
+- **Instability (I)** — Ce/(Ca+Ce), 0 = stable, 1 = unstable
+- **Cohesion estimate** — function count / LOC ratio
+- **Health** — classified as: healthy, god_module, fragile, isolated, or dependent
+
+**Output**:
+- **Summary cards** — total modules, average instability, breakdown by health category
+- **God module alerts** (red) — modules with too many inbound AND outbound dependencies
+- **Fragile module alerts** (yellow) — unstable modules that others depend on
+- **Full module table** — LOC, functions, Ca, Ce, instability, cohesion, health status (color-coded)
+
+**Use case**: "Which modules are tangled? What would break if I changed this module? Is our architecture healthy?"
+
+### PM Tool 9: Unused Imports 🧹
+
+**Button**: Imports  
+**What it does**: AST-based detection of imported names that are never referenced in the file  
+**Analysis includes**:
+- **Import collection** — all `import` and `from ... import` names and aliases
+- **Reference scanning** — all Name nodes in AST + string annotations (for type hints)
+- **Comparison** — imported names not found in any reference are flagged
+
+**Output**:
+- **Summary cards** — total unused imports, files affected
+- **By-file chips** — file name with count of unused imports per file
+- **Detail table** — file, line number, import name (capped at 100 rows)
+
+**Use case**: "Are we importing things we don't use? Clean up dead imports to reduce clutter."
+
 ---
 
 ## 11. How To: Use the CLI & Agent Loop
@@ -716,7 +785,7 @@ python -m xray.agent /path/to/project --fix --max-retries 3
 
 ### What the Agent Loop Does
 
-1. **SCAN** — runs all 28 rules against the codebase
+1. **SCAN** — runs all 38 rules against the codebase (Python engine) or 28 rules (Rust engine)
 2. **TEST** — generates pytest tests for each finding (via LLM)
 3. **FIX** — applies deterministic fixers first, then LLM-generated patches
 4. **VERIFY** — runs `pytest` to confirm no regressions
@@ -741,7 +810,12 @@ cd scanner && cargo build --release && cd ..
 ## 12. How To: Build & Use the Rust Scanner
 
 The Rust scanner is an optional, high-performance alternative to the Python scanner.
-It implements all 28 rules with identical regex patterns, running ~10× faster.
+It currently implements the original 28 rules with identical regex patterns, running ~10× faster.
+
+> **Syncing new rules:** The Python scanner has 38 rules (10 new rules were added for
+> timing attacks, debug mode, weak hashing, TLS bypass, broad Exception catching,
+> string concat in loops, long lines, captured-ignored exceptions, sys.exit in library
+> code, and long isinstance chains). Run `python generate_rust_rules.py` to sync them.
 
 ### Prerequisites
 
@@ -835,8 +909,7 @@ The server listens on **port 8077** (configurable via `--port`) and exposes thes
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/` | Serve the web UI (ui.html) |
-| GET | `/api/info` | Platform, Python version, Rust status, rules count, fixable rules |
-| GET | `/api/progress` | Live scan progress (files_scanned, findings_count, elapsed_ms) |
+| GET | `/api/info` | Platform, Python version, Rust status, rules count (38), fixable rules |
 
 ### File Browsing
 
@@ -848,7 +921,7 @@ The server listens on **port 8077** (configurable via `--port`) and exposes thes
 
 | Method | Path | Body | Description |
 |--------|------|------|-------------|
-| POST | `/api/scan` | `{directory, engine, severity, excludes[]}` | Run full scan |
+| POST | `/api/scan` | `{directory, engine, severity, excludes[]}` | SSE streaming scan with per-file progress events |
 | POST | `/api/abort` | `{}` | Cancel running scan |
 
 ### Auto-Fix
@@ -891,6 +964,16 @@ The server listens on **port 8077** (configurable via `--port`) and exposes thes
 | POST | `/api/sprint-batches` | `{findings, smells}` | ROI-sorted sprint work packages |
 | POST | `/api/architecture` | `{directory}` | Import graph + circular deps + layers |
 | POST | `/api/call-graph` | `{directory}` | AST-based function call graph |
+| POST | `/api/circular-calls` | `{directory}` | Function-level circular call detection |
+| POST | `/api/coupling` | `{directory}` | Module coupling/cohesion metrics |
+| POST | `/api/unused-imports` | `{directory}` | AST-based unused import detection |
+
+### Utility
+
+| Method | Path | Body | Description |
+|--------|------|------|-------------|
+| POST | `/api/chat` | `{message}` | Knowledge-based chatbot (rules, tools, features) |
+| POST | `/api/project-review` | `{directory, findings, smells, ...}` | Comprehensive project review |
 
 ---
 
@@ -919,6 +1002,10 @@ Located in `analyzers.py`. Each function can be called programmatically or via i
 | `compute_architecture_map(directory)` | directory path | `{nodes[], edges[], layers{}, circular_deps[], god_modules[], clusters{}}` |
 | `compute_call_graph(directory)` | directory path | `{nodes[], edges[], entries[], leaves[], total_functions, total_edges}` |
 | `compute_sprint_batches(findings, smells)` | findings + smells lists | `{batches[], total_items, total_hours}` |
+| `compute_project_review(directory, ...)` | directory + optional findings/smells/health/satd | `{sections[], overall_grade, summary}` |
+| `detect_circular_calls(directory)` | directory path | `{circular_calls[], total_cycles, recursive_functions[], total_recursive, hub_functions[], total_hubs, total_functions, total_edges}` |
+| `compute_coupling_metrics(directory)` | directory path | `{modules[], total_modules, health_summary{}, avg_instability, god_modules[], fragile_modules[], isolated_modules[]}` |
+| `detect_unused_imports(directory)` | directory path | `{unused_imports[], total_unused, files_with_unused, by_file{}}` |
 
 ---
 
@@ -1009,9 +1096,9 @@ This verifies that:
 
 ```
 X_Ray_LLM/
-├── ui_server.py          # Web server (30+ REST endpoints, port 8077)
-├── ui.html               # Single-page web UI (25+ views)
-├── analyzers.py          # 18 analysis functions
+├── ui_server.py          # Web server (34+ REST endpoints, port 8077)
+├── ui.html               # Single-page web UI (28+ views)
+├── analyzers.py          # 21 analysis functions
 ├── build.py              # Rust build system + cross-compilation
 ├── README.md             # Project README
 ├── X_RAY_LLM_GUIDE.md   # This document
@@ -1025,10 +1112,10 @@ X_Ray_LLM/
 │   ├── fixer.py          # 7 deterministic auto-fixers
 │   ├── runner.py         # Test execution (pytest)
 │   └── rules/
-│       ├── __init__.py   # Exports ALL_RULES (28 total)
-│       ├── security.py   # SEC-001 through SEC-010
-│       ├── quality.py    # QUAL-001 through QUAL-010
-│       └── python_rules.py  # PY-001 through PY-008
+│       ├── __init__.py   # Exports ALL_RULES (38 total)
+│       ├── security.py   # SEC-001 through SEC-014 (14 rules)
+│       ├── quality.py    # QUAL-001 through QUAL-013 (13 rules)
+│       └── python_rules.py  # PY-001 through PY-011 (11 rules)
 │
 ├── scanner/              # Optional Rust scanner
 │   ├── Cargo.toml
@@ -1082,6 +1169,9 @@ from analyzers import (
     compute_sprint_batches,
     compute_architecture_map,
     compute_call_graph,
+    detect_circular_calls,
+    compute_coupling_metrics,
+    detect_unused_imports,
 )
 
 risk = compute_risk_heatmap("/path/to/project", findings=[])
@@ -1090,6 +1180,9 @@ confidence = compute_confidence_meter("/path/to/project", findings=[])
 batches = compute_sprint_batches(findings=[], smells=[])
 arch = compute_architecture_map("/path/to/project")
 cg = compute_call_graph("/path/to/project")
+circular = detect_circular_calls("/path/to/project")
+coupling = compute_coupling_metrics("/path/to/project")
+unused = detect_unused_imports("/path/to/project")
 ```
 
 ### Q: What files does the scanner skip?

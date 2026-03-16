@@ -22,8 +22,8 @@ python -m xray.agent /path/to/project --severity HIGH --dry-run
 
 ```
   ┌───────────┐
-  │   SCAN    │  28 rules (security / quality / python)
-  └─────┬─────┘  Python regex scanner + optional Rust scanner
+  │   SCAN    │  38 rules (security / quality / python)
+  └─────┬─────┘  Python regex scanner (38 rules) + Rust scanner (28 rules)
         │
   ┌─────▼─────┐
   │   TEST    │  Auto-generate pytest tests for each finding
@@ -46,15 +46,18 @@ python -m xray.agent /path/to/project --severity HIGH --dry-run
   └───────────┘
 ```
 
-## Pattern Rules (28 total)
+## Pattern Rules (38 total)
 
 | Category | Count | Examples |
 |----------|-------|---------|
-| Security | 10 | XSS, SQL injection, command injection, SSRF, eval, secrets, deserialization, path traversal |
-| Quality | 10 | Bare except, silent swallow, unchecked int(), non-daemon threads, TODO markers |
-| Python | 8 | Wildcard imports, print debug, JSON without try, global mutation, os.environ[] |
+| Security | 14 | XSS, SQL injection, command injection, SSRF, eval, secrets, deserialization, path traversal, timing attacks, debug mode, weak hash, TLS bypass |
+| Quality | 13 | Bare except, silent swallow, unchecked int(), non-daemon threads, TODO markers, broad Exception, string concat in loops, long lines |
+| Python | 11 | Wildcard imports, print debug, JSON without try, global mutation, os.environ[], captured-but-ignored exception, sys.exit in lib, long isinstance |
 
 All rules sourced from real bugs found in real projects.
+
+> **Note:** The Python scanner implements all 38 rules. The Rust scanner currently has
+> the original 28 rules; run `python generate_rust_rules.py` to sync the 10 new rules.
 
 ## Recommended Models
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "xray-llm"
-version = "0.1.0"
+version = "0.2.0"
 description = "Self-improving code quality agent — SCAN → TEST → FIX → VERIFY → LOOP"
 requires-python = ">=3.10"
 license = "MIT"
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "mypy"]
+dev = ["ruff>=0.15", "ty>=0.0.1"]
 
 [project.scripts]
 xray = "xray.agent:main"
@@ -23,3 +23,41 @@ xray = "xray.agent:main"
 testpaths = ["tests"]
 pythonpath = ["."]
 filterwarnings = ["ignore::pytest.PytestCollectionWarning"]
+
+# ── Ruff configuration ─────────────────────────────────────────────
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "S",    # flake8-bandit (security)
+    "T20",  # flake8-print
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "S101",   # assert usage (fine in tests)
+    "T201",   # print() (X-Ray is a CLI tool)
+    "E501",   # line length (handled by formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "B"]   # relax security/bugbear in test files
+"build.py" = ["T201"]    # print() is the UI in build scripts
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ── ty type checker configuration ──────────────────────────────────
+[tool.ty.environment]
+python-version = "3.10"

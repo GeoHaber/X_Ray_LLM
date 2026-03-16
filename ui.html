@@ -518,6 +518,10 @@ body.light {
         <button class="btn btn-sm btn-outline" onclick="runBatches()" id="batchBtn" disabled>&#x1F4CB; Batches</button>
         <button class="btn btn-sm btn-outline" onclick="runArchMap()" id="archBtn" disabled>&#x1F3D7; Arch Map</button>
         <button class="btn btn-sm btn-outline" onclick="runCallGraph()" id="cgBtn" disabled>&#x1F4DE; Call Graph</button>
+        <button class="btn btn-sm btn-outline" onclick="runCircularCalls()" id="circBtn" disabled>&#x1F300; Circular</button>
+        <button class="btn btn-sm btn-outline" onclick="runCoupling()" id="coupBtn" disabled>&#x1F517; Coupling</button>
+        <button class="btn btn-sm btn-outline" onclick="runUnusedImports()" id="uimpBtn" disabled>&#x1F9F9; Imports</button>
+        <button class="btn btn-sm btn-outline" onclick="runProjectReview()" id="reviewBtn" disabled style="grid-column:1/-1; background:var(--bg3); border-color:var(--accent);">&#x1F4DD; Project Review</button>
       </div>
     </div>
 
@@ -619,6 +623,9 @@ let confidenceData = null;
 let batchesData = null;
 let architectureData = null;
 let callGraphData = null;
+let circularCallsData = null;
+let couplingData = null;
+let unusedImportsData = null;
 
 // ── Theme ────────────────────────────────────────────────────────
 function toggleTheme() {
@@ -676,7 +683,7 @@ async function browse(path) {
 function renderDrives(drives) {
   const el = document.getElementById('browser');
   el.innerHTML = drives.map(d => `
-    <div class="browser-item" ondblclick="browse('${esc(d.path)}')">
+    <div class="browser-item" onclick="browse('${esc(d.path)}')" style="cursor:pointer;">
       <span class="icon">&#128187;</span>
       <span class="name">${esc(d.name)}</span>
     </div>
@@ -695,7 +702,7 @@ function renderBrowser(data) {
 
   for (const item of data.items) {
     if (item.is_dir) {
-      html += `<div class="browser-item" onclick="selectDir('${esc(item.path)}')" ondblclick="browse('${esc(item.path)}')">
+      html += `<div class="browser-item" onclick="selectDir('${esc(item.path)}', this); browse('${esc(item.path)}')" style="cursor:pointer;">
         <span class="icon">&#128193;</span>
         <span class="name">${esc(item.name)}</span>
       </div>`;
@@ -711,13 +718,13 @@ function renderBrowser(data) {
   el.innerHTML = html;
 }
 
-function selectDir(path) {
+function selectDir(path, el) {
   selectedDir = path;
   document.getElementById('selectedPath').textContent = shortenPath(path);
   document.querySelectorAll('.tool-grid .btn-sm, #scanBtn').forEach(b => b.disabled = false);
   // Highlight
-  document.querySelectorAll('.browser-item').forEach(el => el.classList.remove('selected'));
-  event.currentTarget.classList.add('selected');
+  document.querySelectorAll('.browser-item').forEach(i => i.classList.remove('selected'));
+  if (el) el.classList.add('selected');
 }
 
 function goToPath() {
@@ -730,36 +737,8 @@ document.getElementById('pathInput').addEventListener('keydown', e => {
 });
 
 // ── Scan ─────────────────────────────────────────────────────────
-let progressInterval = null;
 
-async function pollProgress() {
-  try {
-    const p = await api('/api/progress');
-    if (!p.active) return;
-    const el = document.getElementById('progressInfo');
-    if (!el) return;
-
-    const elapsed = (p.elapsed_ms / 1000).toFixed(1);
-    const shortDir = shortenPath(p.directory);
-    const shortFile = p.current_file ? shortenPath(p.current_file) : '';
-
-    el.innerHTML = `
-      <div style="font-size:14px; font-weight:600; margin-bottom:8px;">
-        Scanning: ${esc(shortDir)}
-      </div>
-      <div style="display:flex; gap:24px; margin-bottom:8px;">
-        <span><b>${p.files_scanned}</b> files scanned</span>
-        <span><b>${p.findings_count}</b> findings</span>
-        <span>${elapsed}s elapsed</span>
-      </div>
-      <div style="font-size:12px; color:var(--text2); font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-        ${esc(shortFile)}
-      </div>
-    `;
-  } catch(e) {}
-}
-
-function startProgress(engine) {
+function showScanUI(engine) {
   document.getElementById('scanBtn').disabled = true;
   document.getElementById('mainContent').innerHTML = `
     <div style="padding:40px; text-align:center;">
@@ -772,18 +751,53 @@ function startProgress(engine) {
         &#x25A0; Stop Scan
       </button>
     </div>`;
-  progressInterval = setInterval(pollProgress, 400);
+}
+
+function updateProgressUI(p) {
+  const el = document.getElementById('progressInfo');
+  if (!el) return;
+
+  const elapsed = (p.elapsed_ms / 1000).toFixed(1);
+  const shortFile = p.current_file ? shortenPath(p.current_file) : '';
+  const total = p.total_files || 0;
+  const scanned = p.files_scanned || 0;
+  const pct = total > 0 ? Math.min(100, Math.round(scanned / total * 100)) : 0;
+
+  let etaStr = '';
+  if (total > 0 && scanned > 0 && p.elapsed_ms > 200) {
+    const msPerFile = p.elapsed_ms / scanned;
+    const remaining = Math.max(0, total - scanned);
+    const etaSec = remaining * msPerFile / 1000;
+    etaStr = etaSec < 60 ? `~${Math.ceil(etaSec)}s remaining` : `~${(etaSec / 60).toFixed(1)}m remaining`;
+  }
+
+  el.innerHTML = `
+    ${total > 0 ? `
+    <div style="margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+        <span>${pct}% &mdash; ${scanned} / ${total} files</span>
+        <span style="color:var(--accent);">${etaStr}</span>
+      </div>
+      <div style="background:var(--bg3); border-radius:6px; height:10px; overflow:hidden;">
+        <div style="height:100%; width:${pct}%; background:linear-gradient(90deg, var(--accent), var(--green)); border-radius:6px; transition:width 0.2s;"></div>
+      </div>
+    </div>` : ''}
+    <div style="display:flex; gap:24px; margin-bottom:8px;">
+      <span><b>${scanned}</b> files scanned</span>
+      <span><b>${p.findings_count}</b> findings</span>
+      <span>${elapsed}s elapsed</span>
+    </div>
+    <div style="font-size:12px; color:var(--text2); font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+      ${esc(shortFile)}
+    </div>
+    ${p.file_size ? `<div style="font-size:11px; color:var(--text2);">${(p.file_size/1024).toFixed(1)} KB &middot; ${p.file_type || '?'}</div>` : ''}
+  `;
 }
 
 async function abortScan() {
   const btn = document.getElementById('abortBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Stopping...'; }
   try { await api('/api/abort', { method: 'POST' }); } catch(e) {}
-}
-
-function stopProgress() {
-  if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
-  document.getElementById('scanBtn').disabled = false;
 }
 
 async function runScan() {
@@ -800,56 +814,113 @@ async function runScan() {
   const excludeStr = document.getElementById('excludes').value.trim();
   const excludes = excludeStr ? excludeStr.split(',').map(s => s.trim()).filter(Boolean) : [];
 
-  startProgress(engine);
+  showScanUI(engine);
 
-  const result = await api('/api/scan', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ directory: selectedDir, engine, severity, excludes })
-  });
+  try {
+    const response = await fetch('/api/scan', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir, engine, severity, excludes })
+    });
 
-  stopProgress();
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result = null;
 
-  if (result.aborted) {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // Parse SSE events from buffer
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const block = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+
+        let eventType = 'message';
+        let data = '';
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event: ')) eventType = line.slice(7);
+          else if (line.startsWith('data: ')) data = line.slice(6);
+        }
+        if (!data) continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          if (eventType === 'progress') {
+            updateProgressUI(parsed);
+          } else if (eventType === 'done') {
+            result = parsed;
+          }
+        } catch(e) {}
+      }
+      // Break immediately once we have the done result — don't wait for stream EOF
+      if (result) break;
+    }
+    // Close the stream reader if still open
+    try { reader.cancel(); } catch(e) {}
+
+    document.getElementById('scanBtn').disabled = false;
+
+    if (!result) {
+      document.getElementById('mainContent').innerHTML = `
+        <div class="welcome"><h2>Scan Failed</h2>
+          <p style="color:var(--high);">No result received from server.</p>
+        </div>`;
+      return;
+    }
+
+    if (result.aborted) {
+      document.getElementById('mainContent').innerHTML = `
+        <div class="welcome"><h2>Scan Aborted</h2>
+          <p>Stopped after ${result.files_scanned || 0} files, ${result.findings_count || 0} findings.</p>
+        </div>`;
+      return;
+    }
+
+    if (result.error) {
+      document.getElementById('mainContent').innerHTML = `
+        <div class="welcome"><h2>Error</h2><p>${esc(result.error)}</p></div>`;
+      return;
+    }
+
+    scanResults = result;
+    activeFilter = 'ALL';
+
+    // Save to history for trend chart
+    const grade = calcDimensionGrades(result.findings || [], result.files_scanned).overall;
+    scanHistory.push({
+      time: new Date().toISOString(),
+      total: result.summary.total,
+      high: result.summary.high,
+      medium: result.summary.medium,
+      low: result.summary.low,
+      score: grade.score,
+      letter: grade.letter,
+      files: result.files_scanned,
+    });
+    if (scanHistory.length > 50) scanHistory.shift();
+    try { localStorage.setItem('xray_history', JSON.stringify(scanHistory)); } catch(e) {}
+
+    // Fetch remediation time
+    api('/api/remediation-time', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ findings: result.findings || [] })
+    }).then(t => { scanResults._remTime = t; renderResults(); }).catch(() => {});
+
+    renderResults();
+    addRecent(selectedDir, result);
+
+  } catch(e) {
+    document.getElementById('scanBtn').disabled = false;
     document.getElementById('mainContent').innerHTML = `
-      <div class="welcome"><h2>Scan Aborted</h2>
-        <p>Stopped after ${result.files_scanned || 0} files, ${result.findings_count || 0} findings.</p>
+      <div class="welcome"><h2>Scan Failed</h2>
+        <p style="color:var(--high);">Network or server error: ${esc(e.message)}</p>
+        <p style="color:var(--text2); font-size:12px;">Check that the server is running and try again.</p>
       </div>`;
-    return;
   }
-
-  if (result.error) {
-    document.getElementById('mainContent').innerHTML = `
-      <div class="welcome"><h2>Error</h2><p>${esc(result.error)}</p></div>`;
-    return;
-  }
-
-  scanResults = result;
-  activeFilter = 'ALL';
-
-  // Save to history for trend chart
-  const grade = calcDimensionGrades(result.findings || [], result.files_scanned).overall;
-  scanHistory.push({
-    time: new Date().toISOString(),
-    total: result.summary.total,
-    high: result.summary.high,
-    medium: result.summary.medium,
-    low: result.summary.low,
-    score: grade.score,
-    letter: grade.letter,
-    files: result.files_scanned,
-  });
-  if (scanHistory.length > 50) scanHistory.shift();
-  try { localStorage.setItem('xray_history', JSON.stringify(scanHistory)); } catch(e) {}
-
-  // Fetch remediation time
-  api('/api/remediation-time', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ findings: result.findings || [] })
-  }).then(t => { scanResults._remTime = t; renderResults(); }).catch(() => {});
-
-  renderResults();
-  addRecent(selectedDir, result);
 }
 
 // ── Grade Calculation ─────────────────────────────────────────────
@@ -915,8 +986,9 @@ function deltaHtml(current, previous, lowerIsBetter) {
 }
 
 // ── View State ───────────────────────────────────────────────────
-let activeView = 'findings';  // findings | fixplan | files | gate | satd | git | graph | smells | bandit | dead | dups | health | format | temporal | typecheck | release | aidetect | websmells | testgen | trend
+let activeView = 'findings';  // findings | fixplan | files | gate | satd | git | graph | smells | bandit | dead | dups | health | format | temporal | typecheck | release | aidetect | websmells | testgen | trend | review
 let searchQuery = '';
+let reviewData = null;
 
 // ── Render Results ───────────────────────────────────────────────
 function renderResults() {
@@ -980,6 +1052,10 @@ function renderResults() {
       <button class="view-tab ${activeView==='batches'?'active':''}" onclick="switchView('batches')">&#x1F4CB; Batches</button>
       <button class="view-tab ${activeView==='arch'?'active':''}" onclick="switchView('arch')">&#x1F3D7; Arch</button>
       <button class="view-tab ${activeView==='callgraph'?'active':''}" onclick="switchView('callgraph')">&#x1F4DE; Calls</button>
+      <button class="view-tab ${activeView==='circular'?'active':''}" onclick="switchView('circular')">&#x1F300; Circular</button>
+      <button class="view-tab ${activeView==='coupling'?'active':''}" onclick="switchView('coupling')">&#x1F517; Coupling</button>
+      <button class="view-tab ${activeView==='unusedimports'?'active':''}" onclick="switchView('unusedimports')">&#x1F9F9; Imports</button>
+      <button class="view-tab ${activeView==='review'?'active':''}" onclick="switchView('review')" style="border-color:var(--accent);">&#x1F4DD; Review</button>
     </div>
     <div class="toolbar-right">
       <input class="search-box" type="text" placeholder="Search findings..." value="${esc(searchQuery)}" oninput="searchQuery=this.value; renderViewContent();" />
@@ -1029,6 +1105,10 @@ function renderViewContent() {
   if (activeView === 'batches')    { el.innerHTML = renderBatchesView(); return; }
   if (activeView === 'arch')       { el.innerHTML = renderArchView(); initArchGraph(); return; }
   if (activeView === 'callgraph')  { el.innerHTML = renderCallGraphView(); initCallGraph(); return; }
+  if (activeView === 'circular')    { el.innerHTML = renderCircularCallsView(); return; }
+  if (activeView === 'coupling')    { el.innerHTML = renderCouplingView(); return; }
+  if (activeView === 'unusedimports') { el.innerHTML = renderUnusedImportsView(); return; }
+  if (activeView === 'review')     { el.innerHTML = renderProjectReviewView(); drawReviewCharts(); return; }
   el.innerHTML = renderFindingsList();
 }
 
@@ -2221,6 +2301,225 @@ async function runCallGraph() {
   if (btn) { btn.disabled = false; btn.textContent = '\u{1F4DE} Call Graph'; }
 }
 
+async function runProjectReview() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('reviewBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating Review...'; }
+  try {
+    reviewData = await api('/api/project-review', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        directory: selectedDir,
+        findings: scanResults?.findings || [],
+        summary: scanResults?.summary || null,
+        files_scanned: scanResults?.files_scanned || 0,
+        smells: smellsData?.smells || [],
+        dead_functions: deadCodeData?.dead_functions || [],
+        health: healthData || null,
+        satd: satdData || null,
+        duplicates: duplicatesData || null
+      })
+    });
+    if (scanResults) { activeView = 'review'; renderResults(); }
+    else { renderStandalone('review'); }
+  } catch(e) { showToast('Project review failed', true); }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F4DD} Project Review'; }
+}
+
+// ── CGC-Inspired: Circular Calls Runner ──────────────────────────
+async function runCircularCalls() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('circBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  try {
+    circularCallsData = await api('/api/circular-calls', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir })
+    });
+    if (scanResults) { activeView = 'circular'; renderResults(); }
+    else { renderStandalone('circular'); }
+  } catch(e) { showToast('Circular call analysis failed', true); }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F300} Circular'; }
+}
+
+async function runCoupling() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('coupBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  try {
+    couplingData = await api('/api/coupling', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir })
+    });
+    if (scanResults) { activeView = 'coupling'; renderResults(); }
+    else { renderStandalone('coupling'); }
+  } catch(e) { showToast('Coupling analysis failed', true); }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F517} Coupling'; }
+}
+
+async function runUnusedImports() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('uimpBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  try {
+    unusedImportsData = await api('/api/unused-imports', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir })
+    });
+    if (scanResults) { activeView = 'unusedimports'; renderResults(); }
+    else { renderStandalone('unusedimports'); }
+  } catch(e) { showToast('Unused imports analysis failed', true); }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F9F9} Imports'; }
+}
+
+// ── CGC-Inspired: Circular Calls View ────────────────────────────
+function renderCircularCallsView() {
+  const d = circularCallsData;
+  if (!d) return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>\u{1F300} Circular</b> in PM Dashboard to detect circular call chains (macaroni code).</div>';
+
+  let html = '<div style="padding:20px;">'
+    + '<h2>\u{1F300} Circular Call Analysis</h2>'
+    + '<div style="display:flex; gap:24px; margin-bottom:20px; flex-wrap:wrap;">'
+    + `<div class="stat-card"><div class="stat-value">${d.total_functions}</div><div class="stat-label">Functions</div></div>`
+    + `<div class="stat-card"><div class="stat-value">${d.total_edges}</div><div class="stat-label">Call Edges</div></div>`
+    + `<div class="stat-card"><div class="stat-value" style="color:${d.total_cycles > 0 ? 'var(--high)' : 'var(--green)'}">${d.total_cycles}</div><div class="stat-label">Circular Chains</div></div>`
+    + `<div class="stat-card"><div class="stat-value">${d.total_recursive}</div><div class="stat-label">Recursive</div></div>`
+    + `<div class="stat-card"><div class="stat-value" style="color:${d.total_hubs > 0 ? 'var(--medium)' : 'var(--green)'}">${d.total_hubs}</div><div class="stat-label">Hub Functions</div></div>`
+    + '</div>';
+
+  // Circular chains
+  if (d.circular_calls && d.circular_calls.length > 0) {
+    html += '<h3 style="color:var(--high);">\u26A0 Circular Call Chains (Macaroni Code)</h3>'
+      + '<p style="color:var(--text2); margin-bottom:12px;">Functions that call each other in cycles — hard to reason about, test, and refactor.</p>';
+    for (const c of d.circular_calls) {
+      html += `<div style="background:var(--bg2); border:1px solid var(--high); border-radius:var(--radius); padding:12px; margin-bottom:8px;">`
+        + `<div style="font-weight:600; color:var(--high);">Cycle (${c.length} calls): ${c.chain.map(n => '<code>' + esc(n) + '</code>').join(' \u2192 ')}</div>`
+        + `<div style="font-size:12px; color:var(--text2); margin-top:4px;">Files: ${c.files.map(f => esc(f)).join(', ')}</div>`
+        + '</div>';
+    }
+  } else {
+    html += '<div style="padding:20px; text-align:center; color:var(--green); font-size:16px;">\u2705 No circular call chains detected — clean call flow!</div>';
+  }
+
+  // Hub functions (spaghetti centers)
+  if (d.hub_functions && d.hub_functions.length > 0) {
+    html += '<h3 style="margin-top:24px; color:var(--medium);">\u{1F578} Hub Functions (High Fan-in \u00D7 Fan-out)</h3>'
+      + '<p style="color:var(--text2); margin-bottom:12px;">Functions with many callers AND many callees — coordination smell, hard to change.</p>'
+      + '<table class="results-table"><tr><th>Function</th><th>File</th><th>Fan-in</th><th>Fan-out</th><th>Score</th></tr>';
+    for (const h of d.hub_functions) {
+      html += `<tr><td><code>${esc(h.name)}</code></td><td style="font-size:11px;">${esc(h.file)}:${h.line}</td>`
+        + `<td>${h.fan_in}</td><td>${h.fan_out}</td><td style="color:var(--medium); font-weight:600;">${h.score}</td></tr>`;
+    }
+    html += '</table>';
+  }
+
+  // Recursive functions
+  if (d.recursive_functions && d.recursive_functions.length > 0) {
+    html += '<h3 style="margin-top:24px;">\u{1F504} Recursive Functions</h3>'
+      + '<table class="results-table"><tr><th>Function</th><th>File</th><th>Line</th></tr>';
+    for (const r of d.recursive_functions) {
+      html += `<tr><td><code>${esc(r.function)}</code></td><td>${esc(r.file)}</td><td>${r.line}</td></tr>`;
+    }
+    html += '</table>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// ── CGC-Inspired: Coupling Metrics View ──────────────────────────
+function renderCouplingView() {
+  const d = couplingData;
+  if (!d) return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>\u{1F517} Coupling</b> in PM Dashboard to analyze module coupling and cohesion.</div>';
+
+  const healthColors = { healthy: 'var(--green)', god_module: 'var(--high)', fragile: 'var(--medium)', isolated: 'var(--text2)', dependent: 'var(--medium)' };
+  const healthIcons = { healthy: '\u2705', god_module: '\u{1F4A5}', fragile: '\u26A0', isolated: '\u{1F4A4}', dependent: '\u{1F517}' };
+
+  let html = '<div style="padding:20px;">'
+    + '<h2>\u{1F517} Module Coupling & Cohesion</h2>'
+    + '<div style="display:flex; gap:24px; margin-bottom:20px; flex-wrap:wrap;">'
+    + `<div class="stat-card"><div class="stat-value">${d.total_modules}</div><div class="stat-label">Modules</div></div>`
+    + `<div class="stat-card"><div class="stat-value">${d.avg_instability}</div><div class="stat-label">Avg Instability</div></div>`;
+
+  const hs = d.health_summary || {};
+  for (const [k, v] of Object.entries(hs)) {
+    html += `<div class="stat-card"><div class="stat-value" style="color:${healthColors[k] || 'var(--text)'}">${v}</div><div class="stat-label">${k}</div></div>`;
+  }
+  html += '</div>';
+
+  // God modules alert
+  if (d.god_modules && d.god_modules.length > 0) {
+    html += '<h3 style="color:var(--high);">\u{1F4A5} God Modules (High Ca + Ce)</h3>'
+      + '<p style="color:var(--text2); margin-bottom:12px;">Modules with many inbound AND outbound dependencies — tangled, hard to change without ripple effects.</p>';
+  }
+
+  // Fragile modules alert
+  if (d.fragile_modules && d.fragile_modules.length > 0) {
+    html += '<h3 style="color:var(--medium);">\u26A0 Fragile Modules (High Instability + Dependents)</h3>'
+      + '<p style="color:var(--text2); margin-bottom:12px;">Unstable modules that many others depend on — changes here will break things.</p>';
+    for (const m of d.fragile_modules) {
+      html += `<div style="background:var(--bg2); border-left:3px solid var(--medium); padding:8px 12px; margin-bottom:4px; font-size:13px;">`
+        + `<code>${esc(m.module)}</code> — I=${m.instability} Ca=${m.afferent_coupling} Ce=${m.efferent_coupling}</div>`;
+    }
+  }
+
+  // All modules table
+  html += '<h3 style="margin-top:24px;">All Modules</h3>'
+    + '<div style="font-size:12px; color:var(--text2); margin-bottom:8px;">Ca = who depends on me (afferent) · Ce = who I depend on (efferent) · I = Ce/(Ca+Ce) — 0=stable 1=unstable</div>'
+    + '<table class="results-table"><tr><th>Module</th><th>LOC</th><th>Funcs</th><th>Ca</th><th>Ce</th><th>I</th><th>Cohesion</th><th>Health</th></tr>';
+  for (const m of d.modules.slice(0, 50)) {
+    const hc = healthColors[m.health] || 'var(--text)';
+    const hi = healthIcons[m.health] || '';
+    html += `<tr><td><code>${esc(m.module)}</code></td><td>${m.loc}</td><td>${m.func_count}</td>`
+      + `<td>${m.afferent_coupling}</td><td>${m.efferent_coupling}</td>`
+      + `<td style="color:${m.instability > 0.7 ? 'var(--medium)' : 'var(--text)'}">${m.instability}</td>`
+      + `<td>${m.cohesion}</td>`
+      + `<td style="color:${hc}">${hi} ${m.health}</td></tr>`;
+  }
+  html += '</table></div>';
+  return html;
+}
+
+// ── CGC-Inspired: Unused Imports View ────────────────────────────
+function renderUnusedImportsView() {
+  const d = unusedImportsData;
+  if (!d) return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>\u{1F9F9} Imports</b> in PM Dashboard to find unused imports.</div>';
+
+  let html = '<div style="padding:20px;">'
+    + '<h2>\u{1F9F9} Unused Imports</h2>'
+    + '<div style="display:flex; gap:24px; margin-bottom:20px; flex-wrap:wrap;">'
+    + `<div class="stat-card"><div class="stat-value" style="color:${d.total_unused > 0 ? 'var(--medium)' : 'var(--green)'}">${d.total_unused}</div><div class="stat-label">Unused Imports</div></div>`
+    + `<div class="stat-card"><div class="stat-value">${d.files_with_unused}</div><div class="stat-label">Files Affected</div></div>`
+    + '</div>';
+
+  if (d.total_unused === 0) {
+    html += '<div style="padding:20px; text-align:center; color:var(--green); font-size:16px;">\u2705 All imports are used — clean!</div>';
+  } else {
+    // By file summary
+    if (d.by_file && Object.keys(d.by_file).length > 0) {
+      html += '<h3>By File</h3>'
+        + '<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">';
+      for (const [file, count] of Object.entries(d.by_file)) {
+        html += `<span style="background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:4px 10px; font-size:12px;"><code>${esc(file)}</code> <b>${count}</b></span>`;
+      }
+      html += '</div>';
+    }
+
+    // Detail table
+    html += '<table class="results-table"><tr><th>File</th><th>Line</th><th>Import</th></tr>';
+    for (const i of d.unused_imports.slice(0, 100)) {
+      html += `<tr><td style="font-size:11px;">${esc(i.file)}</td><td>${i.line}</td><td><code>${esc(i.import_name)}</code></td></tr>`;
+    }
+    html += '</table>';
+    if (d.total_unused > 100) {
+      html += `<div style="color:var(--text2); text-align:center; margin-top:8px;">Showing 100 of ${d.total_unused}</div>`;
+    }
+  }
+
+  html += '</div>';
+  return html;
+}
+
 // ── PM Dashboard: Risk Map View ──────────────────────────────────
 function renderRiskMapView() {
   if (!riskMapData) return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Risk Map</b> in PM Dashboard to analyze composite risk per file.</div>';
@@ -2486,6 +2785,246 @@ function initCallGraph() {
     interaction: { hover: true, tooltipDelay: 100 },
     layout: { hierarchical: { direction: 'UD', sortMethod: 'directed', levelSeparation: 80, nodeSpacing: 30 } },
   });
+}
+
+// ── PM Dashboard: Project Review View ────────────────────────────
+function renderProjectReviewView() {
+  if (!reviewData) return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>&#x1F4DD; Project Review</b> in PM Dashboard to generate a professional review.</div>';
+  if (reviewData.error) return '<div style="color:var(--high); padding:20px;">' + esc(reviewData.error) + '</div>';
+  const d = reviewData;
+  const total = d.total_findings || 0;
+  const grColor = d.letter === 'A' ? 'var(--green)' : d.letter === 'B' ? 'var(--accent)' : d.letter === 'C' ? 'var(--medium)' : 'var(--high)';
+  const releaseColor = d.release_ready ? 'var(--green)' : 'var(--high)';
+
+  let html = `<div style="margin-top:12px;">
+  <!-- Header -->
+  <div style="display:flex; gap:16px; align-items:stretch; flex-wrap:wrap; margin-bottom:20px;">
+    <div class="grade-card" style="min-width:120px; background:var(--bg2); border:2px solid ${grColor}; border-radius:var(--radius); padding:16px; text-align:center;">
+      <div style="font-size:48px; font-weight:900; color:${grColor};">${esc(d.letter)}</div>
+      <div style="font-size:28px; color:${grColor};">${d.score}/100</div>
+      <div style="font-size:11px; color:var(--text2); margin-top:4px;">Quality Score</div>
+    </div>
+    <div style="flex:1; min-width:200px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px;">
+      <h2 style="margin:0 0 8px 0;">&#x1F4DD; ${esc(d.project_name)} — Project Review</h2>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px;">
+        <div><span style="color:var(--text2);">Files scanned:</span> <b>${d.files_scanned}</b></div>
+        <div><span style="color:var(--text2);">Total findings:</span> <b>${total}</b></div>
+        <div><span style="color:var(--text2);">Code smells:</span> <b>${d.smells_count}</b></div>
+        <div><span style="color:var(--text2);">Dead code:</span> <b>${d.dead_count}</b></div>
+        <div><span style="color:var(--text2);">Duplicates:</span> <b>${d.duplicates_count}</b></div>
+        <div><span style="color:var(--text2);">Tech debt:</span> <b>${d.debt_hours}h</b> (${d.debt_items} items)</div>
+        <div><span style="color:var(--text2);">Est. fix time:</span> <b>${d.total_fix_hours}h</b></div>
+      </div>
+    </div>
+    <div style="min-width:120px; background:var(--bg2); border:2px solid ${releaseColor}; border-radius:var(--radius); padding:16px; text-align:center; display:flex; flex-direction:column; justify-content:center;">
+      <div style="font-size:28px;">${d.release_ready ? '&#x2705;' : '&#x274C;'}</div>
+      <div style="font-size:20px; font-weight:900; color:${releaseColor};">${esc(d.release_status)}</div>
+      <div style="font-size:11px; color:var(--text2);">${d.blockers} blocker${d.blockers !== 1 ? 's' : ''}</div>
+    </div>
+  </div>
+
+  <!-- Charts row -->
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+    <div style="background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px;">
+      <h3 style="margin:0 0 12px 0;">Severity Distribution</h3>
+      <canvas id="reviewSevChart" width="400" height="200"></canvas>
+    </div>
+    <div style="background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px;">
+      <h3 style="margin:0 0 12px 0;">Category Breakdown</h3>
+      <canvas id="reviewCatChart" width="400" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Recommendations -->
+  <div style="margin-bottom:20px;">
+    <h3 style="margin-bottom:12px;">&#x1F6A8; Must Do (Blockers)</h3>`;
+
+  if (d.must_do.length === 0) {
+    html += '<div style="padding:12px; background:var(--bg2); border:1px solid var(--green); border-radius:var(--radius); color:var(--green);">&#x2705; No blockers — all critical items clear!</div>';
+  } else {
+    for (const r of d.must_do) {
+      html += `<div style="padding:12px; margin-bottom:8px; background:var(--bg2); border-left:4px solid var(--high); border-radius:var(--radius);">
+        <div style="font-weight:700; color:var(--high);">&#x1F534; ${esc(r.title)}</div>
+        <div style="color:var(--text2); font-size:12px; margin-top:4px;">${esc(r.reason)}</div>
+        <div style="display:flex; gap:16px; margin-top:6px; font-size:11px;">
+          <span>&#x23F1; ${esc(r.effort)}</span>
+          <span style="color:var(--high);">Impact: ${esc(r.impact)}</span>
+        </div>
+      </div>`;
+    }
+  }
+
+  html += `<h3 style="margin:16px 0 12px 0;">&#x26A0; Should Do (High Priority)</h3>`;
+  if (d.should_do.length === 0) {
+    html += '<div style="padding:12px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); color:var(--text2);">All clear.</div>';
+  } else {
+    for (const r of d.should_do) {
+      html += `<div style="padding:12px; margin-bottom:8px; background:var(--bg2); border-left:4px solid var(--medium); border-radius:var(--radius);">
+        <div style="font-weight:700; color:var(--medium);">&#x1F7E1; ${esc(r.title)}</div>
+        <div style="color:var(--text2); font-size:12px; margin-top:4px;">${esc(r.reason)}</div>
+        <div style="display:flex; gap:16px; margin-top:6px; font-size:11px;">
+          <span>&#x23F1; ${esc(r.effort)}</span>
+          <span style="color:var(--medium);">Impact: ${esc(r.impact)}</span>
+        </div>
+      </div>`;
+    }
+  }
+
+  html += `<h3 style="margin:16px 0 12px 0;">&#x1F4A1; Nice to Have</h3>`;
+  if (d.nice_to_have.length === 0) {
+    html += '<div style="padding:12px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); color:var(--text2);">No additional suggestions.</div>';
+  } else {
+    for (const r of d.nice_to_have) {
+      html += `<div style="padding:12px; margin-bottom:8px; background:var(--bg2); border-left:4px solid var(--accent); border-radius:var(--radius);">
+        <div style="font-weight:700; color:var(--accent);">&#x1F535; ${esc(r.title)}</div>
+        <div style="color:var(--text2); font-size:12px; margin-top:4px;">${esc(r.reason)}</div>
+        <div style="display:flex; gap:16px; margin-top:6px; font-size:11px;">
+          <span>&#x23F1; ${esc(r.effort)}</span>
+          <span style="color:var(--accent);">Impact: ${esc(r.impact)}</span>
+        </div>
+      </div>`;
+    }
+  }
+
+  // ── Hotspot table ──
+  html += `</div>
+  <div style="margin-bottom:20px;">
+    <h3 style="margin-bottom:12px;">&#x1F525; Top Risk Files</h3>
+    <table style="width:100%; font-size:12px; border-collapse:collapse;">
+      <tr style="color:var(--text2); border-bottom:1px solid var(--border); text-align:left;">
+        <th style="padding:6px;">File</th><th style="padding:6px; text-align:center;">High</th>
+        <th style="padding:6px; text-align:center;">Medium</th><th style="padding:6px; text-align:center;">Low</th>
+        <th style="padding:6px; text-align:center;">Total</th>
+        <th style="padding:6px;">Risk</th>
+      </tr>`;
+
+  for (const h of (d.hotspots || [])) {
+    const riskPct = Math.min(100, (h.high * 5 + h.medium * 2 + h.low) * 3);
+    html += `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:6px; font-family:monospace; font-size:11px; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(h.file)}</td>
+      <td style="padding:6px; text-align:center; color:var(--high); font-weight:700;">${h.high}</td>
+      <td style="padding:6px; text-align:center; color:var(--medium);">${h.medium}</td>
+      <td style="padding:6px; text-align:center; color:var(--accent);">${h.low}</td>
+      <td style="padding:6px; text-align:center; font-weight:700;">${h.total}</td>
+      <td style="padding:6px; width:120px;">
+        <div style="background:var(--bg3); border-radius:4px; height:14px; overflow:hidden;">
+          <div style="height:100%; width:${riskPct}%; background:${h.high > 0 ? 'var(--high)' : h.medium > 0 ? 'var(--medium)' : 'var(--accent)'}; border-radius:4px;"></div>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  html += `</table></div>`;
+
+  // ── Health flags ──
+  const flags = Object.entries(d.health_flags || {});
+  if (flags.length > 0) {
+    html += `<div style="margin-bottom:20px;">
+      <h3 style="margin-bottom:12px;">&#x1FA7A; Project Health Checks</h3>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:8px;">`;
+    for (const [k, v] of flags) {
+      const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      html += `<div style="padding:8px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); display:flex; align-items:center; gap:8px;">
+        <span style="font-size:16px;">${v ? '&#x2705;' : '&#x274C;'}</span>
+        <span style="font-size:12px;">${esc(label)}</span>
+      </div>`;
+    }
+    html += '</div></div>';
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function drawReviewCharts() {
+  const d = reviewData;
+  if (!d) return;
+
+  // ── Severity bar chart ──
+  const sevCanvas = document.getElementById('reviewSevChart');
+  if (sevCanvas) {
+    const ctx = sevCanvas.getContext('2d');
+    const rect = sevCanvas.parentElement.getBoundingClientRect();
+    sevCanvas.width = rect.width - 32;
+    sevCanvas.height = 180;
+    const sev = d.severity || {};
+    const bars = [
+      { label: 'HIGH', value: sev.HIGH || 0, color: '#f85149' },
+      { label: 'MEDIUM', value: sev.MEDIUM || 0, color: '#d29922' },
+      { label: 'LOW', value: sev.LOW || 0, color: '#58a6ff' },
+    ];
+    const maxVal = Math.max(1, ...bars.map(b => b.value));
+    const pad = { top: 10, bottom: 30, left: 50, right: 20 };
+    const w = sevCanvas.width - pad.left - pad.right;
+    const h = sevCanvas.height - pad.top - pad.bottom;
+    const barW = Math.min(80, w / bars.length - 20);
+
+    ctx.clearRect(0, 0, sevCanvas.width, sevCanvas.height);
+    ctx.strokeStyle = '#30363d'; ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.top + h - (h * i / 4);
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + w, y); ctx.stroke();
+      ctx.fillStyle = '#8b949e'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+      ctx.fillText(Math.round(maxVal * i / 4), pad.left - 6, y + 3);
+    }
+
+    bars.forEach((b, i) => {
+      const x = pad.left + (w / bars.length) * i + (w / bars.length - barW) / 2;
+      const bh = (b.value / maxVal) * h;
+      const y = pad.top + h - bh;
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      const r = 4;
+      ctx.moveTo(x + r, y); ctx.lineTo(x + barW - r, y); ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
+      ctx.lineTo(x + barW, pad.top + h); ctx.lineTo(x, pad.top + h); ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y); ctx.fill();
+      // Value on top
+      ctx.fillStyle = '#e6edf3'; ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(b.value, x + barW / 2, y - 5);
+      // Label
+      ctx.fillStyle = '#8b949e'; ctx.font = '11px sans-serif';
+      ctx.fillText(b.label, x + barW / 2, pad.top + h + 18);
+    });
+  }
+
+  // ── Category horizontal bar chart ──
+  const catCanvas = document.getElementById('reviewCatChart');
+  if (catCanvas) {
+    const ctx = catCanvas.getContext('2d');
+    const cats = Object.entries(d.categories || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const rect = catCanvas.parentElement.getBoundingClientRect();
+    catCanvas.width = rect.width - 32;
+    const rowH = 24;
+    catCanvas.height = Math.max(180, cats.length * rowH + 20);
+    const maxVal = Math.max(1, ...cats.map(c => c[1]));
+    const pad = { top: 5, left: 60, right: 30 };
+    const w = catCanvas.width - pad.left - pad.right;
+    const palette = ['#58a6ff', '#3fb950', '#d29922', '#f85149', '#bc8cff', '#f778ba', '#79c0ff', '#56d364'];
+
+    ctx.clearRect(0, 0, catCanvas.width, catCanvas.height);
+    cats.forEach((c, i) => {
+      const y = pad.top + i * rowH;
+      const bw = (c[1] / maxVal) * w;
+      // Label
+      ctx.fillStyle = '#8b949e'; ctx.font = '11px monospace'; ctx.textAlign = 'right';
+      ctx.fillText(c[0], pad.left - 6, y + rowH / 2 + 4);
+      // Bar
+      ctx.fillStyle = palette[i % palette.length];
+      ctx.beginPath();
+      const r = 3;
+      ctx.moveTo(pad.left + r, y + 3); ctx.lineTo(pad.left + bw - r, y + 3);
+      ctx.quadraticCurveTo(pad.left + bw, y + 3, pad.left + bw, y + 3 + r);
+      ctx.lineTo(pad.left + bw, y + rowH - 3 - r);
+      ctx.quadraticCurveTo(pad.left + bw, y + rowH - 3, pad.left + bw - r, y + rowH - 3);
+      ctx.lineTo(pad.left + r, y + rowH - 3);
+      ctx.quadraticCurveTo(pad.left, y + rowH - 3, pad.left, y + rowH - 3 - r);
+      ctx.lineTo(pad.left, y + 3 + r);
+      ctx.quadraticCurveTo(pad.left, y + 3, pad.left + r, y + 3); ctx.fill();
+      // Count
+      ctx.fillStyle = '#e6edf3'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
+      ctx.fillText(c[1], pad.left + bw + 6, y + rowH / 2 + 4);
+    });
+  }
 }
 
 // ── Chat Bot ────────────────────────────────────────────────────

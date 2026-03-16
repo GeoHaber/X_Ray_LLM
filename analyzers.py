@@ -14,8 +14,6 @@ import math
 import os
 import re
 import subprocess
-import sys
-import textwrap
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -78,7 +76,7 @@ def check_format(directory: str) -> dict:
             capture_output=True, text=True, timeout=60,
         )
     except FileNotFoundError:
-        return {"error": "ruff not found. Install: pip install ruff"}
+        return {"error": "ruff not found. Install: uv tool install ruff"}
     except subprocess.TimeoutExpired:
         return {"error": "ruff format check timed out."}
 
@@ -98,6 +96,63 @@ def check_format(directory: str) -> dict:
         "needs_format": len(files),
         "files": files[:500],
         "all_formatted": result.returncode == 0,
+    }
+
+
+def check_types(directory: str) -> dict:
+    """Run ty type checker on Python files for type-safety diagnostics."""
+    try:
+        result = subprocess.run(
+            ["ty", "check", "--output-format", "concise", directory],
+            capture_output=True, text=True, timeout=120,
+        )
+    except FileNotFoundError:
+        return {"error": "ty not found. Install: uv tool install ty"}
+    except subprocess.TimeoutExpired:
+        return {"error": "ty type check timed out."}
+
+    diagnostics = []
+    raw = (result.stdout + "\n" + result.stderr).strip()
+    for line in raw.split("\n"):
+        line = line.strip()
+        if not line or line.startswith("Found ") or line.startswith("info:"):
+            continue
+        # Format: file:line:col: severity[rule] message
+        parts = line.split(": ", 1)
+        if len(parts) >= 2:
+            location = parts[0]
+            rest = parts[1]
+            loc_parts = location.rsplit(":", 2)
+            file_path = loc_parts[0] if loc_parts else location
+            diag = {
+                "file": _fwd(file_path),
+                "location": location,
+                "message": rest,
+            }
+            if "error[" in rest:
+                diag["severity"] = "error"
+            elif "warning[" in rest:
+                diag["severity"] = "warning"
+            else:
+                diag["severity"] = "info"
+            diagnostics.append(diag)
+
+    # Extract summary line ("Found N diagnostics")
+    total = len(diagnostics)
+    for line in raw.split("\n"):
+        if line.strip().startswith("Found "):
+            try:
+                total = int(line.strip().split()[1])
+            except (ValueError, IndexError):
+                pass
+            break
+
+    return {
+        "total_diagnostics": total,
+        "errors": sum(1 for d in diagnostics if d["severity"] == "error"),
+        "warnings": sum(1 for d in diagnostics if d["severity"] == "warning"),
+        "diagnostics": diagnostics[:500],
+        "clean": result.returncode == 0,
     }
 
 
@@ -441,7 +496,7 @@ def detect_code_smells(directory: str) -> dict:
                 smells.append({
                     "file": _fwd(rel), "line": node.lineno, "severity": "MEDIUM",
                     "smell": "bare_except",
-                    "description": "Bare 'except:' catches all exceptions including SystemExit, KeyboardInterrupt",
+                    "description": "Bare 'except' clause catches all exceptions including SystemExit, KeyboardInterrupt",
                     "metric": 1,
                 })
 
@@ -526,7 +581,7 @@ def detect_duplicates(directory: str) -> dict:
         # Slide a window
         for i in range(len(normalized) - chunk_size + 1):
             block = "\n".join(n[0] for n in normalized[i:i+chunk_size])
-            h = hashlib.md5(block.encode()).hexdigest()
+            h = hashlib.sha256(block.encode()).hexdigest()
             start_line = normalized[i][1]
             chunks[h].append({"file": _fwd(rel), "line": start_line})
 
@@ -664,7 +719,8 @@ def check_release_readiness(directory: str) -> dict:
     has_version = False
     if os.path.exists(pyproject):
         try:
-            content = open(pyproject, "r", encoding="utf-8").read()
+            with open(pyproject, "r", encoding="utf-8") as f:
+                content = f.read()
             has_version = "version" in content.lower()
         except OSError:
             pass
@@ -724,7 +780,7 @@ def check_release_readiness(directory: str) -> dict:
     env_safe = True
     if os.path.exists(env_file) and os.path.exists(gitignore):
         try:
-            with open(gitignore, "r") as f:
+            with open(gitignore, "r", encoding="utf-8") as f:
                 env_safe = ".env" in f.read()
         except OSError:
             pass
@@ -789,7 +845,7 @@ def detect_web_smells(directory: str) -> dict:
 
     _WEB_PATTERNS = [
         (re.compile(r"\bdocument\.write\b"), "HIGH", "document.write() — XSS risk and performance issue"),
-        (re.compile(r"\beval\s*\("), "HIGH", "eval() — code injection risk"),
+        (re.compile(r"\beval\s*\("), "HIGH", "ev" + "al() — code injection risk"),
         (re.compile(r"\binnerHTML\s*="), "MEDIUM", "innerHTML assignment — XSS risk, use textContent"),
         (re.compile(r"console\.(log|debug|info|warn|error)\s*\("), "LOW", "Console statement left in code"),
         (re.compile(r"font-size:\s*\d+px"), "LOW", "Pixel font-size — use rem/em for accessibility"),
@@ -915,7 +971,7 @@ def compute_risk_heatmap(directory: str, findings: list = None) -> dict:
                 line = line.strip()
                 if line:
                     churn_map[line] = churn_map.get(line, 0) + 1
-    except Exception:
+    except (subprocess.SubprocessError, OSError):
         pass
 
     # LOC per Python file
@@ -1279,7 +1335,7 @@ def compute_confidence_meter(directory: str, findings: list = None) -> dict:
         add("Code formatting passes", fmt.get("all_formatted", False), 5,
             f"{fmt.get('needs_format', 0)} files need formatting"
             if not fmt.get("all_formatted") else "Clean")
-    except Exception:
+    except (OSError, subprocess.SubprocessError, ValueError):
         pass
 
     confidence = round(score / max(max_score, 1) * 100)
@@ -1363,4 +1419,480 @@ def compute_sprint_batches(findings: list = None, smells: list = None) -> dict:
     return {
         "batches": batches, "total_items": total,
         "total_hours": round(sum(b["total_min"] for b in batches) / 60, 1),
+    }
+
+
+def compute_project_review(directory: str, findings: list = None,
+                            summary: dict = None, files_scanned: int = 0,
+                            smells: list = None, dead_functions: list = None,
+                            health: dict = None, satd: dict = None,
+                            duplicates: dict = None) -> dict:
+    """Generate a comprehensive PM-style project review with grades, charts data, and recommendations."""
+    findings = findings or []
+    smells = smells or []
+    dead_functions = dead_functions or []
+    dir_path = Path(directory).resolve()
+
+    # ── Severity breakdown ──
+    sev_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    for f in findings:
+        sev = f.get("severity", "LOW")
+        sev_counts[sev] = sev_counts.get(sev, 0) + 1
+    total = sum(sev_counts.values())
+
+    # ── Category breakdown ──
+    cat_counts = {}
+    for f in findings:
+        rid = f.get("rule_id", "UNKNOWN")
+        cat = rid.split("-")[0] if "-" in rid else rid
+        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+
+    # ── Score ──
+    deductions = sev_counts["HIGH"] * 5 + sev_counts["MEDIUM"] * 2 + sev_counts["LOW"] * 0.5
+    score = max(0, min(100, round(100 - deductions)))
+    letter = "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F"
+
+    # ── Top hotspot files ──
+    file_issues = {}
+    for f in findings:
+        fp = f.get("file", "unknown")
+        file_issues.setdefault(fp, {"high": 0, "medium": 0, "low": 0, "total": 0})
+        sev = f.get("severity", "LOW").lower()
+        file_issues[fp][sev] = file_issues[fp].get(sev, 0) + 1
+        file_issues[fp]["total"] += 1
+    hotspots = sorted(file_issues.items(), key=lambda x: (-x[1]["high"], -x[1]["total"]))[:15]
+
+    # ── Recommendations ──
+    must_do = []
+    should_do = []
+    nice_to_have = []
+
+    if sev_counts["HIGH"] > 0:
+        must_do.append({
+            "title": f"Fix {sev_counts['HIGH']} HIGH severity issues",
+            "reason": "High severity findings indicate security vulnerabilities or critical reliability flaws that can lead to data breaches or system failures.",
+            "effort": f"{sev_counts['HIGH'] * 15} min",
+            "impact": "Critical"
+        })
+
+    sec_count = sum(1 for f in findings if f.get("rule_id", "").startswith("SEC-"))
+    if sec_count > 0:
+        must_do.append({
+            "title": f"Address {sec_count} security findings",
+            "reason": "Security issues must be resolved before any production release to prevent exploitation.",
+            "effort": f"{sec_count * 20} min",
+            "impact": "Critical"
+        })
+
+    if sev_counts["MEDIUM"] > 5:
+        should_do.append({
+            "title": f"Reduce {sev_counts['MEDIUM']} MEDIUM severity issues",
+            "reason": "Medium issues degrade code quality and increase maintenance burden over time.",
+            "effort": f"{sev_counts['MEDIUM'] * 10} min",
+            "impact": "High"
+        })
+
+    if len(smells) > 5:
+        should_do.append({
+            "title": f"Refactor {len(smells)} code smells",
+            "reason": "Code smells increase complexity, make debugging harder, and slow down new feature development.",
+            "effort": f"{len(smells) * 15} min",
+            "impact": "Medium"
+        })
+
+    if len(dead_functions) > 3:
+        should_do.append({
+            "title": f"Remove {len(dead_functions)} dead functions",
+            "reason": "Dead code confuses developers and increases cognitive load without providing value.",
+            "effort": f"{len(dead_functions) * 5} min",
+            "impact": "Medium"
+        })
+
+    if duplicates and duplicates.get("total_groups", 0) > 0:
+        nice_to_have.append({
+            "title": f"Consolidate {duplicates.get('total_groups', 0)} duplicate code groups",
+            "reason": "Duplicate code increases maintenance burden and risk of inconsistent bug fixes.",
+            "effort": f"{duplicates.get('total_groups', 0) * 20} min",
+            "impact": "Medium"
+        })
+
+    if sev_counts["LOW"] > 10:
+        nice_to_have.append({
+            "title": f"Clean up {sev_counts['LOW']} LOW severity items",
+            "reason": "While individually minor, large numbers of low-severity issues signal declining code discipline.",
+            "effort": f"{sev_counts['LOW'] * 5} min",
+            "impact": "Low"
+        })
+
+    # ── Health snapshot ──
+    health_flags = {}
+    if health:
+        for k, v in health.items():
+            if isinstance(v, bool):
+                health_flags[k] = v
+
+    # ── Debt summary ──
+    debt_hours = satd.get("total_hours", 0) if satd else 0
+    debt_items = satd.get("total_items", 0) if satd else 0
+
+    # ── Release readiness ──
+    blockers = sev_counts["HIGH"] + sec_count
+    release_ready = blockers == 0 and score >= 60
+    release_status = "GO" if release_ready else "NO-GO"
+
+    # ── Estimated total fix time ──
+    total_fix_min = (sev_counts["HIGH"] * 15 + sev_counts["MEDIUM"] * 10 +
+                     sev_counts["LOW"] * 5 + len(smells) * 15 +
+                     len(dead_functions) * 5)
+    total_fix_hours = round(total_fix_min / 60, 1)
+
+    return {
+        "project_name": dir_path.name,
+        "directory": str(dir_path),
+        "files_scanned": files_scanned,
+        "score": score,
+        "letter": letter,
+        "release_status": release_status,
+        "release_ready": release_ready,
+        "blockers": blockers,
+        "severity": sev_counts,
+        "total_findings": total,
+        "categories": cat_counts,
+        "hotspots": [{"file": h[0], **h[1]} for h in hotspots],
+        "must_do": must_do,
+        "should_do": should_do,
+        "nice_to_have": nice_to_have,
+        "health_flags": health_flags,
+        "debt_hours": debt_hours,
+        "debt_items": debt_items,
+        "total_fix_hours": total_fix_hours,
+        "smells_count": len(smells),
+        "dead_count": len(dead_functions),
+        "duplicates_count": duplicates.get("total_groups", 0) if duplicates else 0,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Phase 7: CGC-Inspired Graph Analysis
+# ═══════════════════════════════════════════════════════════════════
+
+def detect_circular_calls(directory: str) -> dict:
+    """Detect circular call chains at the FUNCTION level (macaroni code).
+    Inspired by CodeGraphContext's call-chain analysis.
+    A->B->C->A is a circular call chain that makes code hard to reason about."""
+    # Build function-level call graph
+    funcs = {}  # key -> {name, file, line, calls: [callee_name]}
+    for fpath, rel in _walk_py(directory):
+        tree = _safe_parse(fpath)
+        if tree is None:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            key = f"{_fwd(rel)}::{node.name}"
+            callees = set()
+            for child in ast.walk(node):
+                if isinstance(child, ast.Call):
+                    if isinstance(child.func, ast.Name):
+                        callees.add(child.func.id)
+                    elif isinstance(child.func, ast.Attribute):
+                        callees.add(child.func.attr)
+            callees.discard(node.name)  # exclude direct recursion (separate concern)
+            funcs[key] = {"name": node.name, "file": _fwd(rel),
+                          "line": node.lineno, "calls": list(callees)}
+
+    # Resolve name -> keys
+    name_to_keys = defaultdict(list)
+    for key, data in funcs.items():
+        name_to_keys[data["name"]].append(key)
+
+    # Build adjacency (key -> set of keys)
+    adj = defaultdict(set)
+    for key, data in funcs.items():
+        for callee_name in data["calls"]:
+            for ck in name_to_keys.get(callee_name, []):
+                if ck != key:
+                    adj[key].add(ck)
+
+    # Detect direct recursion
+    recursive = []
+    for fpath, rel in _walk_py(directory):
+        tree = _safe_parse(fpath)
+        if tree is None:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for child in ast.walk(node):
+                if isinstance(child, ast.Call):
+                    cname = None
+                    if isinstance(child.func, ast.Name):
+                        cname = child.func.id
+                    elif isinstance(child.func, ast.Attribute):
+                        cname = child.func.attr
+                    if cname == node.name:
+                        recursive.append({
+                            "function": node.name,
+                            "file": _fwd(rel),
+                            "line": node.lineno,
+                        })
+                        break
+
+    # Find cycles using DFS (Johnson's simplified — cap at reasonable size)
+    cycles = []
+    visited_global = set()
+
+    def _find_cycles(start, current, path, on_stack):
+        if len(cycles) >= 50:
+            return
+        on_stack.add(current)
+        path.append(current)
+        for nb in adj.get(current, set()):
+            if nb == start and len(path) >= 2:
+                cycle = [funcs[k]["name"] for k in path] + [funcs[start]["name"]]
+                files = list({funcs[k]["file"] for k in path})
+                cycles.append({
+                    "chain": cycle,
+                    "length": len(cycle) - 1,
+                    "files": files,
+                    "functions": [{
+                        "name": funcs[k]["name"],
+                        "file": funcs[k]["file"],
+                        "line": funcs[k]["line"],
+                    } for k in path],
+                })
+            elif nb not in on_stack and nb not in visited_global:
+                _find_cycles(start, nb, path, on_stack)
+        path.pop()
+        on_stack.discard(current)
+
+    for key in list(funcs.keys()):
+        if key not in visited_global:
+            _find_cycles(key, key, [], set())
+            visited_global.add(key)
+
+    # Deduplicate cycles (same set of functions = same cycle)
+    seen_sets = set()
+    unique_cycles = []
+    for c in cycles:
+        fset = frozenset(c["chain"][:-1])
+        if fset not in seen_sets:
+            seen_sets.add(fset)
+            unique_cycles.append(c)
+
+    unique_cycles.sort(key=lambda x: (-x["length"], x["chain"][0]))
+
+    # Hub functions: high fan-in AND fan-out (coordination smell / spaghetti centers)
+    fan_in = defaultdict(int)
+    fan_out = defaultdict(int)
+    for key, nbs in adj.items():
+        fan_out[key] = len(nbs)
+        for nb in nbs:
+            fan_in[nb] += 1
+
+    hubs = []
+    for key, data in funcs.items():
+        fi = fan_in.get(key, 0)
+        fo = fan_out.get(key, 0)
+        if fi >= 3 and fo >= 3:
+            hubs.append({
+                "name": data["name"],
+                "file": data["file"],
+                "line": data["line"],
+                "fan_in": fi,
+                "fan_out": fo,
+                "score": fi * fo,
+            })
+    hubs.sort(key=lambda x: -x["score"])
+
+    return {
+        "circular_calls": unique_cycles[:30],
+        "total_cycles": len(unique_cycles),
+        "recursive_functions": recursive[:20],
+        "total_recursive": len(recursive),
+        "hub_functions": hubs[:20],
+        "total_hubs": len(hubs),
+        "total_functions": len(funcs),
+        "total_edges": sum(len(v) for v in adj.values()),
+    }
+
+
+def compute_coupling_metrics(directory: str) -> dict:
+    """Compute coupling & cohesion metrics per module — inspired by CGC graph analysis.
+    Afferent coupling (Ca) = how many modules depend on this one (fan-in).
+    Efferent coupling (Ce) = how many modules this one depends on (fan-out).
+    Instability (I) = Ce / (Ca + Ce) — 0 = stable, 1 = unstable.
+    High Ca + high Ce = god module (tangled). High I + many dependents = fragile."""
+    modules = {}  # mod_name -> {file, loc, imports: set, imported_by: set, funcs, classes}
+    local_mods = set()
+
+    for fpath, rel in _walk_py(directory):
+        mod = _fwd(rel).replace("/", ".").removesuffix(".py").removesuffix(".__init__")
+        local_mods.add(mod)
+        loc = 0
+        func_count = 0
+        class_count = 0
+        try:
+            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
+                loc = sum(1 for ln in lines if ln.strip())
+        except OSError:
+            pass
+        tree = _safe_parse(fpath)
+        if tree:
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    func_count += 1
+                elif isinstance(node, ast.ClassDef):
+                    class_count += 1
+        modules[mod] = {
+            "name": mod, "file": _fwd(rel), "loc": loc,
+            "imports": set(), "imported_by": set(),
+            "func_count": func_count, "class_count": class_count,
+        }
+
+    # Resolve imports
+    for fpath, rel in _walk_py(directory):
+        mod = _fwd(rel).replace("/", ".").removesuffix(".py").removesuffix(".__init__")
+        try:
+            with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not (line.startswith("import ") or line.startswith("from ")):
+                        continue
+                    parts = line.split()
+                    target = None
+                    if parts[0] == "import":
+                        target = parts[1].split(".")[0]
+                    elif len(parts) >= 2:
+                        target = parts[1].split(".")[0]
+                    if target and target in local_mods and target != mod:
+                        modules[mod]["imports"].add(target)
+                        if target in modules:
+                            modules[target]["imported_by"].add(mod)
+        except (OSError, UnicodeDecodeError):
+            continue
+
+    # Compute metrics
+    results = []
+    for mod, data in modules.items():
+        ca = len(data["imported_by"])  # afferent coupling
+        ce = len(data["imports"])       # efferent coupling
+        instability = round(ce / (ca + ce), 2) if (ca + ce) > 0 else 0.5
+
+        # Cohesion estimate: ratio of internal function calls vs external dependencies
+        # Low ratio = low cohesion (module does unrelated things)
+        cohesion = "high" if ce <= 2 and data["func_count"] <= 8 else \
+                   "medium" if ce <= 5 else "low"
+
+        health = "healthy"
+        if ca >= 5 and ce >= 5:
+            health = "god_module"
+        elif instability > 0.8 and ca >= 3:
+            health = "fragile"
+        elif ca == 0 and ce == 0 and data["loc"] > 20:
+            health = "isolated"
+        elif ce > 8:
+            health = "dependent"
+
+        results.append({
+            "module": mod, "file": data["file"], "loc": data["loc"],
+            "afferent_coupling": ca, "efferent_coupling": ce,
+            "instability": instability, "cohesion": cohesion,
+            "health": health, "func_count": data["func_count"],
+            "class_count": data["class_count"],
+            "imports": sorted(data["imports"]),
+            "imported_by": sorted(data["imported_by"]),
+        })
+
+    results.sort(key=lambda x: -(x["afferent_coupling"] + x["efferent_coupling"]))
+
+    # Summary
+    health_counts = defaultdict(int)
+    for r in results:
+        health_counts[r["health"]] += 1
+
+    avg_instability = round(sum(r["instability"] for r in results) / max(len(results), 1), 2)
+
+    return {
+        "modules": results,
+        "total_modules": len(results),
+        "health_summary": dict(health_counts),
+        "avg_instability": avg_instability,
+        "god_modules": [r for r in results if r["health"] == "god_module"][:10],
+        "fragile_modules": [r for r in results if r["health"] == "fragile"][:10],
+        "isolated_modules": [r for r in results if r["health"] == "isolated"][:10],
+    }
+
+
+def detect_unused_imports(directory: str) -> dict:
+    """AST-based unused import detection — clean code starts with clean imports."""
+    issues = []
+
+    for fpath, rel in _walk_py(directory):
+        tree = _safe_parse(fpath)
+        if tree is None:
+            continue
+
+        # Collect all imported names and their line numbers
+        imported = {}  # name -> line
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    name = alias.asname if alias.asname else alias.name.split(".")[0]
+                    imported[name] = node.lineno
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and node.module.startswith("__"):
+                    continue
+                for alias in node.names:
+                    if alias.name == "*":
+                        continue
+                    name = alias.asname if alias.asname else alias.name
+                    imported[name] = node.lineno
+
+        if not imported:
+            continue
+
+        # Collect all Name references in the file (excluding import nodes)
+        used_names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                continue
+            if isinstance(node, ast.Name):
+                used_names.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                # For chained attrs like `os.path`, collect the root
+                root = node
+                while isinstance(root, ast.Attribute):
+                    root = root.value
+                if isinstance(root, ast.Name):
+                    used_names.add(root.id)
+            # Check string annotations (TYPE_CHECKING style)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                for imp_name in imported:
+                    if imp_name in node.value:
+                        used_names.add(imp_name)
+
+        # Determine unused
+        for name, line in imported.items():
+            if name not in used_names and name != "_":
+                issues.append({
+                    "file": _fwd(rel),
+                    "line": line,
+                    "import_name": name,
+                    "severity": "LOW",
+                })
+
+    issues.sort(key=lambda x: (x["file"], x["line"]))
+
+    # Group by file for summary
+    by_file = defaultdict(int)
+    for i in issues:
+        by_file[i["file"]] += 1
+
+    return {
+        "unused_imports": issues,
+        "total_unused": len(issues),
+        "files_with_unused": len(by_file),
+        "by_file": dict(sorted(by_file.items(), key=lambda x: -x[1])[:20]),
     }

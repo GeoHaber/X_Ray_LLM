@@ -5,6 +5,7 @@ Scans files against the rule database and reports findings.
 
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -126,7 +127,6 @@ def scan_file(filepath: str, rules: list[dict] | None = None) -> list[Finding]:
         return []
 
     findings: list[Finding] = []
-    lines = content.split("\n")
 
     for rule in applicable:
         try:
@@ -135,7 +135,6 @@ def scan_file(filepath: str, rules: list[dict] | None = None) -> list[Finding]:
             continue
 
         for match in pattern.finditer(content):
-            # Calculate line/col from match position
             line_num = content[:match.start()].count("\n") + 1
             line_start = content.rfind("\n", 0, match.start()) + 1
             col = match.start() - line_start + 1
@@ -157,7 +156,7 @@ def scan_file(filepath: str, rules: list[dict] | None = None) -> list[Finding]:
 
 def scan_directory(root: str, rules: list[dict] | None = None,
                    exclude_patterns: list[str] | None = None,
-                   on_progress: callable = None) -> ScanResult:
+                   on_progress: Callable | None = None) -> ScanResult:
     """Recursively scan a directory for code issues.
 
     Args:
@@ -182,7 +181,12 @@ def scan_directory(root: str, rules: list[dict] | None = None,
 
         for filename in filenames:
             filepath = os.path.join(dirpath, filename)
-            rel_path = os.path.relpath(filepath, root).replace(os.sep, "/")
+            try:
+                rel_path = os.path.relpath(filepath, root).replace(os.sep, "/")
+            except ValueError:
+                # Windows reserved device names (NUL, CON, …) can't be
+                # made relative — skip them silently.
+                continue
 
             # Check exclude patterns
             if any(r.search(rel_path) for r in exclude_res):
