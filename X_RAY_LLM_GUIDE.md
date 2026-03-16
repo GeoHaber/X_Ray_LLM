@@ -215,14 +215,18 @@ The web UI is a single-page application served at **http://127.0.0.1:8077**.
 ├──────────┬──────────────────────────────────────────┤
 │ Sidebar  │  Main Content Area                       │
 │          │                                          │
-│ [Browse] │  ┌─ Tab Bar ─────────────────────────┐   │
-│ [Scan]   │  │ Findings │ Fixes │ Grade │ Risk  …│   │
-│ [Abort]  │  └──────────────────────────────────┘   │
+│ Scan     │  ┌─ Tab Bar ─────────────────────────┐   │
+│ Controls │  │ Findings │ Fixes │ Grade │ Risk  …│   │
+│ [▶ Scan] │  └──────────────────────────────────┘   │
+│ [■ Stop] │                                          │
+│ Status:… │  (Active view content)                   │
 │          │                                          │
-│ Tools    │  (Active view content)                   │
+│ [Browse] │                                          │
+│          │                                          │
+│ Settings │                                          │
+│          │                                          │
+│ Tools    │                                          │
 │ ┌──┬──┐  │                                          │
-│ │  │  │  │                                          │
-│ ├──┼──┤  │                                          │
 │ │  │  │  │                                          │
 │ └──┴──┘  │                                          │
 │          │                                          │
@@ -231,16 +235,29 @@ The web UI is a single-page application served at **http://127.0.0.1:8077**.
 │ │  │  │  │                                          │
 │ └──┴──┘  │                                          │
 ├──────────┴──────────────────────────────────────────┤
-│  Footer: Status bar + scan progress                 │
+│  Footer: Status bar                                 │
 └─────────────────────────────────────────────────────┘
 ```
 
 ### Sidebar Sections
 
-1. **Directory Browser** — navigate folders, select project to scan
-2. **Scan Controls** — Scan button (engine selector: Python/Rust), Abort button
-3. **Analysis Tools** — 19 buttons (2-column grid), each runs one analysis
-4. **PM Dashboard** — 9 buttons (2-column grid), each runs a PM-level analysis
+1. **Scan Controls** — Always at the top: Scan / Stop buttons, selected path, live pipeline status ("Starting scan...", "Scanning 50/249 files...", "Loading results...", "Scan complete ✔")
+2. **Directory Browser** — Navigate folders, select project to scan
+3. **Settings** — Engine (Python/Rust), severity filter, exclude patterns
+4. **Quality Gate** — Configurable thresholds (max high, max medium, min score, max debt)
+5. **Analysis Tools** — 16 buttons (2-column grid), each runs one analysis
+6. **PM Dashboard** — 10 buttons (2-column grid), each runs a PM-level analysis
+7. **Recent Scans** — Previously scanned directories for quick re-scan
+
+### Scan Architecture
+
+The scan uses an **async background thread + client polling** pattern:
+
+1. **POST `/api/scan`** starts a background daemon thread and returns `{"status":"started","total_files":N}` immediately
+2. **Client polls `GET /api/scan-progress`** every 400ms — returns `{"status":"scanning","files_scanned":X,"total_files":Y,"findings_count":Z,...}`
+3. When status becomes `"done"`, client fetches **`GET /api/scan-result`** for the full result payload
+4. Large result sets (290k+ findings) are capped at **500 rendered findings** in the DOM with a warning banner to prevent browser crashes
+5. All JSON responses include `Cache-Control: no-store` headers; GET requests append cache-buster query parameters
 
 ### View Tabs (28+)
 
@@ -929,7 +946,9 @@ The server listens on **port 8077** (configurable via `--port`) and exposes thes
 
 | Method | Path | Body | Description |
 |--------|------|------|-------------|
-| POST | `/api/scan` | `{directory, engine, severity, excludes[]}` | SSE streaming scan with per-file progress events |
+| POST | `/api/scan` | `{directory, engine, severity, excludes[]}` | Start async background scan, returns `{status, total_files}` |
+| GET | `/api/scan-progress` | | Poll scan progress `{status, files_scanned, total_files, findings_count}` |
+| GET | `/api/scan-result` | | Fetch completed scan result (full findings payload) |
 | POST | `/api/abort` | `{}` | Cancel running scan |
 
 ### Auto-Fix

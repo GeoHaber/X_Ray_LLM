@@ -202,10 +202,73 @@ def run_ruff(directory: str) -> dict:
 
 # ── Scan Progress Tracking ───────────────────────────────────────────────
 
-De_Bug = True  # Toggle verbose debug logging for SSE scan flow
+De_Bug = True  # Toggle verbose debug logging for scan flow
 
 _abort = threading.Event()
-_last_scan_result = None  # Stores full scan result for client to fetch separately
+_last_scan_result = None   # Stores full scan result for client to fetch separately
+_scan_progress = None      # Dict updated per-file during scan (for polling)
+_scan_thread = None        # Background thread running the scan
+
+
+def _background_scan(directory: str, engine: str, severity: str,
+                     excludes: list[str], total_files: int):
+    """Run scan in background thread, updating _scan_progress as it goes."""
+    global _last_scan_result, _scan_progress
+    import time as _time
+    _last_scan_result = None
+    scan_start = _time.perf_counter()
+    _scan_progress = {
+        "status": "scanning",
+        "files_scanned": 0,
+        "total_files": total_files,
+        "findings_count": 0,
+        "current_file": "Starting scan...",
+        "file_size": 0,
+        "file_type": "",
+        "elapsed_ms": 0,
+    }
+
+    def progress_writer(_event_type, data):
+        """Called per-file; updates the global progress dict instead of SSE."""
+        global _scan_progress
+        if _event_type == "progress":
+            _scan_progress = {**data, "status": "scanning"}
+
+    try:
+        if engine == "rust":
+            result = scan_with_rust(directory, severity, excludes,
+                                    sse_write=progress_writer,
+                                    total_files=total_files)
+        else:
+            result = scan_with_python(directory, severity, excludes,
+                                      sse_write=progress_writer,
+                                      total_files=total_files)
+    except Exception as exc:
+        if De_Bug:
+            print(f"[De_Bug] SCAN CRASHED: {type(exc).__name__}: {exc}")
+        result = {"error": f"Scan crashed: {type(exc).__name__}: {exc}",
+                  "engine": engine, "aborted": False,
+                  "files_scanned": 0, "findings": [], "errors": [],
+                  "summary": {"total": 0, "high": 0, "medium": 0, "low": 0}}
+
+    elapsed_ms = round((_time.perf_counter() - scan_start) * 1000, 1)
+    _last_scan_result = result
+
+    _scan_progress = {
+        "status": "done",
+        "files_scanned": result.get("files_scanned", 0),
+        "total_files": total_files,
+        "findings_count": result.get("summary", {}).get("total", 0),
+        "elapsed_ms": result.get("elapsed_ms", elapsed_ms),
+    }
+
+    if De_Bug:
+        print(f"[De_Bug] background scan done — "
+              f"{result.get('files_scanned', '?')} files, "
+              f"{result.get('summary', {}).get('total', '?')} findings, "
+              f"elapsed={elapsed_ms:.0f}ms")
+    print(f"[scan] done — {result.get('files_scanned', 0)} files, "
+          f"{result.get('summary', {}).get('total', 0)} findings")
 
 def _count_scannable_files(directory: str, exclude_patterns: list[str] | None = None) -> int:
     """Fast pre-count of scannable files (mirrors scanner's walk logic)."""
@@ -636,6 +699,9 @@ class XRayHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.end_headers()
         self.wfile.write(body)
 
@@ -692,6 +758,12 @@ class XRayHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "No scan results available"}, 404)
 
+        elif path == "/api/scan-progress":
+            if _scan_progress is not None:
+                self._send_json(_scan_progress)
+            else:
+                self._send_json({"status": "idle"})
+
         elif path == "/api/info":
             rust_bin = get_rust_binary()
             from xray.fixer import FIXABLE_RULES
@@ -734,105 +806,29 @@ class XRayHandler(BaseHTTPRequestHandler):
             # Resolve to absolute path
             directory = str(Path(directory).resolve())
 
-            # Clear previous result so polling failsafe won't find stale data
-            global _last_scan_result
+            # Clear previous results
+            global _last_scan_result, _scan_progress, _scan_thread
             _last_scan_result = None
+            _scan_progress = None
 
-            # --- SSE streaming scan ---
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Cache-Control", "no-cache")
-            self.send_header("Connection", "close")
-            self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1:8077")
-            self.end_headers()
-
-            _sse_lock = threading.Lock()
-            _sse_writes_ok = [0]  # mutable counter for successful writes
-            _sse_writes_fail = [0]
-
-            def sse_write(event_type, data):
-                try:
-                    payload = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
-                    with _sse_lock:
-                        self.wfile.write(payload.encode())
-                        self.wfile.flush()
-                    _sse_writes_ok[0] += 1
-                except Exception as exc:
-                    _sse_writes_fail[0] += 1
-                    if De_Bug:
-                        print(f"[De_Bug] SSE WRITE FAILED ({event_type}): "
-                              f"{type(exc).__name__}: {exc}")
-
-            if De_Bug:
-                print(f"[De_Bug] === SCAN START ===")
-                print(f"[De_Bug] directory: {directory}")
-                print(f"[De_Bug] engine: {engine}, severity: {severity}")
-
-            # Pre-count files and send initial event
+            # Pre-count files
             total = _count_scannable_files(directory, excludes)
             if De_Bug:
+                print(f"[De_Bug] === SCAN START (async) ===")
+                print(f"[De_Bug] directory: {directory}")
+                print(f"[De_Bug] engine: {engine}, severity: {severity}")
                 print(f"[De_Bug] pre-count: {total} scannable files")
-            sse_write("progress", {
-                "files_scanned": 0, "total_files": total,
-                "findings_count": 0, "current_file": "Starting scan...",
-                "file_size": 0, "file_type": "", "elapsed_ms": 0,
-            })
 
-            try:
-                if engine == "rust":
-                    result = scan_with_rust(directory, severity, excludes,
-                                            sse_write=sse_write, total_files=total)
-                else:
-                    result = scan_with_python(directory, severity, excludes,
-                                              sse_write=sse_write, total_files=total)
-            except Exception as exc:
-                if De_Bug:
-                    print(f"[De_Bug] SCAN CRASHED: {type(exc).__name__}: {exc}")
-                result = {"error": f"Scan crashed: {type(exc).__name__}: {exc}",
-                          "engine": engine, "aborted": False}
+            # Start scan in background thread — return immediately
+            _abort.clear()
+            _scan_thread = threading.Thread(
+                target=_background_scan,
+                args=(directory, engine, severity, excludes, total),
+                daemon=True,
+            )
+            _scan_thread.start()
 
-            if De_Bug:
-                print(f"[De_Bug] scan engine returned: "
-                      f"{result.get('files_scanned', '?')} files, "
-                      f"{result.get('summary', {}).get('total', '?')} findings, "
-                      f"errors={len(result.get('errors', []))}, "
-                      f"aborted={result.get('aborted', False)}, "
-                      f"has_error={result.get('error') is not None}")
-                print(f"[De_Bug] findings list length: {len(result.get('findings', []))}")
-
-            # Store full result server-side (findings can be 1000s of items = MBs)
-            _last_scan_result = result
-
-            # Send only a lightweight summary via SSE — client fetches full
-            # findings from /api/scan-result to avoid mega-payload SSE hangs.
-            done_summary = {
-                "engine": result.get("engine", engine),
-                "elapsed_ms": result.get("elapsed_ms", 0),
-                "files_scanned": result.get("files_scanned", 0),
-                "summary": result.get("summary", {}),
-                "errors": result.get("errors", []),
-                "aborted": result.get("aborted", False),
-                "error": result.get("error"),
-            }
-            if De_Bug:
-                print(f"[De_Bug] about to send SSE done event...")
-            sse_write("done", done_summary)
-            if De_Bug:
-                print(f"[De_Bug] SSE done event sent "
-                      f"(ok_writes={_sse_writes_ok[0]}, fail_writes={_sse_writes_fail[0]})")
-            print(f"[scan] done — {result.get('files_scanned', 0)} files, "
-                  f"{result.get('summary', {}).get('total', 0)} findings")
-            # Force-close so the browser's ReadableStream gets EOF
-            try:
-                self.wfile.flush()
-                if De_Bug:
-                    print(f"[De_Bug] final flush OK")
-            except Exception as exc:
-                if De_Bug:
-                    print(f"[De_Bug] final flush FAILED: {type(exc).__name__}: {exc}")
-            self.close_connection = True
-            if De_Bug:
-                print(f"[De_Bug] === SCAN END (connection closing) ===")
+            self._send_json({"status": "started", "total_files": total})
             return
 
         elif path == "/api/preview-fix":

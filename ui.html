@@ -430,6 +430,24 @@ body.light {
 
   <!-- Sidebar -->
   <div class="sidebar">
+    <!-- Scan Controls -->
+    <div class="section" style="padding-bottom:8px;">
+      <div id="selectedPath" style="font-size:11px; color:var(--text2); text-align:center; margin-bottom:6px;">
+        No directory selected
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button class="btn" id="scanBtn" onclick="runScan()" disabled style="flex:1;">
+          &#9654; Scan Project
+        </button>
+        <button class="btn" id="abortBtn" onclick="abortScan()" disabled
+          style="flex:0 0 auto; padding:6px 14px; background:var(--high); color:#fff; border:none;
+                 border-radius:var(--radius); font-weight:600; cursor:pointer; display:none;">
+          &#x25A0; Stop
+        </button>
+      </div>
+      <div id="pipelineStatus" style="margin-top:6px; font-size:12px; color:var(--accent); font-weight:600; text-align:center; min-height:18px;"></div>
+    </div>
+
     <!-- Directory Picker -->
     <div class="section">
       <h3>&#128193; Target Directory</h3>
@@ -506,9 +524,6 @@ body.light {
         <button class="btn btn-sm btn-outline" onclick="runWebSmells()" id="webBtn" disabled>&#x1F310; Web Smells</button>
         <button class="btn btn-sm btn-outline" onclick="runTestGen()" id="testGenBtn" disabled>&#x1F9EA; Test Gen</button>
       </div>
-      <div style="margin-top:8px; font-size:11px; color:var(--text2); text-align:center;" id="selectedPath">
-        No directory selected
-      </div>
     </div>
 
     <!-- PM Dashboard -->
@@ -542,9 +557,6 @@ body.light {
       <h2>Welcome to X-Ray Scanner</h2>
       <p>Select a directory from the file browser on the left, configure your scan settings, and click <b>Scan Project</b>.</p>
       <p style="font-size:12px; margin-top:16px;">28 rules &middot; Security + Quality + Python &middot; Python &amp; Rust engines</p>
-      <button class="btn" id="scanBtn" onclick="runScan()" disabled style="margin-top:24px; max-width:280px;">
-        &#9654; Scan Project
-      </button>
     </div>
   </div>
 </div>
@@ -659,7 +671,11 @@ async function init() {
 
 // ── API helper ───────────────────────────────────────────────────
 async function api(url, opts) {
-  const resp = await fetch(url, opts);
+  // Cache-bust GET requests to prevent stale polling responses
+  const bustUrl = (!opts || !opts.method || opts.method === 'GET')
+    ? url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now()
+    : url;
+  const resp = await fetch(bustUrl, opts);
   return resp.json();
 }
 
@@ -741,19 +757,31 @@ document.getElementById('pathInput').addEventListener('keydown', e => {
 
 // ── Scan ─────────────────────────────────────────────────────────
 
+let _scanAborted = false; // JS-side abort flag
+
+function _scanBtnSet(disabled) {
+  const btn = document.getElementById('scanBtn');
+  if (btn) btn.disabled = disabled;
+}
+
 function showScanUI(engine) {
-  document.getElementById('scanBtn').disabled = true;
+  _scanAborted = false;
+  _scanBtnSet(true);
+  // Show abort button, update sidebar status
+  const abortBtn = document.getElementById('abortBtn');
+  if (abortBtn) { abortBtn.style.display = ''; abortBtn.disabled = false; abortBtn.innerHTML = '&#x25A0; Stop'; }
+  updatePipelineStatus(`Starting ${engine} scan...`);
   document.getElementById('mainContent').innerHTML = `
     <div style="padding:40px; text-align:center;">
       <div class="scanning-msg"><div class="spinner"></div>Scanning with ${engine} engine...</div>
       <div id="progressInfo" style="margin-top:16px; color:var(--text2);"></div>
-      <button id="abortBtn" onclick="abortScan()"
-        style="margin-top:20px; padding:10px 28px; background:var(--high); color:#fff; border:none;
-               border-radius:var(--radius); font-size:14px; font-weight:600; cursor:pointer;
-               transition:opacity .2s;">
-        &#x25A0; Stop Scan
-      </button>
     </div>`;
+}
+
+function updatePipelineStatus(msg) {
+  const el = document.getElementById('pipelineStatus');
+  if (el) el.textContent = msg;
+  console.log('[xray] ' + msg);
 }
 
 function updateProgressUI(p) {
@@ -797,9 +825,16 @@ function updateProgressUI(p) {
   `;
 }
 
+function _hideAbortBtn() {
+  const btn = document.getElementById('abortBtn');
+  if (btn) { btn.style.display = 'none'; btn.disabled = true; }
+}
+
 async function abortScan() {
+  _scanAborted = true;
   const btn = document.getElementById('abortBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Stopping...'; }
+  updatePipelineStatus('Stopping scan...');
   try { await api('/api/abort', { method: 'POST' }); } catch(e) {}
 }
 
@@ -819,46 +854,142 @@ async function runScan() {
 
   showScanUI(engine);
 
-  const De_Bug = true;
-  let _scanRendered = false;  // Guard: only one path renders results
-  let _pollId = null;
+  function showFatalError(title, detail) {
+    console.error('[xray] FATAL:', title, detail);
+    _scanBtnSet(false);
+    _hideAbortBtn();
+    updatePipelineStatus('Error: ' + title);
+    document.getElementById('mainContent').innerHTML = `
+      <div class="welcome"><h2>${esc(title)}</h2>
+        <p style="color:var(--high);">${esc(String(detail))}</p>
+        <p style="color:var(--text2); font-size:12px; margin-top:8px;">Check browser console (F12) for details.</p>
+      </div>`;
+  }
 
-  // ── Helper: render scan result (called by SSE path OR polling failsafe) ──
-  function finishWithResult(result) {
-    if (_scanRendered) return;
-    _scanRendered = true;
-    if (_pollId) { clearInterval(_pollId); _pollId = null; }
-    document.getElementById('scanBtn').disabled = false;
+  try {
+    // ── STEP 1: Start scan ──────────────────────────────────────
+    updatePipelineStatus('Starting scan...');
+    let startResp;
+    try {
+      startResp = await api('/api/scan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ directory: selectedDir, engine, severity, excludes })
+      });
+    } catch(e) {
+      showFatalError('Cannot reach server', e.message);
+      return;
+    }
+
+    if (startResp.error) {
+      showFatalError('Scan Error', startResp.error);
+      return;
+    }
+    console.log('[xray] scan started:', startResp);
+
+    // ── STEP 2: Poll for progress ───────────────────────────────
+    updatePipelineStatus('Scanning files...');
+    let done = false;
+    let pollCount = 0;
+    const maxPolls = 300; // ~2 minutes max
+
+    while (!done && !_scanAborted && pollCount < maxPolls) {
+      await new Promise(r => setTimeout(r, 400));
+      pollCount++;
+      try {
+        const p = await api('/api/scan-progress');
+        if (pollCount <= 3 || pollCount % 10 === 0) {
+          console.log(`[xray] poll #${pollCount}: status=${p.status} files=${p.files_scanned||0}/${p.total_files||0}`);
+        }
+        if (p.status === 'scanning') {
+          updateProgressUI(p);
+          updatePipelineStatus(`Scanning... ${p.files_scanned||0}/${p.total_files||0} files`);
+        } else if (p.status === 'done') {
+          updateProgressUI(p);
+          updatePipelineStatus('Scan complete! Loading results...');
+          done = true;
+        } else if (p.status === 'idle') {
+          // Scan finished so fast _scan_progress was already cleared, or never set
+          console.log('[xray] got idle — scan may have finished already');
+          updatePipelineStatus('Scan complete! Loading results...');
+          done = true;
+        }
+      } catch(e) {
+        console.warn('[xray] poll error (will retry):', e.message);
+      }
+    }
+
+    if (_scanAborted) {
+      showFatalError('Scan Aborted', 'Scan was stopped by user.');
+      return;
+    }
+    if (pollCount >= maxPolls) {
+      showFatalError('Scan Timeout', 'Scan took too long (>2 minutes). Try a smaller directory.');
+      return;
+    }
+
+    // ── STEP 3: Fetch full results ──────────────────────────────
+    updatePipelineStatus('Downloading results from server...');
+    // Small delay to let browser paint the status update
+    await new Promise(r => setTimeout(r, 50));
+
+    let result = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (_scanAborted) break;
+      try {
+        console.log(`[xray] fetching /api/scan-result (attempt ${attempt+1})...`);
+        const full = await api('/api/scan-result');
+        console.log(`[xray] result attempt ${attempt+1}: status=${full ? 'ok' : 'null'}, has_findings=${!!(full && full.findings)}, keys=${full ? Object.keys(full).join(',') : 'none'}`);
+        if (full && full.findings) {
+          result = full;
+          break;
+        }
+        if (full && full.error) {
+          console.error('[xray] scan-result returned error:', full.error);
+        }
+      } catch(e) {
+        console.warn(`[xray] result fetch attempt ${attempt+1} error:`, e.message);
+      }
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    if (_scanAborted) {
+      showFatalError('Scan Aborted', 'Scan was stopped by user.');
+      return;
+    }
 
     if (!result) {
-      document.getElementById('mainContent').innerHTML = `
-        <div class="welcome"><h2>Scan Failed</h2>
-          <p style="color:var(--high);">No result received from server.</p>
-        </div>`;
+      showFatalError('No Results', 'Server completed scan but returned no findings data. Try scanning again.');
       return;
     }
+
     if (result.aborted) {
-      document.getElementById('mainContent').innerHTML = `
-        <div class="welcome"><h2>Scan Aborted</h2>
-          <p>Stopped after ${result.files_scanned || 0} files, ${result.findings_count || 0} findings.</p>
-        </div>`;
+      showFatalError('Scan Aborted', `Stopped after ${result.files_scanned || 0} files.`);
       return;
     }
+
     if (result.error) {
-      document.getElementById('mainContent').innerHTML = `
-        <div class="welcome"><h2>Error</h2><p>${esc(result.error)}</p></div>`;
+      showFatalError('Scan Error', result.error);
       return;
     }
+
+    console.log(`[xray] got ${result.findings.length} findings, preparing to render...`);
+
+    // ── STEP 4: Process & render ────────────────────────────────
+    updatePipelineStatus(`Rendering ${result.findings.length} findings...`);
+    await new Promise(r => setTimeout(r, 50)); // Let browser paint
 
     scanResults = result;
     activeFilter = 'ALL';
-    if (De_Bug) console.log('[De_Bug] === RENDERING RESULTS ===', {
-      files: result.files_scanned,
-      findings: (result.findings || []).length,
-      summary: result.summary
-    });
 
-    const grade = calcDimensionGrades(result.findings || [], result.files_scanned).overall;
+    let grade;
+    try {
+      grade = calcDimensionGrades(result.findings || [], result.files_scanned).overall;
+    } catch(e) {
+      console.error('[xray] grade calc error:', e);
+      grade = { letter: '?', score: 0, label: 'Error' };
+    }
+
     scanHistory.push({
       time: new Date().toISOString(),
       total: result.summary.total,
@@ -872,159 +1003,37 @@ async function runScan() {
     if (scanHistory.length > 50) scanHistory.shift();
     try { localStorage.setItem('xray_history', JSON.stringify(scanHistory)); } catch(e) {}
 
+    // Fire-and-forget remediation time
     api('/api/remediation-time', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ findings: result.findings || [] })
-    }).then(t => { scanResults._remTime = t; renderResults(); }).catch(() => {});
+    }).then(t => { scanResults._remTime = t; try { renderResults(); } catch(e) { console.error('[xray] re-render error:', e); } }).catch(() => {});
 
+    console.log('[xray] calling renderResults()...');
     renderResults();
+    console.log('[xray] renderResults() completed OK');
+
+    _scanBtnSet(false);
+    _hideAbortBtn();
+    updatePipelineStatus('Scan complete \u2714');
     addRecent(selectedDir, result);
-  }
-
-  try {
-    if (De_Bug) console.log('[De_Bug] === SCAN START ===', {directory: selectedDir, engine, severity});
-
-    const response = await fetch('/api/scan', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ directory: selectedDir, engine, severity, excludes })
-    });
-
-    if (De_Bug) console.log('[De_Bug] fetch response:', response.status, response.statusText,
-                             'content-type:', response.headers.get('content-type'));
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let result = null;
-    let lastProgress = null;
-    let scanAt100Since = 0;
-    let lastDataTime = Date.now();
-    let chunkCount = 0;
-    let sseEventCount = 0;
-
-    // ── POLLING FAILSAFE ───────────────────────────────────────
-    // Every 2s, check if the server has results ready.  If the SSE
-    // ReadableStream loop is stuck (browser bug), polling catches it.
-    _pollId = setInterval(async () => {
-      if (_scanRendered) { clearInterval(_pollId); _pollId = null; return; }
-      try {
-        const r = await fetch('/api/scan-result');
-        if (!r.ok) return;
-        const full = await r.json();
-        if (full && full.findings && !_scanRendered) {
-          console.log('[FAILSAFE] Polling got results — SSE loop was stuck');
-          try { reader.cancel(); } catch(e) {}
-          finishWithResult(full);
-        }
-      } catch(e) {}
-    }, 2000);
-
-    // ── SSE STREAM READING ─────────────────────────────────────
-    while (true) {
-      const readPromise = reader.read();
-      let timeoutMs;
-      if (scanAt100Since > 0) {
-        timeoutMs = Math.max(100, 3000 - (Date.now() - scanAt100Since));
-      } else {
-        timeoutMs = Math.max(100, 8000 - (Date.now() - lastDataTime));
-      }
-      const timeout = new Promise(r => setTimeout(() => r({value: undefined, done: true, timedOut: true}), timeoutMs));
-      const raced = await Promise.race([readPromise, timeout]);
-      if (raced.timedOut) {
-        if (De_Bug) console.log('[De_Bug] TIMEOUT hit!', {scanAt100Since, idleMs: Date.now() - lastDataTime, chunkCount, sseEventCount});
-        console.warn('SSE timeout — falling back to REST fetch');
-        break;
-      }
-      const { value, done } = raced;
-      if (done) {
-        if (De_Bug) console.log('[De_Bug] reader.read() done=true (stream EOF)', {chunkCount, sseEventCount});
-        break;
-      }
-
-      chunkCount++;
-      lastDataTime = Date.now();
-      const chunk = decoder.decode(value, { stream: true });
-      if (De_Bug && chunkCount <= 5) console.log(`[De_Bug] chunk #${chunkCount} (${chunk.length} bytes):`, chunk.slice(0, 200));
-      buffer += chunk;
-
-      let idx;
-      while ((idx = buffer.indexOf('\n\n')) !== -1) {
-        const block = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 2);
-
-        let eventType = 'message';
-        let data = '';
-        for (const line of block.split('\n')) {
-          if (line.startsWith('event: ')) eventType = line.slice(7);
-          else if (line.startsWith('data: ')) data = line.slice(6);
-        }
-        if (!data) continue;
-
-        try {
-          const parsed = JSON.parse(data);
-          sseEventCount++;
-          if (eventType === 'progress') {
-            updateProgressUI(parsed);
-            lastProgress = parsed;
-            if (De_Bug && sseEventCount % 50 === 0) console.log(`[De_Bug] progress #${sseEventCount}: ${parsed.files_scanned}/${parsed.total_files} files`);
-            if (parsed.total_files > 0 && parsed.files_scanned >= parsed.total_files && !scanAt100Since) {
-              scanAt100Since = Date.now();
-              if (De_Bug) console.log('[De_Bug] 100% reached!', {files_scanned: parsed.files_scanned, total_files: parsed.total_files});
-            }
-          } else if (eventType === 'done') {
-            if (De_Bug) console.log('[De_Bug] GOT DONE EVENT!', parsed);
-            result = parsed;
-          } else {
-            if (De_Bug) console.log('[De_Bug] unknown SSE event:', eventType, data.slice(0, 100));
-          }
-        } catch(e) {
-          console.warn('SSE parse error:', e, 'on data:', data.slice(0, 200));
-        }
-      }
-      if (result) break;
-    }
-    try { reader.cancel(); } catch(e) {}
-
-    if (De_Bug) console.log('[De_Bug] SSE loop ended.', {
-      hasResult: !!result, resultHasFindings: !!(result && result.findings),
-      chunkCount, sseEventCount, bufferRemaining: buffer.length
-    });
-
-    // If polling already rendered results, we're done
-    if (_scanRendered) return;
-
-    // SSE done event is lightweight (no findings) — fetch full results via REST
-    if (!result || !result.findings) {
-      if (De_Bug) console.log('[De_Bug] fetching full results via REST /api/scan-result...');
-      for (let attempt = 0; attempt < 3; attempt++) {
-        await new Promise(r => setTimeout(r, attempt === 0 ? 300 : 1000));
-        if (_scanRendered) return;  // Polling may have caught it
-        try {
-          const full = await api('/api/scan-result');
-          if (De_Bug) console.log(`[De_Bug] REST attempt ${attempt+1}:`, {
-            hasFindings: !!(full && full.findings),
-            findingsCount: full && full.findings ? full.findings.length : 0,
-            keys: full ? Object.keys(full) : 'null'
-          });
-          if (full && full.findings) { result = full; break; }
-        } catch(e) {
-          if (De_Bug) console.log(`[De_Bug] REST attempt ${attempt+1} FAILED:`, e.message);
-        }
-      }
-    }
-
-    finishWithResult(result);
 
   } catch(e) {
-    if (_pollId) { clearInterval(_pollId); _pollId = null; }
-    if (_scanRendered) return;  // Polling already handled it
-    document.getElementById('scanBtn').disabled = false;
-    document.getElementById('mainContent').innerHTML = `
-      <div class="welcome"><h2>Scan Failed</h2>
-        <p style="color:var(--high);">Network or server error: ${esc(e.message)}</p>
-        <p style="color:var(--text2); font-size:12px;">Check that the server is running and try again.</p>
-      </div>`;
+    console.error('[xray] UNCAUGHT in runScan:', e);
+    try {
+      _scanBtnSet(false);
+      _hideAbortBtn();
+      updatePipelineStatus('Scan failed');
+      document.getElementById('mainContent').innerHTML = `
+        <div class="welcome"><h2>Scan Failed</h2>
+          <p style="color:var(--high);">${esc(String(e.message || e))}</p>
+          <p style="color:var(--text2); font-size:12px;">Error: ${esc(String(e.stack || ''))}</p>
+          <p style="color:var(--text2); font-size:12px;">Check browser console (F12) for full details.</p>
+        </div>`;
+    } catch(e2) {
+      // Last resort — if even the error display crashes
+      alert('Scan crashed: ' + String(e.message || e));
+    }
   }
 }
 
@@ -1221,6 +1230,8 @@ function renderViewContent() {
 function renderFindingsList() {
   const r = scanResults;
   const findings = filterFindings(r.findings || []);
+  const MAX_RENDER = 500;  // Limit DOM rendering for large scans
+  const showing = Math.min(findings.length, MAX_RENDER);
 
   let html = `
   <div class="findings-header" style="margin-top:12px;">
@@ -1241,7 +1252,13 @@ function renderFindingsList() {
     </div>`;
   }
 
-  for (let i = 0; i < findings.length; i++) {
+  if (findings.length > MAX_RENDER) {
+    html += `<div style="padding:12px; background:var(--bg3); border-radius:var(--radius); margin-bottom:12px; text-align:center; color:var(--medium);">
+      &#x26A0; Showing first ${MAX_RENDER} of ${findings.length.toLocaleString()} findings. Use filters or search to narrow results.
+    </div>`;
+  }
+
+  for (let i = 0; i < showing; i++) {
     const f = findings[i];
     const shortFile = shortenPath(f.file);
     html += `
