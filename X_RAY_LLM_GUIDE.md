@@ -80,10 +80,18 @@ python -m xray.agent /path/to/project --fix
 ### Install Dependencies
 
 ```bash
-pip install llama-cpp-python pytest pyright ruff bandit
+# Recommended: use Astral's uv for fast, reliable installs
+python setup_tools.py          # First-time bootstrap (installs uv, ruff, ty)
+python update_tools.py --check  # Verify versions
+
+# Or install manually
+pip install llama-cpp-python pytest ruff bandit
+uv tool install ruff ty        # Astral toolchain (type checker + linter)
 ```
 
 Only `pytest` is strictly required for scanning. The rest unlock additional analysis tools.
+`ruff` enables the Format and Ruff Fix tools; `ty` (Astral's Rust-based type checker) enables Type Check.
+`uv` is optional but recommended — it manages tool installs and provides faster dependency resolution.
 
 ---
 
@@ -500,9 +508,9 @@ to run a scan first (though some tools produce richer results if scan data is av
 ### Tool 12: Type Check
 
 **Button**: 🔎 Types  
-**What it does**: Runs pyright static type checker  
-**Output**: Type errors, warnings, and information messages with file/line  
-**Prerequisite**: `pip install pyright`
+**What it does**: Runs **ty** (Astral's Rust-based type checker, successor to pyright)  
+**Output**: Diagnostics with severity, rule code, file/line/column  
+**Prerequisite**: `uv tool install ty` (or `pip install ty`)
 
 ### Tool 13: Release Readiness
 
@@ -947,7 +955,7 @@ The server listens on **port 8077** (configurable via `--port`) and exposes thes
 | POST | `/api/smells` | `{directory}` | Detect code smells |
 | POST | `/api/duplicates` | `{directory}` | Find duplicate code blocks |
 | POST | `/api/temporal-coupling` | `{directory}` | Git file co-change analysis |
-| POST | `/api/typecheck` | `{directory}` | Run pyright type checker |
+| POST | `/api/typecheck` | `{directory}` | Run ty type checker |
 | POST | `/api/release-readiness` | `{directory}` | Release readiness check |
 | POST | `/api/ai-detect` | `{directory}` | AI-generated code detection |
 | POST | `/api/web-smells` | `{directory}` | Web anti-pattern detection |
@@ -990,7 +998,7 @@ Located in `analyzers.py`. Each function can be called programmatically or via i
 | `detect_duplicates(directory)` | directory path | `{duplicate_groups[], total_groups, total_duplicated_blocks}` |
 | `analyze_temporal_coupling(directory)` | directory path | `{couplings[], total_commits, total_pairs}` |
 | `detect_code_smells(directory)` | directory path | `{smells[], total, by_type{}}` |
-| `run_typecheck(directory)` | directory path | `{issues[], total, errors, warnings, informations}` |
+| `check_types(directory)` | directory path | `{total_diagnostics, errors, warnings, diagnostics[], clean}` |
 | `check_release_readiness(directory)` | directory path | `{score, passed, total, checks[], ready}` |
 | `detect_ai_code(directory)` | directory path | `{indicators[], total, note}` |
 | `detect_web_smells(directory)` | directory path | `{smells[], total, by_severity{}}` |
@@ -1050,9 +1058,12 @@ XRAY_MAX_TOKENS=2048                    # Max output tokens
 # Core (always needed)
 pytest >= 7.0
 
-# For analysis tools (optional, each enables its tool)
-ruff         # Format + Ruff Fix tools
-pyright      # Type Check tool
+# Astral toolchain (recommended — fast, Rust-based)
+uv           # Package/tool manager (optional but recommended)
+ruff         # Format + Ruff Fix tools (managed by uv)
+ty           # Type Check tool — Astral's Rust-based type checker (managed by uv)
+
+# Other analysis tools (optional)
 bandit       # Bandit Security tool
 
 # For agent auto-fix (optional)
@@ -1100,9 +1111,13 @@ X_Ray_LLM/
 ├── ui.html               # Single-page web UI (28+ views)
 ├── analyzers.py          # 21 analysis functions
 ├── build.py              # Rust build system + cross-compilation
+├── setup_tools.py        # First-time bootstrap (installs uv, ruff, ty)
+├── update_tools.py       # One-command updater for uv + ruff + ty
+├── Run_me.bat            # Windows launcher (uses uv when available)
+├── run.sh                # Linux/macOS launcher
 ├── README.md             # Project README
 ├── X_RAY_LLM_GUIDE.md   # This document
-├── pyproject.toml        # Project configuration
+├── pyproject.toml        # Project configuration (ruff + ty config)
 │
 ├── xray/                 # Core scanner package
 │   ├── __init__.py
@@ -1141,10 +1156,16 @@ X_Ray_LLM/
 - You haven't set `--severity HIGH` which filters out MEDIUM/LOW findings
 - The exclude patterns aren't filtering out all files
 
-### Q: Ruff / Bandit / Pyright tool shows "not installed"
+### Q: Ruff / Bandit / Type Check tool shows "not installed"
 
-**A**: Install the missing tool: `pip install ruff bandit pyright`. Each tool button in the UI
-requires its corresponding Python package.
+**A**: Install the missing tools:
+```bash
+python setup_tools.py          # Installs uv, ruff, and ty automatically
+# Or manually:
+uv tool install ruff ty        # Recommended
+pip install ruff bandit        # Bandit via pip
+```
+Each tool button in the UI requires its corresponding package.
 
 ### Q: The Rust scanner doesn't appear in the engine selector
 

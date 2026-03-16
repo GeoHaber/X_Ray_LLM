@@ -7,7 +7,13 @@ Built from real bugs discovered in production projects — not synthetic pattern
 ## Quick Start
 
 ```bash
-# Scan only (no LLM required)
+# First-time setup (installs uv, ruff, ty)
+python setup_tools.py
+
+# Start the Web UI (no LLM required)
+python ui_server.py                   # Open http://127.0.0.1:8077
+
+# Scan only (CLI)
 python -m xray.agent /path/to/project --dry-run
 
 # Scan with auto-fix (requires a GGUF model)
@@ -16,6 +22,22 @@ python -m xray.agent /path/to/project --fix
 
 # High-severity only
 python -m xray.agent /path/to/project --severity HIGH --dry-run
+```
+
+## Toolchain
+
+X-Ray LLM v0.2.0+ uses the **Astral toolchain** for fast, Rust-based analysis:
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| [uv](https://docs.astral.sh/uv/) | 0.10+ | Package & tool manager (optional but recommended) |
+| [ruff](https://docs.astral.sh/ruff/) | 0.15+ | Linter + formatter (replaces flake8/black/isort) |
+| [ty](https://docs.astral.sh/ty/) | 0.0.23+ | Type checker (replaces pyright) |
+
+```bash
+python setup_tools.py          # Bootstrap all three tools
+python update_tools.py --check # Show current versions
+python update_tools.py         # Update all tools to latest
 ```
 
 ## Architecture
@@ -74,6 +96,18 @@ X-Ray scans its own codebase as part of CI:
 ```bash
 python -m pytest tests/ -v
 ```
+
+## Cross-Platform Launchers
+
+```bash
+# Windows
+Run_me.bat
+
+# Linux / macOS
+chmod +x run.sh && ./run.sh
+```
+
+Both launchers use `uv run` when available, falling back to plain `python`.
 
 ## Rust Scanner (optional speed boost)
 
