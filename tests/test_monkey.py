@@ -973,3 +973,303 @@ class TestRulesIntegrity:
         all_ids = {r["id"] for r in ALL_RULES}
         for fixable in FIXABLE_RULES:
             assert fixable in all_ids, f"Fixable rule {fixable} not in ALL_RULES"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 13. SCAN COMPLETION — regression tests for the SSE hang/no-continuation bug
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestScanCompletion:
+    """Regression tests for the scan-completes-but-UI-hangs bug.
+
+    The root cause was sending the full findings array (potentially MBs)
+    inside a single SSE 'done' event.  The fix splits the flow:
+      1. SSE 'done' carries only a lightweight summary (no findings).
+      2. Client fetches full results from GET /api/scan-result.
+
+    These tests verify every aspect of this contract so the bug
+    can never silently return.
+    """
+
+    # ── SSE done event must NOT contain findings ──────────────────────────
+
+    def test_sse_done_has_no_findings_key(self, server_url, test_project):
+        """The SSE 'done' event must carry a summary, NOT the findings array.
+        This is the exact regression guard for the hang bug."""
+        data = json.dumps({
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        }).encode()
+        req = Request(f"{server_url}/api/scan", data=data,
+                      headers={"Content-Type": "application/json"})
+        resp = urlopen(req, timeout=60)
+        raw = resp.read().decode("utf-8", errors="replace")
+
+        # Parse only the raw done event (before post_sse merges findings in)
+        done_payload = None
+        current_event = None
+        current_data = []
+        for line in raw.split("\n"):
+            if line.startswith("event: "):
+                current_event = line[7:].strip()
+            elif line.startswith("data: "):
+                current_data.append(line[6:])
+            elif line == "" and current_event:
+                if current_event == "done":
+                    try:
+                        done_payload = json.loads("\n".join(current_data))
+                    except json.JSONDecodeError:
+                        pass
+                current_event = None
+                current_data = []
+
+        assert done_payload is not None, "No 'done' SSE event received at all"
+        assert "findings" not in done_payload, \
+            "SSE 'done' still contains 'findings' — the mega-payload hang bug is back!"
+
+    def test_sse_done_has_required_summary_fields(self, server_url, test_project):
+        """The lightweight SSE done must have all fields the UI needs
+        to decide what to do (render results, show error, show aborted)."""
+        data = json.dumps({
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        }).encode()
+        req = Request(f"{server_url}/api/scan", data=data,
+                      headers={"Content-Type": "application/json"})
+        resp = urlopen(req, timeout=60)
+        raw = resp.read().decode("utf-8", errors="replace")
+
+        done_payload = None
+        current_event = None
+        current_data = []
+        for line in raw.split("\n"):
+            if line.startswith("event: "):
+                current_event = line[7:].strip()
+            elif line.startswith("data: "):
+                current_data.append(line[6:])
+            elif line == "" and current_event:
+                if current_event == "done":
+                    try:
+                        done_payload = json.loads("\n".join(current_data))
+                    except json.JSONDecodeError:
+                        pass
+                current_event = None
+                current_data = []
+
+        assert done_payload is not None
+        required = {"engine", "elapsed_ms", "files_scanned", "summary", "aborted"}
+        missing = required - set(done_payload.keys())
+        assert not missing, f"SSE done event missing fields: {missing}"
+        assert isinstance(done_payload["summary"], dict)
+        assert done_payload["aborted"] is False
+
+    # ── /api/scan-result REST endpoint ────────────────────────────────────
+
+    def test_scan_result_endpoint_returns_full_findings(self, server_url, test_project):
+        """After a scan, GET /api/scan-result must return the full findings array."""
+        # Run a scan first
+        post_sse(f"{server_url}/api/scan", {
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        })
+        # Fetch full results
+        full = get(f"{server_url}/api/scan-result")
+        assert "findings" in full, "scan-result missing 'findings' key"
+        assert isinstance(full["findings"], list)
+        assert len(full["findings"]) > 0, "scan-result has empty findings for a project with known issues"
+        assert "summary" in full
+        assert full["summary"]["total"] == len(full["findings"])
+
+    def test_scan_result_before_any_scan_returns_404(self, server_url):
+        """Before any scan has run, /api/scan-result should return a 404 or error.
+        (Note: if another test already ran a scan on this server instance,
+        _last_scan_result will be set. We test the error key if present.)"""
+        import ui_server
+        # Temporarily clear the stored result
+        original = ui_server._last_scan_result
+        ui_server._last_scan_result = None
+        try:
+            with pytest.raises(HTTPError) as exc_info:
+                get(f"{server_url}/api/scan-result", timeout=10)
+            assert exc_info.value.code == 404
+        finally:
+            ui_server._last_scan_result = original
+
+    def test_scan_result_finding_fields_complete(self, server_url, test_project):
+        """Every finding from /api/scan-result has all required fields."""
+        post_sse(f"{server_url}/api/scan", {
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        })
+        full = get(f"{server_url}/api/scan-result")
+        required_fields = {"rule_id", "severity", "file", "line", "description"}
+        for f in full["findings"]:
+            missing = required_fields - set(f.keys())
+            assert not missing, f"Finding missing fields {missing}: {f.get('rule_id')}"
+            assert f["severity"] in ("HIGH", "MEDIUM", "LOW")
+
+    # ── Summary/findings count consistency ────────────────────────────────
+
+    def test_sse_summary_matches_full_findings_count(self, server_url, test_project):
+        """The summary.total in the SSE done must equal len(findings)
+        from /api/scan-result — if they disagree the UI shows wrong numbers."""
+        result = post_sse(f"{server_url}/api/scan", {
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        })
+        sse_total = result["done"]["summary"]["total"]
+        full = get(f"{server_url}/api/scan-result")
+        rest_total = len(full["findings"])
+        assert sse_total == rest_total, \
+            f"SSE summary says {sse_total} findings but REST returned {rest_total}"
+
+    def test_severity_breakdown_matches(self, server_url, test_project):
+        """High/Medium/Low counts in SSE summary must match actual findings."""
+        result = post_sse(f"{server_url}/api/scan", {
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        })
+        summary = result["done"]["summary"]
+        full = get(f"{server_url}/api/scan-result")
+        actual_high = sum(1 for f in full["findings"] if f["severity"] == "HIGH")
+        actual_med = sum(1 for f in full["findings"] if f["severity"] == "MEDIUM")
+        actual_low = sum(1 for f in full["findings"] if f["severity"] == "LOW")
+        assert summary["high"] == actual_high
+        assert summary["medium"] == actual_med
+        assert summary["low"] == actual_low
+
+    # ── SSE stream ordering and termination ───────────────────────────────
+
+    def test_progress_events_before_done(self, server_url, test_project):
+        """Progress events must arrive before the done event — never after."""
+        data = json.dumps({
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        }).encode()
+        req = Request(f"{server_url}/api/scan", data=data,
+                      headers={"Content-Type": "application/json"})
+        resp = urlopen(req, timeout=60)
+        raw = resp.read().decode("utf-8", errors="replace")
+
+        events = []
+        current_event = None
+        current_data = []
+        for line in raw.split("\n"):
+            if line.startswith("event: "):
+                current_event = line[7:].strip()
+            elif line.startswith("data: "):
+                current_data.append(line[6:])
+            elif line == "" and current_event:
+                events.append(current_event)
+                current_event = None
+                current_data = []
+
+        assert "done" in events, "Stream has no 'done' event"
+        done_idx = events.index("done")
+        after_done = events[done_idx + 1:]
+        assert "progress" not in after_done, \
+            f"Progress event found AFTER done event at indices: {events}"
+
+    def test_done_is_last_event(self, server_url, test_project):
+        """'done' should be the last event in the SSE stream."""
+        data = json.dumps({
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        }).encode()
+        req = Request(f"{server_url}/api/scan", data=data,
+                      headers={"Content-Type": "application/json"})
+        resp = urlopen(req, timeout=60)
+        raw = resp.read().decode("utf-8", errors="replace")
+
+        events = []
+        current_event = None
+        current_data = []
+        for line in raw.split("\n"):
+            if line.startswith("event: "):
+                current_event = line[7:].strip()
+            elif line.startswith("data: "):
+                current_data.append(line[6:])
+            elif line == "" and current_event:
+                events.append(current_event)
+                current_event = None
+                current_data = []
+
+        assert events[-1] == "done", \
+            f"Last SSE event is '{events[-1]}', expected 'done'"
+
+    def test_stream_closes_after_done(self, server_url, test_project):
+        """The HTTP response must end (EOF) after the done event,
+        otherwise the browser's ReadableStream hangs forever."""
+        data = json.dumps({
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        }).encode()
+        req = Request(f"{server_url}/api/scan", data=data,
+                      headers={"Content-Type": "application/json"})
+        resp = urlopen(req, timeout=60)
+        # If read() returns, the stream closed. If it hangs, the test times out.
+        raw = resp.read()
+        assert len(raw) > 0, "Empty response from SSE scan"
+        assert b"event: done" in raw, "No done event in response"
+
+    # ── Second scan overwrites first ──────────────────────────────────────
+
+    def test_second_scan_overwrites_result(self, server_url, test_project):
+        """Running a second scan with different severity should overwrite
+        _last_scan_result so /api/scan-result returns the latest."""
+        # First scan: all severities
+        post_sse(f"{server_url}/api/scan", {
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        })
+        all_result = get(f"{server_url}/api/scan-result")
+        all_count = len(all_result["findings"])
+
+        # Second scan: HIGH only
+        post_sse(f"{server_url}/api/scan", {
+            "directory": test_project, "engine": "python", "severity": "HIGH"
+        })
+        high_result = get(f"{server_url}/api/scan-result")
+        high_count = len(high_result["findings"])
+
+        # HIGH-only should have fewer (or equal) findings
+        assert high_count <= all_count, \
+            f"HIGH-only scan ({high_count}) has more findings than LOW+ scan ({all_count})"
+        # And all findings should be HIGH severity
+        for f in high_result["findings"]:
+            assert f["severity"] == "HIGH"
+
+    # ── post_sse helper merges correctly ──────────────────────────────────
+
+    def test_post_sse_merges_findings(self, server_url, test_project):
+        """The post_sse test helper must merge findings from /api/scan-result
+        into the done dict, so all existing tests keep working."""
+        result = post_sse(f"{server_url}/api/scan", {
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        })
+        done = result["done"]
+        assert done is not None
+        assert "findings" in done, "post_sse did not merge findings into done"
+        assert len(done["findings"]) > 0
+        assert done["files_scanned"] > 0
+
+    # ── SSE done event size is bounded ────────────────────────────────────
+
+    def test_sse_done_event_is_small(self, server_url, test_project):
+        """The SSE done payload should be small (< 10KB) since it's just
+        a summary. This prevents the JSON.parse hang on large payloads."""
+        data = json.dumps({
+            "directory": test_project, "engine": "python", "severity": "LOW"
+        }).encode()
+        req = Request(f"{server_url}/api/scan", data=data,
+                      headers={"Content-Type": "application/json"})
+        resp = urlopen(req, timeout=60)
+        raw = resp.read().decode("utf-8", errors="replace")
+
+        # Extract the done event's data line
+        done_data_line = ""
+        current_event = None
+        current_data = []
+        for line in raw.split("\n"):
+            if line.startswith("event: "):
+                current_event = line[7:].strip()
+            elif line.startswith("data: "):
+                current_data.append(line[6:])
+            elif line == "" and current_event:
+                if current_event == "done":
+                    done_data_line = "\n".join(current_data)
+                current_event = None
+                current_data = []
+
+        assert len(done_data_line) < 10_000, \
+            f"SSE done event is {len(done_data_line)} bytes — too large, will cause parse hangs"

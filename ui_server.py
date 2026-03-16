@@ -743,7 +743,7 @@ class XRayHandler(BaseHTTPRequestHandler):
                     with _sse_lock:
                         self.wfile.write(payload.encode())
                         self.wfile.flush()
-                except (BrokenPipeError, ConnectionResetError):
+                except Exception:
                     pass
 
             # Pre-count files and send initial event
@@ -754,12 +754,16 @@ class XRayHandler(BaseHTTPRequestHandler):
                 "file_size": 0, "file_type": "", "elapsed_ms": 0,
             })
 
-            if engine == "rust":
-                result = scan_with_rust(directory, severity, excludes,
-                                        sse_write=sse_write, total_files=total)
-            else:
-                result = scan_with_python(directory, severity, excludes,
-                                          sse_write=sse_write, total_files=total)
+            try:
+                if engine == "rust":
+                    result = scan_with_rust(directory, severity, excludes,
+                                            sse_write=sse_write, total_files=total)
+                else:
+                    result = scan_with_python(directory, severity, excludes,
+                                              sse_write=sse_write, total_files=total)
+            except Exception as exc:
+                result = {"error": f"Scan crashed: {type(exc).__name__}: {exc}",
+                          "engine": engine, "aborted": False}
 
             # Store full result server-side (findings can be 1000s of items = MBs)
             global _last_scan_result
@@ -778,6 +782,10 @@ class XRayHandler(BaseHTTPRequestHandler):
             }
             sse_write("done", done_summary)
             # Force-close so the browser's ReadableStream gets EOF
+            try:
+                self.wfile.flush()
+            except Exception:
+                pass
             self.close_connection = True
             return
 
@@ -910,7 +918,7 @@ class XRayHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(analyze_temporal_coupling(str(Path(directory).resolve()), days))
 
-        elif path == "/api/typecheck":
+        elif path == "/api/typecheck-pyright":
             from analyzers import run_typecheck
             body = self._read_body()
             directory = body.get("directory", "")
@@ -1083,9 +1091,18 @@ def main():
 
     _load_guide()  # Load knowledge base for chat bot
 
-    server = type('ThreadedHTTPServer', (ThreadingMixIn, HTTPServer), {'daemon_threads': True})(
-        (args.host, args.port), XRayHandler
-    )
+    ServerClass = type('ThreadedHTTPServer', (ThreadingMixIn, HTTPServer), {
+        'daemon_threads': True,
+        'allow_reuse_address': True,
+    })
+    try:
+        server = ServerClass((args.host, args.port), XRayHandler)
+    except OSError as e:
+        print(f"\n  ERROR: Cannot bind to {args.host}:{args.port} — {e}")
+        print(f"  Another instance is likely already running on that port.")
+        print(f"  Kill it first or use: python ui_server.py --port {args.port + 1}")
+        sys.exit(1)
+
     rust_status = "available" if get_rust_binary() else "not built"
     print(f"X-Ray Scanner UI: http://{args.host}:{args.port}")
     print(f"  Python scanner: ready")

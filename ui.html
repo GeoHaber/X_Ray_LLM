@@ -827,9 +827,24 @@ async function runScan() {
     const decoder = new TextDecoder();
     let buffer = '';
     let result = null;
+    let lastProgress = null;
+    let scanAt100Since = 0;   // timestamp when progress first hit 100%
 
     while (true) {
-      const { value, done } = await reader.read();
+      // Timeout: if progress hit 100% over 3s ago but no done event, break
+      let readPromise = reader.read();
+      if (scanAt100Since > 0) {
+        const wait = Math.max(0, 3000 - (Date.now() - scanAt100Since));
+        const timeout = new Promise(r => setTimeout(() => r({value: undefined, done: true, timedOut: true}), wait));
+        const raced = await Promise.race([readPromise, timeout]);
+        if (raced.timedOut) {
+          console.warn('SSE done event not received — falling back to REST fetch');
+          break;
+        }
+        var { value, done } = raced;
+      } else {
+        var { value, done } = await readPromise;
+      }
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
@@ -851,10 +866,17 @@ async function runScan() {
           const parsed = JSON.parse(data);
           if (eventType === 'progress') {
             updateProgressUI(parsed);
+            lastProgress = parsed;
+            // Detect scan finished: progress hit 100%
+            if (parsed.total_files > 0 && parsed.files_scanned >= parsed.total_files && !scanAt100Since) {
+              scanAt100Since = Date.now();
+            }
           } else if (eventType === 'done') {
             result = parsed;
           }
-        } catch(e) {}
+        } catch(e) {
+          console.warn('SSE parse error:', e, 'on data:', data.slice(0, 200));
+        }
       }
       // Break immediately once we have the done result — don't wait for stream EOF
       if (result) break;
@@ -2093,7 +2115,7 @@ function renderTemporalView() {
 
 // ── Typecheck View ───────────────────────────────────────────────
 function renderTypecheckView() {
-  if (!typecheckData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Types</b> to run pyright type checker.</div>`;
+  if (!typecheckData) return `<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Types</b> to run type checker.</div>`;
   if (typecheckData.error) return `<div style="color:var(--high); padding:20px;">${esc(typecheckData.error)}</div>`;
   const d = typecheckData;
   let html = `<div style="margin-top:12px;">
