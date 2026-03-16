@@ -172,7 +172,11 @@ def post(url, body=None, timeout=60):
 
 
 def post_sse(url, body, timeout=120):
-    """POST to an SSE endpoint, collect all events, return the final 'done' payload."""
+    """POST to an SSE endpoint, collect all events, return the final 'done' payload.
+
+    The SSE 'done' event carries only a summary (no findings). Full findings
+    are fetched automatically from /api/scan-result and merged into the done dict.
+    """
     data = json.dumps(body).encode()
     req = Request(url, data=data, headers={"Content-Type": "application/json"})
     resp = urlopen(req, timeout=timeout)
@@ -197,7 +201,19 @@ def post_sse(url, body, timeout=120):
 
     done_events = [e for e in events if e[0] == "done"]
     progress_events = [e for e in events if e[0] == "progress"]
-    return {"done": done_events[-1][1] if done_events else None,
+    done_data = done_events[-1][1] if done_events else None
+
+    # Merge full results (with findings) from the REST endpoint
+    if done_data and "findings" not in done_data:
+        base = url.rsplit("/api/", 1)[0]
+        try:
+            full = get(f"{base}/api/scan-result", timeout=30)
+            if isinstance(full, dict) and "findings" in full:
+                done_data["findings"] = full["findings"]
+        except Exception:
+            pass
+
+    return {"done": done_data,
             "progress_count": len(progress_events),
             "all_events": events}
 

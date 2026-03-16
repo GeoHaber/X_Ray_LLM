@@ -886,6 +886,16 @@ async function runScan() {
       return;
     }
 
+    // SSE done event carries only summary — fetch full results (with findings) via REST
+    if (!result.findings) {
+      try {
+        const full = await api('/api/scan-result');
+        if (full && full.findings) result = full;
+      } catch(e) {
+        console.error('Failed to fetch full scan results:', e);
+      }
+    }
+
     scanResults = result;
     activeFilter = 'ALL';
 

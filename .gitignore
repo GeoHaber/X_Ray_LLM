@@ -4,10 +4,26 @@ __pycache__/
 *.gguf
 target/
 .pytest_cache/
+.ruff_cache/
 *.egg-info/
 dist/
 build/
+.venv/
+
+# Scan output / logs (never commit these)
 rust_scan.json
+scan_output.json
 _python_scan_log.txt
 _python_scan_results.json
-scan_output.json
+xray_*.txt
+xray_*.json
+xray_*.html
+xray_*.md
+pytest_*.txt
+temp_pytest_out.txt
+test_smells_out.txt
+*.log
+snapshot.patch
+_gen_test_*.txt
+crits_result.txt
+failures.txt

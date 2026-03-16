@@ -203,6 +203,7 @@ def run_ruff(directory: str) -> dict:
 # ── Scan Progress Tracking ───────────────────────────────────────────────
 
 _abort = threading.Event()
+_last_scan_result = None  # Stores full scan result for client to fetch separately
 
 def _count_scannable_files(directory: str, exclude_patterns: list[str] | None = None) -> int:
     """Fast pre-count of scannable files (mirrors scanner's walk logic)."""
@@ -678,6 +679,12 @@ class XRayHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json(browse_directory(dir_path))
 
+        elif path == "/api/scan-result":
+            if _last_scan_result is not None:
+                self._send_json(_last_scan_result)
+            else:
+                self._send_json({"error": "No scan results available"}, 404)
+
         elif path == "/api/info":
             rust_bin = get_rust_binary()
             from xray.fixer import FIXABLE_RULES
@@ -754,7 +761,22 @@ class XRayHandler(BaseHTTPRequestHandler):
                 result = scan_with_python(directory, severity, excludes,
                                           sse_write=sse_write, total_files=total)
 
-            sse_write("done", result)
+            # Store full result server-side (findings can be 1000s of items = MBs)
+            global _last_scan_result
+            _last_scan_result = result
+
+            # Send only a lightweight summary via SSE — client fetches full
+            # findings from /api/scan-result to avoid mega-payload SSE hangs.
+            done_summary = {
+                "engine": result.get("engine", engine),
+                "elapsed_ms": result.get("elapsed_ms", 0),
+                "files_scanned": result.get("files_scanned", 0),
+                "summary": result.get("summary", {}),
+                "errors": result.get("errors", []),
+                "aborted": result.get("aborted", False),
+                "error": result.get("error"),
+            }
+            sse_write("done", done_summary)
             # Force-close so the browser's ReadableStream gets EOF
             self.close_connection = True
             return
