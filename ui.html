@@ -829,23 +829,29 @@ async function runScan() {
     let result = null;
     let lastProgress = null;
     let scanAt100Since = 0;   // timestamp when progress first hit 100%
+    let lastDataTime = Date.now(); // timestamp of last data chunk received
 
     while (true) {
-      // Timeout: if progress hit 100% over 3s ago but no done event, break
-      let readPromise = reader.read();
+      // Always race reader.read() against a timeout:
+      //  - After 100%: 3s max for done event
+      //  - Otherwise:  8s idle timeout (no data received)
+      const readPromise = reader.read();
+      let timeoutMs;
       if (scanAt100Since > 0) {
-        const wait = Math.max(0, 3000 - (Date.now() - scanAt100Since));
-        const timeout = new Promise(r => setTimeout(() => r({value: undefined, done: true, timedOut: true}), wait));
-        const raced = await Promise.race([readPromise, timeout]);
-        if (raced.timedOut) {
-          console.warn('SSE done event not received — falling back to REST fetch');
-          break;
-        }
-        var { value, done } = raced;
+        timeoutMs = Math.max(100, 3000 - (Date.now() - scanAt100Since));
       } else {
-        var { value, done } = await readPromise;
+        timeoutMs = Math.max(100, 8000 - (Date.now() - lastDataTime));
       }
+      const timeout = new Promise(r => setTimeout(() => r({value: undefined, done: true, timedOut: true}), timeoutMs));
+      const raced = await Promise.race([readPromise, timeout]);
+      if (raced.timedOut) {
+        console.warn('SSE timeout — falling back to REST fetch');
+        break;
+      }
+      const { value, done } = raced;
       if (done) break;
+
+      lastDataTime = Date.now();
       buffer += decoder.decode(value, { stream: true });
 
       // Parse SSE events from buffer
@@ -886,6 +892,17 @@ async function runScan() {
 
     document.getElementById('scanBtn').disabled = false;
 
+    // Always try REST fallback for full results (SSE done event may be lost)
+    if (!result || !result.findings) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await new Promise(r => setTimeout(r, attempt === 0 ? 300 : 1000));
+        try {
+          const full = await api('/api/scan-result');
+          if (full && full.findings) { result = full; break; }
+        } catch(e) {}
+      }
+    }
+
     if (!result) {
       document.getElementById('mainContent').innerHTML = `
         <div class="welcome"><h2>Scan Failed</h2>
@@ -906,16 +923,6 @@ async function runScan() {
       document.getElementById('mainContent').innerHTML = `
         <div class="welcome"><h2>Error</h2><p>${esc(result.error)}</p></div>`;
       return;
-    }
-
-    // SSE done event carries only summary — fetch full results (with findings) via REST
-    if (!result.findings) {
-      try {
-        const full = await api('/api/scan-result');
-        if (full && full.findings) result = full;
-      } catch(e) {
-        console.error('Failed to fetch full scan results:', e);
-      }
     }
 
     scanResults = result;

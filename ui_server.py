@@ -226,18 +226,13 @@ def _count_scannable_files(directory: str, exclude_patterns: list[str] | None = 
             if ext not in scan_exts:
                 continue
             fp = os.path.join(dirpath, fn)
+            # Match scan_directory: always check relpath (skips Windows reserved names)
             try:
-                if os.path.getsize(fp) > _MAX_FILE_SIZE:
-                    continue
-            except (OSError, ValueError):
+                rel = os.path.relpath(fp, directory).replace(os.sep, "/")
+            except ValueError:
                 continue
-            if exclude_res:
-                try:
-                    rel = os.path.relpath(fp, directory).replace(os.sep, "/")
-                except ValueError:
-                    continue
-                if any(r.search(rel) for r in exclude_res):
-                    continue
+            if exclude_res and any(r.search(rel) for r in exclude_res):
+                continue
             count += 1
     return count
 
@@ -781,6 +776,9 @@ class XRayHandler(BaseHTTPRequestHandler):
                 "error": result.get("error"),
             }
             sse_write("done", done_summary)
+            print(f"[scan] done — {result.get('files_scanned', 0)} files, "
+                  f"{result.get('summary', {}).get('total', 0)} findings, "
+                  f"SSE done event sent")
             # Force-close so the browser's ReadableStream gets EOF
             try:
                 self.wfile.flush()
