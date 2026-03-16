@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>X-Ray Scanner</title>
 <style>
 :root {
@@ -817,11 +820,17 @@ async function runScan() {
   showScanUI(engine);
 
   try {
+    const De_Bug = true;  // Toggle verbose SSE debug logging
+    if (De_Bug) console.log('[De_Bug] === SCAN START ===', {directory: selectedDir, engine, severity});
+
     const response = await fetch('/api/scan', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ directory: selectedDir, engine, severity, excludes })
     });
+
+    if (De_Bug) console.log('[De_Bug] fetch response:', response.status, response.statusText,
+                             'content-type:', response.headers.get('content-type'));
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -830,6 +839,8 @@ async function runScan() {
     let lastProgress = null;
     let scanAt100Since = 0;   // timestamp when progress first hit 100%
     let lastDataTime = Date.now(); // timestamp of last data chunk received
+    let chunkCount = 0;
+    let sseEventCount = 0;
 
     while (true) {
       // Always race reader.read() against a timeout:
@@ -845,14 +856,21 @@ async function runScan() {
       const timeout = new Promise(r => setTimeout(() => r({value: undefined, done: true, timedOut: true}), timeoutMs));
       const raced = await Promise.race([readPromise, timeout]);
       if (raced.timedOut) {
+        if (De_Bug) console.log('[De_Bug] TIMEOUT hit!', {scanAt100Since, idleMs: Date.now() - lastDataTime, chunkCount, sseEventCount});
         console.warn('SSE timeout — falling back to REST fetch');
         break;
       }
       const { value, done } = raced;
-      if (done) break;
+      if (done) {
+        if (De_Bug) console.log('[De_Bug] reader.read() returned done=true (stream EOF)', {chunkCount, sseEventCount});
+        break;
+      }
 
+      chunkCount++;
       lastDataTime = Date.now();
-      buffer += decoder.decode(value, { stream: true });
+      const chunk = decoder.decode(value, { stream: true });
+      if (De_Bug && chunkCount <= 5) console.log(`[De_Bug] chunk #${chunkCount} (${chunk.length} bytes):`, chunk.slice(0, 200));
+      buffer += chunk;
 
       // Parse SSE events from buffer
       let idx;
@@ -870,15 +888,21 @@ async function runScan() {
 
         try {
           const parsed = JSON.parse(data);
+          sseEventCount++;
           if (eventType === 'progress') {
             updateProgressUI(parsed);
             lastProgress = parsed;
+            if (De_Bug && sseEventCount % 50 === 0) console.log(`[De_Bug] progress #${sseEventCount}: ${parsed.files_scanned}/${parsed.total_files} files`);
             // Detect scan finished: progress hit 100%
             if (parsed.total_files > 0 && parsed.files_scanned >= parsed.total_files && !scanAt100Since) {
               scanAt100Since = Date.now();
+              if (De_Bug) console.log('[De_Bug] 100% reached!', {files_scanned: parsed.files_scanned, total_files: parsed.total_files});
             }
           } else if (eventType === 'done') {
+            if (De_Bug) console.log('[De_Bug] GOT DONE EVENT!', parsed);
             result = parsed;
+          } else {
+            if (De_Bug) console.log('[De_Bug] unknown SSE event:', eventType, data.slice(0, 100));
           }
         } catch(e) {
           console.warn('SSE parse error:', e, 'on data:', data.slice(0, 200));
@@ -890,16 +914,29 @@ async function runScan() {
     // Close the stream reader if still open
     try { reader.cancel(); } catch(e) {}
 
+    if (De_Bug) console.log('[De_Bug] SSE loop ended.', {
+      hasResult: !!result, resultHasFindings: !!(result && result.findings),
+      chunkCount, sseEventCount, bufferRemaining: buffer.length
+    });
+
     document.getElementById('scanBtn').disabled = false;
 
     // Always try REST fallback for full results (SSE done event may be lost)
     if (!result || !result.findings) {
+      if (De_Bug) console.log('[De_Bug] fetching full results via REST /api/scan-result...');
       for (let attempt = 0; attempt < 3; attempt++) {
         await new Promise(r => setTimeout(r, attempt === 0 ? 300 : 1000));
         try {
           const full = await api('/api/scan-result');
+          if (De_Bug) console.log(`[De_Bug] REST attempt ${attempt+1}:`, {
+            hasFindings: !!(full && full.findings),
+            findingsCount: full && full.findings ? full.findings.length : 0,
+            keys: full ? Object.keys(full) : 'null'
+          });
           if (full && full.findings) { result = full; break; }
-        } catch(e) {}
+        } catch(e) {
+          if (De_Bug) console.log(`[De_Bug] REST attempt ${attempt+1} FAILED:`, e.message);
+        }
       }
     }
 
@@ -927,6 +964,11 @@ async function runScan() {
 
     scanResults = result;
     activeFilter = 'ALL';
+    if (De_Bug) console.log('[De_Bug] === RENDERING RESULTS ===', {
+      files: result.files_scanned,
+      findings: (result.findings || []).length,
+      summary: result.summary
+    });
 
     // Save to history for trend chart
     const grade = calcDimensionGrades(result.findings || [], result.files_scanned).overall;

@@ -202,6 +202,8 @@ def run_ruff(directory: str) -> dict:
 
 # ── Scan Progress Tracking ───────────────────────────────────────────────
 
+De_Bug = True  # Toggle verbose debug logging for SSE scan flow
+
 _abort = threading.Event()
 _last_scan_result = None  # Stores full scan result for client to fetch separately
 
@@ -290,6 +292,9 @@ def scan_with_python(directory: str, severity: str, excludes: list[str],
                 fext = os.path.splitext(current_file)[1]
             except OSError:
                 pass
+            if De_Bug and files_scanned % 50 == 0:
+                print(f"[De_Bug] progress: {files_scanned}/{total_files} files, "
+                      f"{findings_count} findings, {current_file}")
             sse_write("progress", {
                 "files_scanned": files_scanned,
                 "total_files": total_files,
@@ -640,6 +645,9 @@ class XRayHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
             self.end_headers()
             self.wfile.write(content)
         except FileNotFoundError:
@@ -675,6 +683,10 @@ class XRayHandler(BaseHTTPRequestHandler):
                 self._send_json(browse_directory(dir_path))
 
         elif path == "/api/scan-result":
+            if De_Bug:
+                has = _last_scan_result is not None
+                n = len(_last_scan_result.get('findings', [])) if has else 0
+                print(f"[De_Bug] GET /api/scan-result — has_result={has}, findings={n}")
             if _last_scan_result is not None:
                 self._send_json(_last_scan_result)
             else:
@@ -731,6 +743,8 @@ class XRayHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
             _sse_lock = threading.Lock()
+            _sse_writes_ok = [0]  # mutable counter for successful writes
+            _sse_writes_fail = [0]
 
             def sse_write(event_type, data):
                 try:
@@ -738,11 +752,22 @@ class XRayHandler(BaseHTTPRequestHandler):
                     with _sse_lock:
                         self.wfile.write(payload.encode())
                         self.wfile.flush()
-                except Exception:
-                    pass
+                    _sse_writes_ok[0] += 1
+                except Exception as exc:
+                    _sse_writes_fail[0] += 1
+                    if De_Bug:
+                        print(f"[De_Bug] SSE WRITE FAILED ({event_type}): "
+                              f"{type(exc).__name__}: {exc}")
+
+            if De_Bug:
+                print(f"[De_Bug] === SCAN START ===")
+                print(f"[De_Bug] directory: {directory}")
+                print(f"[De_Bug] engine: {engine}, severity: {severity}")
 
             # Pre-count files and send initial event
             total = _count_scannable_files(directory, excludes)
+            if De_Bug:
+                print(f"[De_Bug] pre-count: {total} scannable files")
             sse_write("progress", {
                 "files_scanned": 0, "total_files": total,
                 "findings_count": 0, "current_file": "Starting scan...",
@@ -757,8 +782,19 @@ class XRayHandler(BaseHTTPRequestHandler):
                     result = scan_with_python(directory, severity, excludes,
                                               sse_write=sse_write, total_files=total)
             except Exception as exc:
+                if De_Bug:
+                    print(f"[De_Bug] SCAN CRASHED: {type(exc).__name__}: {exc}")
                 result = {"error": f"Scan crashed: {type(exc).__name__}: {exc}",
                           "engine": engine, "aborted": False}
+
+            if De_Bug:
+                print(f"[De_Bug] scan engine returned: "
+                      f"{result.get('files_scanned', '?')} files, "
+                      f"{result.get('summary', {}).get('total', '?')} findings, "
+                      f"errors={len(result.get('errors', []))}, "
+                      f"aborted={result.get('aborted', False)}, "
+                      f"has_error={result.get('error') is not None}")
+                print(f"[De_Bug] findings list length: {len(result.get('findings', []))}")
 
             # Store full result server-side (findings can be 1000s of items = MBs)
             global _last_scan_result
@@ -775,16 +811,25 @@ class XRayHandler(BaseHTTPRequestHandler):
                 "aborted": result.get("aborted", False),
                 "error": result.get("error"),
             }
+            if De_Bug:
+                print(f"[De_Bug] about to send SSE done event...")
             sse_write("done", done_summary)
+            if De_Bug:
+                print(f"[De_Bug] SSE done event sent "
+                      f"(ok_writes={_sse_writes_ok[0]}, fail_writes={_sse_writes_fail[0]})")
             print(f"[scan] done — {result.get('files_scanned', 0)} files, "
-                  f"{result.get('summary', {}).get('total', 0)} findings, "
-                  f"SSE done event sent")
+                  f"{result.get('summary', {}).get('total', 0)} findings")
             # Force-close so the browser's ReadableStream gets EOF
             try:
                 self.wfile.flush()
-            except Exception:
-                pass
+                if De_Bug:
+                    print(f"[De_Bug] final flush OK")
+            except Exception as exc:
+                if De_Bug:
+                    print(f"[De_Bug] final flush FAILED: {type(exc).__name__}: {exc}")
             self.close_connection = True
+            if De_Bug:
+                print(f"[De_Bug] === SCAN END (connection closing) ===")
             return
 
         elif path == "/api/preview-fix":
