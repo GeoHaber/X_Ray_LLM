@@ -29,7 +29,19 @@
       "Bash(python -m pytest tests/test_analyzers.py -v --tb=short)",
       "Bash(python -m pytest tests/test_analyzers.py tests/test_fixer.py -v --tb=short)",
       "Bash(dir /AD /B)",
-      "Bash(PYTHONIOENCODING=utf-8 python -c \":*)"
+      "Bash(PYTHONIOENCODING=utf-8 python -c \":*)",
+      "Bash(for d:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM/**)",
+      "Bash(grep -rn \"C:\\\\AI\\\\|C:/AI\\\\|llama.cpp\\\\|llama-server\\\\|llama_cpp\\\\|\\\\.gguf\\\\|models_path\\\\|MODEL_PATH\\\\|model_dir\" C:/Users/dvdze/Documents/GitHub/GeorgeHaber/ --include=*.py --include=*.yaml --include=*.yml --include=*.json --include=*.toml --include=*.env*)",
+      "Bash(grep -rn \"C:\\\\AI\\\\|C:/AI\\\\|C:\\\\Users\\\\dvdze\\\\|C:/Users/dvdze\\\\|D:\\\\|/mnt/\" C:/Users/dvdze/Documents/GitHub/GeorgeHaber/ --include=*.py --include=*.yaml --include=*.yml --include=*.toml --include=*.env)",
+      "Bash(grep -rn \"C:\\\\\\\\AI\\\\|C:/AI\\\\|C:\\\\\\\\Users\\\\\\\\dvdze\\\\|C:/Users/dvdze\" C:/Users/dvdze/Documents/GitHub/GeorgeHaber/ --include=\"*.py\" -l)",
+      "Bash(grep -rn \"C:\\\\\\\\AI\\\\|C:/AI\\\\|C:\\\\\\\\Users\\\\\\\\dvdze\\\\|C:/Users/dvdze\" C:/Users/dvdze/Documents/GitHub/GeorgeHaber/ --include=\"*.py\")",
+      "Bash(ls C:/Users/dvdze/Documents/GitHub/GeorgeHaber/*/)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(ls C:/Users/dvdze/Documents/GitHub/Regression-Testing/requirements*)",
+      "Bash(wc -l /c/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM/xray/rules/*.py)",
+      "Bash(python -m pytest tests/test_build.py tests/test_portability.py tests/test_fixer_regression.py tests/test_false_positives.py tests/test_llm_mock.py tests/test_agent_loop.py tests/test_scanner_boundary.py -v --tb=short)"
     ]
   }
 }
