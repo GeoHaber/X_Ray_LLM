@@ -2,5 +2,5 @@
 # Upper bounds for reproducibility; Dependabot proposes updates.
 -r requirements.txt
 pyright==1.1.408
-pip-audit==2.9.0
+pip-audit==2.10.0
 bandit==1.9.4
