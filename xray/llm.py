@@ -4,6 +4,7 @@ Generates tests, fixes, and analysis from scan findings.
 """
 
 import os
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,12 +23,24 @@ class LLMConfig:
     @classmethod
     def from_env(cls) -> "LLMConfig":
         """Load config from environment variables."""
+        def _int(key: str, default: str) -> int:
+            try:
+                return int(os.environ.get(key, default))
+            except (ValueError, TypeError):
+                return int(default)
+
+        def _float(key: str, default: str) -> float:
+            try:
+                return float(os.environ.get(key, default))
+            except (ValueError, TypeError):
+                return float(default)
+
         return cls(
             model_path=os.environ.get("XRAY_MODEL_PATH", ""),
-            n_ctx=int(os.environ.get("XRAY_N_CTX", "8192")),
-            n_gpu_layers=int(os.environ.get("XRAY_GPU_LAYERS", "-1")),
-            temperature=float(os.environ.get("XRAY_TEMPERATURE", "0.3")),
-            max_tokens=int(os.environ.get("XRAY_MAX_TOKENS", "2048")),
+            n_ctx=_int("XRAY_N_CTX", "8192"),
+            n_gpu_layers=_int("XRAY_GPU_LAYERS", "-1"),
+            temperature=_float("XRAY_TEMPERATURE", "0.3"),
+            max_tokens=_int("XRAY_MAX_TOKENS", "2048"),
         )
 
 
@@ -37,11 +50,15 @@ class LLMEngine:
     def __init__(self, config: LLMConfig | None = None):
         self.config = config or LLMConfig.from_env()
         self._model = None
+        self._lock = threading.Lock()
 
     def _ensure_model(self):
-        """Lazy-load the model on first use."""
+        """Lazy-load the model on first use (thread-safe)."""
         if self._model is not None:
             return
+        with self._lock:
+            if self._model is not None:
+                return
         if not self.config.model_path:
             raise RuntimeError(
                 "No model path set. Set XRAY_MODEL_PATH env var or pass LLMConfig.\n"

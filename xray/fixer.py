@@ -345,6 +345,11 @@ def apply_fix(finding: dict) -> dict:
     if not result.fixable:
         return {"ok": False, "error": result.error}
 
+    # Create .bak backup before writing
+    import shutil
+    bak = p.with_suffix(p.suffix + ".bak")
+    shutil.copy2(p, bak)
+
     # Write patched file
     p.write_text("".join(result.new_lines), encoding="utf-8")
 

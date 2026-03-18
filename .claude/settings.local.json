@@ -16,7 +16,20 @@
       "Bash(ruff check:*)",
       "Bash(ruff format:*)",
       "Bash(python -m pytest tests/ -q --tb=short)",
-      "Bash(curl -s http://localhost:9111/)"
+      "Bash(curl -s http://localhost:9111/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:9111/)",
+      "Bash(python -m ruff format KeepBest_VisualAI.py)",
+      "Bash(python -m ruff check KeepBest_VisualAI.py)",
+      "Bash(python -m ruff format --check KeepBest_VisualAI.py)",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''KeepBest_VisualAI.py'', doraise=True\\); print\\(''Syntax OK''\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:9111/)",
+      "Bash(curl -s http://127.0.0.1:9111/)",
+      "Bash(python ui_server.py --port 9111)",
+      "Bash(python -m pytest tests/test_fixer.py -v --tb=short)",
+      "Bash(python -m pytest tests/test_analyzers.py -v --tb=short)",
+      "Bash(python -m pytest tests/test_analyzers.py tests/test_fixer.py -v --tb=short)",
+      "Bash(dir /AD /B)",
+      "Bash(PYTHONIOENCODING=utf-8 python -c \":*)"
     ]
   }
 }

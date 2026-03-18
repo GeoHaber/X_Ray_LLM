@@ -255,10 +255,11 @@ def run_ruff(directory: str) -> dict:
 
 # ── Scan Progress Tracking ───────────────────────────────────────────────
 
-De_Bug = True  # Toggle verbose debug logging for scan flow
+De_Bug = os.environ.get("XRAY_DEBUG", "").lower() in ("1", "true", "yes")
 
 _abort = threading.Event()
 _last_scan_result = None  # Stores full scan result for client to fetch separately
+_scan_progress = None  # Initialised here to avoid NameError on early GET /api/scan-progress
 # ── Wire Test Progress ──────────────────────────────────────────────────
 _wire_test_results = None
 _wire_test_progress = None
@@ -921,9 +922,14 @@ class XRayHandler(BaseHTTPRequestHandler):
             logger.debug("UI file not found: %s", self.path)
             self.send_error(404, "File not found")
 
+    _MAX_BODY = 10 * 1024 * 1024  # 10 MB safety limit
+
     def _read_body(self) -> dict:
         length = int(self.headers.get("Content-Length", 0))
         if length == 0:
+            return {}
+        if length > self._MAX_BODY:
+            self.send_error(413, "Request body too large")
             return {}
         body = self.rfile.read(length)
         try:

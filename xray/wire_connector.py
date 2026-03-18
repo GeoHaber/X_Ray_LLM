@@ -98,9 +98,12 @@ class WireConnector:
                     resp = requests.post(target_url, json=payload, timeout=10)
 
                 duration = round((time.perf_counter() - start_time) * 1000, 2)
-                success = 200 <= resp.status_code < 300 or resp.status_code == 404 # 404 is technically a "connection" but maybe a missing resource
+                # Count as "wired" if the server responded (connection works),
+                # but track the actual status so 404/400 can be flagged separately.
+                connected = resp.status_code != 0
+                success = 200 <= resp.status_code < 500  # server responded
                 # We want to know if the "wire" works, i.e., the server responds.
-                # Some endpoints might return 400 or 404 if data is missing, but they are "wired".
+                # 4xx means wired but possibly wrong payload; 5xx is a server bug.
 
                 result = {
                     "method": method,
