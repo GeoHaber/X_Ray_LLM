@@ -1456,7 +1456,7 @@ def main():
         logger.error("Cannot bind to %s:%s — %s", args.host, args.port, e)
         logger.error("Another instance is likely already running on that port.")
         logger.error("Kill it first or use: python ui_server.py --port %s", args.port + 1)
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     rust_status = "available" if get_rust_binary() else "not built"
     logger.info("X-Ray Scanner UI: http://%s:%s", args.host, args.port)

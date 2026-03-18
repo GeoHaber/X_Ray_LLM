@@ -230,7 +230,7 @@ class TestDangerousChars:
     """
 
     # Characters that are dangerous in inline onclick="fn('HERE')"
-    DANGEROUS_IN_JS_STRING = {
+    DANGEROUS_IN_JS_STRING = {  # noqa: RUF012
         "\\": "backslash — JS escape",
         "'": "single quote — breaks string",
         '"': "double quote — breaks attribute",
@@ -241,7 +241,7 @@ class TestDangerousChars:
         "`": "backtick — template literal",
     }
 
-    DANGEROUS_IN_HTML = {
+    DANGEROUS_IN_HTML = {  # noqa: RUF012
         "<": "less than — HTML tag injection",
         ">": "greater than — HTML tag injection",
         "&": "ampersand — HTML entity confusion",

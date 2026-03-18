@@ -1,2 +1,4 @@
 llama-cpp-python>=0.3.0
 pytest>=7.0
+flet>=0.25
+requests>=2.30

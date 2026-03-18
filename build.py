@@ -277,7 +277,7 @@ def step_cross_validate(target: str, scan_path: str):
         rust_data = json.loads(proc.stdout)
     except json.JSONDecodeError as e:
         logger.error("Failed to parse Rust scanner output: %s", e)
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     rust_by_rule: dict[str, int] = {}
     for finding in rust_data["findings"]:

@@ -637,7 +637,7 @@ class TestFixEndpoints:
 class TestErrorHandling:
     """Every endpoint requiring a directory rejects invalid paths gracefully."""
 
-    DIRECTORY_ENDPOINTS = [
+    DIRECTORY_ENDPOINTS = [  # noqa: RUF012
         "/api/satd",
         "/api/git-hotspots",
         "/api/imports",

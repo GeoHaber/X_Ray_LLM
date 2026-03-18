@@ -346,7 +346,6 @@ def apply_fix(finding: dict) -> dict:
         return {"ok": False, "error": result.error}
 
     # Create .bak backup before writing
-    import shutil
     bak = p.with_suffix(p.suffix + ".bak")
     shutil.copy2(p, bak)
 

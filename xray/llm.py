@@ -59,21 +59,21 @@ class LLMEngine:
         with self._lock:
             if self._model is not None:
                 return
-        if not self.config.model_path:
-            raise RuntimeError(
-                "No model path set. Set XRAY_MODEL_PATH env var or pass LLMConfig.\n"
-                "Recommended models:\n"
-                "  - Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf (best quality)\n"
-                "  - DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf (fastest)\n"
-                "  - Codestral-22B-v0.1-Q4_K_M.gguf (good balance)"
+            if not self.config.model_path:
+                raise RuntimeError(
+                    "No model path set. Set XRAY_MODEL_PATH env var or pass LLMConfig.\n"
+                    "Recommended models:\n"
+                    "  - Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf (best quality)\n"
+                    "  - DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf (fastest)\n"
+                    "  - Codestral-22B-v0.1-Q4_K_M.gguf (good balance)"
+                )
+            from llama_cpp import Llama  # lazy import
+            self._model = Llama(
+                model_path=self.config.model_path,
+                n_ctx=self.config.n_ctx,
+                n_gpu_layers=self.config.n_gpu_layers,
+                verbose=False,
             )
-        from llama_cpp import Llama  # lazy import
-        self._model = Llama(
-            model_path=self.config.model_path,
-            n_ctx=self.config.n_ctx,
-            n_gpu_layers=self.config.n_gpu_layers,
-            verbose=False,
-        )
 
     def generate(self, prompt: str, system: str = "", max_tokens: int | None = None) -> str:
         """Generate text from a prompt using the local model."""

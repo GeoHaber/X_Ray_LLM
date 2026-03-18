@@ -883,7 +883,7 @@ def check_release_readiness(directory: str) -> dict:
 
     # No TODO/FIXME in critical paths
     critical_tods = 0
-    for fpath, rel in _walk_py(directory):
+    for fpath, _ in _walk_py(directory):
         try:
             with open(fpath, encoding="utf-8", errors="ignore") as f:
                 for line in f:
@@ -1051,7 +1051,7 @@ def generate_test_stubs(directory: str) -> dict:
     test_files = set()
 
     # Find existing test files
-    for fpath, rel in _walk_py(directory):
+    for _, rel in _walk_py(directory):
         if "test" in rel.lower():
             test_files.add(rel)
 
