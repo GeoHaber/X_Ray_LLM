@@ -1063,6 +1063,44 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
   width: 32px; height: 32px; border: 1px solid var(--glass-border); border-radius: var(--radius);
   background: none; color: var(--text); cursor: pointer; font-size: 18px; }
 
+/* ── Auto-Fix Bar ─── */
+.autofix-bar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+  background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);
+  border-radius: var(--radius); margin-bottom: 10px; flex-wrap: wrap;
+}
+.autofix-bar .fix-label { font-size: 11px; color: var(--text2); text-transform: uppercase;
+  letter-spacing: 0.05em; font-weight: 700; margin-right: 4px; }
+.autofix-bar .btn-fix-sev {
+  padding: 5px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  border: 1px solid transparent; cursor: pointer; transition: all .2s;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.autofix-bar .btn-fix-sev:disabled { opacity: 0.4; cursor: not-allowed; }
+.autofix-bar .btn-fix-high { background: rgba(248,81,73,0.12); color: var(--high);
+  border-color: rgba(248,81,73,0.25); }
+.autofix-bar .btn-fix-high:hover:not(:disabled) { background: rgba(248,81,73,0.25); }
+.autofix-bar .btn-fix-med { background: rgba(210,153,34,0.12); color: var(--medium);
+  border-color: rgba(210,153,34,0.25); }
+.autofix-bar .btn-fix-med:hover:not(:disabled) { background: rgba(210,153,34,0.25); }
+.autofix-bar .btn-fix-low { background: rgba(88,166,255,0.12); color: var(--low);
+  border-color: rgba(88,166,255,0.25); }
+.autofix-bar .btn-fix-low:hover:not(:disabled) { background: rgba(88,166,255,0.25); }
+.autofix-bar .btn-autofix {
+  padding: 5px 16px; border-radius: 8px; font-size: 12px; font-weight: 700;
+  background: linear-gradient(135deg, var(--neon-cyan), #0090ff); color: #000;
+  border: none; cursor: pointer; transition: all .2s; margin-left: auto;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.autofix-bar .btn-autofix:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+.autofix-bar .btn-autofix:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.autofix-progress { font-size: 12px; color: var(--neon-cyan); font-weight: 600;
+  display: none; align-items: center; gap: 8px; width: 100%; margin-top: 4px; }
+.autofix-progress .progress-track { flex: 1; height: 4px; background: rgba(255,255,255,0.06);
+  border-radius: 2px; overflow: hidden; }
+.autofix-progress .progress-fill { height: 100%; background: var(--neon-cyan);
+  border-radius: 2px; transition: width 0.3s; width: 0%; }
+
 /* ── Wire / Fix button classes (replace !important inline styles) ─── */
 .btn-wire { background: #8a2be2; color: #fff; }
 .btn-wire:hover { background: #7b1fa2; }
@@ -2017,6 +2055,30 @@ function renderResults() {
     </div>
   </div>
 
+  <div class="autofix-bar" id="autofixBar">
+    <span class="fix-label">Auto-Fix:</span>
+    <button class="btn-fix-sev btn-fix-high" id="fixHighBtn" onclick="fixBySeverity('HIGH')"
+      title="Fix all HIGH findings with available auto-fixers">
+      &#x1F534; HIGH <span id="fixHighCount"></span>
+    </button>
+    <button class="btn-fix-sev btn-fix-med" id="fixMedBtn" onclick="fixBySeverity('MEDIUM')"
+      title="Fix all MEDIUM findings with available auto-fixers">
+      &#x1F7E1; MED <span id="fixMedCount"></span>
+    </button>
+    <button class="btn-fix-sev btn-fix-low" id="fixLowBtn" onclick="fixBySeverity('LOW')"
+      title="Fix all LOW findings with available auto-fixers">
+      &#x1F535; LOW <span id="fixLowCount"></span>
+    </button>
+    <button class="btn-autofix" id="autofixAllBtn" onclick="autofixAll()"
+      title="Auto-fix all findings: HIGH first, then MEDIUM, then LOW, with re-scan after each">
+      &#x26A1; Auto-Fix All <span id="autofixAllCount"></span>
+    </button>
+    <div class="autofix-progress" id="autofixProgress">
+      <span id="autofixStatus">Fixing HIGH...</span>
+      <div class="progress-track"><div class="progress-fill" id="autofixFill"></div></div>
+    </div>
+  </div>
+
   <div id="rescanBar" style="display:none; align-items:center; gap:12px; padding:10px 16px; margin-bottom:12px;
     background:rgba(0,240,255,0.06); border:1px solid rgba(0,240,255,0.15); border-radius:var(--radius);">
     <span style="font-size:13px; color:var(--text2);">Fixes applied \u2014 counts updated optimistically.</span>
@@ -2026,6 +2088,7 @@ function renderResults() {
 
   document.getElementById('mainContent').innerHTML = html;
   renderViewContent();
+  _updateAutofixCounts();
 }
 
 function switchView(view) {
@@ -2700,6 +2763,189 @@ function _removeFindingsBulk(ruleId, appliedCount) {
 function _showRescanBar() {
   const bar = document.getElementById('rescanBar');
   if (bar) bar.style.display = 'flex';
+}
+
+// ── Auto-Fix by Severity ────────────────────────────────────────
+function _getFixable(severity) {
+  if (!scanResults || !scanResults.findings) return [];
+  return scanResults.findings.filter(f => f.severity === severity && fixableRules.has(f.rule_id));
+}
+
+function _updateAutofixCounts() {
+  if (!scanResults || !scanResults.findings) return;
+  const hc = _getFixable('HIGH').length;
+  const mc = _getFixable('MEDIUM').length;
+  const lc = _getFixable('LOW').length;
+  const total = hc + mc + lc;
+  // Count unfixable per severity
+  const allH = scanResults.findings.filter(f => f.severity === 'HIGH').length;
+  const allM = scanResults.findings.filter(f => f.severity === 'MEDIUM').length;
+  const allL = scanResults.findings.filter(f => f.severity === 'LOW').length;
+  const unfixH = allH - hc;
+  const unfixM = allM - mc;
+  const unfixL = allL - lc;
+  const unfixTotal = unfixH + unfixM + unfixL;
+
+  const hEl = document.getElementById('fixHighCount');
+  const mEl = document.getElementById('fixMedCount');
+  const lEl = document.getElementById('fixLowCount');
+  const aEl = document.getElementById('autofixAllCount');
+  if (hEl) hEl.textContent = hc > 0 ? `(${hc})` : '(0)';
+  if (mEl) mEl.textContent = mc > 0 ? `(${mc})` : '(0)';
+  if (lEl) lEl.textContent = lc > 0 ? `(${lc})` : '(0)';
+  if (aEl) aEl.textContent = total > 0 ? `(${total})` : '(0)';
+
+  const hBtn = document.getElementById('fixHighBtn');
+  const mBtn = document.getElementById('fixMedBtn');
+  const lBtn = document.getElementById('fixLowBtn');
+  const aBtn = document.getElementById('autofixAllBtn');
+  if (hBtn) { hBtn.disabled = hc === 0; hBtn.title = hc > 0 ? `Fix ${hc} HIGH findings (${unfixH} need manual review)` : `No fixable HIGH (${unfixH} need manual review)`; }
+  if (mBtn) { mBtn.disabled = mc === 0; mBtn.title = mc > 0 ? `Fix ${mc} MEDIUM findings (${unfixM} need manual review)` : `No fixable MEDIUM (${unfixM} need manual review)`; }
+  if (lBtn) { lBtn.disabled = lc === 0; lBtn.title = lc > 0 ? `Fix ${lc} LOW findings (${unfixL} need manual review)` : `No fixable LOW (${unfixL} need manual review)`; }
+  if (aBtn) { aBtn.disabled = total === 0; aBtn.title = total > 0 ? `Auto-fix ${total} findings (${unfixTotal} unfixable, need manual review)` : 'No auto-fixable findings'; }
+
+  // Show/hide unfixable hint
+  let hint = document.getElementById('unfixableHint');
+  if (!hint) {
+    hint = document.createElement('span');
+    hint.id = 'unfixableHint';
+    hint.style.cssText = 'font-size:11px; color:var(--text2); margin-left:4px;';
+    document.getElementById('autofixBar')?.appendChild(hint);
+  }
+  if (unfixTotal > 0 && total === 0) {
+    hint.innerHTML = `${unfixTotal} findings need <b>manual review</b> (eval/exec, XSS, hardcoded creds)`;
+    hint.style.display = 'inline';
+  } else if (unfixTotal > 0) {
+    hint.innerHTML = `+${unfixTotal} manual`;
+    hint.style.display = 'inline';
+  } else {
+    hint.style.display = 'none';
+  }
+}
+
+async function fixBySeverity(severity) {
+  const fixable = _getFixable(severity);
+  if (!fixable.length) { showToast(`No fixable ${severity} findings`, true); return; }
+  if (!confirm(`Auto-fix ${fixable.length} ${severity} finding(s)?`)) return;
+
+  const btn = document.getElementById(severity === 'HIGH' ? 'fixHighBtn' : severity === 'MEDIUM' ? 'fixMedBtn' : 'fixLowBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Fixing...'; }
+
+  const result = await api('/api/apply-fixes-bulk', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ findings: fixable })
+  });
+
+  if (result.applied > 0) {
+    // Remove fixed findings from scanResults
+    const fixedSet = new Set(fixable.slice(0, result.applied).map(f => `${f.rule_id}:${f.file}:${f.line}`));
+    const before = scanResults.findings.length;
+    scanResults.findings = scanResults.findings.filter(f => !fixedSet.has(`${f.rule_id}:${f.file}:${f.line}`));
+    scanResults.summary.total = scanResults.findings.length;
+    scanResults.summary.high = scanResults.findings.filter(f => f.severity === 'HIGH').length;
+    scanResults.summary.medium = scanResults.findings.filter(f => f.severity === 'MEDIUM').length;
+    scanResults.summary.low = scanResults.findings.filter(f => f.severity === 'LOW').length;
+    renderResults();
+    _showRescanBar();
+    showToast(`${severity}: ${result.applied} fixed, ${result.skipped} skipped \u2014 ${before}\u2192${scanResults.findings.length} findings`, result.skipped > 0);
+  } else {
+    showToast(`${severity}: ${result.skipped} skipped (no fixes applied)`, true);
+    if (btn) { btn.disabled = false; }
+    _updateAutofixCounts();
+  }
+}
+
+let _autofixRunning = false;
+
+async function autofixAll() {
+  if (_autofixRunning) return;
+  const total = _getFixable('HIGH').length + _getFixable('MEDIUM').length + _getFixable('LOW').length;
+  if (!total) { showToast('No fixable findings', true); return; }
+  if (!confirm(`Auto-fix all ${total} fixable findings?\n\nOrder: HIGH \u2192 MEDIUM \u2192 LOW\nRe-scan after each severity level.`)) return;
+
+  _autofixRunning = true;
+  const allBtn = document.getElementById('autofixAllBtn');
+  if (allBtn) { allBtn.disabled = true; allBtn.textContent = '\u23F3 Running...'; }
+  const progress = document.getElementById('autofixProgress');
+  const statusEl = document.getElementById('autofixStatus');
+  const fillEl = document.getElementById('autofixFill');
+  if (progress) progress.style.display = 'flex';
+
+  const severities = ['HIGH', 'MEDIUM', 'LOW'];
+  const labels = { HIGH: '\uD83D\uDD34 HIGH', MEDIUM: '\uD83D\uDFE1 MEDIUM', LOW: '\uD83D\uDD35 LOW' };
+  let totalFixed = 0;
+  let totalSkipped = 0;
+  const originalTotal = scanResults.findings.length;
+
+  for (let i = 0; i < severities.length; i++) {
+    const sev = severities[i];
+    const pct = Math.round(((i) / 4) * 100);
+    if (fillEl) fillEl.style.width = pct + '%';
+    if (statusEl) statusEl.textContent = `Fixing ${labels[sev]}...`;
+
+    const fixable = _getFixable(sev);
+    if (fixable.length > 0) {
+      const result = await api('/api/apply-fixes-bulk', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ findings: fixable })
+      });
+      totalFixed += result.applied || 0;
+      totalSkipped += result.skipped || 0;
+    }
+
+    // Re-scan after each severity level to get accurate counts
+    const stepPct = Math.round(((i + 0.5) / 4) * 100);
+    if (fillEl) fillEl.style.width = stepPct + '%';
+    if (statusEl) statusEl.textContent = `Re-scanning after ${labels[sev]}...`;
+
+    try {
+      await api('/api/scan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          directory: selectedDir,
+          engine: document.getElementById('engine').value,
+          severity: document.getElementById('severity').value,
+          excludes: []
+        })
+      });
+      // Poll until done
+      let done = false;
+      let polls = 0;
+      while (!done && polls < 300) {
+        await new Promise(r => setTimeout(r, 400));
+        polls++;
+        const p = await api('/api/scan-progress');
+        if (p.status === 'done' || p.status === 'idle') done = true;
+      }
+      // Fetch fresh results
+      const fresh = await api('/api/scan-result');
+      if (fresh && fresh.findings) {
+        scanResults = fresh;
+        activeFilter = 'ALL';
+      }
+    } catch(e) {
+      console.warn('[autofix] re-scan failed after', sev, e);
+    }
+  }
+
+  // Final render
+  if (fillEl) fillEl.style.width = '100%';
+  if (statusEl) statusEl.textContent = 'Done!';
+  renderResults();
+  _showRescanBar();
+
+  const nowTotal = scanResults.findings.length;
+  showToast(`Auto-Fix complete: ${totalFixed} fixed, ${totalSkipped} skipped \u2014 ${originalTotal}\u2192${nowTotal} findings`);
+
+  setTimeout(() => {
+    if (progress) progress.style.display = 'none';
+    if (allBtn) { allBtn.textContent = '\u26A1 Auto-Fix All'; }
+    _autofixRunning = false;
+    _updateAutofixCounts();
+  }, 2000);
 }
 
 async function applyFixDirect(findingIdx) {
