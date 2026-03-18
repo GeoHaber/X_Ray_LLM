@@ -11,26 +11,29 @@ The core loop:
 """
 
 import json
+import logging
 import os
 import sys
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 
-from .scanner import ScanResult, scan_project, scan_file, Finding
-from .llm import LLMEngine, LLMConfig
-from .runner import run_tests, TestResult
+logger = logging.getLogger(__name__)
+
+from .llm import LLMConfig, LLMEngine
+from .runner import TestResult, run_tests
+from .scanner import Finding, ScanResult, scan_project
 
 
 @dataclass
 class AgentConfig:
     """Configuration for the X-Ray agent."""
+
     project_root: str = "."
     test_path: str = "tests/"
     max_fix_retries: int = 3
-    auto_fix: bool = True         # generate fixes automatically
-    auto_test: bool = True        # generate tests automatically
-    dry_run: bool = False         # scan only, no changes
+    auto_fix: bool = True  # generate fixes automatically
+    auto_test: bool = True  # generate tests automatically
+    dry_run: bool = False  # scan only, no changes
     severity_threshold: str = "MEDIUM"  # skip LOW findings
     exclude_patterns: list[str] = field(default_factory=list)
     python_exe: str | None = None
@@ -39,12 +42,13 @@ class AgentConfig:
     def severity_levels(self) -> list[str]:
         levels = ["HIGH", "MEDIUM", "LOW"]
         idx = levels.index(self.severity_threshold)
-        return levels[:idx + 1]
+        return levels[: idx + 1]
 
 
 @dataclass
 class AgentReport:
     """Final report from an agent run."""
+
     scan_result: ScanResult | None = None
     tests_generated: int = 0
     fixes_applied: int = 0
@@ -75,7 +79,7 @@ class AgentReport:
 def _get_source_context(filepath: str, line: int, context: int = 10) -> str:
     """Extract source code context around a line."""
     try:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        with open(filepath, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
         start = max(0, line - context - 1)
         end = min(len(lines), line + context)
@@ -91,8 +95,7 @@ def _get_source_context(filepath: str, line: int, context: int = 10) -> str:
 class XRayAgent:
     """The main self-improving code quality agent."""
 
-    def __init__(self, config: AgentConfig | None = None,
-                 llm: LLMEngine | None = None, quiet: bool = False):
+    def __init__(self, config: AgentConfig | None = None, llm: LLMEngine | None = None, quiet: bool = False):
         self.config = config or AgentConfig()
         self.llm = llm or LLMEngine()
         self.report = AgentReport()
@@ -100,13 +103,13 @@ class XRayAgent:
         self._quiet = quiet
 
     def log(self, msg: str):
-        """Log a message to both stdout and internal log."""
+        """Log a message to both the logger and internal log."""
         self._log_lines.append(msg)
         if not self._quiet:
             try:
-                print(msg)
+                logger.info(msg)
             except UnicodeEncodeError:
-                print(msg.encode("ascii", errors="replace").decode("ascii"))
+                logger.info(msg.encode("ascii", errors="replace").decode("ascii"))
 
     # ── Step 1: SCAN ────────────────────────────────────────────────────────
 
@@ -163,8 +166,7 @@ class XRayAgent:
 
     # ── Step 3: GENERATE FIXES ──────────────────────────────────────────────
 
-    def generate_fixes(self, findings: list[Finding],
-                       test_error: str = "") -> list[dict]:
+    def generate_fixes(self, findings: list[Finding], test_error: str = "") -> list[dict]:
         """Generate code fixes for findings using the LLM."""
         if not self.config.auto_fix:
             self.log("⏭  Skipping fix generation (auto_fix=False)")
@@ -179,13 +181,13 @@ class XRayAgent:
         for finding in findings:
             context = _get_source_context(finding.file, finding.line)
             try:
-                fix_code = self.llm.generate_fix(
-                    finding.to_dict(), context, test_error=test_error
+                fix_code = self.llm.generate_fix(finding.to_dict(), context, test_error=test_error)
+                fixes.append(
+                    {
+                        "finding": finding,
+                        "fix": fix_code,
+                    }
                 )
-                fixes.append({
-                    "finding": finding,
-                    "fix": fix_code,
-                })
                 self.report.fixes_applied += 1
                 self.log(f"  ✅ Generated fix for {finding.rule_id}")
             except Exception as e:
@@ -266,10 +268,7 @@ class XRayAgent:
                 break
 
             # Collect failure info for next retry
-            last_error = "\n".join(
-                f"{f['test']}: {f['output'][:500]}"
-                for f in test_result.failures
-            )
+            last_error = "\n".join(f"{f['test']}: {f['output'][:500]}" for f in test_result.failures)
 
             # Re-scan to check if findings were resolved
             new_scan = scan_project(
@@ -299,25 +298,20 @@ def main():
             "  python -m xray.agent . --fix              # scan + auto-fix\n"
         ),
     )
-    parser.add_argument("project", nargs="?", default=".",
-                        help="Project root directory to scan")
-    parser.add_argument("--test-path", default="tests/",
-                        help="Path to test directory (default: tests/)")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Scan only, no fixes")
-    parser.add_argument("--fix", action="store_true",
-                        help="Enable auto-fix mode (requires LLM)")
-    parser.add_argument("--severity", default="MEDIUM",
-                        choices=["HIGH", "MEDIUM", "LOW"],
-                        help="Minimum severity to report (default: MEDIUM)")
-    parser.add_argument("--max-retries", type=int, default=3,
-                        help="Max fix retries (default: 3)")
-    parser.add_argument("--model", default="",
-                        help="Path to GGUF model file")
-    parser.add_argument("--exclude", nargs="*", default=[],
-                        help="Regex patterns to exclude from scan")
-    parser.add_argument("--json", action="store_true",
-                        help="Output findings as JSON")
+    parser.add_argument("project", nargs="?", default=".", help="Project root directory to scan")
+    parser.add_argument("--test-path", default="tests/", help="Path to test directory (default: tests/)")
+    parser.add_argument("--dry-run", action="store_true", help="Scan only, no fixes")
+    parser.add_argument("--fix", action="store_true", help="Enable auto-fix mode (requires LLM)")
+    parser.add_argument(
+        "--severity",
+        default="MEDIUM",
+        choices=["HIGH", "MEDIUM", "LOW"],
+        help="Minimum severity to report (default: MEDIUM)",
+    )
+    parser.add_argument("--max-retries", type=int, default=3, help="Max fix retries (default: 3)")
+    parser.add_argument("--model", default="", help="Path to GGUF model file")
+    parser.add_argument("--exclude", nargs="*", default=[], help="Regex patterns to exclude from scan")
+    parser.add_argument("--json", action="store_true", help="Output findings as JSON")
 
     args = parser.parse_args()
 
@@ -351,7 +345,7 @@ def main():
                 "low": result.low_count,
             },
         }
-        print(json.dumps(output, indent=2))
+        sys.stdout.write(json.dumps(output, indent=2) + "\n")
     else:
         agent.run()
 

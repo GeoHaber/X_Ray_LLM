@@ -10,14 +10,12 @@ import difflib
 import re
 import shutil
 import subprocess
-import textwrap
 from pathlib import Path
-
 
 # ── Fix Result ───────────────────────────────────────────────────────────
 
 class FixResult:
-    __slots__ = ("fixable", "description", "diff", "new_lines", "error")
+    __slots__ = ("description", "diff", "error", "fixable", "new_lines")
 
     def __init__(self, *, fixable=False, description="", diff="",
                  new_lines=None, error=""):

@@ -17,16 +17,19 @@ Usage:
   python generate_rust_rules.py --dry-run    # print to stdout
 """
 
+import logging
+import os
 import re
 import sys
-import os
+
+logger = logging.getLogger(__name__)
 
 # ── Load Python rules (source of truth) ────────────────────────────────────
 
 sys.path.insert(0, os.path.dirname(__file__))
-from xray.rules.security import SECURITY_RULES
-from xray.rules.quality import QUALITY_RULES
 from xray.rules.python_rules import PYTHON_RULES
+from xray.rules.quality import QUALITY_RULES
+from xray.rules.security import SECURITY_RULES
 
 
 def python_pattern_to_rust_literal(pattern: str) -> str:
@@ -78,7 +81,7 @@ def validate_pattern_compiles(pattern: str, rule_id: str) -> bool:
         re.compile(pattern)
         return True
     except re.error as e:
-        print(f"  WARNING: {rule_id} pattern doesn't compile in Python: {e}", file=sys.stderr)
+        logger.warning("%s pattern doesn't compile in Python: %s", rule_id, e)
         return False
 
 
@@ -278,31 +281,31 @@ def check_parity() -> bool:
     """Verify generated output matches what's on disk."""
     target = os.path.join(os.path.dirname(__file__), "scanner", "src", "rules", "mod.rs")
     if not os.path.exists(target):
-        print("mod.rs not found — run without --check first", file=sys.stderr)
+        logger.error("mod.rs not found — run without --check first")
         return False
 
     generated = generate_mod_rs()
-    with open(target, "r", encoding="utf-8") as f:
+    with open(target, encoding="utf-8") as f:
         current = f.read()
 
     if generated == current:
-        print(f"PARITY OK — {target} matches generated output")
+        logger.info("PARITY OK — %s matches generated output", target)
         return True
     else:
-        print(f"DRIFT DETECTED — {target} differs from generated output", file=sys.stderr)
+        logger.error("DRIFT DETECTED — %s differs from generated output", target)
         # Show first difference
         gen_lines = generated.splitlines()
         cur_lines = current.splitlines()
         for i, (g, c) in enumerate(zip(gen_lines, cur_lines), 1):
             if g != c:
-                print(f"  First diff at line {i}:", file=sys.stderr)
-                print(f"    Generated: {g[:120]}", file=sys.stderr)
-                print(f"    Current:   {c[:120]}", file=sys.stderr)
+                logger.error("  First diff at line %d:", i)
+                logger.error("    Generated: %s", g[:120])
+                logger.error("    Current:   %s", c[:120])
                 break
         else:
             if len(gen_lines) != len(cur_lines):
-                print(f"  Line count differs: generated={len(gen_lines)} current={len(cur_lines)}",
-                      file=sys.stderr)
+                logger.error("  Line count differs: generated=%d current=%d",
+                             len(gen_lines), len(cur_lines))
         return False
 
 
@@ -326,9 +329,9 @@ def main():
         with open(target, "w", encoding="utf-8", newline="\n") as f:
             f.write(output)
         all_rules = SECURITY_RULES + QUALITY_RULES + PYTHON_RULES
-        print(f"Generated {target}")
-        print(f"  {len(all_rules)} rules ({len(SECURITY_RULES)} security, "
-              f"{len(QUALITY_RULES)} quality, {len(PYTHON_RULES)} python)")
+        logger.info("Generated %s", target)
+        logger.info("  %d rules (%d security, %d quality, %d python)",
+                     len(all_rules), len(SECURITY_RULES), len(QUALITY_RULES), len(PYTHON_RULES))
 
         # Verify the patterns round-trip correctly
         import re as re_mod
@@ -337,18 +340,18 @@ def main():
             try:
                 re_mod.compile(rule["pattern"])
             except re_mod.error as e:
-                print(f"  ERROR: {rule['id']} regex doesn't compile: {e}")
+                logger.error("  %s regex doesn't compile: %s", rule['id'], e)
                 errors += 1
 
         # Sanity: ensure generated output has the right number of make_rule calls
         # The pattern call + the fn definition = len(all_rules) + 1
         make_rule_count = output.count("        make_rule(")
         if make_rule_count != len(all_rules):
-            print(f"  WARNING: expected {len(all_rules)} make_rule calls, got {make_rule_count}")
+            logger.warning("  expected %d make_rule calls, got %d", len(all_rules), make_rule_count)
             errors += 1
 
         if errors == 0:
-            print("  All patterns validated OK")
+            logger.info("  All patterns validated OK")
 
 
 if __name__ == "__main__":

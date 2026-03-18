@@ -8,7 +8,6 @@ import json
 import sys
 from pathlib import Path
 
-
 # Quality gate thresholds (configurable)
 QUALITY_GATES = {
     # Severity caps

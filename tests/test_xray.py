@@ -5,7 +5,6 @@ Tests cover: scanner, rules, runner, LLM config, agent loop.
 Run:  python -m pytest tests/ -v
 """
 
-import json
 import os
 import re
 import sys
@@ -17,12 +16,11 @@ import pytest
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
-from xray.scanner import scan_file, scan_directory, Finding, ScanResult, _detect_lang
-from xray.rules import ALL_RULES, SECURITY_RULES, QUALITY_RULES, PYTHON_RULES
-from xray.llm import LLMConfig, LLMEngine
-from xray.runner import TestResult, run_tests
 from xray.agent import AgentConfig, XRayAgent, _get_source_context
-
+from xray.llm import LLMConfig, LLMEngine
+from xray.rules import ALL_RULES, PYTHON_RULES, QUALITY_RULES, SECURITY_RULES
+from xray.runner import TestResult, run_tests
+from xray.scanner import Finding, ScanResult, _detect_lang, scan_directory, scan_file
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TEST 1: Rule Database

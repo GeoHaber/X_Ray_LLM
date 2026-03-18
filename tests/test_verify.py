@@ -11,9 +11,6 @@ Run:  python -m pytest tests/test_verify.py -v
 import hashlib
 import json
 import os
-import re
-import shutil
-import stat
 import struct
 import sys
 import tempfile
@@ -24,12 +21,10 @@ import pytest
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
-from xray.scanner import scan_file, scan_directory, scan_project, Finding, ScanResult, _detect_lang, _should_skip
-from xray.rules import ALL_RULES, SECURITY_RULES, QUALITY_RULES, PYTHON_RULES
-from xray.llm import LLMConfig, LLMEngine
+from xray.agent import AgentConfig, XRayAgent, _get_source_context
+from xray.rules import ALL_RULES
 from xray.runner import TestResult, run_tests
-from xray.agent import AgentConfig, AgentReport, XRayAgent, _get_source_context
-
+from xray.scanner import ScanResult, scan_directory, scan_file
 
 # ═════════════════════════════════════════════════════════════════════════════
 # HELPERS
@@ -773,7 +768,7 @@ class TestIntegrationRealProject:
         for f in findings:
             if f.rule_id == "SEC-001":
                 # If it fires, check it's NOT on a line with _escHtml
-                with open(html_path, "r", encoding="utf-8", errors="replace") as fh:
+                with open(html_path, encoding="utf-8", errors="replace") as fh:
                     lines = fh.readlines()
                 if f.line <= len(lines):
                     line_text = lines[f.line - 1]

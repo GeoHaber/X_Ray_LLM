@@ -16,7 +16,6 @@ from pathlib import Path
 
 import flet as ft
 
-
 # Known Flet 0.80.2 API changes
 API_MIGRATIONS = {
     "TextField": {

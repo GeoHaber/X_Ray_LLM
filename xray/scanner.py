@@ -3,11 +3,13 @@ X-Ray Scanner — Pattern-based code analysis engine.
 Scans files against the rule database and reports findings.
 """
 
+import logging
 import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from .rules import ALL_RULES
 
@@ -25,9 +27,22 @@ _EXT_LANG = {
 
 # Directories to always skip
 _SKIP_DIRS = {
-    "__pycache__", "node_modules", ".git", ".venv", "venv",
-    "target", "dist", "build", ".mypy_cache", ".ruff_cache",
-    ".pytest_cache", "env", ".env", ".tox", "eggs", "*.egg-info",
+    "__pycache__",
+    "node_modules",
+    ".git",
+    ".venv",
+    "venv",
+    "target",
+    "dist",
+    "build",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    "env",
+    ".env",
+    ".tox",
+    "eggs",
+    "*.egg-info",
 }
 
 # Max file size to scan (1 MB)
@@ -37,6 +52,7 @@ _MAX_FILE_SIZE = 1_048_576
 @dataclass
 class Finding:
     """A single issue found by the scanner."""
+
     rule_id: str
     severity: str
     file: str
@@ -67,6 +83,7 @@ class Finding:
 @dataclass
 class ScanResult:
     """Aggregated scan results."""
+
     findings: list[Finding] = field(default_factory=list)
     files_scanned: int = 0
     rules_checked: int = 0
@@ -121,7 +138,7 @@ def scan_file(filepath: str, rules: list[dict] | None = None) -> list[Finding]:
         size = os.path.getsize(filepath)
         if size > _MAX_FILE_SIZE:
             return []
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        with open(filepath, encoding="utf-8", errors="replace") as f:
             content = f.read()
     except (OSError, PermissionError):
         return []
@@ -135,28 +152,33 @@ def scan_file(filepath: str, rules: list[dict] | None = None) -> list[Finding]:
             continue
 
         for match in pattern.finditer(content):
-            line_num = content[:match.start()].count("\n") + 1
+            line_num = content[: match.start()].count("\n") + 1
             line_start = content.rfind("\n", 0, match.start()) + 1
             col = match.start() - line_start + 1
 
-            findings.append(Finding(
-                rule_id=rule["id"],
-                severity=rule["severity"],
-                file=filepath,
-                line=line_num,
-                col=col,
-                matched_text=match.group(0),
-                description=rule["description"],
-                fix_hint=rule["fix_hint"],
-                test_hint=rule["test_hint"],
-            ))
+            findings.append(
+                Finding(
+                    rule_id=rule["id"],
+                    severity=rule["severity"],
+                    file=filepath,
+                    line=line_num,
+                    col=col,
+                    matched_text=match.group(0),
+                    description=rule["description"],
+                    fix_hint=rule["fix_hint"],
+                    test_hint=rule["test_hint"],
+                )
+            )
 
     return findings
 
 
-def scan_directory(root: str, rules: list[dict] | None = None,
-                   exclude_patterns: list[str] | None = None,
-                   on_progress: Callable | None = None) -> ScanResult:
+def scan_directory(
+    root: str,
+    rules: list[dict] | None = None,
+    exclude_patterns: list[str] | None = None,
+    on_progress: Callable | None = None,
+) -> ScanResult:
     """Recursively scan a directory for code issues.
 
     Args:
@@ -185,7 +207,8 @@ def scan_directory(root: str, rules: list[dict] | None = None,
                 rel_path = os.path.relpath(filepath, root).replace(os.sep, "/")
             except ValueError:
                 # Windows reserved device names (NUL, CON, …) can't be
-                # made relative — skip them silently.
+                # made relative — skip them.
+                logger.debug("Skipped non-relative path: %s", filepath)
                 continue
 
             # Check exclude patterns

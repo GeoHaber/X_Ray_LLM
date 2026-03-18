@@ -2,16 +2,19 @@
 X-Ray Test Runner — Executes pytest and captures results.
 """
 
-import json
+import logging
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class TestResult:
     """Result of a pytest execution."""
+
     passed: int = 0
     failed: int = 0
     errors: int = 0
@@ -28,14 +31,19 @@ class TestResult:
         return f"{status}: {self.passed}/{self.total} passed, {self.failed} failed, {self.errors} errors"
 
 
-def run_tests(test_path: str, timeout: int = 120,
-              python_exe: str | None = None) -> TestResult:
+def run_tests(test_path: str, timeout: int = 120, python_exe: str | None = None) -> TestResult:
     """Run pytest on the given path and return structured results."""
     exe = python_exe or sys.executable
     cmd = [
-        exe, "-m", "pytest", test_path,
-        "-v", "--timeout", str(timeout),
-        "--tb=short", "-q",
+        exe,
+        "-m",
+        "pytest",
+        test_path,
+        "-v",
+        "--timeout",
+        str(timeout),
+        "--tb=short",
+        "-q",
     ]
 
     try:
@@ -48,8 +56,10 @@ def run_tests(test_path: str, timeout: int = 120,
         )
         output = proc.stdout + proc.stderr
     except subprocess.TimeoutExpired:
+        logger.debug("Test run timed out for %s", test_path)
         return TestResult(output="TIMEOUT: Tests exceeded time limit")
     except FileNotFoundError:
+        logger.debug("Python executable not found: %s", exe)
         return TestResult(output=f"ERROR: Python executable not found: {exe}")
 
     result = TestResult(output=output)
@@ -59,6 +69,7 @@ def run_tests(test_path: str, timeout: int = 120,
         line = line.strip()
         if "passed" in line or "failed" in line or "error" in line:
             import re
+
             m_passed = re.search(r"(\d+)\s+passed", line)
             m_failed = re.search(r"(\d+)\s+failed", line)
             m_errors = re.search(r"(\d+)\s+error", line)

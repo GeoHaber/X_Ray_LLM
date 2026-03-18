@@ -15,16 +15,19 @@ Usage:
 
 import argparse
 import json
+import logging
 import os
 import platform
 import subprocess
 import sys
-import time
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from socketserver import ThreadingMixIn
+import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from socketserver import ThreadingMixIn
+from urllib.parse import parse_qs, urlparse
+
+logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).parent
 SCANNER_DIR = ROOT / "scanner"
@@ -48,13 +51,44 @@ _SATD_MARKERS = [
     (_re.compile(r"\b(DOCME|DOCUMENT|UNDOCUMENTED)\b", _re.IGNORECASE), "documentation", 0.25),
 ]
 
-_SATD_SKIP_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules", ".tox",
-                    "build", "dist", "_rustified", ".mypy_cache", ".pytest_cache", "target"}
+_SATD_SKIP_DIRS = {
+    "__pycache__",
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    ".tox",
+    "build",
+    "dist",
+    "_rustified",
+    ".mypy_cache",
+    ".pytest_cache",
+    "target",
+}
 
 _COMMENT_RE = _re.compile(r"#\s*(.*)")
 
-_TEXT_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".c", ".cpp", ".h",
-                    ".cs", ".go", ".rb", ".rs", ".sh", ".bat", ".yaml", ".yml", ".toml", ".md"}
+_TEXT_EXTENSIONS = {
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".cs",
+    ".go",
+    ".rb",
+    ".rs",
+    ".sh",
+    ".bat",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".md",
+}
 
 
 def scan_satd(directory: str) -> dict:
@@ -71,7 +105,7 @@ def scan_satd(directory: str) -> dict:
                 continue
             fpath = os.path.join(dirpath, fname)
             try:
-                with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                with open(fpath, encoding="utf-8", errors="ignore") as fh:
                     for lineno, line in enumerate(fh, 1):
                         for pat, category, hours in _SATD_MARKERS:
                             m = pat.search(line)
@@ -81,14 +115,16 @@ def scan_satd(directory: str) -> dict:
                                 cm = _COMMENT_RE.search(line)
                                 if cm:
                                     text = cm.group(1).strip()
-                                items.append({
-                                    "file": _fwd(fpath),
-                                    "line": lineno,
-                                    "category": category,
-                                    "marker": m.group(1).upper(),
-                                    "text": text[:200],
-                                    "hours": hours,
-                                })
+                                items.append(
+                                    {
+                                        "file": _fwd(fpath),
+                                        "line": lineno,
+                                        "category": category,
+                                        "marker": m.group(1).upper(),
+                                        "text": text[:200],
+                                        "hours": hours,
+                                    }
+                                )
                                 total_hours += hours
                                 by_category.setdefault(category, []).append(items[-1])
                                 break  # first match wins per line
@@ -108,18 +144,24 @@ def analyze_git_hotspots(directory: str, days: int = 90) -> dict:
     try:
         result = subprocess.run(
             ["git", "log", f"--since={days}.days", "--name-only", "--pretty=format:", "--diff-filter=ACMR"],
-            capture_output=True, text=True, cwd=directory, timeout=30,
+            capture_output=True,
+            text=True,
+            cwd=directory,
+            timeout=30,
+            encoding="utf-8",
+            errors="ignore",
         )
     except FileNotFoundError:
+        logger.debug("git not found for hotspot analysis")
         return {"error": "git not found. Install git to use hotspot analysis."}
     except subprocess.TimeoutExpired:
+        logger.debug("git log timed out for hotspot analysis")
         return {"error": "git log timed out."}
 
     if result.returncode != 0:
         return {"error": f"git error: {result.stderr.strip()[:200]}"}
 
-    skip_patterns = {"__pycache__", ".min.js", ".min.css", "package-lock.json",
-                     "uv.lock", "Cargo.lock", ".pyc"}
+    skip_patterns = {"__pycache__", ".min.js", ".min.css", "package-lock.json", "uv.lock", "Cargo.lock", ".pyc"}
     churn = {}
     for line in result.stdout.strip().split("\n"):
         line = line.strip()
@@ -155,7 +197,7 @@ def parse_imports(directory: str) -> dict:
                 nodes[module] = {"id": module, "label": module.split(".")[-1], "external": False, "imports_count": 0}
 
             try:
-                with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                with open(fpath, encoding="utf-8", errors="ignore") as fh:
                     for line in fh:
                         line = line.strip()
                         if line.startswith("import ") or line.startswith("from "):
@@ -188,33 +230,61 @@ def run_ruff(directory: str) -> dict:
     try:
         result = subprocess.run(
             ["ruff", "check", "--fix", directory],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            encoding="utf-8",
+            errors="ignore",
         )
     except FileNotFoundError:
+        logger.debug("ruff not found for autofix")
         return {"error": "ruff not found. Install: pip install ruff"}
     except subprocess.TimeoutExpired:
+        logger.debug("ruff timed out during autofix")
         return {"error": "ruff timed out."}
+    except Exception as e:
+        logger.debug("ruff autofix failed: %s", e)
+        return {"error": f"ruff failed: {e!s}"}
 
     # Count fixes from output
-    fixed = result.stdout.count("Fixed") + result.stdout.count("fixed")
-    remaining = result.stdout.count("[")
-    return {"fixed": fixed, "remaining": remaining, "output": result.stdout[:2000]}
+    stdout = result.stdout or ""
+    fixed = stdout.count("Fixed") + stdout.count("fixed")
+    remaining = stdout.count("[")
+    return {"fixed": fixed, "remaining": remaining, "output": stdout[:2000]}
+
 
 # ── Scan Progress Tracking ───────────────────────────────────────────────
 
 De_Bug = True  # Toggle verbose debug logging for scan flow
 
 _abort = threading.Event()
-_last_scan_result = None   # Stores full scan result for client to fetch separately
-_scan_progress = None      # Dict updated per-file during scan (for polling)
-_scan_thread = None        # Background thread running the scan
+_last_scan_result = None  # Stores full scan result for client to fetch separately
+# ── Wire Test Progress ──────────────────────────────────────────────────
+_wire_test_results = None
+_wire_test_progress = None
+_wire_test_thread = None
 
 
-def _background_scan(directory: str, engine: str, severity: str,
-                     excludes: list[str], total_files: int):
+def _execute_wire_test(directory: str, base_url: str):
+    global _wire_test_results, _wire_test_progress
+    from xray.wire_connector import WireConnector
+
+    wc = WireConnector(base_url)
+
+    def callback(p):
+        global _wire_test_progress
+        _wire_test_progress = p
+
+    results = wc.run_tests(directory, callback)
+    _wire_test_results = results
+    _wire_test_progress = {"status": "done", "results": results}
+
+
+def _background_scan(directory: str, engine: str, severity: str, excludes: list[str], total_files: int):
     """Run scan in background thread, updating _scan_progress as it goes."""
     global _last_scan_result, _scan_progress
     import time as _time
+
     _last_scan_result = None
     scan_start = _time.perf_counter()
     _scan_progress = {
@@ -236,20 +306,21 @@ def _background_scan(directory: str, engine: str, severity: str,
 
     try:
         if engine == "rust":
-            result = scan_with_rust(directory, severity, excludes,
-                                    sse_write=progress_writer,
-                                    total_files=total_files)
+            result = scan_with_rust(directory, severity, excludes, sse_write=progress_writer, total_files=total_files)
         else:
-            result = scan_with_python(directory, severity, excludes,
-                                      sse_write=progress_writer,
-                                      total_files=total_files)
+            result = scan_with_python(directory, severity, excludes, sse_write=progress_writer, total_files=total_files)
     except Exception as exc:
         if De_Bug:
-            print(f"[De_Bug] SCAN CRASHED: {type(exc).__name__}: {exc}")
-        result = {"error": f"Scan crashed: {type(exc).__name__}: {exc}",
-                  "engine": engine, "aborted": False,
-                  "files_scanned": 0, "findings": [], "errors": [],
-                  "summary": {"total": 0, "high": 0, "medium": 0, "low": 0}}
+            logger.debug("SCAN CRASHED: %s: %s", type(exc).__name__, exc)
+        result = {
+            "error": f"Scan crashed: {type(exc).__name__}: {exc}",
+            "engine": engine,
+            "aborted": False,
+            "files_scanned": 0,
+            "findings": [],
+            "errors": [],
+            "summary": {"total": 0, "high": 0, "medium": 0, "low": 0},
+        }
 
     elapsed_ms = round((_time.perf_counter() - scan_start) * 1000, 1)
     _last_scan_result = result
@@ -263,17 +334,23 @@ def _background_scan(directory: str, engine: str, severity: str,
     }
 
     if De_Bug:
-        print(f"[De_Bug] background scan done — "
-              f"{result.get('files_scanned', '?')} files, "
-              f"{result.get('summary', {}).get('total', '?')} findings, "
-              f"elapsed={elapsed_ms:.0f}ms")
-    print(f"[scan] done — {result.get('files_scanned', 0)} files, "
-          f"{result.get('summary', {}).get('total', 0)} findings")
+        logger.debug(
+            "background scan done — %s files, %s findings, elapsed=%.0fms",
+            result.get("files_scanned", "?"),
+            result.get("summary", {}).get("total", "?"),
+            elapsed_ms,
+        )
+    logger.info(
+        "[scan] done — %s files, %s findings", result.get("files_scanned", 0), result.get("summary", {}).get("total", 0)
+    )
+
 
 def _count_scannable_files(directory: str, exclude_patterns: list[str] | None = None) -> int:
     """Fast pre-count of scannable files (mirrors scanner's walk logic)."""
     import re as _re
-    from xray.scanner import _EXT_LANG, _SKIP_DIRS, _MAX_FILE_SIZE
+
+    from xray.scanner import _EXT_LANG, _SKIP_DIRS
+
     skip_dirs = _SKIP_DIRS
     scan_exts = set(_EXT_LANG.keys())
     exclude_res = []
@@ -281,8 +358,8 @@ def _count_scannable_files(directory: str, exclude_patterns: list[str] | None = 
         for pat in exclude_patterns:
             try:
                 exclude_res.append(_re.compile(pat))
-            except _re.error:
-                pass
+            except _re.error as exc:
+                logger.debug("Invalid exclude pattern %r: %s", pat, exc)
     count = 0
     for dirpath, dirnames, filenames in os.walk(directory):
         dirnames[:] = [d for d in dirnames if d not in skip_dirs and not d.startswith(".")]
@@ -295,19 +372,24 @@ def _count_scannable_files(directory: str, exclude_patterns: list[str] | None = 
             try:
                 rel = os.path.relpath(fp, directory).replace(os.sep, "/")
             except ValueError:
+                logger.debug("Cannot compute relative path for %s", fp)
                 continue
             if exclude_res and any(r.search(rel) for r in exclude_res):
                 continue
             count += 1
     return count
 
+
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 class _ScanAborted(Exception):
     """Raised inside on_progress to abort a scan early."""
 
+
 _rust_proc = None  # track running Rust subprocess for abort
 _rust_proc_lock = threading.Lock()
+
 
 def get_rust_binary() -> str | None:
     """Find the Rust binary for the current platform."""
@@ -328,12 +410,11 @@ def get_rust_binary() -> str | None:
     return str(path) if path.exists() else None
 
 
-def scan_with_python(directory: str, severity: str, excludes: list[str],
-                     sse_write=None, total_files: int = 0) -> dict:
+def scan_with_python(directory: str, severity: str, excludes: list[str], sse_write=None, total_files: int = 0) -> dict:
     """Run scan using Python scanner. If sse_write is provided, push per-file SSE events."""
     sys.path.insert(0, str(ROOT))
-    from xray.scanner import scan_directory
     from xray.rules import ALL_RULES
+    from xray.scanner import scan_directory
 
     sev_order = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
     min_sev = sev_order.get(severity.upper(), 1)
@@ -354,28 +435,35 @@ def scan_with_python(directory: str, severity: str, excludes: list[str],
                 fsize = os.path.getsize(full)
                 fext = os.path.splitext(current_file)[1]
             except OSError:
-                pass
+                logger.debug("Could not stat file %s", current_file)
             if De_Bug and files_scanned % 50 == 0:
-                print(f"[De_Bug] progress: {files_scanned}/{total_files} files, "
-                      f"{findings_count} findings, {current_file}")
-            sse_write("progress", {
-                "files_scanned": files_scanned,
-                "total_files": total_files,
-                "findings_count": findings_count,
-                "current_file": current_file,
-                "file_size": fsize,
-                "file_type": fext,
-                "elapsed_ms": elapsed_ms,
-            })
+                logger.debug(
+                    "progress: %s/%s files, %s findings, %s",
+                    files_scanned,
+                    total_files,
+                    findings_count,
+                    current_file,
+                )
+            sse_write(
+                "progress",
+                {
+                    "files_scanned": files_scanned,
+                    "total_files": total_files,
+                    "findings_count": findings_count,
+                    "current_file": current_file,
+                    "file_size": fsize,
+                    "file_type": fext,
+                    "elapsed_ms": elapsed_ms,
+                },
+            )
 
     _abort.clear()
     start = time.perf_counter()
     try:
-        result = scan_directory(directory, rules=rules, exclude_patterns=excludes or None,
-                                on_progress=on_progress)
+        result = scan_directory(directory, rules=rules, exclude_patterns=excludes or None, on_progress=on_progress)
     except _ScanAborted:
-        return {"aborted": True, "engine": "python",
-                "files_scanned": 0, "findings_count": 0}
+        logger.debug("Scan aborted by user")
+        return {"aborted": True, "engine": "python", "files_scanned": 0, "findings_count": 0}
     elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
 
     return {
@@ -393,8 +481,7 @@ def scan_with_python(directory: str, severity: str, excludes: list[str],
     }
 
 
-def scan_with_rust(directory: str, severity: str, excludes: list[str],
-                   sse_write=None, total_files: int = 0) -> dict:
+def scan_with_rust(directory: str, severity: str, excludes: list[str], sse_write=None, total_files: int = 0) -> dict:
     """Run scan using Rust binary. If sse_write provided, push SSE events."""
     binary = get_rust_binary()
     if not binary:
@@ -406,15 +493,24 @@ def scan_with_rust(directory: str, severity: str, excludes: list[str],
 
     _abort.clear()
     if sse_write:
-        sse_write("progress", {
-            "files_scanned": 0, "total_files": total_files,
-            "findings_count": 0, "current_file": "(rust binary)",
-            "file_size": 0, "file_type": "", "elapsed_ms": 0,
-        })
+        sse_write(
+            "progress",
+            {
+                "files_scanned": 0,
+                "total_files": total_files,
+                "findings_count": 0,
+                "current_file": "(rust binary)",
+                "file_size": 0,
+                "file_type": "",
+                "elapsed_ms": 0,
+            },
+        )
 
     global _rust_proc
     start = time.perf_counter()
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="ignore"
+    )
     with _rust_proc_lock:
         _rust_proc = proc
     stdout, stderr = proc.communicate()
@@ -454,13 +550,16 @@ def browse_directory(path: str) -> dict:
                 name = entry.name
                 if name.startswith(".") and name not in (".env",):
                     continue
-                items.append({
-                    "name": name,
-                    "path": _fwd(str(entry)),
-                    "is_dir": entry.is_dir(),
-                    "size": entry.stat().st_size if entry.is_file() else None,
-                })
+                items.append(
+                    {
+                        "name": name,
+                        "path": _fwd(str(entry)),
+                        "is_dir": entry.is_dir(),
+                        "size": entry.stat().st_size if entry.is_file() else None,
+                    }
+                )
         except PermissionError:
+            logger.debug("Permission denied listing %s", path)
             return {"error": f"Permission denied: {path}"}
 
         parent = _fwd(str(p.parent)) if p.parent != p else None
@@ -470,6 +569,7 @@ def browse_directory(path: str) -> dict:
             "items": items,
         }
     except Exception as e:
+        logger.debug("browse_directory error: %s", e)
         return {"error": str(e)}
 
 
@@ -490,12 +590,14 @@ def get_drives() -> list[dict]:
 
 _GUIDE_TEXT = ""
 
+
 def _load_guide():
     """Load X_RAY_LLM_GUIDE.md once at startup for chat context."""
     global _GUIDE_TEXT
     guide_path = ROOT / "X_RAY_LLM_GUIDE.md"
     if guide_path.exists():
         _GUIDE_TEXT = guide_path.read_text(encoding="utf-8", errors="ignore")
+
 
 # Rule knowledge base
 _RULES = {
@@ -543,11 +645,25 @@ _RULES = {
 }
 
 _TOOLS_LIST = [
-    "Dead Code", "Code Smells", "Duplicates", "Formatting (ruff)", "Type Check (pyright)",
-    "Bandit (security)", "Ruff --fix", "Import Graph", "Git Hotspots", "Project Health",
-    "SATD (tech debt)", "Release Readiness", "AI-Generated Code Detection", "Web Smells",
-    "Test Stub Generator", "Remediation Time Estimate",
-    "Circular Call Detection", "Module Coupling & Cohesion", "Unused Imports",
+    "Dead Code",
+    "Code Smells",
+    "Duplicates",
+    "Formatting (ruff)",
+    "Type Check (pyright)",
+    "Bandit (security)",
+    "Ruff --fix",
+    "Import Graph",
+    "Git Hotspots",
+    "Project Health",
+    "SATD (tech debt)",
+    "Release Readiness",
+    "AI-Generated Code Detection",
+    "Web Smells",
+    "Test Stub Generator",
+    "Remediation Time Estimate",
+    "Circular Call Detection",
+    "Module Coupling & Cohesion",
+    "Unused Imports",
 ]
 
 _PM_FEATURES = {
@@ -571,9 +687,7 @@ def _chat_reply(message: str, context: dict) -> str:
     for rule_id, (name, severity, fixable) in _RULES.items():
         if rule_id.lower() in lo:
             fix_str = "✅ Auto-fixable" if fixable else "❌ No auto-fix (manual or LLM)"
-            return (f"<strong>{rule_id}: {name}</strong><br>"
-                    f"Severity: <strong>{severity}</strong><br>"
-                    f"Fix: {fix_str}")
+            return f"<strong>{rule_id}: {name}</strong><br>Severity: <strong>{severity}</strong><br>Fix: {fix_str}"
 
     # PM Dashboard features
     for feature, desc in _PM_FEATURES.items():
@@ -585,100 +699,131 @@ def _chat_reply(message: str, context: dict) -> str:
         sec = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("SEC")]
         qual = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("QUAL")]
         py = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("PY")]
-        return ("<strong>38 Scan Rules:</strong><br><br>"
-                "<strong>Security (14):</strong><br>" + "<br>".join(sec) +
-                "<br><br><strong>Quality (13):</strong><br>" + "<br>".join(qual) +
-                "<br><br><strong>Python (11):</strong><br>" + "<br>".join(py))
+        return (
+            "<strong>38 Scan Rules:</strong><br><br>"
+            "<strong>Security (14):</strong><br>"
+            + "<br>".join(sec)
+            + "<br><br><strong>Quality (13):</strong><br>"
+            + "<br>".join(qual)
+            + "<br><br><strong>Python (11):</strong><br>"
+            + "<br>".join(py)
+        )
 
     if _re.search(r"\bfix|auto.?fix|fixable|fixer", lo):
         fixable = [f"<strong>{k}</strong>: {v[0]}" for k, v in _RULES.items() if v[2]]
-        return ("<strong>7 Auto-Fixable Rules</strong> (no LLM needed):<br>" +
-                "<br>".join(fixable) +
-                "<br><br>Click the 🔧 wrench icon on any finding, or use <code>/api/apply-fix</code>.")
+        return (
+            "<strong>7 Auto-Fixable Rules</strong> (no LLM needed):<br>"
+            + "<br>".join(fixable)
+            + "<br><br>Click the 🔧 wrench icon on any finding, or use <code>/api/apply-fix</code>."
+        )
 
     if _re.search(r"\bpm|dashboard|project.?manag", lo):
         items = [f"• <strong>{k.title()}</strong>: {v}" for k, v in _PM_FEATURES.items()]
         return "<strong>PM Dashboard — 9 Features:</strong><br><br>" + "<br>".join(items)
 
     if _re.search(r"\btool|analys|analyzer", lo):
-        numbered = [f"{i+1}. {t}" for i, t in enumerate(_TOOLS_LIST)]
+        numbered = [f"{i + 1}. {t}" for i, t in enumerate(_TOOLS_LIST)]
         return "<strong>19 Analysis Tools:</strong><br>" + "<br>".join(numbered)
 
     if _re.search(r"\bscan|how.*start|begin|quick.?start", lo):
-        return ("<strong>How to Scan:</strong><br>"
-                "1. Browse to a directory in the left sidebar<br>"
-                "2. Choose engine (Python or Rust) and severity filter<br>"
-                "3. Click <strong>Scan Project</strong><br>"
-                "4. Results appear on the right with severity badges<br><br>"
-                "CLI: <code>python -m xray.agent /path --dry-run</code>")
+        return (
+            "<strong>How to Scan:</strong><br>"
+            "1. Browse to a directory in the left sidebar<br>"
+            "2. Choose engine (Python or Rust) and severity filter<br>"
+            "3. Click <strong>Scan Project</strong><br>"
+            "4. Results appear on the right with severity badges<br><br>"
+            "CLI: <code>python -m xray.agent /path --dry-run</code>"
+        )
 
     if _re.search(r"\bgrade|score|letter|a\+|rating", lo):
-        return ("<strong>Grading System:</strong><br>"
-                "• A+ = 0 issues<br>• A = 1–3<br>• B = 4–7<br>• C = 8–12<br>"
-                "• D = 13–20<br>• F = 21+<br><br>"
-                "Weighted: High×3 + Medium×1 + Low×0.3<br>"
-                "Quality Gate in sidebar sets pass/fail thresholds.")
+        return (
+            "<strong>Grading System:</strong><br>"
+            "• A+ = 0 issues<br>• A = 1–3<br>• B = 4–7<br>• C = 8–12<br>"
+            "• D = 13–20<br>• F = 21+<br><br>"
+            "Weighted: High×3 + Medium×1 + Low×0.3<br>"
+            "Quality Gate in sidebar sets pass/fail thresholds."
+        )
 
     if _re.search(r"\bapi|endpoint|rest|http", lo):
-        return ("<strong>34+ API Endpoints</strong> on <code>localhost:8077/api/</code>:<br><br>"
-                "Core: <code>/api/scan</code> (SSE), <code>/api/browse</code>, <code>/api/info</code>, <code>/api/abort</code><br>"
-                "Fix: <code>/api/preview-fix</code>, <code>/api/apply-fix</code>, <code>/api/apply-fixes-bulk</code><br>"
-                "Analysis: <code>/api/dead-code</code>, <code>/api/smells</code>, <code>/api/duplicates</code>, "
-                "<code>/api/format</code>, <code>/api/typecheck</code>, <code>/api/bandit</code>, <code>/api/ruff</code><br>"
-                "PM: <code>/api/risk-heatmap</code>, <code>/api/module-cards</code>, <code>/api/confidence</code>, "
-                "<code>/api/sprint-batches</code>, <code>/api/architecture</code>, <code>/api/call-graph</code><br>"
-                "CGC: <code>/api/circular-calls</code>, <code>/api/coupling</code>, <code>/api/unused-imports</code><br>"
-                "Utility: <code>/api/chat</code>, <code>/api/project-review</code>")
+        return (
+            "<strong>34+ API Endpoints</strong> on <code>localhost:8077/api/</code>:<br><br>"
+            "Core: <code>/api/scan</code> (SSE), <code>/api/browse</code>, <code>/api/info</code>, <code>/api/abort</code><br>"
+            "Fix: <code>/api/preview-fix</code>, <code>/api/apply-fix</code>, <code>/api/apply-fixes-bulk</code><br>"
+            "Analysis: <code>/api/dead-code</code>, <code>/api/smells</code>, <code>/api/duplicates</code>, "
+            "<code>/api/format</code>, <code>/api/typecheck</code>, <code>/api/bandit</code>, <code>/api/ruff</code><br>"
+            "PM: <code>/api/risk-heatmap</code>, <code>/api/module-cards</code>, <code>/api/confidence</code>, "
+            "<code>/api/sprint-batches</code>, <code>/api/architecture</code>, <code>/api/call-graph</code><br>"
+            "CGC: <code>/api/circular-calls</code>, <code>/api/coupling</code>, <code>/api/unused-imports</code><br>"
+            "Utility: <code>/api/chat</code>, <code>/api/project-review</code>"
+        )
 
     if _re.search(r"\brust|engine|fast|performance|speed", lo):
-        return ("<strong>Dual Engines:</strong><br>"
-                "• <strong>Python</strong>: Cross-platform, always available, full feature set<br>"
-                "• <strong>Rust</strong>: ~10× faster, optional. Build: <code>python build.py</code><br><br>"
-                "Switch in the sidebar Settings → Engine dropdown.")
+        return (
+            "<strong>Dual Engines:</strong><br>"
+            "• <strong>Python</strong>: Cross-platform, always available, full feature set<br>"
+            "• <strong>Rust</strong>: ~10× faster, optional. Build: <code>python build.py</code><br><br>"
+            "Switch in the sidebar Settings → Engine dropdown."
+        )
 
     if _re.search(r"\bsecurity|vuln|xss|inject|sql|ssrf|cors|eval|pickle|secret|password", lo):
-        sec = [f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
-               for k, v in _RULES.items() if k.startswith("SEC")]
+        sec = [
+            f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
+            for k, v in _RULES.items()
+            if k.startswith("SEC")
+        ]
         return "<strong>Security Rules (14):</strong><br>" + "<br>".join(sec)
 
     if _re.search(r"\bquality|smell|except|magic|dup|long func|param", lo):
-        qual = [f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
-                for k, v in _RULES.items() if k.startswith("QUAL")]
+        qual = [
+            f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
+            for k, v in _RULES.items()
+            if k.startswith("QUAL")
+        ]
         return "<strong>Quality Rules (13):</strong><br>" + "<br>".join(qual)
 
     if _re.search(r"\bpython rule|py rule|print|assert|wildcard|import\b", lo):
-        py = [f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
-              for k, v in _RULES.items() if k.startswith("PY")]
+        py = [
+            f"<strong>{k}</strong>: {v[0]} ({v[1]}){' ✅fix' if v[2] else ''}"
+            for k, v in _RULES.items()
+            if k.startswith("PY")
+        ]
         return "<strong>Python Rules (11):</strong><br>" + "<br>".join(py)
 
     if _re.search(r"\bhello|hi\b|hey|help|what can you", lo):
-        return ("Hello! I'm the <strong>X-Ray Assistant</strong>. I can help with:<br><br>"
-                "• <strong>rules</strong> — all 38 scan rules (14 security + 13 quality + 11 Python)<br>"
-                "• <strong>auto-fix</strong> — which rules have automatic fixes<br>"
-                "• <strong>tools</strong> — 19 analysis tools<br>"
-                "• <strong>PM Dashboard</strong> — 9 project management features<br>"
-                "• <strong>scanning</strong> — how to scan a project<br>"
-                "• <strong>grading</strong> — score and letter grade system<br>"
-                "• <strong>API</strong> — 34+ REST endpoints<br>"
-                "• <strong>engines</strong> — Python vs Rust<br><br>"
-                "Or ask about a specific rule like <code>SEC-003</code>!")
+        return (
+            "Hello! I'm the <strong>X-Ray Assistant</strong>. I can help with:<br><br>"
+            "• <strong>rules</strong> — all 38 scan rules (14 security + 13 quality + 11 Python)<br>"
+            "• <strong>auto-fix</strong> — which rules have automatic fixes<br>"
+            "• <strong>tools</strong> — 19 analysis tools<br>"
+            "• <strong>PM Dashboard</strong> — 9 project management features<br>"
+            "• <strong>scanning</strong> — how to scan a project<br>"
+            "• <strong>grading</strong> — score and letter grade system<br>"
+            "• <strong>API</strong> — 34+ REST endpoints<br>"
+            "• <strong>engines</strong> — Python vs Rust<br><br>"
+            "Or ask about a specific rule like <code>SEC-003</code>!"
+        )
 
     # Scan context
     has_results = context.get("has_results", False)
     findings = context.get("findings_count", 0)
     if has_results and _re.search(r"\bresult|finding|current|status|summary", lo):
-        return (f"Current scan: <strong>{findings} findings</strong> in "
-                f"<code>{context.get('directory', 'unknown')}</code>. "
-                "Use the filter tabs above the results to sort by severity or rule.")
+        return (
+            f"Current scan: <strong>{findings} findings</strong> in "
+            f"<code>{context.get('directory', 'unknown')}</code>. "
+            "Use the filter tabs above the results to sort by severity or rule."
+        )
 
     # Default
-    return ("I know about X-Ray's <strong>38 rules</strong>, <strong>7 auto-fixers</strong>, "
-            "<strong>19 tools</strong>, <strong>9 PM Dashboard features</strong>, <strong>grading</strong>, "
-            "and <strong>34+ API endpoints</strong>. "
-            "Try asking about any of those, or a specific rule like <code>SEC-003</code>!")
+    return (
+        "I know about X-Ray's <strong>38 rules</strong>, <strong>7 auto-fixers</strong>, "
+        "<strong>19 tools</strong>, <strong>9 PM Dashboard features</strong>, <strong>grading</strong>, "
+        "and <strong>34+ API endpoints</strong>. "
+        "Try asking about any of those, or a specific rule like <code>SEC-003</code>!"
+    )
 
 
 # ── HTTP Handler ─────────────────────────────────────────────────────────
+
 
 class XRayHandler(BaseHTTPRequestHandler):
     """Handle API requests and serve the UI."""
@@ -692,7 +837,7 @@ class XRayHandler(BaseHTTPRequestHandler):
         try:
             super().handle()
         except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
-            pass
+            logger.debug("Client connection lost during request")
 
     def _send_json(self, data: dict, status: int = 200):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -717,6 +862,7 @@ class XRayHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(content)
         except FileNotFoundError:
+            logger.debug("UI file not found: %s", self.path)
             self.send_error(404, "File not found")
 
     def _read_body(self) -> dict:
@@ -751,8 +897,8 @@ class XRayHandler(BaseHTTPRequestHandler):
         elif path == "/api/scan-result":
             if De_Bug:
                 has = _last_scan_result is not None
-                n = len(_last_scan_result.get('findings', [])) if has else 0
-                print(f"[De_Bug] GET /api/scan-result — has_result={has}, findings={n}")
+                n = len(_last_scan_result.get("findings", [])) if has else 0
+                logger.debug("GET /api/scan-result — has_result=%s, findings=%s", has, n)
             if _last_scan_result is not None:
                 self._send_json(_last_scan_result)
             else:
@@ -767,15 +913,26 @@ class XRayHandler(BaseHTTPRequestHandler):
         elif path == "/api/info":
             rust_bin = get_rust_binary()
             from xray.fixer import FIXABLE_RULES
-            self._send_json({
-                "platform": f"{platform.system()} {platform.machine()}",
-                "python": platform.python_version(),
-                "rust_available": rust_bin is not None,
-                "rust_binary": rust_bin,
-                "rules_count": len(__import__('xray.rules', fromlist=['ALL_RULES']).ALL_RULES),
-                "home": _fwd(str(Path.home())),
-                "fixable_rules": sorted(FIXABLE_RULES),
-            })
+
+            self._send_json(
+                {
+                    "platform": f"{platform.system()} {platform.machine()}",
+                    "python": platform.python_version(),
+                    "rust_available": rust_bin is not None,
+                    "rust_binary": rust_bin,
+                    "rules_count": len(__import__("xray.rules", fromlist=["ALL_RULES"]).ALL_RULES),
+                    "home": _fwd(str(Path.home())),
+                    "fixable_rules": sorted(FIXABLE_RULES),
+                }
+            )
+
+        elif path == "/api/wire-progress":
+            if _wire_test_progress is not None:
+                self._send_json(_wire_test_progress)
+            elif _wire_test_results is not None:
+                self._send_json({"status": "done", "results": _wire_test_results})
+            else:
+                self._send_json({"status": "idle"})
 
         else:
             self.send_error(404)
@@ -814,10 +971,10 @@ class XRayHandler(BaseHTTPRequestHandler):
             # Pre-count files
             total = _count_scannable_files(directory, excludes)
             if De_Bug:
-                print(f"[De_Bug] === SCAN START (async) ===")
-                print(f"[De_Bug] directory: {directory}")
-                print(f"[De_Bug] engine: {engine}, severity: {severity}")
-                print(f"[De_Bug] pre-count: {total} scannable files")
+                logger.debug("=== SCAN START (async) ===")
+                logger.debug("directory: %s", directory)
+                logger.debug("engine: %s, severity: %s", engine, severity)
+                logger.debug("pre-count: %s scannable files", total)
 
             # Start scan in background thread — return immediately
             _abort.clear()
@@ -833,18 +990,21 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/preview-fix":
             from xray.fixer import preview_fix
+
             body = self._read_body()
             result = preview_fix(body)
             self._send_json(result)
 
         elif path == "/api/apply-fix":
             from xray.fixer import apply_fix
+
             body = self._read_body()
             result = apply_fix(body)
             self._send_json(result)
 
         elif path == "/api/apply-fixes-bulk":
             from xray.fixer import apply_fixes_bulk
+
             body = self._read_body()
             findings = body.get("findings", [])
             result = apply_fixes_bulk(findings)
@@ -889,6 +1049,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/format":
             from analyzers import check_format
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -898,6 +1059,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/typecheck":
             from analyzers import check_types
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -907,6 +1069,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/health":
             from analyzers import check_project_health
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -916,6 +1079,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/bandit":
             from analyzers import run_bandit
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -925,6 +1089,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/dead-code":
             from analyzers import detect_dead_functions
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -934,6 +1099,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/smells":
             from analyzers import detect_code_smells
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -943,6 +1109,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/duplicates":
             from analyzers import detect_duplicates
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -952,6 +1119,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/temporal-coupling":
             from analyzers import analyze_temporal_coupling
+
             body = self._read_body()
             directory = body.get("directory", "")
             days = body.get("days", 90)
@@ -962,6 +1130,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/typecheck-pyright":
             from analyzers import run_typecheck
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -971,6 +1140,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/release-readiness":
             from analyzers import check_release_readiness
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -980,6 +1150,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/ai-detect":
             from analyzers import detect_ai_code
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -989,6 +1160,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/web-smells":
             from analyzers import detect_web_smells
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -996,8 +1168,19 @@ class XRayHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(detect_web_smells(str(Path(directory).resolve())))
 
+        elif path == "/api/connection-test":
+            from analyzers import analyze_connections
+
+            body = self._read_body()
+            directory = body.get("directory", "")
+            if not directory or not os.path.isdir(directory):
+                self._send_json({"error": f"Invalid directory: {directory}"}, 400)
+                return
+            self._send_json(analyze_connections(str(Path(directory).resolve())))
+
         elif path == "/api/test-gen":
             from analyzers import generate_test_stubs
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -1007,6 +1190,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/remediation-time":
             from analyzers import estimate_remediation_time
+
             body = self._read_body()
             findings = body.get("findings", [])
             self._send_json(estimate_remediation_time(findings))
@@ -1014,6 +1198,7 @@ class XRayHandler(BaseHTTPRequestHandler):
         # ── PM Dashboard endpoints ──────────────────────────────
         elif path == "/api/risk-heatmap":
             from analyzers import compute_risk_heatmap
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -1023,6 +1208,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/module-cards":
             from analyzers import compute_module_cards
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -1032,6 +1218,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/confidence":
             from analyzers import compute_confidence_meter
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -1041,11 +1228,13 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/sprint-batches":
             from analyzers import compute_sprint_batches
+
             body = self._read_body()
             self._send_json(compute_sprint_batches(body.get("findings"), body.get("smells")))
 
         elif path == "/api/architecture":
             from analyzers import compute_architecture_map
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -1055,6 +1244,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/call-graph":
             from analyzers import compute_call_graph
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -1073,25 +1263,29 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/project-review":
             from analyzers import compute_project_review
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
                 self._send_json({"error": f"Invalid directory: {directory}"}, 400)
                 return
-            self._send_json(compute_project_review(
-                str(Path(directory).resolve()),
-                findings=body.get("findings"),
-                summary=body.get("summary"),
-                files_scanned=body.get("files_scanned", 0),
-                smells=body.get("smells"),
-                dead_functions=body.get("dead_functions"),
-                health=body.get("health"),
-                satd=body.get("satd"),
-                duplicates=body.get("duplicates"),
-            ))
+            self._send_json(
+                compute_project_review(
+                    str(Path(directory).resolve()),
+                    findings=body.get("findings"),
+                    summary=body.get("summary"),
+                    files_scanned=body.get("files_scanned", 0),
+                    smells=body.get("smells"),
+                    dead_functions=body.get("dead_functions"),
+                    health=body.get("health"),
+                    satd=body.get("satd"),
+                    duplicates=body.get("duplicates"),
+                )
+            )
 
         elif path == "/api/circular-calls":
             from analyzers import detect_circular_calls
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -1101,6 +1295,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/coupling":
             from analyzers import compute_coupling_metrics
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -1110,6 +1305,7 @@ class XRayHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/unused-imports":
             from analyzers import detect_unused_imports
+
             body = self._read_body()
             directory = body.get("directory", "")
             if not directory or not os.path.isdir(directory):
@@ -1117,44 +1313,73 @@ class XRayHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(detect_unused_imports(str(Path(directory).resolve())))
 
+        elif path == "/api/wire-test":
+            body = self._read_body()
+            directory = body.get("directory", "")
+            if not directory or not os.path.isdir(directory):
+                self._send_json({"error": f"Invalid directory: {directory}"}, 400)
+                return
+
+            global _wire_test_thread, _wire_test_results, _wire_test_progress
+            _wire_test_results = None
+            _wire_test_progress = {"status": "starting", "step": 0, "total": 0}
+
+            host = self.server.server_address[0]
+            port = self.server.server_address[1]
+            base_url = f"http://{host}:{port}"
+
+            _wire_test_thread = threading.Thread(
+                target=_execute_wire_test, args=(str(Path(directory).resolve()), base_url), daemon=True
+            )
+            _wire_test_thread.start()
+            self._send_json({"status": "started"})
+
         else:
             self.send_error(404)
 
 
 # ── Main ─────────────────────────────────────────────────────────────────
 
+
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
     parser = argparse.ArgumentParser(description="X-Ray Scanner Web UI")
-    parser.add_argument("--port", "-p", type=int, default=8077,
-                        help="Port to listen on (default: 8077)")
-    parser.add_argument("--host", type=str, default="127.0.0.1",
-                        help="Host to bind to (default: 127.0.0.1)")
+    parser.add_argument("--port", "-p", type=int, default=8077, help="Port to listen on (default: 8077)")
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
     args = parser.parse_args()
 
     _load_guide()  # Load knowledge base for chat bot
 
-    ServerClass = type('ThreadedHTTPServer', (ThreadingMixIn, HTTPServer), {
-        'daemon_threads': True,
-        'allow_reuse_address': True,
-    })
+    ServerClass = type(
+        "ThreadedHTTPServer",
+        (ThreadingMixIn, HTTPServer),
+        {
+            "daemon_threads": True,
+            "allow_reuse_address": True,
+        },
+    )
     try:
         server = ServerClass((args.host, args.port), XRayHandler)
     except OSError as e:
-        print(f"\n  ERROR: Cannot bind to {args.host}:{args.port} — {e}")
-        print(f"  Another instance is likely already running on that port.")
-        print(f"  Kill it first or use: python ui_server.py --port {args.port + 1}")
-        sys.exit(1)
+        logger.error("Cannot bind to %s:%s — %s", args.host, args.port, e)
+        logger.error("Another instance is likely already running on that port.")
+        logger.error("Kill it first or use: python ui_server.py --port %s", args.port + 1)
+        raise SystemExit(1)
 
     rust_status = "available" if get_rust_binary() else "not built"
-    print(f"X-Ray Scanner UI: http://{args.host}:{args.port}")
-    print(f"  Python scanner: ready")
-    print(f"  Rust scanner:   {rust_status}")
-    print(f"  Press Ctrl+C to stop")
+    logger.info("X-Ray Scanner UI: http://%s:%s", args.host, args.port)
+    logger.info("  Python scanner: ready")
+    logger.info("  Rust scanner:   %s", rust_status)
+    logger.info("  Press Ctrl+C to stop")
 
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down.")
+        logger.info("Shutting down.")
         server.server_close()
 
 

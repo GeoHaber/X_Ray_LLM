@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find C:/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM/docs -name *.md -type f)",
+      "Bash(python -m ruff check analyzers.py tests/test_connection_analyzer.py tests/test_monkey.py ui_server.py)",
+      "Bash(python -m ruff format --check analyzers.py tests/test_connection_analyzer.py tests/test_monkey.py ui_server.py)",
+      "Bash(python -m ruff format analyzers.py tests/test_connection_analyzer.py tests/test_monkey.py ui_server.py)",
+      "Bash(python -m pytest tests/test_connection_analyzer.py -v --tb=short)",
+      "Bash(python -m pytest tests/test_xray.py tests/test_verify.py tests/test_ui_paths.py -v --tb=short)",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -c \":*)",
+      "Bash(cd /d C:UsersdvdzeDocumentsGitHubGeorgeHaberX_Ray_LLM)",
+      "Bash(python x_ray_claude.py --full-scan --path . --report x_ray_report.json)",
+      "Bash(ls C:/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM/*.py)",
+      "Bash(python -m xray.runner --help)",
+      "Bash(ruff check:*)",
+      "Bash(ruff format:*)",
+      "Bash(python -m pytest tests/ -q --tb=short)",
+      "Bash(curl -s http://localhost:9111/)"
+    ]
+  }
+}

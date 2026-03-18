@@ -10,10 +10,8 @@ Covers:
   6. Real filesystem paths on current OS
 """
 
-import json
 import os
 import platform
-import re
 import sys
 import tempfile
 from pathlib import Path
@@ -23,7 +21,6 @@ import pytest
 # Import from our codebase
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from ui_server import _fwd, browse_directory, get_drives
-
 
 # ══════════════════════════════════════════════════════════════════════════
 # 1. _fwd() — backslash normalization

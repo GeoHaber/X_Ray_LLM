@@ -7,7 +7,7 @@ builds the Rust binary, runs tests, and optionally cross-validates against
 the Python scanner.
 
 Usage:
-  python build.py                  # full build: generate → test → release
+  python build.py                  # full build: generate -> test -> release
   python build.py --test-only      # just cargo test
   python build.py --validate       # build + cross-validate vs Python scanner
   python build.py --target linux   # cross-compile for Linux (if toolchain installed)
@@ -17,6 +17,7 @@ Usage:
 
 import argparse
 import json
+import logging
 import os
 import platform
 import shutil
@@ -24,40 +25,42 @@ import subprocess
 import sys
 import time
 
-# ── OS / Architecture Detection ───────────────────────────────────────────
+logger = logging.getLogger(__name__)
 
-# Map (system, machine) → Rust target triple
+# -- OS / Architecture Detection -------------------------------------------
+
+# Map (system, machine) -> Rust target triple
 TARGET_MAP = {
     # Windows
-    ("Windows", "AMD64"):    "x86_64-pc-windows-msvc",
-    ("Windows", "x86_64"):   "x86_64-pc-windows-msvc",
-    ("Windows", "ARM64"):    "aarch64-pc-windows-msvc",
+    ("Windows", "AMD64"): "x86_64-pc-windows-msvc",
+    ("Windows", "x86_64"): "x86_64-pc-windows-msvc",
+    ("Windows", "ARM64"): "aarch64-pc-windows-msvc",
     # Linux
-    ("Linux", "x86_64"):     "x86_64-unknown-linux-gnu",
-    ("Linux", "aarch64"):    "aarch64-unknown-linux-gnu",
-    ("Linux", "armv7l"):     "armv7-unknown-linux-gnueabihf",
+    ("Linux", "x86_64"): "x86_64-unknown-linux-gnu",
+    ("Linux", "aarch64"): "aarch64-unknown-linux-gnu",
+    ("Linux", "armv7l"): "armv7-unknown-linux-gnueabihf",
     # macOS
-    ("Darwin", "x86_64"):    "x86_64-apple-darwin",
-    ("Darwin", "arm64"):     "aarch64-apple-darwin",
-    ("Darwin", "aarch64"):   "aarch64-apple-darwin",
+    ("Darwin", "x86_64"): "x86_64-apple-darwin",
+    ("Darwin", "arm64"): "aarch64-apple-darwin",
+    ("Darwin", "aarch64"): "aarch64-apple-darwin",
 }
 
 # Friendly names for cross-compile aliases
 CROSS_ALIASES = {
-    "windows":       "x86_64-pc-windows-msvc",
-    "windows-arm":   "aarch64-pc-windows-msvc",
-    "linux":         "x86_64-unknown-linux-gnu",
-    "linux-arm":     "aarch64-unknown-linux-gnu",
-    "macos":         "x86_64-apple-darwin",
-    "macos-arm":     "aarch64-apple-darwin",
+    "windows": "x86_64-pc-windows-msvc",
+    "windows-arm": "aarch64-pc-windows-msvc",
+    "linux": "x86_64-unknown-linux-gnu",
+    "linux-arm": "aarch64-unknown-linux-gnu",
+    "macos": "x86_64-apple-darwin",
+    "macos-arm": "aarch64-apple-darwin",
     "apple-silicon": "aarch64-apple-darwin",
 }
 
 # Binary name per OS
 BINARY_NAME = {
     "Windows": "xray-scanner.exe",
-    "Linux":   "xray-scanner",
-    "Darwin":  "xray-scanner",
+    "Linux": "xray-scanner",
+    "Darwin": "xray-scanner",
 }
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -71,8 +74,7 @@ def detect_target() -> str:
     target = TARGET_MAP.get((system, machine))
     if not target:
         # Fallback: try just the system with common arch
-        print(f"WARNING: Unknown platform ({system}/{machine}), trying default x86_64",
-              file=sys.stderr)
+        logger.warning("Unknown platform (%s/%s), trying default x86_64", system, machine)
         fallback = {
             "Windows": "x86_64-pc-windows-msvc",
             "Linux": "x86_64-unknown-linux-gnu",
@@ -80,8 +82,8 @@ def detect_target() -> str:
         }
         target = fallback.get(system)
         if not target:
-            print(f"ERROR: Unsupported OS: {system}", file=sys.stderr)
-            sys.exit(1)
+            logger.error("Unsupported OS: %s", system)
+            raise SystemExit(1)
     return target
 
 
@@ -107,181 +109,200 @@ def get_binary_path(target: str) -> str:
 
 def show_info(target: str):
     """Display detected platform and build info."""
-    print("=" * 60)
-    print("X-Ray Scanner — Build Info")
-    print("=" * 60)
-    print(f"  OS:           {platform.system()} {platform.release()}")
-    print(f"  Architecture: {platform.machine()}")
-    print(f"  Python:       {platform.python_version()}")
-    print(f"  Rust target:  {target}")
-    print(f"  Binary:       {get_binary_path(target)}")
-    print(f"  Scanner dir:  {SCANNER_DIR}")
+    logger.info("=" * 60)
+    logger.info("X-Ray Scanner — Build Info")
+    logger.info("=" * 60)
+    logger.info("  OS:           %s %s", platform.system(), platform.release())
+    logger.info("  Architecture: %s", platform.machine())
+    logger.info("  Python:       %s", platform.python_version())
+    logger.info("  Rust target:  %s", target)
+    logger.info("  Binary:       %s", get_binary_path(target))
+    logger.info("  Scanner dir:  %s", SCANNER_DIR)
 
     # Check Rust toolchain
     rustc = shutil.which("rustc")
     cargo = shutil.which("cargo")
-    print(f"  rustc:        {rustc or 'NOT FOUND'}")
-    print(f"  cargo:        {cargo or 'NOT FOUND'}")
+    logger.info("  rustc:        %s", rustc or "NOT FOUND")
+    logger.info("  cargo:        %s", cargo or "NOT FOUND")
 
     if rustc:
         result = subprocess.run(["rustc", "--version"], capture_output=True, text=True)
-        print(f"  rustc ver:    {result.stdout.strip()}")
+        logger.info("  rustc ver:    %s", result.stdout.strip())
 
     # Check if target is installed
-    result = subprocess.run(["rustup", "target", "list", "--installed"],
-                            capture_output=True, text=True)
+    result = subprocess.run(
+        ["rustup", "target", "list", "--installed"],
+        capture_output=True,
+        text=True,
+    )
     installed = result.stdout.strip().split("\n") if result.returncode == 0 else []
     if target in installed:
-        print(f"  Target:       INSTALLED")
+        logger.info("  Target:       INSTALLED")
     else:
-        print(f"  Target:       NOT INSTALLED (run: rustup target add {target})")
+        logger.info("  Target:       NOT INSTALLED (run: rustup target add %s)", target)
 
-    print("=" * 60)
+    logger.info("=" * 60)
 
 
 def ensure_target_installed(target: str):
     """Ensure the Rust target triple is installed via rustup."""
-    result = subprocess.run(["rustup", "target", "list", "--installed"],
-                            capture_output=True, text=True)
+    result = subprocess.run(
+        ["rustup", "target", "list", "--installed"],
+        capture_output=True,
+        text=True,
+    )
     if result.returncode != 0:
-        print("WARNING: Could not query rustup targets", file=sys.stderr)
+        logger.warning("Could not query rustup targets")
         return
 
     installed = result.stdout.strip().split("\n")
     if target not in installed:
-        print(f"Installing Rust target: {target}")
+        logger.info("Installing Rust target: %s", target)
         result = subprocess.run(["rustup", "target", "add", target])
         if result.returncode != 0:
-            print(f"ERROR: Failed to install target {target}", file=sys.stderr)
-            sys.exit(1)
+            logger.error("Failed to install target %s", target)
+            raise SystemExit(1)
 
 
 def run_cmd(args: list[str], label: str, cwd: str | None = None) -> subprocess.CompletedProcess:
     """Run a command with progress reporting."""
-    print(f"\n{'─' * 60}")
-    print(f"  {label}")
-    print(f"  $ {' '.join(args)}")
-    print(f"{'─' * 60}")
+    logger.info("\n%s", "\u2500" * 60)
+    logger.info("  %s", label)
+    logger.info("  $ %s", " ".join(args))
+    logger.info("%s", "\u2500" * 60)
     start = time.perf_counter()
     result = subprocess.run(args, cwd=cwd or SCANNER_DIR)
     elapsed = time.perf_counter() - start
     status = "OK" if result.returncode == 0 else f"FAILED (exit {result.returncode})"
-    print(f"  [{status}] {elapsed:.1f}s")
+    logger.info("  [%s] %.1fs", status, elapsed)
     return result
 
 
-# ── Build Steps ───────────────────────────────────────────────────────────
+# -- Build Steps -----------------------------------------------------------
+
 
 def step_generate_rules():
     """Step 1: Generate Rust rules from Python source of truth."""
-    print("\n[1/4] Generating Rust rules from Python...")
+    logger.info("\n[1/4] Generating Rust rules from Python...")
     gen_script = os.path.join(ROOT, "generate_rust_rules.py")
     result = subprocess.run([sys.executable, gen_script], cwd=ROOT)
     if result.returncode != 0:
-        print("ERROR: Rule generation failed", file=sys.stderr)
-        sys.exit(1)
+        logger.error("Rule generation failed")
+        raise SystemExit(1)
 
 
 def step_test(target: str):
     """Step 2: Run cargo test."""
     result = run_cmd(
         ["cargo", "test", "--target", target],
-        f"Running tests (target: {target})"
+        f"Running tests (target: {target})",
     )
     if result.returncode != 0:
-        print("ERROR: Tests failed — fix before building release", file=sys.stderr)
-        sys.exit(1)
+        logger.error("Tests failed -- fix before building release")
+        raise SystemExit(1)
 
 
 def step_build_release(target: str):
     """Step 3: Build release binary."""
     result = run_cmd(
         ["cargo", "build", "--release", "--target", target],
-        f"Building release (target: {target})"
+        f"Building release (target: {target})",
     )
     if result.returncode != 0:
-        print("ERROR: Release build failed", file=sys.stderr)
-        sys.exit(1)
+        logger.error("Release build failed")
+        raise SystemExit(1)
 
     binary = get_binary_path(target)
     if os.path.exists(binary):
         size_mb = os.path.getsize(binary) / (1024 * 1024)
-        print(f"\n  Binary: {binary}")
-        print(f"  Size:   {size_mb:.1f} MB")
+        logger.info("\n  Binary: %s", binary)
+        logger.info("  Size:   %.1f MB", size_mb)
     else:
-        print(f"WARNING: Expected binary not found at {binary}", file=sys.stderr)
+        logger.warning("Expected binary not found at %s", binary)
 
 
 def step_cross_validate(target: str, scan_path: str):
     """Step 4: Cross-validate Rust binary vs Python scanner."""
     binary = get_binary_path(target)
     if not os.path.exists(binary):
-        print("ERROR: Binary not found — build first", file=sys.stderr)
-        sys.exit(1)
+        logger.error("Binary not found -- build first")
+        raise SystemExit(1)
 
     # Check that the target matches the current OS (can't run cross-compiled binaries)
     current_os = platform.system()
     if "windows" in target and current_os != "Windows":
-        print("SKIP: Can't run Windows binary on non-Windows OS")
+        logger.info("SKIP: Can't run Windows binary on non-Windows OS")
         return
     if "linux" in target and current_os != "Linux":
-        print("SKIP: Can't run Linux binary on non-Linux OS")
+        logger.info("SKIP: Can't run Linux binary on non-Linux OS")
         return
     if "darwin" in target and current_os != "Darwin":
-        print("SKIP: Can't run macOS binary on non-macOS OS")
+        logger.info("SKIP: Can't run macOS binary on non-macOS OS")
         return
 
     scan_path = os.path.abspath(scan_path)
     if not os.path.isdir(scan_path):
-        print(f"ERROR: Scan path not found: {scan_path}", file=sys.stderr)
-        sys.exit(1)
+        logger.error("Scan path not found: %s", scan_path)
+        raise SystemExit(1)
 
-    print(f"\n[4/4] Cross-validating against Python scanner...")
-    print(f"  Scanning: {scan_path}")
+    logger.info("\n[4/4] Cross-validating against Python scanner...")
+    logger.info("  Scanning: %s", scan_path)
 
-    # ── Python scan ──
+    # -- Python scan --
     sys.path.insert(0, ROOT)
     from xray.scanner import scan_project
+
     start = time.perf_counter()
     py_result = scan_project(scan_path)
     py_ms = round((time.perf_counter() - start) * 1000, 1)
 
-    py_by_rule = {}
+    py_by_rule: dict[str, int] = {}
     for f in py_result.findings:
         py_by_rule[f.rule_id] = py_by_rule.get(f.rule_id, 0) + 1
 
-    # ── Rust scan ──
+    # -- Rust scan --
     start = time.perf_counter()
     proc = subprocess.run(
         [binary, scan_path, "--severity", "LOW", "--json"],
-        capture_output=True, text=True
+        capture_output=True,
+        text=True,
     )
     rust_ms = round((time.perf_counter() - start) * 1000, 1)
 
     if proc.returncode != 0:
-        print(f"ERROR: Rust scanner failed:\n{proc.stderr}", file=sys.stderr)
-        sys.exit(1)
+        logger.error("Rust scanner failed:\n%s", proc.stderr)
+        raise SystemExit(1)
 
     try:
         rust_data = json.loads(proc.stdout)
     except json.JSONDecodeError as e:
-        print(f"ERROR: Failed to parse Rust scanner output: {e}", file=sys.stderr)
-        sys.exit(1)
+        logger.error("Failed to parse Rust scanner output: %s", e)
+        raise SystemExit(1)
 
-    rust_by_rule = {}
+    rust_by_rule: dict[str, int] = {}
     for finding in rust_data["findings"]:
         rust_by_rule[finding["rule_id"]] = rust_by_rule.get(finding["rule_id"], 0) + 1
 
-    # ── Compare ──
-    print("\n" + "=" * 60)
-    print("CROSS-VALIDATION: Python vs Rust")
-    print("=" * 60)
-    print(f"  Python: {py_result.files_scanned} files, {len(py_result.findings)} findings  ({py_ms} ms)")
+    # -- Compare --
+    logger.info("\n%s", "=" * 60)
+    logger.info("CROSS-VALIDATION: Python vs Rust")
+    logger.info("=" * 60)
+    logger.info(
+        "  Python: %d files, %d findings  (%s ms)",
+        py_result.files_scanned,
+        len(py_result.findings),
+        py_ms,
+    )
     rust_total = rust_data["summary"]["total"]
-    print(f"  Rust:   {rust_data['files_scanned']} files, {rust_total} findings  ({rust_ms} ms)")
+    logger.info(
+        "  Rust:   %d files, %d findings  (%s ms)",
+        rust_data["files_scanned"],
+        rust_total,
+        rust_ms,
+    )
     if rust_ms > 0:
-        print(f"  Speedup: {py_ms / rust_ms:.1f}x")
-    print()
+        logger.info("  Speedup: %.1fx", py_ms / rust_ms)
+    logger.info("")
 
     all_rules = sorted(set(list(py_by_rule.keys()) + list(rust_by_rule.keys())))
     mismatches = 0
@@ -291,21 +312,25 @@ def step_cross_validate(target: str, scan_path: str):
         match = "OK" if pc == rc else "MISMATCH"
         if pc != rc:
             mismatches += 1
-        print(f"  {rid:12s}  Python={pc:3d}  Rust={rc:3d}  {match}")
+        logger.info("  %12s  Python=%3d  Rust=%3d  %s", rid, pc, rc, match)
 
-    print()
+    logger.info("")
     if mismatches == 0:
-        print("RESULT: PERFECT PARITY — all rule counts match!")
+        logger.info("RESULT: PERFECT PARITY -- all rule counts match!")
     else:
-        print(f"RESULT: {mismatches} MISMATCHES found")
-        sys.exit(1)
+        logger.error("RESULT: %d MISMATCHES found", mismatches)
+        raise SystemExit(1)
 
 
-# ── Main ──────────────────────────────────────────────────────────────────
+# -- Main ------------------------------------------------------------------
+
 
 def main():
+    """Entry point for the build script."""
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     parser = argparse.ArgumentParser(
-        description="Build X-Ray Rust scanner — auto-detects OS + architecture",
+        description="Build X-Ray Rust scanner -- auto-detects OS + architecture",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Target aliases (--target):
@@ -319,21 +344,35 @@ Target aliases (--target):
 
 Or pass a full Rust target triple directly.
 If omitted, auto-detects from current OS + architecture.
-"""
+""",
     )
-    parser.add_argument("--target", "-t", type=str, default=None,
-                        help="Rust target triple or alias (default: auto-detect)")
-    parser.add_argument("--info", action="store_true",
-                        help="Show platform info and exit")
-    parser.add_argument("--test-only", action="store_true",
-                        help="Only run cargo test")
-    parser.add_argument("--release-only", action="store_true",
-                        help="Skip tests, only build release")
-    parser.add_argument("--validate", type=str, nargs="?", const="../Swarm",
-                        metavar="PATH",
-                        help="Cross-validate vs Python scanner on PATH (default: ../Swarm)")
-    parser.add_argument("--skip-generate", action="store_true",
-                        help="Skip rule generation (use existing mod.rs)")
+    parser.add_argument(
+        "--target",
+        "-t",
+        type=str,
+        default=None,
+        help="Rust target triple or alias (default: auto-detect)",
+    )
+    parser.add_argument("--info", action="store_true", help="Show platform info and exit")
+    parser.add_argument("--test-only", action="store_true", help="Only run cargo test")
+    parser.add_argument(
+        "--release-only",
+        action="store_true",
+        help="Skip tests, only build release",
+    )
+    parser.add_argument(
+        "--validate",
+        type=str,
+        nargs="?",
+        const="../Swarm",
+        metavar="PATH",
+        help="Cross-validate vs Python scanner on PATH (default: ../Swarm)",
+    )
+    parser.add_argument(
+        "--skip-generate",
+        action="store_true",
+        help="Skip rule generation (use existing mod.rs)",
+    )
 
     args = parser.parse_args()
     target = resolve_target(args.target)
@@ -342,10 +381,10 @@ If omitted, auto-detects from current OS + architecture.
         show_info(target)
         return
 
-    print("=" * 60)
-    print(f"X-Ray Scanner Build — {platform.system()} {platform.machine()}")
-    print(f"Target: {target}")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("X-Ray Scanner Build -- %s %s", platform.system(), platform.machine())
+    logger.info("Target: %s", target)
+    logger.info("=" * 60)
 
     # Ensure target is installed
     ensure_target_installed(target)
@@ -354,15 +393,15 @@ If omitted, auto-detects from current OS + architecture.
     if not args.skip_generate:
         step_generate_rules()
     else:
-        print("\n[1/4] Skipping rule generation (--skip-generate)")
+        logger.info("\n[1/4] Skipping rule generation (--skip-generate)")
 
     # Step 2: Test
     if args.release_only:
-        print("\n[2/4] Skipping tests (--release-only)")
+        logger.info("\n[2/4] Skipping tests (--release-only)")
     else:
         step_test(target)
         if args.test_only:
-            print("\nDone (test-only mode).")
+            logger.info("\nDone (test-only mode).")
             return
 
     # Step 3: Build release
@@ -372,7 +411,7 @@ If omitted, auto-detects from current OS + architecture.
     if args.validate is not None:
         step_cross_validate(target, args.validate)
 
-    print("\nBuild complete!")
+    logger.info("\nBuild complete!")
 
 
 if __name__ == "__main__":

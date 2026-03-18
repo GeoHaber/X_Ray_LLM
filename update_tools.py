@@ -5,27 +5,30 @@ Usage:
     python update_tools.py          # update all three
     python update_tools.py --check  # show current versions only
 """
+import logging
 import subprocess
 import sys
 
+logger = logging.getLogger(__name__)
+
 
 def run(cmd: list[str], label: str) -> bool:
-    print(f"\n{'='*50}")
-    print(f"  {label}")
-    print(f"{'='*50}")
+    logger.info("=" * 50)
+    logger.info("  %s", label)
+    logger.info("=" * 50)
     try:
         result = subprocess.run(cmd, timeout=120)
         return result.returncode == 0
     except FileNotFoundError:
-        print(f"  [ERROR] {cmd[0]!r} not found on PATH.")
+        logger.error("  %r not found on PATH.", cmd[0])
         return False
     except subprocess.TimeoutExpired:
-        print(f"  [ERROR] {label} timed out.")
+        logger.error("  %s timed out.", label)
         return False
 
 
 def show_versions():
-    print("\nInstalled versions:")
+    logger.info("Installed versions:")
     for cmd, name in [
         (["uv", "--version"], "uv"),
         (["ruff", "--version"], "ruff"),
@@ -34,11 +37,11 @@ def show_versions():
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             ver = r.stdout.strip() or r.stderr.strip()
-            print(f"  {name}: {ver}")
+            logger.info("  %s: %s", name, ver)
         except FileNotFoundError:
-            print(f"  {name}: not installed")
+            logger.warning("  %s: not installed", name)
         except subprocess.TimeoutExpired:
-            print(f"  {name}: timed out")
+            logger.warning("  %s: timed out", name)
 
 
 def main():
@@ -59,10 +62,10 @@ def main():
     show_versions()
 
     if ok:
-        print("\n✓ All tools updated successfully.")
+        logger.info("All tools updated successfully.")
     else:
-        print("\n⚠ Some updates failed — see errors above.")
-        sys.exit(1)
+        logger.warning("Some updates failed — see errors above.")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

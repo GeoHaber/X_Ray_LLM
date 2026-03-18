@@ -10,6 +10,7 @@ AI code detection, web smells, and test generation stubs.
 import ast
 import hashlib
 import json
+import logging
 import math
 import os
 import re
@@ -18,13 +19,47 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 # ── Shared constants ──────────────────────────────────────────────
-_SKIP_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules", ".tox",
-              "build", "dist", "_rustified", ".mypy_cache", ".pytest_cache",
-              "target", ".ruff_cache", "egg-info", ".eggs", "site-packages"}
+_SKIP_DIRS = {
+    "__pycache__",
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    ".tox",
+    "build",
+    "dist",
+    "_rustified",
+    ".mypy_cache",
+    ".pytest_cache",
+    "target",
+    ".ruff_cache",
+    "egg-info",
+    ".eggs",
+    "site-packages",
+}
 
 _PY_EXTS = {".py"}
-_TEXT_EXTS = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".c", ".cpp", ".h",
-              ".cs", ".go", ".rb", ".rs", ".sh", ".bat", ".yaml", ".yml", ".toml", ".md"}
+_TEXT_EXTS = {
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".cs",
+    ".go",
+    ".rb",
+    ".rs",
+    ".sh",
+    ".bat",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".md",
+}
 _WEB_EXTS = {".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".vue", ".svelte"}
 
 
@@ -58,7 +93,7 @@ def _fwd(path: str) -> str:
 def _safe_parse(fpath: str):
     """Parse a Python file into AST, return None on failure."""
     try:
-        with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(fpath, encoding="utf-8", errors="ignore") as f:
             return ast.parse(f.read(), filename=fpath)
     except (SyntaxError, ValueError, RecursionError):
         return None
@@ -68,12 +103,15 @@ def _safe_parse(fpath: str):
 # Phase 1: Quick Wins
 # ═══════════════════════════════════════════════════════════════════
 
+
 def check_format(directory: str) -> dict:
     """Run ruff format --check to find files needing reformatting."""
     try:
         result = subprocess.run(
             ["ruff", "format", "--check", directory],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     except FileNotFoundError:
         return {"error": "ruff not found. Install: uv tool install ruff"}
@@ -104,7 +142,9 @@ def check_types(directory: str) -> dict:
     try:
         result = subprocess.run(
             ["ty", "check", "--output-format", "concise", directory],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
     except FileNotFoundError:
         return {"error": "ty not found. Install: uv tool install ty"}
@@ -164,24 +204,43 @@ def check_project_health(directory: str) -> dict:
         for pat in patterns:
             target = os.path.join(directory, pat)
             if os.path.exists(target):
-                checks.append({"name": name, "status": "pass", "file": pat, "description": description, "severity": severity})
+                checks.append(
+                    {"name": name, "status": "pass", "file": pat, "description": description, "severity": severity}
+                )
                 return
-        checks.append({"name": name, "status": "fail", "file": patterns[0], "description": description, "severity": severity})
+        checks.append(
+            {"name": name, "status": "fail", "file": patterns[0], "description": description, "severity": severity}
+        )
 
     _check("README", ["README.md", "README.rst", "README.txt", "README"], "Project documentation", "HIGH")
     _check("LICENSE", ["LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE", "COPYING"], "License file", "MEDIUM")
     _check(".gitignore", [".gitignore"], "Git ignore rules", "MEDIUM")
-    _check("Requirements", ["requirements.txt", "pyproject.toml", "setup.py", "setup.cfg", "Pipfile", "poetry.lock", "uv.lock"],
-           "Dependency specification", "HIGH")
-    _check("CI Config", [".github/workflows", ".gitlab-ci.yml", "Jenkinsfile", ".circleci", ".travis.yml", "azure-pipelines.yml"],
-           "CI/CD configuration", "LOW")
+    _check(
+        "Requirements",
+        ["requirements.txt", "pyproject.toml", "setup.py", "setup.cfg", "Pipfile", "poetry.lock", "uv.lock"],
+        "Dependency specification",
+        "HIGH",
+    )
+    _check(
+        "CI Config",
+        [".github/workflows", ".gitlab-ci.yml", "Jenkinsfile", ".circleci", ".travis.yml", "azure-pipelines.yml"],
+        "CI/CD configuration",
+        "LOW",
+    )
     _check("Tests", ["tests", "test", "tests.py", "test.py"], "Test directory or file", "HIGH")
-    _check("Type Hints", ["py.typed", "pyproject.toml", "mypy.ini", ".mypy.ini", "pyrightconfig.json"],
-           "Type checking configuration", "LOW")
-    _check("Linter Config", [".ruff.toml", "ruff.toml", "pyproject.toml", ".flake8", ".pylintrc", "tox.ini"],
-           "Linter configuration", "LOW")
-    _check("Changelog", ["CHANGELOG.md", "CHANGELOG.rst", "CHANGES.md", "HISTORY.md"],
-           "Change log", "LOW")
+    _check(
+        "Type Hints",
+        ["py.typed", "pyproject.toml", "mypy.ini", ".mypy.ini", "pyrightconfig.json"],
+        "Type checking configuration",
+        "LOW",
+    )
+    _check(
+        "Linter Config",
+        [".ruff.toml", "ruff.toml", "pyproject.toml", ".flake8", ".pylintrc", "tox.ini"],
+        "Linter configuration",
+        "LOW",
+    )
+    _check("Changelog", ["CHANGELOG.md", "CHANGELOG.rst", "CHANGES.md", "HISTORY.md"], "Change log", "LOW")
     _check("Editor Config", [".editorconfig"], "Editor configuration", "LOW")
 
     passed = sum(1 for c in checks if c["status"] == "pass")
@@ -202,6 +261,7 @@ _TIME_ESTIMATES = {
     "QUAL-": {"label": "~5 min", "minutes": 5},
     "PY-": {"label": "~10 min", "minutes": 10},
 }
+
 
 def estimate_remediation_time(findings: list) -> dict:
     """Estimate remediation time per finding based on rule category."""
@@ -228,6 +288,7 @@ def estimate_remediation_time(findings: list) -> dict:
 # Phase 2: Core Feature Parity
 # ═══════════════════════════════════════════════════════════════════
 
+
 def run_bandit(directory: str) -> dict:
     """Run Bandit security scanner + AST-based secret detection."""
     bandit_issues = []
@@ -237,25 +298,29 @@ def run_bandit(directory: str) -> dict:
     try:
         result = subprocess.run(
             ["bandit", "-r", "-f", "json", "-q", directory],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if result.stdout.strip():
             data = json.loads(result.stdout)
             for issue in data.get("results", []):
-                bandit_issues.append({
-                    "file": _fwd(issue.get("filename", "")),
-                    "line": issue.get("line_number", 0),
-                    "severity": issue.get("issue_severity", "MEDIUM").upper(),
-                    "confidence": issue.get("issue_confidence", "MEDIUM").upper(),
-                    "rule_id": issue.get("test_id", ""),
-                    "rule_name": issue.get("test_name", ""),
-                    "description": issue.get("issue_text", ""),
-                    "cwe": issue.get("issue_cwe", {}).get("id", ""),
-                })
+                bandit_issues.append(
+                    {
+                        "file": _fwd(issue.get("filename", "")),
+                        "line": issue.get("line_number", 0),
+                        "severity": issue.get("issue_severity", "MEDIUM").upper(),
+                        "confidence": issue.get("issue_confidence", "MEDIUM").upper(),
+                        "rule_id": issue.get("test_id", ""),
+                        "rule_name": issue.get("test_name", ""),
+                        "description": issue.get("issue_text", ""),
+                        "cwe": issue.get("issue_cwe", {}).get("id", ""),
+                    }
+                )
     except FileNotFoundError:
-        pass  # bandit not installed, continue with secret detection
-    except (subprocess.TimeoutExpired, json.JSONDecodeError):
-        pass
+        logging.debug("Skipped bandit analysis: bandit not installed")
+    except (subprocess.TimeoutExpired, json.JSONDecodeError) as e:
+        logging.debug("Skipped bandit analysis: %s", e)
 
     # AST-based secret detection
     _API_KEY_PATTERNS = [
@@ -280,23 +345,26 @@ def run_bandit(directory: str) -> dict:
 
     for fpath, rel in _walk_py(directory):
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(fpath, encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-        except OSError:
+        except OSError as e:
+            logging.debug("Skipped secret scan for %s: %s", fpath, e)
             continue
 
         for lineno, line in enumerate(content.split("\n"), 1):
             # Check API key patterns
             for pat, rule_id, desc in _API_KEY_PATTERNS:
                 if pat.search(line):
-                    secrets.append({
-                        "file": _fwd(rel),
-                        "line": lineno,
-                        "severity": "HIGH",
-                        "rule_id": rule_id,
-                        "description": desc,
-                        "matched": line.strip()[:100],
-                    })
+                    secrets.append(
+                        {
+                            "file": _fwd(rel),
+                            "line": lineno,
+                            "severity": "HIGH",
+                            "rule_id": rule_id,
+                            "description": desc,
+                            "matched": line.strip()[:100],
+                        }
+                    )
                     break
 
             # Check suspicious variable assignments
@@ -308,14 +376,16 @@ def run_bandit(directory: str) -> dict:
                     if assign_match:
                         value = assign_match.group(1)
                         if _entropy(value) > 4.0:
-                            secrets.append({
-                                "file": _fwd(rel),
-                                "line": lineno,
-                                "severity": "HIGH",
-                                "rule_id": "XS002",
-                                "description": f"Possible hardcoded secret in '{m.group(1)}'",
-                                "matched": line.strip()[:100],
-                            })
+                            secrets.append(
+                                {
+                                    "file": _fwd(rel),
+                                    "line": lineno,
+                                    "severity": "HIGH",
+                                    "rule_id": "XS002",
+                                    "description": f"Possible hardcoded secret in '{m.group(1)}'",
+                                    "matched": line.strip()[:100],
+                                }
+                            )
 
     return {
         "bandit_available": len(bandit_issues) > 0 or True,
@@ -327,13 +397,38 @@ def run_bandit(directory: str) -> dict:
 
 def detect_dead_functions(directory: str) -> dict:
     """Detect potentially dead (uncalled) functions across a Python project."""
-    defined = {}   # name -> {file, line, lines_count}
+    defined = {}  # name -> {file, line, lines_count}
     called = set()
-    _EXEMPT = {"main", "setUp", "tearDown", "setUpClass", "tearDownClass",
-               "setUpModule", "tearDownModule", "__init__", "__enter__", "__exit__",
-               "__str__", "__repr__", "__len__", "__iter__", "__next__", "__getitem__",
-               "__setitem__", "__delitem__", "__contains__", "__eq__", "__hash__",
-               "__lt__", "__le__", "__gt__", "__ge__", "__add__", "__sub__", "__bool__"}
+    _EXEMPT = {
+        "main",
+        "setUp",
+        "tearDown",
+        "setUpClass",
+        "tearDownClass",
+        "setUpModule",
+        "tearDownModule",
+        "__init__",
+        "__enter__",
+        "__exit__",
+        "__str__",
+        "__repr__",
+        "__len__",
+        "__iter__",
+        "__next__",
+        "__getitem__",
+        "__setitem__",
+        "__delitem__",
+        "__contains__",
+        "__eq__",
+        "__hash__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+        "__add__",
+        "__sub__",
+        "__bool__",
+    }
     _EXEMPT_PREFIXES = ("test_", "on_", "handle_", "do_", "setup_", "teardown_", "_")
 
     for fpath, rel in _walk_py(directory):
@@ -380,6 +475,7 @@ def detect_dead_functions(directory: str) -> dict:
 # Phase 3: Advanced Analysis
 # ═══════════════════════════════════════════════════════════════════
 
+
 def detect_code_smells(directory: str) -> dict:
     """AST-based code smell detection (long functions, complexity, nesting, etc.)."""
     smells = []
@@ -398,12 +494,16 @@ def detect_code_smells(directory: str) -> dict:
 
             # Long function (>50 lines)
             if line_count > 50:
-                smells.append({
-                    "file": _fwd(rel), "line": node.lineno, "severity": "MEDIUM",
-                    "smell": "long_function",
-                    "description": f"Function '{fname}' is {line_count} lines (max: 50)",
-                    "metric": line_count,
-                })
+                smells.append(
+                    {
+                        "file": _fwd(rel),
+                        "line": node.lineno,
+                        "severity": "MEDIUM",
+                        "smell": "long_function",
+                        "description": f"Function '{fname}' is {line_count} lines (max: 50)",
+                        "metric": line_count,
+                    }
+                )
 
             # Too many parameters (>5)
             args = node.args
@@ -416,59 +516,78 @@ def detect_code_smells(directory: str) -> dict:
             if args.args and args.args[0].arg in ("self", "cls"):
                 param_count -= 1
             if param_count > 5:
-                smells.append({
-                    "file": _fwd(rel), "line": node.lineno, "severity": "MEDIUM",
-                    "smell": "too_many_params",
-                    "description": f"Function '{fname}' has {param_count} parameters (max: 5)",
-                    "metric": param_count,
-                })
+                smells.append(
+                    {
+                        "file": _fwd(rel),
+                        "line": node.lineno,
+                        "severity": "MEDIUM",
+                        "smell": "too_many_params",
+                        "description": f"Function '{fname}' has {param_count} parameters (max: 5)",
+                        "metric": param_count,
+                    }
+                )
 
             # Cyclomatic complexity (count branches)
             complexity = 1
             for child in ast.walk(node):
-                if isinstance(child, (ast.If, ast.While, ast.For, ast.ExceptHandler,
-                                      ast.With, ast.Assert)):
+                if isinstance(child, (ast.If, ast.While, ast.For, ast.ExceptHandler, ast.With, ast.Assert)):
                     complexity += 1
                 elif isinstance(child, ast.BoolOp):
                     complexity += len(child.values) - 1
             if complexity > 10:
-                smells.append({
-                    "file": _fwd(rel), "line": node.lineno, "severity": "HIGH",
-                    "smell": "high_complexity",
-                    "description": f"Function '{fname}' has cyclomatic complexity {complexity} (max: 10)",
-                    "metric": complexity,
-                })
+                smells.append(
+                    {
+                        "file": _fwd(rel),
+                        "line": node.lineno,
+                        "severity": "HIGH",
+                        "smell": "high_complexity",
+                        "description": f"Function '{fname}' has cyclomatic complexity {complexity} (max: 10)",
+                        "metric": complexity,
+                    }
+                )
 
             # Deep nesting
             max_depth = _max_nesting(node)
             if max_depth > 4:
-                smells.append({
-                    "file": _fwd(rel), "line": node.lineno, "severity": "MEDIUM",
-                    "smell": "deep_nesting",
-                    "description": f"Function '{fname}' has nesting depth {max_depth} (max: 4)",
-                    "metric": max_depth,
-                })
+                smells.append(
+                    {
+                        "file": _fwd(rel),
+                        "line": node.lineno,
+                        "severity": "MEDIUM",
+                        "smell": "deep_nesting",
+                        "description": f"Function '{fname}' has nesting depth {max_depth} (max: 4)",
+                        "metric": max_depth,
+                    }
+                )
 
             # Mutable default arguments
             for default in args.defaults + args.kw_defaults:
                 if isinstance(default, (ast.List, ast.Dict, ast.Set, ast.Call)):
-                    smells.append({
-                        "file": _fwd(rel), "line": node.lineno, "severity": "HIGH",
-                        "smell": "mutable_default",
-                        "description": f"Function '{fname}' has mutable default argument",
-                        "metric": 1,
-                    })
+                    smells.append(
+                        {
+                            "file": _fwd(rel),
+                            "line": node.lineno,
+                            "severity": "HIGH",
+                            "smell": "mutable_default",
+                            "description": f"Function '{fname}' has mutable default argument",
+                            "metric": 1,
+                        }
+                    )
                     break
 
             # Too many return statements (>5)
             returns = sum(1 for n in ast.walk(node) if isinstance(n, ast.Return))
             if returns > 5:
-                smells.append({
-                    "file": _fwd(rel), "line": node.lineno, "severity": "LOW",
-                    "smell": "too_many_returns",
-                    "description": f"Function '{fname}' has {returns} return statements (max: 5)",
-                    "metric": returns,
-                })
+                smells.append(
+                    {
+                        "file": _fwd(rel),
+                        "line": node.lineno,
+                        "severity": "LOW",
+                        "smell": "too_many_returns",
+                        "description": f"Function '{fname}' has {returns} return statements (max: 5)",
+                        "metric": returns,
+                    }
+                )
 
         # God class detection (>300 lines or >20 methods)
         for node in ast.walk(tree):
@@ -476,29 +595,41 @@ def detect_code_smells(directory: str) -> dict:
                 class_lines = (node.end_lineno or node.lineno) - node.lineno + 1
                 method_count = sum(1 for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))
                 if class_lines > 300:
-                    smells.append({
-                        "file": _fwd(rel), "line": node.lineno, "severity": "MEDIUM",
-                        "smell": "god_class",
-                        "description": f"Class '{node.name}' is {class_lines} lines (max: 300)",
-                        "metric": class_lines,
-                    })
+                    smells.append(
+                        {
+                            "file": _fwd(rel),
+                            "line": node.lineno,
+                            "severity": "MEDIUM",
+                            "smell": "god_class",
+                            "description": f"Class '{node.name}' is {class_lines} lines (max: 300)",
+                            "metric": class_lines,
+                        }
+                    )
                 if method_count > 20:
-                    smells.append({
-                        "file": _fwd(rel), "line": node.lineno, "severity": "MEDIUM",
-                        "smell": "god_class",
-                        "description": f"Class '{node.name}' has {method_count} methods (max: 20)",
-                        "metric": method_count,
-                    })
+                    smells.append(
+                        {
+                            "file": _fwd(rel),
+                            "line": node.lineno,
+                            "severity": "MEDIUM",
+                            "smell": "god_class",
+                            "description": f"Class '{node.name}' has {method_count} methods (max: 20)",
+                            "metric": method_count,
+                        }
+                    )
 
         # Bare except
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler) and node.type is None:
-                smells.append({
-                    "file": _fwd(rel), "line": node.lineno, "severity": "MEDIUM",
-                    "smell": "bare_except",
-                    "description": "Bare 'except' clause catches all exceptions including SystemExit, KeyboardInterrupt",
-                    "metric": 1,
-                })
+                smells.append(
+                    {
+                        "file": _fwd(rel),
+                        "line": node.lineno,
+                        "severity": "MEDIUM",
+                        "smell": "bare_except",
+                        "description": "Bare 'except' clause catches all exceptions including SystemExit, KeyboardInterrupt",
+                        "metric": 1,
+                    }
+                )
 
         # Magic numbers in function bodies
         for node in ast.walk(tree):
@@ -506,13 +637,17 @@ def detect_code_smells(directory: str) -> dict:
                 for child in ast.walk(node):
                     if isinstance(child, ast.Constant) and isinstance(child.value, (int, float)):
                         if child.value not in (0, 1, -1, 2, 0.0, 1.0, 100, True, False, None):
-                            if hasattr(child, 'lineno'):
-                                smells.append({
-                                    "file": _fwd(rel), "line": child.lineno, "severity": "LOW",
-                                    "smell": "magic_number",
-                                    "description": f"Magic number {child.value} — extract to named constant",
-                                    "metric": child.value,
-                                })
+                            if hasattr(child, "lineno"):
+                                smells.append(
+                                    {
+                                        "file": _fwd(rel),
+                                        "line": child.lineno,
+                                        "severity": "LOW",
+                                        "smell": "magic_number",
+                                        "description": f"Magic number {child.value} — extract to named constant",
+                                        "metric": child.value,
+                                    }
+                                )
 
     # Deduplicate magic numbers (keep max 50 per file)
     seen = set()
@@ -566,9 +701,10 @@ def detect_duplicates(directory: str) -> dict:
 
     for fpath, rel in _walk_py(directory):
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(fpath, encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
-        except OSError:
+        except OSError as e:
+            logging.debug("Skipped duplicate check for %s: %s", fpath, e)
             continue
 
         # Normalize lines
@@ -580,7 +716,7 @@ def detect_duplicates(directory: str) -> dict:
 
         # Slide a window
         for i in range(len(normalized) - chunk_size + 1):
-            block = "\n".join(n[0] for n in normalized[i:i+chunk_size])
+            block = "\n".join(n[0] for n in normalized[i : i + chunk_size])
             h = hashlib.sha256(block.encode()).hexdigest()
             start_line = normalized[i][1]
             chunks[h].append({"file": _fwd(rel), "line": start_line})
@@ -596,12 +732,14 @@ def detect_duplicates(directory: str) -> dict:
             lines = [loc["line"] for loc in locations]
             if max(lines) - min(lines) < chunk_size:
                 continue
-        duplicates.append({
-            "hash": h,
-            "occurrences": len(locations),
-            "locations": locations[:10],  # cap per group
-            "lines": chunk_size,
-        })
+        duplicates.append(
+            {
+                "hash": h,
+                "occurrences": len(locations),
+                "locations": locations[:10],  # cap per group
+                "lines": chunk_size,
+            }
+        )
 
     duplicates.sort(key=lambda x: -x["occurrences"])
 
@@ -617,7 +755,10 @@ def analyze_temporal_coupling(directory: str, days: int = 90) -> dict:
     try:
         result = subprocess.run(
             ["git", "log", f"--since={days}.days", "--name-only", "--pretty=format:---COMMIT---"],
-            capture_output=True, text=True, cwd=directory, timeout=30,
+            capture_output=True,
+            text=True,
+            cwd=directory,
+            timeout=30,
         )
     except FileNotFoundError:
         return {"error": "git not found."}
@@ -654,12 +795,14 @@ def analyze_temporal_coupling(directory: str, days: int = 90) -> dict:
     for (a, b), count in pairs.most_common(100):
         if count < 3:
             break
-        couplings.append({
-            "file_a": a,
-            "file_b": b,
-            "co_changes": count,
-            "strength": round(count / len(commits) * 100, 1) if commits else 0,
-        })
+        couplings.append(
+            {
+                "file_a": a,
+                "file_b": b,
+                "co_changes": count,
+                "strength": round(count / len(commits) * 100, 1) if commits else 0,
+            }
+        )
 
     return {
         "couplings": couplings,
@@ -672,12 +815,15 @@ def analyze_temporal_coupling(directory: str, days: int = 90) -> dict:
 # Phase 4: Specialized
 # ═══════════════════════════════════════════════════════════════════
 
+
 def run_typecheck(directory: str) -> dict:
     """Run pyright type checker if available."""
     try:
         result = subprocess.run(
             ["pyright", "--outputjson", directory],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
     except FileNotFoundError:
         return {"error": "pyright not found. Install: npm install -g pyright"}
@@ -692,13 +838,15 @@ def run_typecheck(directory: str) -> dict:
     diagnostics = data.get("generalDiagnostics", [])
     issues = []
     for d in diagnostics[:500]:
-        issues.append({
-            "file": _fwd(d.get("file", "")),
-            "line": d.get("range", {}).get("start", {}).get("line", 0) + 1,
-            "severity": d.get("severity", "information").upper(),
-            "rule": d.get("rule", ""),
-            "message": d.get("message", ""),
-        })
+        issues.append(
+            {
+                "file": _fwd(d.get("file", "")),
+                "line": d.get("range", {}).get("start", {}).get("line", 0) + 1,
+                "severity": d.get("severity", "information").upper(),
+                "rule": d.get("rule", ""),
+                "message": d.get("message", ""),
+            }
+        )
 
     summary = data.get("summary", {})
     return {
@@ -719,11 +867,11 @@ def check_release_readiness(directory: str) -> dict:
     has_version = False
     if os.path.exists(pyproject):
         try:
-            with open(pyproject, "r", encoding="utf-8") as f:
+            with open(pyproject, encoding="utf-8") as f:
                 content = f.read()
             has_version = "version" in content.lower()
-        except OSError:
-            pass
+        except OSError as e:
+            logging.debug("Skipped pyproject.toml version check: %s", e)
     checks.append({"name": "Version defined", "pass": has_version, "severity": "HIGH"})
 
     # CHANGELOG exists and is recent
@@ -737,26 +885,22 @@ def check_release_readiness(directory: str) -> dict:
     critical_tods = 0
     for fpath, rel in _walk_py(directory):
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(fpath, encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     if re.search(r"\b(FIXME|XXX|BUG)\b", line, re.IGNORECASE):
                         critical_tods += 1
-        except OSError:
-            pass
-    checks.append({"name": f"No critical TODOs ({critical_tods} found)", "pass": critical_tods == 0, "severity": "HIGH"})
+        except OSError as e:
+            logging.debug("Skipped TODO scan for %s: %s", fpath, e)
+    checks.append(
+        {"name": f"No critical TODOs ({critical_tods} found)", "pass": critical_tods == 0, "severity": "HIGH"}
+    )
 
     # Tests exist
-    test_dir = any(
-        os.path.isdir(os.path.join(directory, d))
-        for d in ["tests", "test"]
-    )
+    test_dir = any(os.path.isdir(os.path.join(directory, d)) for d in ["tests", "test"])
     checks.append({"name": "Tests exist", "pass": test_dir, "severity": "HIGH"})
 
     # README exists
-    readme = any(
-        os.path.exists(os.path.join(directory, f))
-        for f in ["README.md", "README.rst", "README"]
-    )
+    readme = any(os.path.exists(os.path.join(directory, f)) for f in ["README.md", "README.rst", "README"])
     checks.append({"name": "README exists", "pass": readme, "severity": "MEDIUM"})
 
     # No print() debug statements (rough check)
@@ -765,13 +909,13 @@ def check_release_readiness(directory: str) -> dict:
         if "test" in rel.lower():
             continue
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(fpath, encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     stripped = line.strip()
                     if stripped.startswith("print(") and "debug" not in stripped.lower():
                         debug_prints += 1
-        except OSError:
-            pass
+        except OSError as e:
+            logging.debug("Skipped debug-print scan for %s: %s", fpath, e)
     checks.append({"name": f"No debug prints ({debug_prints} found)", "pass": debug_prints < 5, "severity": "LOW"})
 
     # .env not committed
@@ -780,10 +924,10 @@ def check_release_readiness(directory: str) -> dict:
     env_safe = True
     if os.path.exists(env_file) and os.path.exists(gitignore):
         try:
-            with open(gitignore, "r", encoding="utf-8") as f:
+            with open(gitignore, encoding="utf-8") as f:
                 env_safe = ".env" in f.read()
-        except OSError:
-            pass
+        except OSError as e:
+            logging.debug("Skipped .gitignore check: %s", e)
     checks.append({"name": ".env in .gitignore", "pass": env_safe, "severity": "HIGH"})
 
     passed = sum(1 for c in checks if c["pass"])
@@ -804,32 +948,43 @@ def detect_ai_code(directory: str) -> dict:
     indicators = []
 
     _AI_PATTERNS = [
-        (re.compile(r"#\s*(Generated by|Auto-generated|AI-generated|Created by ChatGPT|Created by Copilot|Generated with)", re.IGNORECASE),
-         "AI generation comment"),
-        (re.compile(r"#\s*TODO:?\s*(implement|add|fill|complete)\s+(this|the|your)", re.IGNORECASE),
-         "Placeholder TODO (common in AI output)"),
-        (re.compile(r'"""[\s\S]{0,20}(Args|Returns|Raises|Example|Note):', re.IGNORECASE),
-         "Formulaic docstring (common in AI output)"),
-        (re.compile(r"pass\s*#\s*(placeholder|implement|todo)", re.IGNORECASE),
-         "Pass-with-placeholder pattern"),
+        (
+            re.compile(
+                r"#\s*(Generated by|Auto-generated|AI-generated|Created by ChatGPT|Created by Copilot|Generated with)",
+                re.IGNORECASE,
+            ),
+            "AI generation comment",
+        ),
+        (
+            re.compile(r"#\s*TODO:?\s*(implement|add|fill|complete)\s+(this|the|your)", re.IGNORECASE),
+            "Placeholder TODO (common in AI output)",
+        ),
+        (
+            re.compile(r'"""[\s\S]{0,20}(Args|Returns|Raises|Example|Note):', re.IGNORECASE),
+            "Formulaic docstring (common in AI output)",
+        ),
+        (re.compile(r"pass\s*#\s*(placeholder|implement|todo)", re.IGNORECASE), "Pass-with-placeholder pattern"),
     ]
 
     for fpath, rel in _walk_py(directory):
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(fpath, encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-        except OSError:
+        except OSError as e:
+            logging.debug("Skipped AI-code scan for %s: %s", fpath, e)
             continue
 
         for lineno, line in enumerate(content.split("\n"), 1):
             for pat, desc in _AI_PATTERNS:
                 if pat.search(line):
-                    indicators.append({
-                        "file": _fwd(rel),
-                        "line": lineno,
-                        "pattern": desc,
-                        "evidence": line.strip()[:120],
-                    })
+                    indicators.append(
+                        {
+                            "file": _fwd(rel),
+                            "line": lineno,
+                            "pattern": desc,
+                            "evidence": line.strip()[:120],
+                        }
+                    )
                     break
 
     return {
@@ -860,21 +1015,24 @@ def detect_web_smells(directory: str) -> dict:
 
     for fpath, rel in _walk_ext(directory, _WEB_EXTS):
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(fpath, encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-        except OSError:
+        except OSError as e:
+            logging.debug("Skipped web-smell scan for %s: %s", fpath, e)
             continue
 
         for lineno, line in enumerate(content.split("\n"), 1):
             for pat, severity, desc in _WEB_PATTERNS:
                 if pat.search(line):
-                    smells.append({
-                        "file": _fwd(rel),
-                        "line": lineno,
-                        "severity": severity,
-                        "description": desc,
-                        "evidence": line.strip()[:120],
-                    })
+                    smells.append(
+                        {
+                            "file": _fwd(rel),
+                            "line": lineno,
+                            "severity": severity,
+                            "description": desc,
+                            "evidence": line.strip()[:120],
+                        }
+                    )
 
     # Cap output
     smells = smells[:1000]
@@ -914,14 +1072,16 @@ def generate_test_stubs(directory: str) -> dict:
                     continue
                 # Check if there's a test for this function
                 has_test = any(f"test_{node.name}" in tf or node.name in tf for tf in test_files)
-                functions.append({
-                    "name": node.name,
-                    "file": _fwd(rel),
-                    "line": node.lineno,
-                    "lines": line_count,
-                    "has_test": has_test,
-                    "params": [a.arg for a in node.args.args if a.arg not in ("self", "cls")],
-                })
+                functions.append(
+                    {
+                        "name": node.name,
+                        "file": _fwd(rel),
+                        "line": node.lineno,
+                        "lines": line_count,
+                        "has_test": has_test,
+                        "params": [a.arg for a in node.args.args if a.arg not in ("self", "cls")],
+                    }
+                )
 
     # Generate stubs for untested functions
     untested = [f for f in functions if not f["has_test"]]
@@ -929,17 +1089,19 @@ def generate_test_stubs(directory: str) -> dict:
     for func in untested[:50]:
         module = func["file"].replace("/", ".").removesuffix(".py")
         params_str = ", ".join(func["params"][:3]) if func["params"] else ""
-        stub = f"""def test_{func['name']}():
-    \"\"\"Test {func['name']} from {func['file']}\"\"\"
-    from {module} import {func['name']}
-    result = {func['name']}({params_str})
+        stub = f"""def test_{func["name"]}():
+    \"\"\"Test {func["name"]} from {func["file"]}\"\"\"
+    from {module} import {func["name"]}
+    result = {func["name"]}({params_str})
     assert result is not None
 """
-        stubs.append({
-            "function": func["name"],
-            "file": func["file"],
-            "stub": stub,
-        })
+        stubs.append(
+            {
+                "function": func["name"],
+                "file": func["file"],
+                "stub": stub,
+            }
+        )
 
     return {
         "total_functions": len(functions),
@@ -955,6 +1117,7 @@ def generate_test_stubs(directory: str) -> dict:
 #               Sprint Batches, Architecture Map, Call Graph
 # ═══════════════════════════════════════════════════════════════════
 
+
 def compute_risk_heatmap(directory: str, findings: list = None) -> dict:
     """Composite risk score per file — combines scanner findings, smells, duplicates, git churn."""
     smells_result = detect_code_smells(directory)
@@ -965,7 +1128,11 @@ def compute_risk_heatmap(directory: str, findings: list = None) -> dict:
     try:
         proc = subprocess.run(
             ["git", "log", "--since=90.days", "--name-only", "--pretty=format:"],
-            capture_output=True, text=True, cwd=directory, timeout=15)
+            capture_output=True,
+            text=True,
+            cwd=directory,
+            timeout=15,
+        )
         if proc.returncode == 0:
             for line in proc.stdout.strip().split("\n"):
                 line = line.strip()
@@ -978,16 +1145,15 @@ def compute_risk_heatmap(directory: str, findings: list = None) -> dict:
     loc_map = {}
     for fpath, rel in _walk_py(directory):
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(fpath, encoding="utf-8", errors="ignore") as f:
                 loc_map[rel] = sum(1 for ln in f if ln.strip())
-        except OSError:
-            pass
+        except OSError as e:
+            logging.debug("Skipped LOC count for %s: %s", fpath, e)
 
     # Accumulate per-file signals
-    risk = defaultdict(lambda: {"security": 0, "quality": 0, "smells": 0,
-                                 "churn": 0, "duplicates": 0})
+    risk = defaultdict(lambda: {"security": 0, "quality": 0, "smells": 0, "churn": 0, "duplicates": 0})
 
-    for f in (findings or []):
+    for f in findings or []:
         rel = f.get("file", "")
         w = {"HIGH": 5, "MEDIUM": 2, "LOW": 0.5}.get(f.get("severity", ""), 1)
         if f.get("rule_id", "").startswith("SEC-"):
@@ -996,8 +1162,7 @@ def compute_risk_heatmap(directory: str, findings: list = None) -> dict:
             risk[rel]["quality"] += w
 
     for s in smells_result.get("smells", []):
-        risk[s["file"]]["smells"] += {"HIGH": 3, "MEDIUM": 2, "LOW": 1}.get(
-            s.get("severity", ""), 1)
+        risk[s["file"]]["smells"] += {"HIGH": 3, "MEDIUM": 2, "LOW": 1}.get(s.get("severity", ""), 1)
 
     for g in dups_result.get("duplicate_groups", []):
         for loc in g.get("locations", []):
@@ -1010,10 +1175,8 @@ def compute_risk_heatmap(directory: str, findings: list = None) -> dict:
     all_files = set(list(risk.keys()) + list(loc_map.keys()))
     files = []
     for rel in all_files:
-        r = risk.get(rel, {"security": 0, "quality": 0, "smells": 0,
-                           "churn": 0, "duplicates": 0})
-        score = (r["security"] * 5 + r["quality"] * 2 + r["smells"] * 2 +
-                 r["churn"] * 3 + r["duplicates"] * 1)
+        r = risk.get(rel, {"security": 0, "quality": 0, "smells": 0, "churn": 0, "duplicates": 0})
+        score = r["security"] * 5 + r["quality"] * 2 + r["smells"] * 2 + r["churn"] * 3 + r["duplicates"] * 1
         loc = loc_map.get(rel, 0)
         if score > 0 or loc > 0:
             files.append({"file": rel, "risk_score": round(score, 1), "loc": loc, **r})
@@ -1026,8 +1189,7 @@ def compute_risk_heatmap(directory: str, findings: list = None) -> dict:
         "total_files": len(files),
         "max_risk": round(max_risk, 1),
         "high_risk": sum(1 for f in files if f["risk_score"] > max_risk * 0.6),
-        "medium_risk": sum(1 for f in files
-                           if max_risk * 0.2 < f["risk_score"] <= max_risk * 0.6),
+        "medium_risk": sum(1 for f in files if max_risk * 0.2 < f["risk_score"] <= max_risk * 0.6),
         "low_risk": sum(1 for f in files if f["risk_score"] <= max_risk * 0.2),
     }
 
@@ -1037,11 +1199,11 @@ def compute_module_cards(directory: str, findings: list = None) -> dict:
     smells_result = detect_code_smells(directory)
     test_result = generate_test_stubs(directory)
 
-    dirs = defaultdict(lambda: {"high": 0, "medium": 0, "low": 0,
-                                 "smells": 0, "files": set(), "loc": 0,
-                                 "tested": 0, "untested": 0})
+    dirs = defaultdict(
+        lambda: {"high": 0, "medium": 0, "low": 0, "smells": 0, "files": set(), "loc": 0, "tested": 0, "untested": 0}
+    )
 
-    for f in (findings or []):
+    for f in findings or []:
         rel = f.get("file", "")
         d = rel.rsplit("/", 1)[0] if "/" in rel else "."
         dirs[d]["files"].add(rel)
@@ -1061,10 +1223,10 @@ def compute_module_cards(directory: str, findings: list = None) -> dict:
     for fpath, rel in _walk_py(directory):
         d = rel.rsplit("/", 1)[0] if "/" in rel else "."
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(fpath, encoding="utf-8", errors="ignore") as f:
                 dirs[d]["loc"] += sum(1 for ln in f if ln.strip())
-        except OSError:
-            pass
+        except OSError as e:
+            logging.debug("Skipped directory LOC for %s: %s", fpath, e)
         dirs[d]["files"].add(rel)
 
     def _grade(h, m, l, fc):
@@ -1072,21 +1234,34 @@ def compute_module_cards(directory: str, findings: list = None) -> dict:
             return "?", 0
         weighted = h * 5 + m * 2 + l * 0.5
         per100 = (weighted / max(fc, 1)) * 100
-        if per100 <= 5:   return "A", max(0, int(100 - per100))
-        if per100 <= 15:  return "B", max(0, int(100 - per100 * 0.8))
-        if per100 <= 40:  return "C", max(0, int(100 - per100 * 0.6))
-        if per100 <= 80:  return "D", max(20, int(100 - per100 * 0.5))
+        if per100 <= 5:
+            return "A", max(0, int(100 - per100))
+        if per100 <= 15:
+            return "B", max(0, int(100 - per100 * 0.8))
+        if per100 <= 40:
+            return "C", max(0, int(100 - per100 * 0.6))
+        if per100 <= 80:
+            return "D", max(20, int(100 - per100 * 0.5))
         return "F", max(5, int(100 - per100 * 0.4))
 
     modules = []
     for d, data in dirs.items():
         fc = len(data["files"])
         letter, score = _grade(data["high"], data["medium"], data["low"], fc)
-        modules.append({
-            "module": d, "grade": letter, "score": score, "files": fc,
-            "loc": data["loc"], "high": data["high"], "medium": data["medium"],
-            "low": data["low"], "smells": data["smells"], "untested": data["untested"],
-        })
+        modules.append(
+            {
+                "module": d,
+                "grade": letter,
+                "score": score,
+                "files": fc,
+                "loc": data["loc"],
+                "high": data["high"],
+                "medium": data["medium"],
+                "low": data["low"],
+                "smells": data["smells"],
+                "untested": data["untested"],
+            }
+        )
 
     modules.sort(key=lambda x: x["score"])
     return {"modules": modules, "total_modules": len(modules)}
@@ -1106,35 +1281,45 @@ def compute_architecture_map(directory: str) -> dict:
         layer = "test" if "test" in rel.lower() else ("app" if top_dir == "." else "lib")
         loc = 0
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(fpath, encoding="utf-8", errors="ignore") as f:
                 loc = sum(1 for ln in f if ln.strip())
-        except OSError:
-            pass
-        nodes[mod] = {"id": mod, "label": mod.split(".")[-1], "file": rel,
-                      "external": False, "layer": layer, "imports_count": 0,
-                      "loc": loc, "dir": top_dir}
+        except OSError as e:
+            logging.debug("Skipped architecture LOC for %s: %s", fpath, e)
+        nodes[mod] = {
+            "id": mod,
+            "label": mod.split(".")[-1],
+            "file": rel,
+            "external": False,
+            "layer": layer,
+            "imports_count": 0,
+            "loc": loc,
+            "dir": top_dir,
+        }
 
     for fpath, rel in _walk_py(directory):
         mod = rel.replace("/", ".").removesuffix(".py").removesuffix(".__init__")
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+            with open(fpath, encoding="utf-8", errors="ignore") as fh:
                 for line in fh:
                     line = line.strip()
                     if not (line.startswith("import ") or line.startswith("from ")):
                         continue
                     parts = line.split()
                     target = None
-                    if parts[0] == "import":
-                        target = parts[1].split(".")[0]
-                    elif len(parts) >= 2:
+                    if parts[0] == "import" or len(parts) >= 2:
                         target = parts[1].split(".")[0]
                     if not target or target.startswith(".") or target == ".":
                         continue
                     if target not in nodes:
                         nodes[target] = {
-                            "id": target, "label": target, "external": True,
-                            "layer": "external", "imports_count": 0,
-                            "loc": 0, "dir": "external"}
+                            "id": target,
+                            "label": target,
+                            "external": True,
+                            "layer": "external",
+                            "imports_count": 0,
+                            "loc": 0,
+                            "dir": "external",
+                        }
                     if mod in nodes:
                         nodes[mod]["imports_count"] += 1
                     ek = f"{mod}->{target}"
@@ -1178,9 +1363,13 @@ def compute_architecture_map(directory: str) -> dict:
         if e["from"] in local_modules and e["to"] in local_modules:
             local_inbound[e["to"]] += 1
     god_modules = sorted(
-        [{"module": m, "dependents": c, "loc": nodes.get(m, {}).get("loc", 0)}
-         for m, c in local_inbound.items() if c >= 5],
-        key=lambda x: -x["dependents"])
+        [
+            {"module": m, "dependents": c, "loc": nodes.get(m, {}).get("loc", 0)}
+            for m, c in local_inbound.items()
+            if c >= 5
+        ],
+        key=lambda x: -x["dependents"],
+    )
 
     clusters = defaultdict(list)
     for n in nodes.values():
@@ -1225,8 +1414,7 @@ def compute_call_graph(directory: str) -> dict:
                     dec_name = dec.attr
                 elif isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute):
                     dec_name = dec.func.attr
-                if dec_name in ("route", "get", "post", "put", "delete",
-                                "command", "task", "cli"):
+                if dec_name in ("route", "get", "post", "put", "delete", "command", "task", "cli"):
                     is_entry = True
 
             fn_calls = []
@@ -1242,9 +1430,13 @@ def compute_call_graph(directory: str) -> dict:
                         calls.append({"caller": key, "callee_name": callee})
 
             functions[key] = {
-                "name": fname, "file": _fwd(rel), "line": node.lineno,
-                "lines": lines, "is_entry": is_entry,
-                "calls": fn_calls, "called_by": [],
+                "name": fname,
+                "file": _fwd(rel),
+                "line": node.lineno,
+                "lines": lines,
+                "is_entry": is_entry,
+                "calls": fn_calls,
+                "called_by": [],
             }
 
     # Resolve callee names to full keys
@@ -1258,21 +1450,34 @@ def compute_call_graph(directory: str) -> dict:
             resolved_edges.append({"from": call["caller"], "to": ck})
             functions[ck]["called_by"].append(call["caller"])
 
-    entries = [k for k, v in functions.items()
-               if v["is_entry"] or not v["called_by"]]
-    leaves = [k for k, v in functions.items()
-              if not any(name_to_keys.get(c) for c in v["calls"])
-              and not v["name"].startswith("_")]
+    entries = [k for k, v in functions.items() if v["is_entry"] or not v["called_by"]]
+    leaves = [
+        k
+        for k, v in functions.items()
+        if not any(name_to_keys.get(c) for c in v["calls"]) and not v["name"].startswith("_")
+    ]
 
-    nodes = [{"id": k, "name": d["name"], "file": d["file"], "line": d["line"],
-              "lines": d["lines"], "is_entry": d["is_entry"],
-              "call_count": len(d["calls"]), "caller_count": len(d["called_by"])}
-             for k, d in functions.items()]
+    nodes = [
+        {
+            "id": k,
+            "name": d["name"],
+            "file": d["file"],
+            "line": d["line"],
+            "lines": d["lines"],
+            "is_entry": d["is_entry"],
+            "call_count": len(d["calls"]),
+            "caller_count": len(d["called_by"]),
+        }
+        for k, d in (functions or {}).items()
+    ]
 
     return {
-        "nodes": nodes[:500], "edges": resolved_edges[:2000],
-        "entries": entries[:50], "leaves": leaves[:50],
-        "total_functions": len(functions), "total_edges": len(resolved_edges),
+        "nodes": nodes[:500],
+        "edges": resolved_edges[:2000],
+        "entries": entries[:50],
+        "leaves": leaves[:50],
+        "total_functions": len(functions),
+        "total_edges": len(resolved_edges),
     }
 
 
@@ -1296,18 +1501,15 @@ def compute_confidence_meter(directory: str, findings: list = None) -> dict:
             score += weight
         checks.append({"name": name, "passed": passed, "weight": weight, "detail": detail})
 
-    high_sec = sum(1 for f in (findings or [])
-                   if f.get("severity") == "HIGH"
-                   and f.get("rule_id", "").startswith("SEC-"))
-    add("No critical security issues", high_sec == 0, 20,
-        f"{high_sec} HIGH security findings" if high_sec else "Clean")
+    high_sec = sum(
+        1 for f in (findings or []) if f.get("severity") == "HIGH" and f.get("rule_id", "").startswith("SEC-")
+    )
+    add("No critical security issues", high_sec == 0, 20, f"{high_sec} HIGH security findings" if high_sec else "Clean")
 
     high_total = sum(1 for f in (findings or []) if f.get("severity") == "HIGH")
-    add("No HIGH-severity findings", high_total == 0, 10,
-        f"{high_total} HIGH findings" if high_total else "Clean")
+    add("No HIGH-severity findings", high_total == 0, 10, f"{high_total} HIGH findings" if high_total else "Clean")
 
-    add("Project health >= 70%", health.get("score", 0) >= 70, 10,
-        f"Health: {health.get('score', 0)}%")
+    add("Project health >= 70%", health.get("score", 0) >= 70, 10, f"Health: {health.get('score', 0)}%")
 
     cov = test.get("coverage_pct", 0)
     add("Test coverage >= 50%", cov >= 50, 15, f"Coverage: {cov}%")
@@ -1316,34 +1518,33 @@ def compute_confidence_meter(directory: str, findings: list = None) -> dict:
     add("Minimal dead code (< 5)", dc < 5, 5, f"{dc} dead functions")
 
     hs = sum(1 for s in smells.get("smells", []) if s.get("severity") == "HIGH")
-    add("No HIGH code smells", hs == 0, 10,
-        f"{hs} HIGH smells" if hs else "Clean")
+    add("No HIGH code smells", hs == 0, 10, f"{hs} HIGH smells" if hs else "Clean")
 
     circ = arch.get("circular_deps", [])
-    add("No circular dependencies", len(circ) == 0, 10,
-        f"{len(circ)} circular deps" if circ else "Clean")
+    add("No circular dependencies", len(circ) == 0, 10, f"{len(circ)} circular deps" if circ else "Clean")
 
     gods = arch.get("god_modules", [])
-    add("No god modules (>=5 dependents)", len(gods) == 0, 5,
-        f"{len(gods)} god modules" if gods else "Clean")
+    add("No god modules (>=5 dependents)", len(gods) == 0, 5, f"{len(gods)} god modules" if gods else "Clean")
 
-    add("Release readiness >= 70%", release.get("score", 0) >= 70, 10,
-        f"Readiness: {release.get('score', 0)}%")
+    add("Release readiness >= 70%", release.get("score", 0) >= 70, 10, f"Readiness: {release.get('score', 0)}%")
 
     try:
         fmt = check_format(directory)
-        add("Code formatting passes", fmt.get("all_formatted", False), 5,
-            f"{fmt.get('needs_format', 0)} files need formatting"
-            if not fmt.get("all_formatted") else "Clean")
+        add(
+            "Code formatting passes",
+            fmt.get("all_formatted", False),
+            5,
+            f"{fmt.get('needs_format', 0)} files need formatting" if not fmt.get("all_formatted") else "Clean",
+        )
     except (OSError, subprocess.SubprocessError, ValueError):
         pass
 
     confidence = round(score / max(max_score, 1) * 100)
 
     top_risks = sorted(
-        [{"name": c["name"], "detail": c["detail"], "weight": c["weight"]}
-         for c in checks if not c["passed"]],
-        key=lambda x: -x["weight"])
+        [{"name": c["name"], "detail": c["detail"], "weight": c["weight"]} for c in checks if not c["passed"]],
+        key=lambda x: -x["weight"],
+    )
 
     if confidence >= 80:
         rec = "Good to ship. Minor items can be addressed post-release."
@@ -1355,9 +1556,12 @@ def compute_confidence_meter(directory: str, findings: list = None) -> dict:
         rec = "Not ready for release. Major structural issues need attention."
 
     return {
-        "confidence": confidence, "checks": checks,
-        "passed": sum(1 for c in checks if c["passed"]), "total": len(checks),
-        "top_risks": top_risks[:5], "recommendation": rec,
+        "confidence": confidence,
+        "checks": checks,
+        "passed": sum(1 for c in checks if c["passed"]),
+        "total": len(checks),
+        "top_risks": top_risks[:5],
+        "recommendation": rec,
     }
 
 
@@ -1365,31 +1569,43 @@ def compute_sprint_batches(findings: list = None, smells: list = None) -> dict:
     """Group all issues into sprint-sized action batches sorted by ROI (impact/effort)."""
     items = []
 
-    for f in (findings or []):
+    for f in findings or []:
         rid = f.get("rule_id", "")
         sev = f.get("severity", "LOW")
         mins = 15 if rid.startswith("SEC-") else 5 if rid.startswith("QUAL-") else 10
         impact = {"HIGH": 10, "MEDIUM": 4, "LOW": 1}.get(sev, 2)
-        items.append({
-            "type": "finding", "id": rid, "file": f.get("file", ""),
-            "line": f.get("line", 0), "severity": sev,
-            "description": f.get("description", ""),
-            "fix_hint": f.get("fix_hint", ""),
-            "minutes": mins, "impact": impact,
-            "roi": round(impact / max(mins, 1), 2),
-        })
+        items.append(
+            {
+                "type": "finding",
+                "id": rid,
+                "file": f.get("file", ""),
+                "line": f.get("line", 0),
+                "severity": sev,
+                "description": f.get("description", ""),
+                "fix_hint": f.get("fix_hint", ""),
+                "minutes": mins,
+                "impact": impact,
+                "roi": round(impact / max(mins, 1), 2),
+            }
+        )
 
-    for s in (smells or []):
+    for s in smells or []:
         sev = s.get("severity", "LOW")
         impact = {"HIGH": 8, "MEDIUM": 3, "LOW": 1}.get(sev, 2)
-        items.append({
-            "type": "smell", "id": s.get("smell", ""), "file": s.get("file", ""),
-            "line": s.get("line", 0), "severity": sev,
-            "description": s.get("description", ""),
-            "fix_hint": "Refactor: " + s.get("smell", "").replace("_", " "),
-            "minutes": 15, "impact": impact,
-            "roi": round(impact / 15, 2),
-        })
+        items.append(
+            {
+                "type": "smell",
+                "id": s.get("smell", ""),
+                "file": s.get("file", ""),
+                "line": s.get("line", 0),
+                "severity": sev,
+                "description": s.get("description", ""),
+                "fix_hint": "Refactor: " + s.get("smell", "").replace("_", " "),
+                "minutes": 15,
+                "impact": impact,
+                "roi": round(impact / 15, 2),
+            }
+        )
 
     items.sort(key=lambda x: -x["roi"])
 
@@ -1417,16 +1633,23 @@ def compute_sprint_batches(findings: list = None, smells: list = None) -> dict:
         del b["max_min"]
 
     return {
-        "batches": batches, "total_items": total,
+        "batches": batches,
+        "total_items": total,
         "total_hours": round(sum(b["total_min"] for b in batches) / 60, 1),
     }
 
 
-def compute_project_review(directory: str, findings: list = None,
-                            summary: dict = None, files_scanned: int = 0,
-                            smells: list = None, dead_functions: list = None,
-                            health: dict = None, satd: dict = None,
-                            duplicates: dict = None) -> dict:
+def compute_project_review(
+    directory: str,
+    findings: list = None,
+    summary: dict = None,
+    files_scanned: int = 0,
+    smells: list = None,
+    dead_functions: list = None,
+    health: dict = None,
+    satd: dict = None,
+    duplicates: dict = None,
+) -> dict:
     """Generate a comprehensive PM-style project review with grades, charts data, and recommendations."""
     findings = findings or []
     smells = smells or []
@@ -1468,61 +1691,75 @@ def compute_project_review(directory: str, findings: list = None,
     nice_to_have = []
 
     if sev_counts["HIGH"] > 0:
-        must_do.append({
-            "title": f"Fix {sev_counts['HIGH']} HIGH severity issues",
-            "reason": "High severity findings indicate security vulnerabilities or critical reliability flaws that can lead to data breaches or system failures.",
-            "effort": f"{sev_counts['HIGH'] * 15} min",
-            "impact": "Critical"
-        })
+        must_do.append(
+            {
+                "title": f"Fix {sev_counts['HIGH']} HIGH severity issues",
+                "reason": "High severity findings indicate security vulnerabilities or critical reliability flaws that can lead to data breaches or system failures.",
+                "effort": f"{sev_counts['HIGH'] * 15} min",
+                "impact": "Critical",
+            }
+        )
 
     sec_count = sum(1 for f in findings if f.get("rule_id", "").startswith("SEC-"))
     if sec_count > 0:
-        must_do.append({
-            "title": f"Address {sec_count} security findings",
-            "reason": "Security issues must be resolved before any production release to prevent exploitation.",
-            "effort": f"{sec_count * 20} min",
-            "impact": "Critical"
-        })
+        must_do.append(
+            {
+                "title": f"Address {sec_count} security findings",
+                "reason": "Security issues must be resolved before any production release to prevent exploitation.",
+                "effort": f"{sec_count * 20} min",
+                "impact": "Critical",
+            }
+        )
 
     if sev_counts["MEDIUM"] > 5:
-        should_do.append({
-            "title": f"Reduce {sev_counts['MEDIUM']} MEDIUM severity issues",
-            "reason": "Medium issues degrade code quality and increase maintenance burden over time.",
-            "effort": f"{sev_counts['MEDIUM'] * 10} min",
-            "impact": "High"
-        })
+        should_do.append(
+            {
+                "title": f"Reduce {sev_counts['MEDIUM']} MEDIUM severity issues",
+                "reason": "Medium issues degrade code quality and increase maintenance burden over time.",
+                "effort": f"{sev_counts['MEDIUM'] * 10} min",
+                "impact": "High",
+            }
+        )
 
     if len(smells) > 5:
-        should_do.append({
-            "title": f"Refactor {len(smells)} code smells",
-            "reason": "Code smells increase complexity, make debugging harder, and slow down new feature development.",
-            "effort": f"{len(smells) * 15} min",
-            "impact": "Medium"
-        })
+        should_do.append(
+            {
+                "title": f"Refactor {len(smells)} code smells",
+                "reason": "Code smells increase complexity, make debugging harder, and slow down new feature development.",
+                "effort": f"{len(smells) * 15} min",
+                "impact": "Medium",
+            }
+        )
 
     if len(dead_functions) > 3:
-        should_do.append({
-            "title": f"Remove {len(dead_functions)} dead functions",
-            "reason": "Dead code confuses developers and increases cognitive load without providing value.",
-            "effort": f"{len(dead_functions) * 5} min",
-            "impact": "Medium"
-        })
+        should_do.append(
+            {
+                "title": f"Remove {len(dead_functions)} dead functions",
+                "reason": "Dead code confuses developers and increases cognitive load without providing value.",
+                "effort": f"{len(dead_functions) * 5} min",
+                "impact": "Medium",
+            }
+        )
 
     if duplicates and duplicates.get("total_groups", 0) > 0:
-        nice_to_have.append({
-            "title": f"Consolidate {duplicates.get('total_groups', 0)} duplicate code groups",
-            "reason": "Duplicate code increases maintenance burden and risk of inconsistent bug fixes.",
-            "effort": f"{duplicates.get('total_groups', 0) * 20} min",
-            "impact": "Medium"
-        })
+        nice_to_have.append(
+            {
+                "title": f"Consolidate {duplicates.get('total_groups', 0)} duplicate code groups",
+                "reason": "Duplicate code increases maintenance burden and risk of inconsistent bug fixes.",
+                "effort": f"{duplicates.get('total_groups', 0) * 20} min",
+                "impact": "Medium",
+            }
+        )
 
     if sev_counts["LOW"] > 10:
-        nice_to_have.append({
-            "title": f"Clean up {sev_counts['LOW']} LOW severity items",
-            "reason": "While individually minor, large numbers of low-severity issues signal declining code discipline.",
-            "effort": f"{sev_counts['LOW'] * 5} min",
-            "impact": "Low"
-        })
+        nice_to_have.append(
+            {
+                "title": f"Clean up {sev_counts['LOW']} LOW severity items",
+                "reason": "While individually minor, large numbers of low-severity issues signal declining code discipline.",
+                "effort": f"{sev_counts['LOW'] * 5} min",
+                "impact": "Low",
+            }
+        )
 
     # ── Health snapshot ──
     health_flags = {}
@@ -1541,9 +1778,13 @@ def compute_project_review(directory: str, findings: list = None,
     release_status = "GO" if release_ready else "NO-GO"
 
     # ── Estimated total fix time ──
-    total_fix_min = (sev_counts["HIGH"] * 15 + sev_counts["MEDIUM"] * 10 +
-                     sev_counts["LOW"] * 5 + len(smells) * 15 +
-                     len(dead_functions) * 5)
+    total_fix_min = (
+        sev_counts["HIGH"] * 15
+        + sev_counts["MEDIUM"] * 10
+        + sev_counts["LOW"] * 5
+        + len(smells) * 15
+        + len(dead_functions) * 5
+    )
     total_fix_hours = round(total_fix_min / 60, 1)
 
     return {
@@ -1576,6 +1817,7 @@ def compute_project_review(directory: str, findings: list = None,
 # Phase 7: CGC-Inspired Graph Analysis
 # ═══════════════════════════════════════════════════════════════════
 
+
 def detect_circular_calls(directory: str) -> dict:
     """Detect circular call chains at the FUNCTION level (macaroni code).
     Inspired by CodeGraphContext's call-chain analysis.
@@ -1598,8 +1840,7 @@ def detect_circular_calls(directory: str) -> dict:
                     elif isinstance(child.func, ast.Attribute):
                         callees.add(child.func.attr)
             callees.discard(node.name)  # exclude direct recursion (separate concern)
-            funcs[key] = {"name": node.name, "file": _fwd(rel),
-                          "line": node.lineno, "calls": list(callees)}
+            funcs[key] = {"name": node.name, "file": _fwd(rel), "line": node.lineno, "calls": list(callees)}
 
     # Resolve name -> keys
     name_to_keys = defaultdict(list)
@@ -1631,11 +1872,13 @@ def detect_circular_calls(directory: str) -> dict:
                     elif isinstance(child.func, ast.Attribute):
                         cname = child.func.attr
                     if cname == node.name:
-                        recursive.append({
-                            "function": node.name,
-                            "file": _fwd(rel),
-                            "line": node.lineno,
-                        })
+                        recursive.append(
+                            {
+                                "function": node.name,
+                                "file": _fwd(rel),
+                                "line": node.lineno,
+                            }
+                        )
                         break
 
     # Find cycles using DFS (Johnson's simplified — cap at reasonable size)
@@ -1651,16 +1894,21 @@ def detect_circular_calls(directory: str) -> dict:
             if nb == start and len(path) >= 2:
                 cycle = [funcs[k]["name"] for k in path] + [funcs[start]["name"]]
                 files = list({funcs[k]["file"] for k in path})
-                cycles.append({
-                    "chain": cycle,
-                    "length": len(cycle) - 1,
-                    "files": files,
-                    "functions": [{
-                        "name": funcs[k]["name"],
-                        "file": funcs[k]["file"],
-                        "line": funcs[k]["line"],
-                    } for k in path],
-                })
+                cycles.append(
+                    {
+                        "chain": cycle,
+                        "length": len(cycle) - 1,
+                        "files": files,
+                        "functions": [
+                            {
+                                "name": funcs[k]["name"],
+                                "file": funcs[k]["file"],
+                                "line": funcs[k]["line"],
+                            }
+                            for k in path
+                        ],
+                    }
+                )
             elif nb not in on_stack and nb not in visited_global:
                 _find_cycles(start, nb, path, on_stack)
         path.pop()
@@ -1695,14 +1943,16 @@ def detect_circular_calls(directory: str) -> dict:
         fi = fan_in.get(key, 0)
         fo = fan_out.get(key, 0)
         if fi >= 3 and fo >= 3:
-            hubs.append({
-                "name": data["name"],
-                "file": data["file"],
-                "line": data["line"],
-                "fan_in": fi,
-                "fan_out": fo,
-                "score": fi * fo,
-            })
+            hubs.append(
+                {
+                    "name": data["name"],
+                    "file": data["file"],
+                    "line": data["line"],
+                    "fan_in": fi,
+                    "fan_out": fo,
+                    "score": fi * fo,
+                }
+            )
     hubs.sort(key=lambda x: -x["score"])
 
     return {
@@ -1733,11 +1983,11 @@ def compute_coupling_metrics(directory: str) -> dict:
         func_count = 0
         class_count = 0
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(fpath, encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
                 loc = sum(1 for ln in lines if ln.strip())
-        except OSError:
-            pass
+        except OSError as e:
+            logging.debug("Skipped coupling metrics for %s: %s", fpath, e)
         tree = _safe_parse(fpath)
         if tree:
             for node in ast.walk(tree):
@@ -1746,25 +1996,27 @@ def compute_coupling_metrics(directory: str) -> dict:
                 elif isinstance(node, ast.ClassDef):
                     class_count += 1
         modules[mod] = {
-            "name": mod, "file": _fwd(rel), "loc": loc,
-            "imports": set(), "imported_by": set(),
-            "func_count": func_count, "class_count": class_count,
+            "name": mod,
+            "file": _fwd(rel),
+            "loc": loc,
+            "imports": set(),
+            "imported_by": set(),
+            "func_count": func_count,
+            "class_count": class_count,
         }
 
     # Resolve imports
     for fpath, rel in _walk_py(directory):
         mod = _fwd(rel).replace("/", ".").removesuffix(".py").removesuffix(".__init__")
         try:
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+            with open(fpath, encoding="utf-8", errors="ignore") as fh:
                 for line in fh:
                     line = line.strip()
                     if not (line.startswith("import ") or line.startswith("from ")):
                         continue
                     parts = line.split()
                     target = None
-                    if parts[0] == "import":
-                        target = parts[1].split(".")[0]
-                    elif len(parts) >= 2:
+                    if parts[0] == "import" or len(parts) >= 2:
                         target = parts[1].split(".")[0]
                     if target and target in local_mods and target != mod:
                         modules[mod]["imports"].add(target)
@@ -1777,13 +2029,12 @@ def compute_coupling_metrics(directory: str) -> dict:
     results = []
     for mod, data in modules.items():
         ca = len(data["imported_by"])  # afferent coupling
-        ce = len(data["imports"])       # efferent coupling
+        ce = len(data["imports"])  # efferent coupling
         instability = round(ce / (ca + ce), 2) if (ca + ce) > 0 else 0.5
 
         # Cohesion estimate: ratio of internal function calls vs external dependencies
         # Low ratio = low cohesion (module does unrelated things)
-        cohesion = "high" if ce <= 2 and data["func_count"] <= 8 else \
-                   "medium" if ce <= 5 else "low"
+        cohesion = "high" if ce <= 2 and data["func_count"] <= 8 else "medium" if ce <= 5 else "low"
 
         health = "healthy"
         if ca >= 5 and ce >= 5:
@@ -1795,15 +2046,22 @@ def compute_coupling_metrics(directory: str) -> dict:
         elif ce > 8:
             health = "dependent"
 
-        results.append({
-            "module": mod, "file": data["file"], "loc": data["loc"],
-            "afferent_coupling": ca, "efferent_coupling": ce,
-            "instability": instability, "cohesion": cohesion,
-            "health": health, "func_count": data["func_count"],
-            "class_count": data["class_count"],
-            "imports": sorted(data["imports"]),
-            "imported_by": sorted(data["imported_by"]),
-        })
+        results.append(
+            {
+                "module": mod,
+                "file": data["file"],
+                "loc": data["loc"],
+                "afferent_coupling": ca,
+                "efferent_coupling": ce,
+                "instability": instability,
+                "cohesion": cohesion,
+                "health": health,
+                "func_count": data["func_count"],
+                "class_count": data["class_count"],
+                "imports": sorted(data["imports"]),
+                "imported_by": sorted(data["imported_by"]),
+            }
+        )
 
     results.sort(key=lambda x: -(x["afferent_coupling"] + x["efferent_coupling"]))
 
@@ -1876,12 +2134,14 @@ def detect_unused_imports(directory: str) -> dict:
         # Determine unused
         for name, line in imported.items():
             if name not in used_names and name != "_":
-                issues.append({
-                    "file": _fwd(rel),
-                    "line": line,
-                    "import_name": name,
-                    "severity": "LOW",
-                })
+                issues.append(
+                    {
+                        "file": _fwd(rel),
+                        "line": line,
+                        "import_name": name,
+                        "severity": "LOW",
+                    }
+                )
 
     issues.sort(key=lambda x: (x["file"], x["line"]))
 
@@ -1895,4 +2155,217 @@ def detect_unused_imports(directory: str) -> dict:
         "total_unused": len(issues),
         "files_with_unused": len(by_file),
         "by_file": dict(sorted(by_file.items(), key=lambda x: -x[1])[:20]),
+    }
+
+
+# ── Connection Analyzer ──────────────────────────────────────────
+_FRONTEND_EXTS = {".js", ".ts", ".jsx", ".tsx", ".html", ".vue", ".svelte"}
+_BACKEND_EXTS = {".py", ".js", ".ts"}
+
+# Frontend API-call patterns  (group 1 = URL path)
+_FE_PATTERNS = [
+    (r"""fetch\(\s*['"`]([^'"`\s]+)['"`]""", "fetch"),
+    (r"""axios\.(?:get|post|put|delete|patch)\(\s*['"`]([^'"`\s]+)['"`]""", "axios"),
+    (r"""\$\.(?:ajax|get|post)\(\s*['"`]([^'"`\s]+)['"`]""", "jquery"),
+    (r"""api\(\s*['"`]([^'"`\s]+)['"`]""", "api"),
+    (r"""XMLHttpRequest[^;]*\.open\(\s*['"][^'"]*['"]\s*,\s*['"]([^'"]+)['"]""", "xhr"),
+    (r"""action\s*=\s*['"]([^'"]+)['"]""", "form_action"),
+    (r"""href\s*=\s*['"](/api/[^'"]+)['"]""", "href"),
+]
+
+# Backend route patterns  (group 1 = URL path, or groups vary)
+_BE_PATTERNS = [
+    # Flask / FastAPI decorators
+    (r"""@\w+\.route\(\s*['"]([^'"]+)['"]""", "flask"),
+    (r"""@\w+\.(?:get|post|put|delete|patch)\(\s*['"]([^'"]+)['"]""", "fastapi"),
+    # Django urlpatterns
+    (r"""(?:^|,)\s*path\(\s*['"]([^'"]+)['"]""", "django"),
+    (r"""re_path\(\s*['"]([^'"]+)['"]""", "django"),
+    # Express
+    (r"""(?:app|router)\.(?:get|post|put|delete|patch|all|use)\(\s*['"]([^'"]+)['"]""", "express"),
+    # X-Ray custom handler
+    (r"""path\s*==\s*['"]([^'"]+)['"]""", "xray_custom"),
+]
+
+# HTTP method extraction from nearby context
+_METHOD_HINT = re.compile(r"""(?:method|methods)\s*[:=]\s*['"\[]*\s*(GET|POST|PUT|DELETE|PATCH)""", re.I)
+
+# Input-receiving patterns (request data access)
+_INPUT_PATTERNS = re.compile(
+    r"""(?:request\.(?:json|form|args|data|files|values|get_json|POST|GET|body|query_params)|"""
+    r"""req\.(?:body|params|query|file|files)|"""
+    r"""self\._read_body\(\))"""
+)
+
+# Path parameter normalization: <id>, :id, {id} → _PARAM_
+_PARAM_RE = re.compile(r"""(?:<[^>]+>|:\w+|\{[^}]+\})""")
+
+
+def _normalize_route(url: str) -> str:
+    """Normalize a URL for matching: strip qs, trailing slash, unify path params."""
+    url = url.split("?")[0].rstrip("/") or "/"
+    return _PARAM_RE.sub("_PARAM_", url)
+
+
+def _is_relative_api(url: str) -> bool:
+    """Return True if URL looks like a relative API path (not external)."""
+    if url.startswith(("http://", "https://", "//")):
+        return False
+    return url.startswith("/")
+
+
+def _infer_method(context: str, call_type: str) -> str:
+    """Infer HTTP method from surrounding code context."""
+    m = _METHOD_HINT.search(context)
+    if m:
+        return m.group(1).upper()
+    if call_type in ("form_action",):
+        return "POST"
+    if "post" in call_type.lower():
+        return "POST"
+    return "UNKNOWN"
+
+
+def _extract_function_body(content: str, line_idx: int) -> str:
+    """Extract a rough function body (next 30 lines) for input-pattern detection."""
+    lines = content.splitlines()
+    end = min(line_idx + 30, len(lines))
+    return "\n".join(lines[line_idx:end])
+
+
+def analyze_connections(directory: str) -> dict:
+    """Static analysis: map UI actions to backend handlers, detect orphans and cardinality."""
+    ui_actions = []  # {"file", "line", "call_type", "url", "method"}
+    handlers = []  # {"file", "line", "route", "method", "framework", "receives_input"}
+    frameworks = set()
+
+    # ── Phase A: Parse frontend files for API calls ──
+    compiled_fe = [(re.compile(p, re.MULTILINE), ct) for p, ct in _FE_PATTERNS]
+
+    for fpath, rel in _walk_ext(directory, _FRONTEND_EXTS):
+        try:
+            content = Path(fpath).read_text(encoding="utf-8", errors="ignore")
+        except OSError as e:
+            logging.debug("Skipped frontend API scan for %s: %s", fpath, e)
+            continue
+        for pat, call_type in compiled_fe:
+            for m in pat.finditer(content):
+                url = m.group(1)
+                if not _is_relative_api(url):
+                    continue
+                line = content[: m.start()].count("\n") + 1
+                ctx = content[max(0, m.start() - 100) : m.end() + 100]
+                ui_actions.append(
+                    {
+                        "file": _fwd(rel),
+                        "line": line,
+                        "call_type": call_type,
+                        "url": url.split("?")[0],
+                        "method": _infer_method(ctx, call_type),
+                    }
+                )
+
+    # ── Phase B: Parse backend files for route handlers ──
+    compiled_be = [(re.compile(p, re.MULTILINE), fw) for p, fw in _BE_PATTERNS]
+
+    for fpath, rel in _walk_ext(directory, _BACKEND_EXTS):
+        try:
+            content = Path(fpath).read_text(encoding="utf-8", errors="ignore")
+        except OSError as e:
+            logging.debug("Skipped backend API scan for %s: %s", fpath, e)
+            continue
+        for pat, framework in compiled_be:
+            for m in pat.finditer(content):
+                route = m.group(1)
+                if not route.startswith("/"):
+                    route = "/" + route
+                line = content[: m.start()].count("\n") + 1
+                frameworks.add(framework)
+
+                # Infer HTTP method
+                ctx = content[max(0, m.start() - 60) : m.end() + 60]
+                method_match = re.search(r"""\.(?:get|post|put|delete|patch)\(""", ctx, re.I)
+                if method_match:
+                    method = method_match.group(0).split(".")[1].split("(")[0].upper()
+                else:
+                    hint = _METHOD_HINT.search(ctx)
+                    method = hint.group(1).upper() if hint else "ANY"
+
+                # Check if handler body receives input
+                body_text = _extract_function_body(content, line)
+                receives_input = bool(_INPUT_PATTERNS.search(body_text))
+
+                handlers.append(
+                    {
+                        "file": _fwd(rel),
+                        "line": line,
+                        "route": route,
+                        "method": method,
+                        "framework": framework,
+                        "receives_input": receives_input,
+                    }
+                )
+
+    # ── Phase C: Build connection map ──
+    # Group by normalized path
+    ui_by_path = defaultdict(list)
+    for a in ui_actions:
+        ui_by_path[_normalize_route(a["url"])].append(a)
+
+    be_by_path = defaultdict(list)
+    for h in handlers:
+        be_by_path[_normalize_route(h["route"])].append(h)
+
+    all_paths = set(ui_by_path.keys()) | set(be_by_path.keys())
+
+    wired = []
+    orphan_ui = []
+    orphan_backend = []
+    card_counts = {"1:1": 0, "1:many": 0, "many:1": 0}
+
+    for path in sorted(all_paths):
+        ui_list = ui_by_path.get(path, [])
+        be_list = be_by_path.get(path, [])
+
+        if ui_list and be_list:
+            # Determine cardinality
+            n_ui, n_be = len(ui_list), len(be_list)
+            if n_ui == 1 and n_be == 1:
+                cardinality = "1:1"
+            elif n_ui > 1:
+                cardinality = "many:1"
+            else:
+                cardinality = "1:many"
+            card_counts[cardinality] += 1
+            wired.append(
+                {
+                    "url": ui_list[0]["url"],
+                    "cardinality": cardinality,
+                    "ui_actions": ui_list[:20],
+                    "handlers": be_list[:20],
+                }
+            )
+        elif ui_list and not be_list:
+            orphan_ui.extend(ui_list[:20])
+        elif be_list and not ui_list:
+            orphan_backend.extend(be_list[:20])
+
+    # Cap results
+    wired = wired[:500]
+    orphan_ui = orphan_ui[:500]
+    orphan_backend = orphan_backend[:500]
+
+    return {
+        "wired": wired,
+        "orphan_ui": orphan_ui,
+        "orphan_backend": orphan_backend,
+        "summary": {
+            "total_ui_actions": len(ui_actions),
+            "total_handlers": len(handlers),
+            "wired_count": len(wired),
+            "orphan_ui_count": len(orphan_ui),
+            "orphan_backend_count": len(orphan_backend),
+            "cardinality": card_counts,
+        },
+        "frameworks_detected": sorted(frameworks),
     }

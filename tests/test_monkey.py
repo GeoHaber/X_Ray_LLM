@@ -18,10 +18,9 @@ import textwrap
 import threading
 import time
 from http.server import HTTPServer
-from pathlib import Path
 from socketserver import ThreadingMixIn
-from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 import pytest
 
@@ -33,13 +32,15 @@ sys.path.insert(0, REPO_ROOT)
 # Fixtures — start real server, create test project directory
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @pytest.fixture(scope="module")
 def test_project(tmp_path_factory):
     """Create a small but realistic test project with known issues."""
     d = tmp_path_factory.mktemp("test_project")
 
     # Python file with known scan triggers
-    (d / "main.py").write_text(textwrap.dedent("""\
+    (d / "main.py").write_text(
+        textwrap.dedent("""\
         import os
         import sys
         import json
@@ -66,10 +67,13 @@ def test_project(tmp_path_factory):
             greet("world")
         except:
             pass
-    """), encoding="utf-8")
+    """),
+        encoding="utf-8",
+    )
 
     # Second file to create duplicates and more findings
-    (d / "utils.py").write_text(textwrap.dedent("""\
+    (d / "utils.py").write_text(
+        textwrap.dedent("""\
         import os
         import sys
 
@@ -87,10 +91,13 @@ def test_project(tmp_path_factory):
 
         class MyClass:
             pass
-    """), encoding="utf-8")
+    """),
+        encoding="utf-8",
+    )
 
     # HTML file for web smell detection
-    (d / "index.html").write_text(textwrap.dedent("""\
+    (d / "index.html").write_text(
+        textwrap.dedent("""\
         <html>
         <body>
             <div onclick="alert('hi')">Click</div>
@@ -100,7 +107,9 @@ def test_project(tmp_path_factory):
             </script>
         </body>
         </html>
-    """), encoding="utf-8")
+    """),
+        encoding="utf-8",
+    )
 
     # README for health/release checks
     (d / "README.md").write_text("# Test Project\nA test.", encoding="utf-8")
@@ -108,10 +117,13 @@ def test_project(tmp_path_factory):
     # Tests dir
     tests_dir = d / "tests"
     tests_dir.mkdir()
-    (tests_dir / "test_main.py").write_text(textwrap.dedent("""\
+    (tests_dir / "test_main.py").write_text(
+        textwrap.dedent("""\
         def test_placeholder():
             assert True
-    """), encoding="utf-8")
+    """),
+        encoding="utf-8",
+    )
 
     return str(d)
 
@@ -125,12 +137,13 @@ def server_url(test_project):
 
     # Find a free port
     import socket
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
     sock.close()
 
-    server = type('ThreadedHTTPServer', (ThreadingMixIn, HTTPServer), {'daemon_threads': True})(
+    server = type("ThreadedHTTPServer", (ThreadingMixIn, HTTPServer), {"daemon_threads": True})(
         ("127.0.0.1", port), XRayHandler
     )
 
@@ -156,6 +169,7 @@ def server_url(test_project):
 # ═══════════════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def get(url, timeout=30):
     """GET request, return parsed JSON."""
@@ -203,14 +217,13 @@ def post_sse(url, body, timeout=120):
     # 3. Fetch full results (with findings)
     full = get(f"{base}/api/scan-result", timeout=30)
 
-    return {"done": full,
-            "progress_count": progress_count,
-            "all_events": []}
+    return {"done": full, "progress_count": progress_count, "all_events": []}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. GET ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestGetEndpoints:
     """Test all GET API endpoints."""
@@ -240,9 +253,17 @@ class TestGetEndpoints:
 
     def test_browse_valid_path(self, server_url, test_project):
         from urllib.parse import quote
+
         data = get(f"{server_url}/api/browse?path={quote(test_project)}")
         # Should return entries
-        assert "entries" in data or "items" in data or "children" in data or "dirs" in data or "files" in data or isinstance(data, dict)
+        assert (
+            "entries" in data
+            or "items" in data
+            or "children" in data
+            or "dirs" in data
+            or "files" in data
+            or isinstance(data, dict)
+        )
 
     def test_favicon_no_crash(self, server_url):
         resp = urlopen(f"{server_url}/favicon.ico", timeout=5)
@@ -258,13 +279,12 @@ class TestGetEndpoints:
 # 2. SCAN ENDPOINT (SSE) — Both engines, all severities
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestScanEndpoint:
     """Test the /api/scan SSE endpoint with all engine/severity combos."""
 
     def test_scan_python_engine_all_severity(self, server_url, test_project):
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         done = result["done"]
         assert done is not None, "No 'done' event received"
         assert done.get("files_scanned", 0) > 0
@@ -273,45 +293,39 @@ class TestScanEndpoint:
         assert result["progress_count"] > 0
 
     def test_scan_python_medium_severity(self, server_url, test_project):
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "MEDIUM"
-        })
+        result = post_sse(
+            f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "MEDIUM"}
+        )
         done = result["done"]
         assert done is not None
         # Medium+ should have fewer findings than LOW
         all_findings = done.get("findings", [])
         for f in all_findings:
-            assert f["severity"] in ("HIGH", "MEDIUM"), \
-                f"LOW finding leaked through MEDIUM filter: {f['rule_id']}"
+            assert f["severity"] in ("HIGH", "MEDIUM"), f"LOW finding leaked through MEDIUM filter: {f['rule_id']}"
 
     def test_scan_python_high_severity(self, server_url, test_project):
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "HIGH"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "HIGH"})
         done = result["done"]
         assert done is not None
         for f in done.get("findings", []):
-            assert f["severity"] == "HIGH", \
-                f"Non-HIGH finding leaked: {f['rule_id']} ({f['severity']})"
+            assert f["severity"] == "HIGH", f"Non-HIGH finding leaked: {f['rule_id']} ({f['severity']})"
 
     def test_scan_with_exclude_pattern(self, server_url, test_project):
-        result_all = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
-        result_exclude = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW",
-            "excludes": ["utils\\.py"]
-        })
+        result_all = post_sse(
+            f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"}
+        )
+        result_exclude = post_sse(
+            f"{server_url}/api/scan",
+            {"directory": test_project, "engine": "python", "severity": "LOW", "excludes": ["utils\\.py"]},
+        )
         # Excluding utils.py should produce fewer findings
         all_count = len(result_all["done"].get("findings", []))
         excl_count = len(result_exclude["done"].get("findings", []))
-        assert excl_count < all_count, \
-            f"Exclude pattern had no effect: {excl_count} >= {all_count}"
+        assert excl_count < all_count, f"Exclude pattern had no effect: {excl_count} >= {all_count}"
 
     def test_scan_invalid_directory(self, server_url):
         data = json.dumps({"directory": "/nonexistent/path/xyz"}).encode()
-        req = Request(f"{server_url}/api/scan", data=data,
-                      headers={"Content-Type": "application/json"})
+        req = Request(f"{server_url}/api/scan", data=data, headers={"Content-Type": "application/json"})
         with pytest.raises(HTTPError) as exc_info:
             urlopen(req, timeout=10)
         assert exc_info.value.code == 400
@@ -321,18 +335,14 @@ class TestScanEndpoint:
         info = get(f"{server_url}/api/info")
         if not info.get("rust_available"):
             pytest.skip("Rust scanner not built")
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "rust", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "rust", "severity": "LOW"})
         done = result["done"]
         assert done is not None
         assert done.get("engine") == "rust"
 
     def test_scan_finding_fields_complete(self, server_url, test_project):
         """Every finding has all required fields."""
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         required_fields = {"rule_id", "severity", "file", "line", "description"}
         for f in result["done"].get("findings", []):
             missing = required_fields - set(f.keys())
@@ -348,6 +358,7 @@ class TestScanEndpoint:
 # 3. ANALYSIS TOOL BUTTONS — every single one
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestAnalysisToolButtons:
     """Test every sidebar tool button's API endpoint."""
 
@@ -360,8 +371,11 @@ class TestAnalysisToolButtons:
     def test_git_hotspots(self, server_url, test_project):
         """Git hotspots — may return empty if not a git repo, but must not crash."""
         data = post(f"{server_url}/api/git-hotspots", {"directory": test_project})
-        assert not data.get("error") or "not a git" in data.get("error", "").lower() \
+        assert (
+            not data.get("error")
+            or "not a git" in data.get("error", "").lower()
             or "git" in data.get("error", "").lower()
+        )
 
     def test_imports(self, server_url, test_project):
         data = post(f"{server_url}/api/imports", {"directory": test_project})
@@ -448,9 +462,7 @@ class TestAnalysisToolButtons:
 
     def test_remediation_time(self, server_url, test_project):
         # First scan to get findings
-        scan = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        scan = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         findings = scan["done"].get("findings", [])[:5]
         data = post(f"{server_url}/api/remediation-time", {"findings": findings})
         assert "total_minutes" in data or "total_hours" in data
@@ -461,10 +473,24 @@ class TestAnalysisToolButtons:
         data = post(f"{server_url}/api/remediation-time", {"findings": []})
         assert isinstance(data, dict)
 
+    def test_connection_test(self, server_url, test_project):
+        """Connection analyzer maps UI actions to backend handlers."""
+        data = post(f"{server_url}/api/connection-test", {"directory": test_project})
+        assert isinstance(data, dict)
+        assert "summary" in data
+        assert "wired" in data
+        assert "orphan_ui" in data
+        assert "orphan_backend" in data
+        assert "frameworks_detected" in data
+        s = data["summary"]
+        assert "total_ui_actions" in s
+        assert "total_handlers" in s
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 4. PM DASHBOARD BUTTONS — every single one
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPMDashboardButtons:
     """Test every PM Dashboard button's API endpoint."""
@@ -472,52 +498,38 @@ class TestPMDashboardButtons:
     @pytest.fixture(scope="class")
     def scan_findings(self, server_url, test_project):
         """Run a scan once and reuse findings for all PM tests."""
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         return result["done"].get("findings", [])
 
     def test_risk_heatmap(self, server_url, test_project, scan_findings):
-        data = post(f"{server_url}/api/risk-heatmap", {
-            "directory": test_project, "findings": scan_findings
-        })
+        data = post(f"{server_url}/api/risk-heatmap", {"directory": test_project, "findings": scan_findings})
         assert "files" in data or "total_files" in data
         assert isinstance(data, dict)
 
     def test_risk_heatmap_no_findings(self, server_url, test_project):
         """Risk heatmap with no findings should still work."""
-        data = post(f"{server_url}/api/risk-heatmap", {
-            "directory": test_project, "findings": []
-        })
+        data = post(f"{server_url}/api/risk-heatmap", {"directory": test_project, "findings": []})
         assert isinstance(data, dict)
 
     def test_module_cards(self, server_url, test_project, scan_findings):
-        data = post(f"{server_url}/api/module-cards", {
-            "directory": test_project, "findings": scan_findings
-        })
+        data = post(f"{server_url}/api/module-cards", {"directory": test_project, "findings": scan_findings})
         assert "modules" in data or "total_modules" in data
         assert isinstance(data, dict)
 
     def test_confidence(self, server_url, test_project, scan_findings):
-        data = post(f"{server_url}/api/confidence", {
-            "directory": test_project, "findings": scan_findings
-        })
+        data = post(f"{server_url}/api/confidence", {"directory": test_project, "findings": scan_findings})
         assert "confidence" in data
         assert isinstance(data["confidence"], (int, float))
         assert 0 <= data["confidence"] <= 100
 
     def test_sprint_batches(self, server_url, scan_findings):
-        data = post(f"{server_url}/api/sprint-batches", {
-            "findings": scan_findings, "smells": []
-        })
+        data = post(f"{server_url}/api/sprint-batches", {"findings": scan_findings, "smells": []})
         assert "batches" in data
         assert isinstance(data["batches"], list)
 
     def test_sprint_batches_empty(self, server_url):
         """Sprint batches with empty inputs."""
-        data = post(f"{server_url}/api/sprint-batches", {
-            "findings": [], "smells": []
-        })
+        data = post(f"{server_url}/api/sprint-batches", {"findings": [], "smells": []})
         assert isinstance(data, dict)
 
     def test_architecture(self, server_url, test_project):
@@ -546,11 +558,14 @@ class TestPMDashboardButtons:
         # Our test project has unused imports (sys in utils.py)
 
     def test_project_review(self, server_url, test_project, scan_findings):
-        data = post(f"{server_url}/api/project-review", {
-            "directory": test_project,
-            "findings": scan_findings,
-            "files_scanned": 3,
-        })
+        data = post(
+            f"{server_url}/api/project-review",
+            {
+                "directory": test_project,
+                "findings": scan_findings,
+                "files_scanned": 3,
+            },
+        )
         assert isinstance(data, dict)
         # Should return a score/grade
         assert "score" in data or "letter" in data or "overall_grade" in data
@@ -560,20 +575,23 @@ class TestPMDashboardButtons:
 # 5. CHAT ENDPOINT
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestChatEndpoint:
 
+class TestChatEndpoint:
     def test_chat_basic(self, server_url):
         data = post(f"{server_url}/api/chat", {"message": "What is X-Ray?"})
         assert "reply" in data
         assert len(data["reply"]) > 0
 
     def test_chat_with_context(self, server_url, test_project):
-        data = post(f"{server_url}/api/chat", {
-            "message": "How many rules does X-Ray have?",
-            "has_results": True,
-            "findings_count": 42,
-            "directory": test_project,
-        })
+        data = post(
+            f"{server_url}/api/chat",
+            {
+                "message": "How many rules does X-Ray have?",
+                "has_results": True,
+                "findings_count": 42,
+                "directory": test_project,
+            },
+        )
         assert "reply" in data
 
     def test_chat_empty_message(self, server_url):
@@ -589,13 +607,11 @@ class TestChatEndpoint:
 # 6. FIX ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestFixEndpoints:
 
+class TestFixEndpoints:
     def test_preview_fix(self, server_url, test_project):
         """Preview fix on a real finding — should return without crashing."""
-        scan = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        scan = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         findings = scan["done"].get("findings", [])
         if not findings:
             pytest.skip("No findings to preview-fix")
@@ -617,32 +633,49 @@ class TestFixEndpoints:
 # 7. ERROR HANDLING — bad inputs on every endpoint that takes directory
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestErrorHandling:
     """Every endpoint requiring a directory rejects invalid paths gracefully."""
 
     DIRECTORY_ENDPOINTS = [
-        "/api/satd", "/api/git-hotspots", "/api/imports", "/api/ruff",
-        "/api/format", "/api/typecheck", "/api/health", "/api/bandit",
-        "/api/dead-code", "/api/smells", "/api/duplicates",
-        "/api/temporal-coupling", "/api/release-readiness", "/api/ai-detect",
-        "/api/web-smells", "/api/test-gen",
-        "/api/risk-heatmap", "/api/module-cards", "/api/confidence",
-        "/api/architecture", "/api/call-graph", "/api/project-review",
-        "/api/circular-calls", "/api/coupling", "/api/unused-imports",
+        "/api/satd",
+        "/api/git-hotspots",
+        "/api/imports",
+        "/api/ruff",
+        "/api/format",
+        "/api/typecheck",
+        "/api/health",
+        "/api/bandit",
+        "/api/dead-code",
+        "/api/smells",
+        "/api/duplicates",
+        "/api/temporal-coupling",
+        "/api/release-readiness",
+        "/api/ai-detect",
+        "/api/web-smells",
+        "/api/test-gen",
+        "/api/risk-heatmap",
+        "/api/module-cards",
+        "/api/confidence",
+        "/api/architecture",
+        "/api/call-graph",
+        "/api/project-review",
+        "/api/circular-calls",
+        "/api/coupling",
+        "/api/unused-imports",
+        "/api/connection-test",
     ]
 
     @pytest.mark.parametrize("endpoint", DIRECTORY_ENDPOINTS)
     def test_invalid_directory_returns_400(self, server_url, endpoint):
         """Every directory-based endpoint returns 400 for bogus path."""
         data = json.dumps({"directory": "/totally/bogus/path/xyz123"}).encode()
-        req = Request(f"{server_url}{endpoint}", data=data,
-                      headers={"Content-Type": "application/json"})
+        req = Request(f"{server_url}{endpoint}", data=data, headers={"Content-Type": "application/json"})
         try:
             resp = urlopen(req, timeout=15)
             body = json.loads(resp.read().decode())
             # Some endpoints return 200 with error key instead of 400
-            assert "error" in body, \
-                f"{endpoint} accepted bogus directory without error"
+            assert "error" in body, f"{endpoint} accepted bogus directory without error"
         except HTTPError as e:
             assert e.code == 400, f"{endpoint} returned {e.code}, expected 400"
 
@@ -650,13 +683,11 @@ class TestErrorHandling:
     def test_empty_directory_returns_400(self, server_url, endpoint):
         """Every directory-based endpoint rejects empty string."""
         data = json.dumps({"directory": ""}).encode()
-        req = Request(f"{server_url}{endpoint}", data=data,
-                      headers={"Content-Type": "application/json"})
+        req = Request(f"{server_url}{endpoint}", data=data, headers={"Content-Type": "application/json"})
         try:
             resp = urlopen(req, timeout=15)
             body = json.loads(resp.read().decode())
-            assert "error" in body, \
-                f"{endpoint} accepted empty directory without error"
+            assert "error" in body, f"{endpoint} accepted empty directory without error"
         except HTTPError as e:
             assert e.code == 400, f"{endpoint} returned {e.code}, expected 400"
 
@@ -665,64 +696,76 @@ class TestErrorHandling:
 # 8. ANALYZER FUNCTIONS — direct import tests (no server needed)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestAnalyzersDirect:
     """Test analyzer functions directly (unit tests, not via HTTP)."""
 
     def test_check_format(self, test_project):
         from analyzers import check_format
+
         result = check_format(test_project)
         assert isinstance(result, dict)
 
     def test_check_types(self, test_project):
         from analyzers import check_types
+
         result = check_types(test_project)
         assert isinstance(result, dict)
 
     def test_check_project_health(self, test_project):
         from analyzers import check_project_health
+
         result = check_project_health(test_project)
         assert "score" in result
         assert isinstance(result["checks"], list)
 
     def test_detect_dead_functions(self, test_project):
         from analyzers import detect_dead_functions
+
         result = detect_dead_functions(test_project)
         assert "dead_functions" in result
         assert "total_defined" in result
 
     def test_detect_code_smells(self, test_project):
         from analyzers import detect_code_smells
+
         result = detect_code_smells(test_project)
         assert "smells" in result
         assert result["total"] >= 0
 
     def test_detect_duplicates(self, test_project):
         from analyzers import detect_duplicates
+
         result = detect_duplicates(test_project)
         assert "duplicate_groups" in result
 
     def test_check_release_readiness(self, test_project):
         from analyzers import check_release_readiness
+
         result = check_release_readiness(test_project)
         assert isinstance(result, dict)
 
     def test_detect_ai_code(self, test_project):
         from analyzers import detect_ai_code
+
         result = detect_ai_code(test_project)
         assert "indicators" in result
 
     def test_detect_web_smells(self, test_project):
         from analyzers import detect_web_smells
+
         result = detect_web_smells(test_project)
         assert "smells" in result
 
     def test_generate_test_stubs(self, test_project):
         from analyzers import generate_test_stubs
+
         result = generate_test_stubs(test_project)
         assert "total_functions" in result
 
     def test_estimate_remediation_time(self):
         from analyzers import estimate_remediation_time
+
         findings = [
             {"rule_id": "SEC-003", "severity": "HIGH"},
             {"rule_id": "QUAL-001", "severity": "LOW"},
@@ -732,52 +775,62 @@ class TestAnalyzersDirect:
 
     def test_compute_risk_heatmap(self, test_project):
         from analyzers import compute_risk_heatmap
+
         result = compute_risk_heatmap(test_project, [])
         assert isinstance(result, dict)
 
     def test_compute_module_cards(self, test_project):
         from analyzers import compute_module_cards
+
         result = compute_module_cards(test_project, [])
         assert isinstance(result, dict)
 
     def test_compute_confidence_meter(self, test_project):
         from analyzers import compute_confidence_meter
+
         result = compute_confidence_meter(test_project, [])
         assert "confidence" in result
         assert 0 <= result["confidence"] <= 100
 
     def test_compute_sprint_batches(self):
         from analyzers import compute_sprint_batches
+
         result = compute_sprint_batches([], [])
         assert "batches" in result
 
     def test_compute_architecture_map(self, test_project):
         from analyzers import compute_architecture_map
+
         result = compute_architecture_map(test_project)
         assert "nodes" in result
 
     def test_compute_call_graph(self, test_project):
         from analyzers import compute_call_graph
+
         result = compute_call_graph(test_project)
         assert "nodes" in result
 
     def test_compute_project_review(self, test_project):
         from analyzers import compute_project_review
+
         result = compute_project_review(test_project)
         assert isinstance(result, dict)
 
     def test_detect_circular_calls(self, test_project):
         from analyzers import detect_circular_calls
+
         result = detect_circular_calls(test_project)
         assert "total_cycles" in result or "circular_calls" in result
 
     def test_compute_coupling_metrics(self, test_project):
         from analyzers import compute_coupling_metrics
+
         result = compute_coupling_metrics(test_project)
         assert "modules" in result
 
     def test_detect_unused_imports(self, test_project):
         from analyzers import detect_unused_imports
+
         result = detect_unused_imports(test_project)
         assert isinstance(result, dict)
 
@@ -786,11 +839,13 @@ class TestAnalyzersDirect:
 # 9. SCANNER ENGINE — direct unit tests
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestScannerDirect:
     """Direct scanner tests — no server."""
 
     def test_scan_directory(self, test_project):
         from xray.scanner import scan_directory
+
         result = scan_directory(test_project)
         assert result.files_scanned > 0
         assert len(result.findings) > 0
@@ -798,6 +853,7 @@ class TestScannerDirect:
 
     def test_scan_file(self, test_project):
         from xray.scanner import scan_file
+
         main_py = os.path.join(test_project, "main.py")
         findings = scan_file(main_py)
         assert isinstance(findings, list)
@@ -805,6 +861,7 @@ class TestScannerDirect:
 
     def test_scan_empty_dir(self):
         from xray.scanner import scan_directory
+
         with tempfile.TemporaryDirectory() as d:
             result = scan_directory(d)
             assert result.files_scanned == 0
@@ -812,6 +869,7 @@ class TestScannerDirect:
 
     def test_finding_fields(self, test_project):
         from xray.scanner import scan_directory
+
         result = scan_directory(test_project)
         for f in result.findings[:10]:
             assert hasattr(f, "rule_id")
@@ -823,6 +881,7 @@ class TestScannerDirect:
 
     def test_severity_counts(self, test_project):
         from xray.scanner import scan_directory
+
         result = scan_directory(test_project)
         total = result.high_count + result.medium_count + result.low_count
         assert total == len(result.findings)
@@ -832,48 +891,37 @@ class TestScannerDirect:
 # 10. SCAN RESULTS — content validation
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestScanResultsContent:
     """Verify the scan actually finds the planted issues."""
 
     def test_finds_eval(self, server_url, test_project):
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         rules = {f["rule_id"] for f in result["done"].get("findings", [])}
         assert "SEC-007" in rules, f"Failed to detect eval() [SEC-007], found: {rules}"
 
     def test_finds_shell_injection(self, server_url, test_project):
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         rules = {f["rule_id"] for f in result["done"].get("findings", [])}
         assert "SEC-003" in rules, "Failed to detect shell=True [SEC-003]"
 
     def test_finds_bare_except(self, server_url, test_project):
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         rules = {f["rule_id"] for f in result["done"].get("findings", [])}
         assert "QUAL-001" in rules, "Failed to detect bare except [QUAL-001]"
 
     def test_finds_hardcoded_secret(self, server_url, test_project):
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         rules = {f["rule_id"] for f in result["done"].get("findings", [])}
         assert "SEC-007" in rules, "Failed to detect hardcoded secret [SEC-007]"
 
     def test_finds_print_debug(self, server_url, test_project):
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         rules = {f["rule_id"] for f in result["done"].get("findings", [])}
         assert "PY-004" in rules, "Failed to detect print() debug [PY-004]"
 
     def test_finds_todo_marker(self, server_url, test_project):
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         rules = {f["rule_id"] for f in result["done"].get("findings", [])}
         assert "QUAL-007" in rules, "Failed to detect TODO/FIXME [QUAL-007]"
 
@@ -881,6 +929,7 @@ class TestScanResultsContent:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 11. SERVER INFRASTRUCTURE
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestServerInfrastructure:
     """Test server behavior: CORS, content types, error responses."""
@@ -897,8 +946,7 @@ class TestServerInfrastructure:
 
     def test_unknown_post_returns_404(self, server_url):
         data = json.dumps({}).encode()
-        req = Request(f"{server_url}/api/does-not-exist", data=data,
-                      headers={"Content-Type": "application/json"})
+        req = Request(f"{server_url}/api/does-not-exist", data=data, headers={"Content-Type": "application/json"})
         with pytest.raises(HTTPError) as exc_info:
             urlopen(req, timeout=10)
         assert exc_info.value.code == 404
@@ -906,6 +954,7 @@ class TestServerInfrastructure:
     def test_concurrent_requests(self, server_url, test_project):
         """Multiple simultaneous requests don't crash the server."""
         import concurrent.futures
+
         endpoints = [
             f"{server_url}/api/health",
             f"{server_url}/api/smells",
@@ -929,15 +978,18 @@ class TestServerInfrastructure:
 # 12. RULES DATABASE INTEGRITY
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestRulesIntegrity:
     """All rules compile and have valid fields."""
 
     def test_all_rules_load(self):
         from xray.rules import ALL_RULES
+
         assert len(ALL_RULES) >= 28
 
     def test_all_patterns_compile(self):
         from xray.rules import ALL_RULES
+
         for rule in ALL_RULES:
             pattern = rule["pattern"]
             try:
@@ -947,19 +999,23 @@ class TestRulesIntegrity:
 
     def test_security_rules_exist(self):
         from xray.rules import SECURITY_RULES
+
         assert len(SECURITY_RULES) >= 10
 
     def test_quality_rules_exist(self):
         from xray.rules import QUALITY_RULES
+
         assert len(QUALITY_RULES) >= 10
 
     def test_python_rules_exist(self):
         from xray.rules import PYTHON_RULES
+
         assert len(PYTHON_RULES) >= 8
 
     def test_fixable_rules_are_real(self):
         from xray.fixer import FIXABLE_RULES
         from xray.rules import ALL_RULES
+
         all_ids = {r["id"] for r in ALL_RULES}
         for fixable in FIXABLE_RULES:
             assert fixable in all_ids, f"Fixable rule {fixable} not in ALL_RULES"
@@ -968,6 +1024,7 @@ class TestRulesIntegrity:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 13. SCAN COMPLETION — regression tests for the SSE hang/no-continuation bug
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestScanCompletion:
     """Regression tests for the scan-completes-but-UI-hangs bug.
@@ -985,19 +1042,18 @@ class TestScanCompletion:
 
     def test_scan_returns_started_status(self, server_url, test_project):
         """POST /api/scan must return immediately with status='started'."""
-        resp = post(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        resp = post(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         assert resp.get("status") == "started"
         assert "total_files" in resp
-        import time; time.sleep(2)  # let background scan finish
+        import time
+
+        time.sleep(2)  # let background scan finish
 
     def test_scan_progress_endpoint(self, server_url, test_project):
         """GET /api/scan-progress returns progress during scan."""
         import time
-        post(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+
+        post(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         # Poll until done
         deadline = time.time() + 30
         saw_scanning = False
@@ -1016,9 +1072,7 @@ class TestScanCompletion:
 
     def test_scan_result_endpoint_returns_full_findings(self, server_url, test_project):
         """After a scan, GET /api/scan-result must return the full findings array."""
-        post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         full = get(f"{server_url}/api/scan-result")
         assert "findings" in full, "scan-result missing 'findings' key"
         assert isinstance(full["findings"], list)
@@ -1031,6 +1085,7 @@ class TestScanCompletion:
         (Note: if another test already ran a scan on this server instance,
         _last_scan_result will be set. We test the error key if present.)"""
         import ui_server
+
         # Temporarily clear the stored result
         original = ui_server._last_scan_result
         ui_server._last_scan_result = None
@@ -1043,9 +1098,7 @@ class TestScanCompletion:
 
     def test_scan_result_finding_fields_complete(self, server_url, test_project):
         """Every finding from /api/scan-result has all required fields."""
-        post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         full = get(f"{server_url}/api/scan-result")
         required_fields = {"rule_id", "severity", "file", "line", "description"}
         for f in full["findings"]:
@@ -1058,19 +1111,14 @@ class TestScanCompletion:
     def test_sse_summary_matches_full_findings_count(self, server_url, test_project):
         """The summary.total in the SSE done must equal len(findings)
         from /api/scan-result — if they disagree the UI shows wrong numbers."""
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         summary_total = result["done"]["summary"]["total"]
         findings_total = len(result["done"]["findings"])
-        assert summary_total == findings_total, \
-            f"Summary says {summary_total} findings but result has {findings_total}"
+        assert summary_total == findings_total, f"Summary says {summary_total} findings but result has {findings_total}"
 
     def test_severity_breakdown_matches(self, server_url, test_project):
         """High/Medium/Low counts in summary must match actual findings."""
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         summary = result["done"]["summary"]
         findings = result["done"]["findings"]
         actual_high = sum(1 for f in findings if f["severity"] == "HIGH")
@@ -1085,9 +1133,8 @@ class TestScanCompletion:
     def test_progress_reports_files_scanned(self, server_url, test_project):
         """Progress polling must report files_scanned increasing to total."""
         import time
-        post(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+
+        post(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         max_scanned = 0
         deadline = time.time() + 30
         while time.time() < deadline:
@@ -1102,17 +1149,16 @@ class TestScanCompletion:
 
     def test_scan_response_is_json_not_sse(self, server_url, test_project):
         """POST /api/scan must return JSON (not SSE stream)."""
-        data = json.dumps({
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        }).encode()
-        req = Request(f"{server_url}/api/scan", data=data,
-                      headers={"Content-Type": "application/json"})
+        data = json.dumps({"directory": test_project, "engine": "python", "severity": "LOW"}).encode()
+        req = Request(f"{server_url}/api/scan", data=data, headers={"Content-Type": "application/json"})
         resp = urlopen(req, timeout=30)
         ct = resp.headers.get("Content-Type", "")
         assert "application/json" in ct, f"Expected JSON response, got {ct}"
         body = json.loads(resp.read().decode())
         assert body.get("status") == "started"
-        import time; time.sleep(2)  # let background scan finish
+        import time
+
+        time.sleep(2)  # let background scan finish
 
     # ── Second scan overwrites first ──────────────────────────────────────
 
@@ -1120,22 +1166,17 @@ class TestScanCompletion:
         """Running a second scan with different severity should overwrite
         _last_scan_result so /api/scan-result returns the latest."""
         # First scan: all severities
-        post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         all_result = get(f"{server_url}/api/scan-result")
         all_count = len(all_result["findings"])
 
         # Second scan: HIGH only
-        post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "HIGH"
-        })
+        post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "HIGH"})
         high_result = get(f"{server_url}/api/scan-result")
         high_count = len(high_result["findings"])
 
         # HIGH-only should have fewer (or equal) findings
-        assert high_count <= all_count, \
-            f"HIGH-only scan ({high_count}) has more findings than LOW+ scan ({all_count})"
+        assert high_count <= all_count, f"HIGH-only scan ({high_count}) has more findings than LOW+ scan ({all_count})"
         # And all findings should be HIGH severity
         for f in high_result["findings"]:
             assert f["severity"] == "HIGH"
@@ -1145,9 +1186,7 @@ class TestScanCompletion:
     def test_post_sse_merges_findings(self, server_url, test_project):
         """The post_sse test helper must fetch findings from /api/scan-result
         into the done dict, so all existing tests keep working."""
-        result = post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        result = post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         done = result["done"]
         assert done is not None
         assert "findings" in done, "post_sse did not merge findings into done"
@@ -1158,9 +1197,7 @@ class TestScanCompletion:
 
     def test_scan_result_has_required_fields(self, server_url, test_project):
         """Full scan result must have all fields the UI needs."""
-        post_sse(f"{server_url}/api/scan", {
-            "directory": test_project, "engine": "python", "severity": "LOW"
-        })
+        post_sse(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         full = get(f"{server_url}/api/scan-result")
         required = {"engine", "elapsed_ms", "files_scanned", "summary", "findings"}
         missing = required - set(full.keys())
