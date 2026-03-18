@@ -947,9 +947,17 @@ class TestServerInfrastructure:
     def test_unknown_post_returns_404(self, server_url):
         data = json.dumps({}).encode()
         req = Request(f"{server_url}/api/does-not-exist", data=data, headers={"Content-Type": "application/json"})
-        with pytest.raises(HTTPError) as exc_info:
-            urlopen(req, timeout=10)
-        assert exc_info.value.code == 404
+        # Retry once — Windows can flake with ConnectionAbortedError
+        for attempt in range(2):
+            try:
+                with pytest.raises(HTTPError) as exc_info:
+                    urlopen(req, timeout=10)
+                assert exc_info.value.code == 404
+                break
+            except ConnectionError:
+                if attempt == 1:
+                    raise
+                time.sleep(0.5)
 
     def test_concurrent_requests(self, server_url, test_project):
         """Multiple simultaneous requests don't crash the server."""

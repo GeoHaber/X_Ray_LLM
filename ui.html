@@ -1244,11 +1244,12 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
 
     <!-- Diagnostics Accordion -->
     <details class="accordion">
-      <summary>&#x1F50C; Diagnostics <span class="badge">2</span></summary>
+      <summary>&#x1F50C; Diagnostics <span class="badge">3</span></summary>
       <div class="accordion-body">
         <div class="tool-list">
           <button class="btn btn-sm btn-outline" onclick="runConnectionTest()" id="connBtn" disabled data-hint="Map UI→Backend wired connections">&#x1F50C; Connection Test</button>
           <button class="btn btn-sm btn-wire" onclick="runWireTest()" id="wireBtn" disabled data-hint="Live endpoint connectivity check">&#128268; Wire Connector Test</button>
+          <button class="btn btn-sm btn-outline" onclick="runMonkeyTests()" id="monkeyBtn" data-hint="Run 85 integration tests against live server">&#x1F412; Run Monkey Tests</button>
         </div>
       </div>
     </details>
@@ -4588,6 +4589,90 @@ function renderWireResults(results) {
   progressEl.scrollTop = progressEl.scrollHeight;
 }
 
+// ── Monkey Tests ─────────────────────────────────────────────────
+async function runMonkeyTests() {
+  const btn = document.getElementById('monkeyBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Running...'; }
+  updatePipelineStatus('Starting Monkey Tests (85 integration tests)...');
+
+  const mainEl = document.getElementById('mainContent');
+  mainEl.innerHTML = `
+    <div style="padding:20px;">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+        <span style="font-size:32px;">&#x1F412;</span>
+        <div>
+          <h2 style="margin:0;">Monkey Tests</h2>
+          <p style="margin:2px 0 0; color:var(--text2); font-size:13px;">85 integration tests against the live server — every endpoint, every button, every error path</p>
+        </div>
+      </div>
+      <div style="display:flex; gap:16px; margin-bottom:12px;">
+        <div class="card" style="padding:12px 20px; text-align:center;" id="monkeyPassed">
+          <div style="font-size:24px; font-weight:800; color:var(--green);">0</div>
+          <div style="font-size:10px; color:var(--text2); text-transform:uppercase;">Passed</div>
+        </div>
+        <div class="card" style="padding:12px 20px; text-align:center;" id="monkeyFailed">
+          <div style="font-size:24px; font-weight:800; color:var(--high);">0</div>
+          <div style="font-size:10px; color:var(--text2); text-transform:uppercase;">Failed</div>
+        </div>
+        <div class="card" style="padding:12px 20px; text-align:center;" id="monkeyStatus">
+          <div style="font-size:24px; font-weight:800; color:var(--neon-cyan);">...</div>
+          <div style="font-size:10px; color:var(--text2); text-transform:uppercase;">Status</div>
+        </div>
+      </div>
+      <pre id="monkeyOutput" style="background:var(--bg1); border:1px solid var(--glass-border);
+        border-radius:var(--radius); padding:16px; max-height:500px; overflow-y:auto;
+        font-size:12px; line-height:1.6; white-space:pre-wrap;"></pre>
+    </div>`;
+
+  try {
+    await api('/api/monkey-test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' });
+
+    let done = false;
+    while (!done) {
+      await new Promise(r => setTimeout(r, 800));
+      const p = await api('/api/monkey-progress');
+      if (p.status === 'running') {
+        document.getElementById('monkeyPassed').querySelector('div').textContent = p.passed || 0;
+        document.getElementById('monkeyFailed').querySelector('div').textContent = p.failed || 0;
+        document.getElementById('monkeyStatus').querySelector('div').textContent = 'Running';
+        const lastLine = p.last_line || '';
+        if (lastLine) {
+          const out = document.getElementById('monkeyOutput');
+          out.textContent = `Running... ${p.passed || 0} passed, ${p.failed || 0} failed\n\nLatest: ${lastLine}`;
+        }
+        updatePipelineStatus(`Monkey: ${p.passed||0} passed, ${p.failed||0} failed...`);
+      } else if (p.status === 'done' || p.output) {
+        done = true;
+        const passed = p.passed || 0;
+        const failed = p.failed || 0;
+        document.getElementById('monkeyPassed').querySelector('div').textContent = passed;
+        document.getElementById('monkeyFailed').querySelector('div').textContent = failed;
+        const statusEl = document.getElementById('monkeyStatus').querySelector('div');
+        statusEl.textContent = failed === 0 ? 'PASS' : 'FAIL';
+        statusEl.style.color = failed === 0 ? 'var(--green)' : 'var(--high)';
+
+        // Colorize output
+        const raw = p.output || '';
+        const colored = raw.split('\n').map(line => {
+          if (line.includes(' PASSED')) return `<span style="color:var(--green)">${esc(line)}</span>`;
+          if (line.includes(' FAILED')) return `<span style="color:var(--high)">${esc(line)}</span>`;
+          if (line.includes('passed') || line.includes('failed')) return `<span style="font-weight:700">${esc(line)}</span>`;
+          return esc(line);
+        }).join('\n');
+        document.getElementById('monkeyOutput').innerHTML = colored;
+
+        updatePipelineStatus(failed === 0 ? `Monkey: ${passed} passed` : `Monkey: ${passed} passed, ${failed} failed`);
+        showToast(failed === 0 ? `Monkey Tests: all ${passed} passed!` : `Monkey Tests: ${failed} failed`, failed > 0);
+      }
+    }
+  } catch (e) {
+    document.getElementById('monkeyOutput').textContent = 'Error: ' + e.message;
+    showToast('Monkey tests failed to start', true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDC12 Run Monkey Tests'; }
+  }
+}
+
 // ── Command Palette (Ctrl+K) ─────────────────────────────────────
 const _cmdActions = [
   { icon: '\u25B6', label: 'Scan Project', hint: 'Ctrl+Enter', desc: 'Run full code scan', action: () => { if(!document.getElementById('scanBtn').disabled) runScan(); } },
@@ -4609,6 +4694,7 @@ const _cmdActions = [
   { icon: '\uD83C\uDF10', label: 'Web Smells', hint: '', desc: 'HTML/JS issues', action: () => { if(!document.getElementById('webBtn').disabled) runWebSmells(); } },
   { icon: '\uD83E\uDDEA', label: 'Test Gen', hint: '', desc: 'Generate tests', action: () => { if(!document.getElementById('testGenBtn').disabled) runTestGen(); } },
   { icon: '\uD83D\uDD0C', label: 'Connection Test', hint: '', desc: 'UI\u2194Backend map', action: () => { if(!document.getElementById('connBtn').disabled) runConnectionTest(); } },
+  { icon: '\uD83D\uDC12', label: 'Monkey Tests', hint: '', desc: '85 integration tests', action: () => runMonkeyTests() },
   { icon: '\uD83C\uDFAF', label: 'Risk Map', hint: '', desc: 'Risk treemap', action: () => { if(!document.getElementById('riskBtn').disabled) runRiskMap(); } },
   { icon: '\uD83D\uDCCA', label: 'Modules', hint: '', desc: 'Per-module grades', action: () => { if(!document.getElementById('modBtn').disabled) runModuleCards(); } },
   { icon: '\uD83C\uDFAF', label: 'Confidence', hint: '', desc: 'Release score', action: () => { if(!document.getElementById('confBtn').disabled) runConfidence(); } },

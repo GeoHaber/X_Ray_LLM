@@ -264,6 +264,62 @@ _wire_test_results = None
 _wire_test_progress = None
 _wire_test_thread = None
 
+# ── Monkey Test Progress ───────────────────────────────────────────────
+_monkey_test_results = None
+_monkey_test_progress = None
+_monkey_test_thread = None
+
+
+def _execute_monkey_tests(base_url: str):
+    """Run monkey tests in background thread."""
+    global _monkey_test_results, _monkey_test_progress
+    import subprocess as _sp
+
+    _monkey_test_progress = {"status": "running", "output": "", "line_count": 0}
+    repo_root = str(Path(__file__).parent)
+    test_file = str(Path(repo_root) / "tests" / "test_monkey.py")
+
+    try:
+        proc = _sp.Popen(
+            [sys.executable, "-m", "pytest", test_file, "-v", "--tb=short", "--no-header"],
+            stdout=_sp.PIPE,
+            stderr=_sp.STDOUT,
+            text=True,
+            cwd=repo_root,
+            encoding="utf-8",
+            errors="replace",
+        )
+        lines = []
+        passed = 0
+        failed = 0
+        for line in proc.stdout:
+            lines.append(line.rstrip())
+            if " PASSED" in line:
+                passed += 1
+            elif " FAILED" in line:
+                failed += 1
+            _monkey_test_progress = {
+                "status": "running",
+                "passed": passed,
+                "failed": failed,
+                "line_count": len(lines),
+                "last_line": lines[-1] if lines else "",
+            }
+        proc.wait(timeout=300)
+        _monkey_test_results = {
+            "status": "done",
+            "exit_code": proc.returncode,
+            "passed": passed,
+            "failed": failed,
+            "total": passed + failed,
+            "output": "\n".join(lines[-200:]),
+        }
+        _monkey_test_progress = {"status": "done"}
+    except Exception as e:
+        logger.debug("Monkey test error: %s", e)
+        _monkey_test_results = {"status": "error", "error": str(e), "output": "\n".join(lines[-100:])}
+        _monkey_test_progress = {"status": "done"}
+
 
 def _execute_wire_test(directory: str, base_url: str):
     global _wire_test_results, _wire_test_progress
@@ -934,6 +990,14 @@ class XRayHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"status": "idle"})
 
+        elif path == "/api/monkey-progress":
+            if _monkey_test_progress is not None and _monkey_test_progress.get("status") == "running":
+                self._send_json(_monkey_test_progress)
+            elif _monkey_test_results is not None:
+                self._send_json(_monkey_test_results)
+            else:
+                self._send_json({"status": "idle"})
+
         else:
             self.send_error(404)
 
@@ -1312,6 +1376,24 @@ class XRayHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": f"Invalid directory: {directory}"}, 400)
                 return
             self._send_json(detect_unused_imports(str(Path(directory).resolve())))
+
+        elif path == "/api/monkey-test":
+            global _monkey_test_thread, _monkey_test_results, _monkey_test_progress
+            if _monkey_test_thread and _monkey_test_thread.is_alive():
+                self._send_json({"status": "already_running"})
+                return
+            _monkey_test_results = None
+            _monkey_test_progress = {"status": "starting", "passed": 0, "failed": 0}
+
+            host = self.server.server_address[0]
+            port = self.server.server_address[1]
+            base_url = f"http://{host}:{port}"
+
+            _monkey_test_thread = threading.Thread(
+                target=_execute_monkey_tests, args=(base_url,), daemon=True
+            )
+            _monkey_test_thread.start()
+            self._send_json({"status": "started"})
 
         elif path == "/api/wire-test":
             body = self._read_body()
