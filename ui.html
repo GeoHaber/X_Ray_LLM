@@ -2017,6 +2017,11 @@ function renderResults() {
     </div>
   </div>
 
+  <div id="rescanBar" style="display:none; align-items:center; gap:12px; padding:10px 16px; margin-bottom:12px;
+    background:rgba(0,240,255,0.06); border:1px solid rgba(0,240,255,0.15); border-radius:var(--radius);">
+    <span style="font-size:13px; color:var(--text2);">Fixes applied \u2014 counts updated optimistically.</span>
+    <button class="btn btn-sm" onclick="runScan()" style="margin-left:auto; font-weight:600;">&#x1F504; Re-Scan to Verify</button>
+  </div>
   <div id="viewContent"></div>`;
 
   document.getElementById('mainContent').innerHTML = html;
@@ -2655,6 +2660,48 @@ async function previewFix(findingIdx) {
   showDiffModal(f, result);
 }
 
+// ── Post-Fix Dashboard Refresh ──────────────────────────────────
+function _removeFinding(finding) {
+  if (!scanResults || !scanResults.findings) return;
+  const before = scanResults.findings.length;
+  scanResults.findings = scanResults.findings.filter(f =>
+    !(f.rule_id === finding.rule_id && f.file === finding.file && f.line === finding.line)
+  );
+  const after = scanResults.findings.length;
+  // Recompute summary counts
+  scanResults.summary.total = after;
+  scanResults.summary.high = scanResults.findings.filter(f => f.severity === 'HIGH').length;
+  scanResults.summary.medium = scanResults.findings.filter(f => f.severity === 'MEDIUM').length;
+  scanResults.summary.low = scanResults.findings.filter(f => f.severity === 'LOW').length;
+  // Re-render dashboard
+  renderResults();
+  _showRescanBar();
+  return { before, after };
+}
+
+function _removeFindingsBulk(ruleId, appliedCount) {
+  if (!scanResults || !scanResults.findings) return;
+  const before = scanResults.findings.length;
+  let removed = 0;
+  scanResults.findings = scanResults.findings.filter(f => {
+    if (f.rule_id === ruleId && removed < appliedCount) { removed++; return false; }
+    return true;
+  });
+  const after = scanResults.findings.length;
+  scanResults.summary.total = after;
+  scanResults.summary.high = scanResults.findings.filter(f => f.severity === 'HIGH').length;
+  scanResults.summary.medium = scanResults.findings.filter(f => f.severity === 'MEDIUM').length;
+  scanResults.summary.low = scanResults.findings.filter(f => f.severity === 'LOW').length;
+  renderResults();
+  _showRescanBar();
+  return { before, after };
+}
+
+function _showRescanBar() {
+  const bar = document.getElementById('rescanBar');
+  if (bar) bar.style.display = 'flex';
+}
+
 async function applyFixDirect(findingIdx) {
   const f = filterFindings(scanResults.findings)[findingIdx];
   if (!f) return;
@@ -2664,7 +2711,8 @@ async function applyFixDirect(findingIdx) {
     body: JSON.stringify(f)
   });
   if (result.ok) {
-    showToast(`Fixed ${f.rule_id} in ${shortenPath(f.file)}:${f.line}`);
+    const delta = _removeFinding(f);
+    showToast(`Fixed ${f.rule_id} in ${shortenPath(f.file)}:${f.line} \u2014 ${delta.before}\u2192${delta.after} findings`);
   } else {
     showToast(result.error || 'Fix failed', true);
   }
@@ -2680,9 +2728,14 @@ async function fixAllRule(ruleId) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ findings })
   });
-  let msg = `${result.applied} fixed, ${result.skipped} skipped`;
-  if (result.errors && result.errors.length) msg += `\n${result.errors[0]}`;
-  showToast(msg, result.skipped > 0);
+  if (result.applied > 0) {
+    const delta = _removeFindingsBulk(ruleId, result.applied);
+    showToast(`${result.applied} fixed, ${result.skipped} skipped \u2014 ${delta.before}\u2192${delta.after} findings`, result.skipped > 0);
+  } else {
+    let msg = `${result.applied} fixed, ${result.skipped} skipped`;
+    if (result.errors && result.errors.length) msg += `\n${result.errors[0]}`;
+    showToast(msg, true);
+  }
 }
 
 function showDiffModal(finding, result) {
@@ -2722,15 +2775,20 @@ function showDiffModal(finding, result) {
 async function applyFromModal(btn) {
   const modal = document.getElementById('diffModal');
   if (!modal || !modal._finding) return;
+  const finding = modal._finding;
   btn.disabled = true; btn.textContent = 'Applying...';
   const result = await api('/api/apply-fix', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(modal._finding)
+    body: JSON.stringify(finding)
   });
   modal.remove();
-  if (result.ok) showToast('Fix applied!');
-  else showToast(result.error || 'Fix failed', true);
+  if (result.ok) {
+    const delta = _removeFinding(finding);
+    showToast(`Fixed ${finding.rule_id} \u2014 ${delta.before}\u2192${delta.after} findings`);
+  } else {
+    showToast(result.error || 'Fix failed', true);
+  }
 }
 
 function colorDiff(diff) {
