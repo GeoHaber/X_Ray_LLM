@@ -27,3 +27,4 @@ snapshot.patch
 _gen_test_*.txt
 crits_result.txt
 failures.txt
+_trash_*.py
