@@ -1,6 +1,8 @@
 """Tests for xray.compat — Python & dependency version verification + API compat."""
 
+import importlib
 import importlib.metadata
+import json
 import sys
 import types
 from unittest.mock import MagicMock, patch
@@ -11,15 +13,20 @@ from xray.compat import (
     API_REGISTRY,
     APICheckResult,
     DEPENDENCIES,
+    DependencyStatus,
     MIN_PYTHON,
+    _fetch_pypi_version,
+    _is_major_upgrade,
     _parse_version,
     _resolve_attr_chain,
     _version_gte,
     api_compatibility_summary,
     check_api_compatibility,
     check_dependency,
+    check_dependency_freshness,
     check_environment,
     check_python_version,
+    dependency_freshness_summary,
     environment_summary,
 )
 
@@ -292,3 +299,224 @@ class TestCheckEnvironmentWithAPI:
             ok, problems = check_environment(warn_optional=False)
         api_breaks = [p for p in problems if "[API BREAK]" in p]
         assert api_breaks == []
+
+
+# ── _fetch_pypi_version ──────────────────────────────────────────────────
+
+class TestFetchPypiVersion:
+    def test_returns_string_for_known_package(self):
+        # Mock a successful PyPI response
+        fake_response = json.dumps({
+            "info": {"version": "2.32.5"},
+            "releases": {},
+        }).encode()
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = fake_response
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("xray.compat.urllib.request.urlopen", return_value=mock_resp):
+            result = _fetch_pypi_version("requests")
+        assert result == "2.32.5"
+
+    def test_returns_none_on_network_error(self):
+        import urllib.error
+
+        with patch("xray.compat.urllib.request.urlopen",
+                    side_effect=urllib.error.URLError("no network")):
+            result = _fetch_pypi_version("requests", timeout=1)
+        assert result is None
+
+    def test_returns_none_on_bad_json(self):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"not json"
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("xray.compat.urllib.request.urlopen", return_value=mock_resp):
+            result = _fetch_pypi_version("requests")
+        assert result is None
+
+    def test_falls_back_to_releases_dict(self):
+        fake_response = json.dumps({
+            "info": {"version": ""},
+            "releases": {
+                "2.30.0": [],
+                "2.31.0": [],
+                "2.32.5": [],
+                "3.0.0a1": [],  # pre-release, should be skipped
+            },
+        }).encode()
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = fake_response
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("xray.compat.urllib.request.urlopen", return_value=mock_resp):
+            result = _fetch_pypi_version("requests")
+        assert result == "2.32.5"
+
+
+# ── _is_major_upgrade ────────────────────────────────────────────────────
+
+class TestIsMajorUpgrade:
+    def test_same_major(self):
+        assert _is_major_upgrade("2.30.0", "2.32.5") is False
+
+    def test_different_major(self):
+        assert _is_major_upgrade("1.9.0", "2.0.0") is True
+
+    def test_empty_strings(self):
+        assert _is_major_upgrade("", "") is False
+
+
+# ── DependencyStatus ─────────────────────────────────────────────────────
+
+class TestDependencyStatus:
+    def test_to_dict_fields(self):
+        ds = DependencyStatus("requests", "requests", False)
+        ds.installed_version = "2.31.0"
+        ds.latest_version = "2.32.5"
+        ds.is_outdated = True
+        d = ds.to_dict()
+        assert d["package"] == "requests"
+        assert d["installed_version"] == "2.31.0"
+        assert d["latest_version"] == "2.32.5"
+        assert d["is_outdated"] is True
+        assert "api_symbols_used" in d
+        assert "upgrade_risk" in d
+
+    def test_default_values(self):
+        ds = DependencyStatus("pkg", "pkg", True)
+        assert ds.upgrade_risk == "unknown"
+        assert ds.api_symbols_used == []
+        assert ds.api_symbols_broken == []
+
+
+# ── check_dependency_freshness ───────────────────────────────────────────
+
+class TestCheckDependencyFreshness:
+    def _mock_pypi(self, versions: dict[str, str]):
+        """Return a patcher that makes _fetch_pypi_version return from a dict."""
+        def fake_fetch(pkg, timeout=5):
+            return versions.get(pkg)
+        return patch("xray.compat._fetch_pypi_version", side_effect=fake_fetch)
+
+    def test_returns_list_of_dependency_status(self):
+        with self._mock_pypi({}):
+            results = check_dependency_freshness(timeout=1)
+        assert isinstance(results, list)
+        assert all(isinstance(r, DependencyStatus) for r in results)
+        assert len(results) == len(DEPENDENCIES)
+
+    def test_detects_outdated_package(self):
+        fake_deps = [("pytest", (7, 0), "pytest", True)]
+        fake_meta = {"Version": "7.0.0"}
+        with patch("xray.compat.DEPENDENCIES", fake_deps):
+            with patch("xray.compat.importlib.metadata.metadata", return_value=fake_meta):
+                with self._mock_pypi({"pytest": "9.0.0"}):
+                    results = check_dependency_freshness(timeout=1)
+        assert len(results) == 1
+        assert results[0].is_outdated is True
+        assert results[0].latest_version == "9.0.0"
+        assert results[0].installed_version == "7.0.0"
+
+    def test_up_to_date_package(self):
+        fake_deps = [("pytest", (7, 0), "pytest", True)]
+        fake_meta = {"Version": "9.0.0"}
+        with patch("xray.compat.DEPENDENCIES", fake_deps):
+            with patch("xray.compat.importlib.metadata.metadata", return_value=fake_meta):
+                with self._mock_pypi({"pytest": "9.0.0"}):
+                    results = check_dependency_freshness(timeout=1)
+        assert results[0].is_outdated is False
+        assert results[0].upgrade_risk == "none"
+
+    def test_missing_package_handled(self):
+        fake_deps = [("nonexistent-pkg-xyz", (1, 0), "nonexistent", False)]
+        with patch("xray.compat.DEPENDENCIES", fake_deps):
+            with self._mock_pypi({}):
+                results = check_dependency_freshness(timeout=1)
+        assert results[0].error == "not installed"
+
+    def test_major_upgrade_detected(self):
+        fake_deps = [("pytest", (7, 0), "pytest", True)]
+        fake_meta = {"Version": "7.4.0"}
+        with patch("xray.compat.DEPENDENCIES", fake_deps):
+            with patch("xray.compat.importlib.metadata.metadata", return_value=fake_meta):
+                with self._mock_pypi({"pytest": "10.0.0"}):
+                    results = check_dependency_freshness(timeout=1)
+        assert results[0].is_major_upgrade is True
+        assert results[0].upgrade_risk == "high"
+
+    def test_api_symbols_cross_referenced(self):
+        fake_deps = [("pytest", (7, 0), "pytest", True)]
+        fake_meta = {"Version": "9.0.0"}
+        with patch("xray.compat.DEPENDENCIES", fake_deps):
+            with patch("xray.compat.importlib.metadata.metadata", return_value=fake_meta):
+                with self._mock_pypi({"pytest": "9.0.0"}):
+                    results = check_dependency_freshness(timeout=1)
+        # pytest has entries in API_REGISTRY
+        assert len(results[0].api_symbols_used) > 0
+        # All should pass since pytest is installed and current
+        assert results[0].api_symbols_ok == results[0].api_symbols_used
+
+    def test_broken_api_shows_high_risk(self):
+        fake_deps = [("fake_lib", (1, 0), "fake_mod", True)]
+        fake_meta = {"Version": "1.0.0"}
+        fake_registry = [("fake_mod", "Missing.method", "test.py", "gone")]
+        fake_mod = types.ModuleType("fake_mod")
+
+        real_import = importlib.import_module
+
+        def fake_import(name):
+            if name == "fake_mod":
+                return fake_mod
+            return real_import(name)
+
+        with patch("xray.compat.DEPENDENCIES", fake_deps), \
+             patch("xray.compat.API_REGISTRY", fake_registry), \
+             patch("xray.compat.importlib.metadata.metadata", return_value=fake_meta), \
+             patch("xray.compat.importlib.import_module", side_effect=fake_import), \
+             patch("xray.compat._fetch_pypi_version", return_value="2.0.0"):
+            results = check_dependency_freshness(timeout=1)
+        assert results[0].api_symbols_broken == ["Missing.method"]
+        assert results[0].upgrade_risk == "high"
+
+
+# ── dependency_freshness_summary ─────────────────────────────────────────
+
+class TestDependencyFreshnessSummary:
+    def test_returns_dict_with_expected_keys(self):
+        ds = DependencyStatus("pkg", "pkg", False)
+        ds.installed_version = "1.0.0"
+        ds.latest_version = "1.1.0"
+        ds.is_outdated = True
+        ds.upgrade_risk = "low"
+
+        result = dependency_freshness_summary([ds])
+        assert "dependencies" in result
+        assert "summary" in result
+        assert result["summary"]["total"] == 1
+        assert result["summary"]["outdated"] == 1
+
+    def test_summary_counts(self):
+        s1 = DependencyStatus("a", "a", True)
+        s1.installed_version = "1.0"
+        s1.is_outdated = False
+
+        s2 = DependencyStatus("b", "b", False)
+        s2.installed_version = "2.0"
+        s2.is_outdated = True
+        s2.is_major_upgrade = True
+
+        s3 = DependencyStatus("c", "c", False)
+        s3.error = "not installed"
+
+        result = dependency_freshness_summary([s1, s2, s3])
+        assert result["summary"]["total"] == 3
+        assert result["summary"]["up_to_date"] == 1
+        assert result["summary"]["outdated"] == 1
+        assert result["summary"]["major_upgrades"] == 1
+        assert result["summary"]["not_installed"] == 1

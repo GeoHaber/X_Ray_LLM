@@ -1020,6 +1020,11 @@ class XRayHandler(BaseHTTPRequestHandler):
                 }
             )
 
+        elif path == "/api/dependency-check":
+            from xray.compat import dependency_freshness_summary
+
+            self._send_json(dependency_freshness_summary())
+
         elif path == "/api/wire-progress":
             if _wire_test_progress is not None:
                 self._send_json(_wire_test_progress)

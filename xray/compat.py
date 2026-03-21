@@ -7,6 +7,8 @@ Validates that:
   3. The specific library APIs (classes, methods, attributes) that X-Ray
      actually calls still exist in the installed versions — catching renames,
      deprecations, and breaking changes after library upgrades.
+  4. Compares installed versions against PyPI latest + analyses upgrade
+     impact on the APIs we actually use.
 
 Usage:
     from xray.compat import check_environment
@@ -14,12 +16,18 @@ Usage:
 
     from xray.compat import check_api_compatibility
     report = check_api_compatibility()       # returns list[APICheckResult]
+
+    from xray.compat import check_dependency_freshness
+    report = check_dependency_freshness()    # returns list[DependencyStatus]
 """
 
 import importlib
 import importlib.metadata
+import json
 import logging
 import sys
+import urllib.request
+import urllib.error
 
 logger = logging.getLogger(__name__)
 
@@ -329,3 +337,215 @@ def api_compatibility_summary() -> str:
             lines.append(f"      Used in: {r.used_in} — {r.description}")
 
     return "\n".join(lines)
+
+
+# ── PyPI Version Fetcher ─────────────────────────────────────────────────
+
+def _fetch_pypi_version(package_name: str, timeout: int = 5) -> str | None:
+    """Query PyPI JSON API for the latest stable version of *package_name*.
+
+    Returns the version string or None on failure.  Only considers stable
+    releases (skips pre-releases like a/b/rc/dev).
+    """
+    url = f"https://pypi.org/pypi/{package_name}/json"
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            data = json.loads(resp.read())
+    except (urllib.error.URLError, OSError, json.JSONDecodeError, ValueError):
+        return None
+
+    latest = data.get("info", {}).get("version")
+    if latest:
+        return latest
+
+    # Fallback: find newest stable release from releases dict
+    releases = data.get("releases", {})
+    stable = []
+    for ver_str in releases:
+        lo = ver_str.lower()
+        if any(tag in lo for tag in ("a", "b", "rc", "dev", "alpha", "beta")):
+            continue
+        stable.append((_parse_version(ver_str), ver_str))
+    if stable:
+        stable.sort(reverse=True)
+        return stable[0][1]
+    return None
+
+
+# ── Dependency Freshness Checker ─────────────────────────────────────────
+
+class DependencyStatus:
+    """Full status of one dependency: installed vs latest vs API impact."""
+
+    __slots__ = (
+        "package", "import_name", "required",
+        "installed_version", "min_version", "latest_version",
+        "is_outdated", "is_major_upgrade",
+        "api_symbols_used", "api_symbols_ok", "api_symbols_broken",
+        "upgrade_risk", "error",
+    )
+
+    def __init__(self, package: str, import_name: str, required: bool):
+        self.package = package
+        self.import_name = import_name
+        self.required = required
+        self.installed_version: str = ""
+        self.min_version: str = ""
+        self.latest_version: str = ""
+        self.is_outdated: bool = False
+        self.is_major_upgrade: bool = False
+        self.api_symbols_used: list[str] = []
+        self.api_symbols_ok: list[str] = []
+        self.api_symbols_broken: list[str] = []
+        self.upgrade_risk: str = "unknown"  # low / medium / high / unknown
+        self.error: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "package": self.package,
+            "import_name": self.import_name,
+            "required": self.required,
+            "installed_version": self.installed_version,
+            "min_version": self.min_version,
+            "latest_version": self.latest_version,
+            "is_outdated": self.is_outdated,
+            "is_major_upgrade": self.is_major_upgrade,
+            "api_symbols_used": self.api_symbols_used,
+            "api_symbols_ok": self.api_symbols_ok,
+            "api_symbols_broken": self.api_symbols_broken,
+            "upgrade_risk": self.upgrade_risk,
+            "error": self.error,
+        }
+
+
+def _is_major_upgrade(installed: str, latest: str) -> bool:
+    """True if the major version changed between installed and latest."""
+    inst = _parse_version(installed)
+    lat = _parse_version(latest)
+    if not inst or not lat:
+        return False
+    return inst[0] != lat[0]
+
+
+def check_dependency_freshness(
+    *, timeout: int = 5,
+) -> list[DependencyStatus]:
+    """Check all registered dependencies against PyPI and API registry.
+
+    For each dependency in DEPENDENCIES:
+      1. Get installed version from importlib.metadata
+      2. Fetch latest version from PyPI
+      3. Cross-reference with API_REGISTRY to list symbols we use
+      4. Verify each symbol still exists (current install)
+      5. Assess upgrade risk
+
+    Returns a list of DependencyStatus objects.
+    """
+    # Build a lookup: import_name → list of (attr_chain, used_in)
+    api_by_import: dict[str, list[tuple[str, str]]] = {}
+    for import_path, attr_chain, used_in, _desc in API_REGISTRY:
+        api_by_import.setdefault(import_path, []).append((attr_chain, used_in))
+
+    results: list[DependencyStatus] = []
+
+    for pkg_name, min_ver, import_name, required in DEPENDENCIES:
+        status = DependencyStatus(pkg_name, import_name, required)
+        status.min_version = _fmt(min_ver)
+
+        # 1. Installed version
+        try:
+            meta = importlib.metadata.metadata(pkg_name)
+            status.installed_version = meta["Version"] or ""
+        except importlib.metadata.PackageNotFoundError:
+            status.installed_version = ""
+            status.error = "not installed"
+            status.upgrade_risk = "unknown"
+            results.append(status)
+            continue
+
+        # 2. Latest from PyPI
+        latest = _fetch_pypi_version(pkg_name, timeout=timeout)
+        status.latest_version = latest or ""
+
+        if latest:
+            inst_tuple = _parse_version(status.installed_version)
+            lat_tuple = _parse_version(latest)
+            status.is_outdated = not _version_gte(inst_tuple, lat_tuple)
+            status.is_major_upgrade = _is_major_upgrade(
+                status.installed_version, latest
+            )
+
+        # 3. API symbols cross-reference
+        symbols = api_by_import.get(import_name, [])
+        status.api_symbols_used = [chain for chain, _used in symbols]
+
+        # 4. Verify current symbols
+        try:
+            mod = importlib.import_module(import_name)
+            for chain, _used_in in symbols:
+                found, _err = _resolve_attr_chain(mod, chain)
+                if found:
+                    status.api_symbols_ok.append(chain)
+                else:
+                    status.api_symbols_broken.append(chain)
+        except ImportError:
+            status.api_symbols_broken = [chain for chain, _ in symbols]
+
+        # 5. Assess upgrade risk
+        if not status.is_outdated:
+            status.upgrade_risk = "none"
+        elif status.api_symbols_broken:
+            status.upgrade_risk = "high"
+        elif status.is_major_upgrade:
+            status.upgrade_risk = "high"
+        elif status.is_outdated and status.api_symbols_used:
+            status.upgrade_risk = "medium"
+        elif status.is_outdated:
+            status.upgrade_risk = "low"
+
+        results.append(status)
+
+    return results
+
+
+def dependency_freshness_summary(
+    statuses: list[DependencyStatus] | None = None,
+) -> dict:
+    """Return a structured summary for the UI / API endpoint.
+
+    Returns:
+        {
+            "dependencies": [...],
+            "summary": {
+                "total": N,
+                "up_to_date": N,
+                "outdated": N,
+                "major_upgrades": N,
+                "broken_apis": N,
+                "not_installed": N,
+            }
+        }
+    """
+    if statuses is None:
+        statuses = check_dependency_freshness()
+
+    deps = [s.to_dict() for s in statuses]
+    return {
+        "dependencies": deps,
+        "summary": {
+            "total": len(statuses),
+            "up_to_date": sum(
+                1 for s in statuses
+                if not s.is_outdated and not s.error
+            ),
+            "outdated": sum(1 for s in statuses if s.is_outdated),
+            "major_upgrades": sum(1 for s in statuses if s.is_major_upgrade),
+            "broken_apis": sum(
+                1 for s in statuses if s.api_symbols_broken
+            ),
+            "not_installed": sum(
+                1 for s in statuses if s.error == "not installed"
+            ),
+        },
+    }
