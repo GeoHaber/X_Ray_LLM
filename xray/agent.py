@@ -287,6 +287,14 @@ def main():
     """CLI entry point."""
     import argparse
 
+    from .compat import check_environment, environment_summary
+
+    ok, problems = check_environment()
+    if not ok:
+        for p in problems:
+            print(p, file=sys.stderr)
+        raise SystemExit(1)
+
     parser = argparse.ArgumentParser(
         description="X-Ray LLM — Self-improving code quality agent",
         formatter_class=argparse.RawDescriptionHelpFormatter,

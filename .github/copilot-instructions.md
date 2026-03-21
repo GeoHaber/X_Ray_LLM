@@ -31,11 +31,12 @@ analyzers, PM Dashboard, auto-fixers, UI views, or architecture:
 | `ui_server.py` | Web server + all API routes |
 | `ui.html` | Single-page web UI |
 | `analyzers.py` | 18 analysis functions |
-| `xray/scanner.py` | Python scanning engine |
+| `xray/scanner.py` | Python scanning engine (string/comment-aware) |
+| `xray/compat.py` | Python/dependency/API compatibility checker |
 | `xray/fixer.py` | Auto-fixers (7 deterministic + LLM) |
 | `xray/agent.py` | CLI agent loop orchestrator |
 | `xray/llm.py` | Local LLM inference |
-| `tests/` | 111+ tests (pytest) |
+| `tests/` | 673+ tests (pytest) |
 
 ## Coding Conventions
 

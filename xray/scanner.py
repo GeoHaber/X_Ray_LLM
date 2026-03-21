@@ -48,6 +48,66 @@ _SKIP_DIRS = {
 # Max file size to scan (1 MB)
 _MAX_FILE_SIZE = 1_048_576
 
+# ── String/comment region detection ─────────────────────────────────────
+# Pre-compiled regex that matches Python comments and string literals
+# (triple-quoted strings, single/double quoted strings, and # comments).
+# Used to suppress false positives where a rule pattern matches inside
+# a string literal or comment rather than in executable code.
+_PY_NON_CODE_RE = re.compile(
+    r'"""[\s\S]*?"""|'   # triple-double-quoted string
+    r"'''[\s\S]*?'''|"   # triple-single-quoted string
+    r'"(?:[^"\\]|\\.)*"|'  # double-quoted string
+    r"'(?:[^'\\]|\\.)*'|"  # single-quoted string
+    r"#[^\n]*",            # comment
+)
+
+# Variant that only matches string literals (NOT comments).
+# Used for rules like QUAL-007 (TODO/FIXME) that genuinely belong
+# in comments but should be suppressed in pattern-definition strings.
+_PY_STRING_ONLY_RE = re.compile(
+    r'"""[\s\S]*?"""|'   # triple-double-quoted string
+    r"'''[\s\S]*?'''|"   # triple-single-quoted string
+    r'"(?:[^"\\]|\\.)*"|'  # double-quoted string
+    r"'(?:[^'\\]|\\.)*'",  # single-quoted string
+)
+
+# Rules whose matches should be suppressed when they fall inside a
+# string literal or comment — these rules are prone to false positives.
+_STRING_AWARE_RULES: dict[str, str] = {
+    # value = "all" → suppress in strings AND comments
+    # value = "strings" → suppress in strings only (not comments)
+    "PY-004":   "all",      # print() — mentioned in strings/comments
+    "PY-006":   "all",      # global — appears in docstrings
+    "PY-007":   "all",      # os.environ[] — appears in help strings
+    "QUAL-007": "strings",  # TODO/FIXME — suppress in pattern strings, keep in comments
+    "QUAL-010": "all",      # localStorage — appears in test/pattern strings
+}
+
+
+def _build_non_code_ranges(content: str, *, strings_only: bool = False) -> list[tuple[int, int]]:
+    """Return sorted list of (start, end) byte ranges that are inside
+    string literals or comments in Python source.
+
+    If *strings_only* is True, only string literals are matched (comments
+    are kept as code)."""
+    regex = _PY_STRING_ONLY_RE if strings_only else _PY_NON_CODE_RE
+    return [(m.start(), m.end()) for m in regex.finditer(content)]
+
+
+def _in_non_code(pos: int, ranges: list[tuple[int, int]]) -> bool:
+    """Binary search to check if *pos* falls inside a non-code range."""
+    lo, hi = 0, len(ranges) - 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        start, end = ranges[mid]
+        if pos < start:
+            hi = mid - 1
+        elif pos >= end:
+            lo = mid + 1
+        else:
+            return True
+    return False
+
 
 @dataclass
 class Finding:
@@ -145,13 +205,32 @@ def scan_file(filepath: str, rules: list[dict] | None = None) -> list[Finding]:
 
     findings: list[Finding] = []
 
+    # Build non-code ranges once per file for Python files
+    non_code_all: list[tuple[int, int]] | None = None     # strings + comments
+    non_code_strings: list[tuple[int, int]] | None = None  # strings only
+    if lang == "python":
+        non_code_all = _build_non_code_ranges(content)
+        non_code_strings = _build_non_code_ranges(content, strings_only=True)
+
     for rule in applicable:
         try:
             pattern = re.compile(rule["pattern"], re.MULTILINE)
         except re.error:
             continue
 
+        # Determine which non-code range set to use for this rule
+        suppression = _STRING_AWARE_RULES.get(rule["id"])
+        if suppression == "all" and non_code_all is not None:
+            active_ranges = non_code_all
+        elif suppression == "strings" and non_code_strings is not None:
+            active_ranges = non_code_strings
+        else:
+            active_ranges = None
+
         for match in pattern.finditer(content):
+            if active_ranges and _in_non_code(match.start(), active_ranges):
+                continue
+
             line_num = content[: match.start()].count("\n") + 1
             line_start = content.rfind("\n", 0, match.start()) + 1
             col = match.start() - line_start + 1

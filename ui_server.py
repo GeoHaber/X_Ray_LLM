@@ -988,6 +988,38 @@ class XRayHandler(BaseHTTPRequestHandler):
                 }
             )
 
+        elif path == "/api/env-check":
+            from xray.compat import (
+                check_environment, environment_summary,
+                check_api_compatibility, api_compatibility_summary,
+                DEPENDENCIES, MIN_PYTHON,
+            )
+
+            ok, problems = check_environment()
+            api_results = check_api_compatibility()
+            api_report = [
+                {
+                    "library": r.import_path,
+                    "symbol": r.attr_chain,
+                    "used_in": r.used_in,
+                    "description": r.description,
+                    "found": r.found,
+                    "error": r.error,
+                }
+                for r in api_results
+            ]
+            self._send_json(
+                {
+                    "ok": ok,
+                    "python_version": platform.python_version(),
+                    "min_python": ".".join(str(v) for v in MIN_PYTHON),
+                    "problems": problems,
+                    "summary": environment_summary(),
+                    "api_compatibility": api_report,
+                    "api_summary": api_compatibility_summary(),
+                }
+            )
+
         elif path == "/api/wire-progress":
             if _wire_test_progress is not None:
                 self._send_json(_wire_test_progress)
@@ -1439,6 +1471,18 @@ def main():
     parser.add_argument("--port", "-p", type=int, default=8077, help="Port to listen on (default: 8077)")
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
     args = parser.parse_args()
+
+    # ── Environment verification ──────────────────────────────────────
+    from xray.compat import check_environment, environment_summary
+
+    ok, problems = check_environment()
+    if problems:
+        for p in problems:
+            lvl = logging.ERROR if p.startswith("[REQUIRED]") else logging.WARNING
+            logger.log(lvl, p)
+    if not ok:
+        raise SystemExit(1)
+    logger.info("Environment OK:\n%s", environment_summary())
 
     _load_guide()  # Load knowledge base for chat bot
 

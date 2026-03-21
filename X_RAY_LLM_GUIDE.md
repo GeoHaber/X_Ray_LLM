@@ -127,10 +127,11 @@ Only `pytest` is strictly required for scanning. The rest unlock additional anal
 
 | Component | File(s) | Role |
 |-----------|---------|------|
-| Scanner (Python) | `xray/scanner.py`, `xray/rules/*.py` | Pattern-based scanning engine (38 rules) |
+| Scanner (Python) | `xray/scanner.py`, `xray/rules/*.py` | Pattern-based scanning engine (38 rules) with string/comment-aware filtering |
 | Scanner (Rust) | `scanner/src/` | Optional high-performance scanner (28 rules) |
 | Agent Loop | `xray/agent.py` | Orchestrates SCAN→TEST→FIX→VERIFY→LOOP |
 | LLM Interface | `xray/llm.py` | Local LLM inference via llama-cpp-python |
+| Compat Checker | `xray/compat.py` | Python version, dependency version, and API compatibility verification |
 | Test Runner | `xray/runner.py` | Executes pytest, parses results |
 | Auto-Fixer | `xray/fixer.py` | 7 deterministic fixers + LLM fallback |
 | Web Server | `ui_server.py` | HTTP API (34+ endpoints) on port 8077 |
@@ -1140,7 +1141,8 @@ X_Ray_LLM/
 │
 ├── xray/                 # Core scanner package
 │   ├── __init__.py
-│   ├── scanner.py        # Python scanning engine
+│   ├── scanner.py        # Python scanning engine (string/comment-aware)
+│   ├── compat.py         # Python/dependency/API compatibility checker
 │   ├── agent.py          # SCAN→TEST→FIX→VERIFY→LOOP orchestrator
 │   ├── llm.py            # LLM inference (llama-cpp-python)
 │   ├── fixer.py          # 7 deterministic auto-fixers
