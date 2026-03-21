@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 from .llm import LLMConfig, LLMEngine
 from .runner import TestResult, run_tests
-from .scanner import Finding, ScanResult, scan_project
+from .scanner import Finding, ScanResult, filter_new_findings, load_baseline, scan_project
 
 
 @dataclass
@@ -288,6 +288,8 @@ def main():
     import argparse
 
     from .compat import check_environment, environment_summary
+    from .config import XRayConfig
+    from .sarif import write_sarif
 
     ok, problems = check_environment()
     if not ok:
@@ -300,10 +302,13 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python -m xray.agent .                    # scan current dir\n"
-            "  python -m xray.agent ./src --dry-run      # scan only, no fixes\n"
-            "  python -m xray.agent . --severity HIGH    # only HIGH severity\n"
-            "  python -m xray.agent . --fix              # scan + auto-fix\n"
+            "  python -m xray .                              # scan current dir\n"
+            "  python -m xray ./src --dry-run                # scan only, no fixes\n"
+            "  python -m xray . --severity HIGH              # only HIGH severity\n"
+            "  python -m xray . --fix                        # scan + auto-fix\n"
+            "  python -m xray . --format sarif -o out.sarif  # SARIF output\n"
+            "  python -m xray . --incremental                # incremental scan\n"
+            "  python -m xray . --baseline prev.json         # show new findings only\n"
         ),
     )
     parser.add_argument("project", nargs="?", default=".", help="Project root directory to scan")
@@ -312,16 +317,42 @@ def main():
     parser.add_argument("--fix", action="store_true", help="Enable auto-fix mode (requires LLM)")
     parser.add_argument(
         "--severity",
-        default="MEDIUM",
+        default="",
         choices=["HIGH", "MEDIUM", "LOW"],
-        help="Minimum severity to report (default: MEDIUM)",
+        help="Minimum severity to report (overrides pyproject.toml)",
     )
     parser.add_argument("--max-retries", type=int, default=3, help="Max fix retries (default: 3)")
     parser.add_argument("--model", default="", help="Path to GGUF model file")
     parser.add_argument("--exclude", nargs="*", default=[], help="Regex patterns to exclude from scan")
-    parser.add_argument("--json", action="store_true", help="Output findings as JSON")
+    parser.add_argument(
+        "--format",
+        dest="output_format",
+        default="",
+        choices=["text", "json", "sarif"],
+        help="Output format (default: text)",
+    )
+    parser.add_argument("-o", "--output", default="", help="Write report to file")
+    parser.add_argument("--baseline", default="", help="Baseline JSON to filter out known findings")
+    parser.add_argument("--incremental", action="store_true", help="Skip files unchanged since last scan")
+    parser.add_argument("--no-parallel", action="store_true", help="Disable parallel scanning")
+
+    # Keep legacy --json flag for backwards compatibility
+    parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
 
     args = parser.parse_args()
+
+    # Load pyproject.toml config, then merge CLI overrides
+    xray_config = XRayConfig.from_pyproject(args.project)
+    xray_config.merge_cli(
+        severity=args.severity,
+        exclude=args.exclude or None,
+        output_format=args.output_format or ("json" if args.json else ""),
+        incremental=args.incremental or None,
+        parallel=False if args.no_parallel else None,
+    )
+
+    effective_severity = xray_config.severity
+    effective_format = xray_config.output_format
 
     config = AgentConfig(
         project_root=args.project,
@@ -329,33 +360,70 @@ def main():
         dry_run=args.dry_run or not args.fix,
         auto_fix=args.fix,
         auto_test=args.fix,
-        severity_threshold=args.severity,
+        severity_threshold=effective_severity,
         max_fix_retries=args.max_retries,
-        exclude_patterns=args.exclude,
+        exclude_patterns=xray_config.exclude_patterns,
     )
 
     llm_config = LLMConfig(model_path=args.model or os.environ.get("XRAY_MODEL_PATH", ""))
     llm = LLMEngine(config=llm_config)
 
-    agent = XRayAgent(config=config, llm=llm, quiet=args.json)
+    quiet = effective_format in ("json", "sarif")
+    agent = XRayAgent(config=config, llm=llm, quiet=quiet)
 
-    if args.json:
-        # JSON mode: scan and output structured data
+    if effective_format in ("json", "sarif"):
+        # Structured output mode: scan and output data
         result = agent.scan()
-        output = {
-            "files_scanned": result.files_scanned,
-            "rules_checked": result.rules_checked,
-            "findings": [f.to_dict() for f in result.findings],
-            "summary": {
-                "total": len(result.findings),
-                "high": result.high_count,
-                "medium": result.medium_count,
-                "low": result.low_count,
-            },
-        }
-        sys.stdout.write(json.dumps(output, indent=2) + "\n")
+
+        # Apply baseline filtering
+        if args.baseline:
+            baseline = load_baseline(args.baseline)
+            result.findings = filter_new_findings(result.findings, baseline)
+
+        if effective_format == "sarif":
+            from . import __version__
+
+            if args.output:
+                write_sarif(
+                    [f.to_dict() for f in result.findings],
+                    args.output,
+                    tool_version=__version__,
+                )
+                print(f"SARIF report written to {args.output}")
+            else:
+                from .sarif import sarif_to_json_string
+
+                sys.stdout.write(sarif_to_json_string(
+                    [f.to_dict() for f in result.findings],
+                    tool_version=__version__,
+                ) + "\n")
+        else:
+            output = {
+                "files_scanned": result.files_scanned,
+                "rules_checked": result.rules_checked,
+                "findings": [f.to_dict() for f in result.findings],
+                "summary": {
+                    "total": len(result.findings),
+                    "high": result.high_count,
+                    "medium": result.medium_count,
+                    "low": result.low_count,
+                },
+            }
+            json_str = json.dumps(output, indent=2)
+            if args.output:
+                with open(args.output, "w", encoding="utf-8") as f:
+                    f.write(json_str)
+                print(f"JSON report written to {args.output}")
+            else:
+                sys.stdout.write(json_str + "\n")
     else:
-        agent.run()
+        report = agent.run()
+
+        # Write text report to file if requested
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(report.summary())
+            print(f"Report written to {args.output}")
 
 
 if __name__ == "__main__":

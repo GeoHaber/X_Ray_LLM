@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  xray-web:
+    build: .
+    ports:
+      - "8077:8077"
+    volumes:
+      - ./:/app
+    restart: unless-stopped
+
+  xray-cli:
+    build: .
+    entrypoint: ["python", "-m", "xray"]
+    volumes:
+      - ./:/code:ro
+    profiles:
+      - cli

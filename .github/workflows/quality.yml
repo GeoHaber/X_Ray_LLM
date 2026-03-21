@@ -17,7 +17,7 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     
@@ -43,7 +43,7 @@ jobs:
     
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-results-${{ matrix.python-version }}
         path: test-results.xml
@@ -56,9 +56,9 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.12'
     
     - name: Install dependencies
       run: |
@@ -66,23 +66,34 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
 
-    - name: Run X-Ray self-scan (Code Smells)
+    - name: Run X-Ray self-scan
       run: |
-        python x_ray_claude.py --full-scan --path . --report x_ray_report.json
-    
+        python -m xray . --format json -o x_ray_report.json
+
+    - name: Run X-Ray SARIF output
+      run: |
+        python -m xray . --format sarif -o x_ray_report.sarif
+
     - name: Parse quality report
       run: |
         python .github/scripts/check_quality.py x_ray_report.json
       continue-on-error: true
-    
+
+    - name: Upload SARIF to GitHub
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: x_ray_report.sarif
+      continue-on-error: true
+
     - name: Upload quality report
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: code-quality-report
         path: |
           x_ray_report.json
-          quality-check.log
+          x_ray_report.sarif
 
   # Optional: Fail if critical issues detected
   quality-gate:

@@ -14,19 +14,28 @@ python setup_tools.py
 python ui_server.py                   # Open http://127.0.0.1:8077
 
 # Scan only (CLI)
-python -m xray.agent /path/to/project --dry-run
+python -m xray /path/to/project --dry-run
+
+# SARIF output (GitHub Code Scanning compatible)
+python -m xray /path/to/project --format sarif -o results.sarif
+
+# JSON output
+python -m xray /path/to/project --format json -o results.json
 
 # Scan with auto-fix (requires a GGUF model)
 export XRAY_MODEL_PATH=/path/to/model.gguf
-python -m xray.agent /path/to/project --fix
+python -m xray /path/to/project --fix
 
-# High-severity only
-python -m xray.agent /path/to/project --severity HIGH --dry-run
+# High-severity only, incremental (skip unchanged files)
+python -m xray /path/to/project --severity HIGH --incremental
+
+# Show only new findings vs a baseline
+python -m xray /path/to/project --baseline previous_scan.json
 ```
 
 ## Toolchain
 
-X-Ray LLM v0.2.0+ uses the **Astral toolchain** for fast, Rust-based analysis:
+X-Ray LLM v0.3.0+ uses the **Astral toolchain** for fast, Rust-based analysis:
 
 | Tool | Version | Purpose |
 |------|---------|---------|
