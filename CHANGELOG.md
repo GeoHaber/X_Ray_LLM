@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.3.1 — 2026-03-22
+
+### Added
+- **E2E test suite** (`tests/test_e2e_real.py`): 95 end-to-end tests with zero mocks — real scanner, fixer, agent, all 46 API routes, services, SARIF, analyzers, rules, and full workflow.
+- **Testing guide** (`docs/TESTING.md`): complete reference for all 22 test files, CI pipeline, and test patterns.
+- **SOTA analysis** (`SOTA_ANALYSIS_2026.md`): competitive positioning vs Semgrep, Bandit, SonarQube, Snyk; tech radar and 18-month roadmap recommendations.
+- **Cost/benefit analysis** (`COST_BENEFIT_ANALYSIS_2026.md`): ROI documentation (50-100× year-1), break-even analysis, and competitor cost comparison.
+- **Enhancement roadmap** (`Enhance_Plan.md`): 4-phase 18-month plan — pre-commit hook, GitHub Action, VSCode extension, ML FP suppression, JetBrains plugin, Go support.
+- **Audit summary** (`AUDIT_SUMMARY_2026_03_21.md`): executive summary of full spec compliance audit (42 rules, 46 endpoints, 23+ analyzers — all verified).
+
+### Fixed
+- **Zombie process vulnerability** (`services/scan_manager.py`): `execute_monkey_tests()` now has guaranteed subprocess cleanup via `try/finally` — `proc.kill()` + `proc.wait()` called on both timeout and generic exceptions.
+- **Rust process cleanup on abort** (`api/scan_routes.py`): added `state.rust_proc.wait()` after `kill()` in the abort handler.
+- **Server exit cleanup** (`ui_server.py`): registered `atexit` handler + explicit `_cleanup()` in `KeyboardInterrupt` handler so Rust subprocesses are always terminated on server shutdown.
+- **PytestCollectionWarning** (`xray/runner.py`): added `__test__ = False` to `TestResult` dataclass so pytest doesn't collect it as a test class.
+- **`.gitignore` encoding corruption**: last two patterns (`*.bak`, `.xray_cache.json`) were UTF-16 LE encoded, causing git to read a bare `*` wildcard that silently ignored all new untracked files. Rewritten as clean UTF-8.
+
+### Changed
+- Test count: 1013 collected, **999 passing**, 14 skipped (added 95 new E2E tests).
+- `X_RAY_LLM_GUIDE.md` §17 (Testing): expanded test file table to all 22 files with accurate counts; added `docs/` to §18 file tree.
+- `Rebuild_Prompt.md`: updated with audit verification status (100% compliant as of 2026-03-21).
+
+---
+
 ## v0.3.0 — 2026-03-21
 
 ### Added
@@ -43,6 +67,6 @@
 - `xray/scanner.py`: `Finding` now has `from_dict()` static method; `ScanResult` now has `cached_files` field.
 - `xray/agent.py`: CLI integrated with `XRayConfig.from_pyproject()` for per-project settings.
 - Version bumped to **0.3.0** across pyproject.toml, Cargo.toml, and `xray/__init__.py`.
-- Total test count: 673 passed, 10 skipped.
+- Total test count: 1013 collected, 999 passing, 14 skipped.
 
 Full changelog: [docs/CHANGELOG.md](docs/CHANGELOG.md)

@@ -314,6 +314,7 @@ def execute_monkey_tests(base_url: str):
     proc_lines: list[str] = []
     repo_root = str(ROOT)
     test_file = str(Path(repo_root) / "tests" / "test_monkey.py")
+    proc = None
 
     try:
         proc = subprocess.Popen(
@@ -340,8 +341,21 @@ def execute_monkey_tests(base_url: str):
             "output": "\n".join(proc_lines[-200:]),
         }
         state.monkey_test_progress = {"status": "done"}
+    except subprocess.TimeoutExpired:
+        logger.warning("Monkey tests timed out after 300s, killing process")
+        if proc:
+            proc.kill()
+            proc.wait()
+        state.monkey_test_results = {
+            "status": "error", "error": "Monkey tests timed out after 300 seconds",
+            "output": "\n".join(proc_lines[-100:]),
+        }
+        state.monkey_test_progress = {"status": "done"}
     except Exception as e:
         logger.debug("Monkey test error: %s", e)
+        if proc and proc.poll() is None:
+            proc.kill()
+            proc.wait()
         state.monkey_test_results = {
             "status": "error", "error": str(e),
             "output": "\n".join(proc_lines[-100:]),

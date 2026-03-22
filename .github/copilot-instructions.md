@@ -42,7 +42,7 @@ analyzers, PM Dashboard, auto-fixers, UI views, or architecture:
 | `xray/llm.py` | Local LLM inference |
 | `xray/constants.py` | Shared constants (SKIP_DIRS, file extensions) |
 | `xray/types.py` | TypedDict definitions for API responses |
-| `tests/` | 800+ tests (pytest) |
+| `tests/` | 1013 tests (22 files, pytest) — 999 passing, 14 skipped |
 
 ## Coding Conventions
 

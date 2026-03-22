@@ -44,6 +44,7 @@ def handle_abort(body: dict, handler) -> tuple[dict, int]:
     with state.rust_proc_lock:
         if state.rust_proc and state.rust_proc.poll() is None:
             state.rust_proc.kill()
+            state.rust_proc.wait()
     return {"ok": True}, 200
 
 

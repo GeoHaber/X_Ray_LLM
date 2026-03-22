@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 class TestResult:
     """Result of a pytest execution."""
 
+    __test__ = False  # Prevent pytest from collecting this dataclass
+
     passed: int = 0
     failed: int = 0
     errors: int = 0

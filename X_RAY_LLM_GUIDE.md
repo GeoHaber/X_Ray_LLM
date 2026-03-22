@@ -1164,13 +1164,32 @@ llama-cpp-python >= 0.3.0
 python -m pytest tests/ -v
 ```
 
-### Test Files
+### Test Files (1013 tests, 999 passing + 14 skipped)
 
-| File | What It Tests |
-|------|---------------|
-| `tests/test_xray.py` | Rule database integrity, scanner accuracy, language detection |
-| `tests/test_verify.py` | Does-no-harm (SHA-256), finds-real-bugs, edge cases (empty, binary, unicode, huge files) |
-| `tests/test_ui_paths.py` | Path normalization, directory browsing, HTML escaping, dotfile filtering |
+| File | Tests | What It Tests |
+|------|------:|---------------|
+| `tests/test_agent_loop.py` | 12 | Agent SCAN→TEST→FIX→VERIFY→LOOP cycle, AgentConfig, AgentReport |
+| `tests/test_analyzers.py` | 25 | All 11 analyzer modules: health, smells, graph, connections, detection, etc. |
+| `tests/test_build.py` | 35 | Rust build system, cross-compilation, binary discovery |
+| `tests/test_compat.py` | 58 | Python/dependency/API/PyPI freshness checker |
+| `tests/test_compat_stress.py` | 64 | Stress & edge cases for compat checker |
+| `tests/test_comprehensive.py` | 107 | Broad coverage: rules, scanner accuracy, false-positive avoidance |
+| `tests/test_config.py` | 26 | XRayConfig defaults, pyproject.toml loading, validation |
+| `tests/test_connection_analyzer.py` | 22 | API endpoint & external connection detection |
+| `tests/test_e2e_real.py` | 95 | **E2E (no mocks):** scanner, fixer, agent, all 46 API routes, services, SARIF, analyzers, rules, full workflow |
+| `tests/test_false_positives.py` | 25 | String/comment-aware scanning; known false-positive regression |
+| `tests/test_fixer.py` | 14 | 7 deterministic fixers + LLM fallback; preview vs apply |
+| `tests/test_fixer_regression.py` | 22 | Fixer regression suite — no fix must break valid code |
+| `tests/test_http_integration.py` | 24 | HTTP server bootstrap, all 46 REST endpoint responses |
+| `tests/test_llm_mock.py` | 20 | LLM inference mock — deterministic fixer fallback |
+| `tests/test_monkey.py` | 158 | Monkey-patch stress tests; edge cases for all 42 rules |
+| `tests/test_portability.py` | 20 | PORT-001–004 rules: os.path, platform, encoding, line endings |
+| `tests/test_sarif.py` | 24 | SARIF output schema, roundtrip, empty/partial findings |
+| `tests/test_sca.py` | 14 | Software composition analysis (pip-audit integration) |
+| `tests/test_scanner_boundary.py` | 77 | Scanner boundary & correctness: nested dirs, excludes, unicode, symlinks |
+| `tests/test_ui_paths.py` | 40 | Path normalization, directory browsing, HTML escaping, dotfile filtering |
+| `tests/test_verify.py` | 84 | Does-no-harm (SHA-256 check), finds-real-bugs, binary/huge-file edge cases |
+| `tests/test_xray.py` | 47 | Rule database integrity (42 rules), scanner accuracy, language detection |
 
 ### Self-Scan
 
@@ -1261,10 +1280,14 @@ X_Ray_LLM/
 │       ├── lib.rs        # Core engine (scan_directory, detect_lang)
 │       └── rules/        # Rust rule implementations
 │
-└── tests/                # Test suite (800+ tests)
+├── docs/                 # Documentation
+│   └── TESTING.md        # Complete testing guide (all 22 test files, CI pipeline)
+│
+└── tests/                # Test suite (1013 collected, 999 passing + 14 skipped)
     ├── test_xray.py           # Rule DB + scanner tests
     ├── test_verify.py         # Does-no-harm + finds-real-bugs
     ├── test_ui_paths.py       # Path handling + browse restrictions
+    ├── test_e2e_real.py       # 95 end-to-end tests (no mocks)
     ├── test_analyzers.py      # Analyzer function tests
     ├── test_compat.py         # Version/dependency compatibility tests
     ├── test_compat_stress.py  # Stress tests for compatibility

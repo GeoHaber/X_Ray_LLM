@@ -14,6 +14,7 @@ Usage:
 """
 
 import argparse
+import atexit
 import json
 import logging
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -253,6 +254,15 @@ def main():
         logger.error("Kill it first or use: python ui_server.py --port %s", args.port + 1)
         raise SystemExit(1) from e
 
+    def _cleanup():
+        """Ensure Rust subprocess is terminated on exit."""
+        with state.rust_proc_lock:
+            if state.rust_proc and state.rust_proc.poll() is None:
+                state.rust_proc.kill()
+                state.rust_proc.wait()
+
+    atexit.register(_cleanup)
+
     rust_status = "available" if get_rust_binary() else "not built"
     logger.info("X-Ray Scanner UI: http://%s:%s", args.host, args.port)
     logger.info("  Python scanner: ready")
@@ -263,6 +273,7 @@ def main():
         server.serve_forever()
     except KeyboardInterrupt:
         logger.info("Shutting down.")
+        _cleanup()
         server.server_close()
 
 
