@@ -36,7 +36,7 @@
 | Feature | X-Ray LLM | CodeRabbit | SonarQube | Semgrep | DeepSource | Snyk | Bandit | Ruff | Vulture |
 |---------|-----------|------------|-----------|---------|------------|------|--------|------|---------|
 | **Core Analysis** | | | | | | | | | |
-| Pattern/Rule-based scanning | ✅ 38 rules | ❌ | ✅ 5000+ | ✅ 2000+ | ✅ 5000+ | ✅ | ❌ | ✅ 900+ | ❌ |
+| Pattern/Rule-based scanning | ✅ 42 rules | ❌ | ✅ 5000+ | ✅ 2000+ | ✅ 5000+ | ✅ | ❌ | ✅ 900+ | ❌ |
 | Security scanning | ✅ 14 rules + Bandit | ✅ AI | ✅ | ✅ | ✅ | ✅ (core) | ✅ | ⚡ | ❌ |
 | Code quality rules | ✅ 13 rules | ✅ AI | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
 | Python-specific rules | ✅ 11 rules | ✅ | ✅ | ✅ | ✅ | ⚡ | ✅ | ✅ | ❌ |
@@ -71,7 +71,7 @@
 | Fix preview (diff) | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Bulk fix | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
 | **Engines & Performance** | | | | | | | | | |
-| Python engine | ✅ 38 rules | N/A | ✅ (Java) | ✅ (OCaml 77%) | ✅ | ✅ | ✅ | ❌ | ✅ |
+| Python engine | ✅ 42 rules | N/A | ✅ (Java) | ✅ (OCaml 77%) | ✅ | ✅ | ✅ | ❌ | ✅ |
 | Rust engine | ✅ 28 rules | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (core) | ❌ |
 | Scan progress + abort | ✅ | N/A | ❌ | ❌ | N/A | ❌ | ❌ | ❌ | ❌ |
 | **Grading & Reporting** | | | | | | | | | |
@@ -403,7 +403,7 @@ These features exist **only** in X-Ray LLM:
 
 ### X-Ray LLM Full Feature Inventory (40)
 
-**Static Analysis (6):** Pattern scanning (38 rules), Security scanning (14 rules + Bandit), Code quality rules (13), Python-specific rules (11), Web smells (12 patterns), Secret detection (7 patterns + entropy)
+**Static Analysis (6):** Pattern scanning (42 rules), Security scanning (14 rules + Bandit), Code quality rules (13), Python-specific rules (11), Portability rules (4), Web smells (12 patterns), Secret detection (7 patterns + entropy)
 
 **Advanced Analysis (15):** Code smell detection (10 types), Dead function detection, Duplicate detection, Temporal coupling, Git hotspot analysis, Circular call detection, Module coupling & cohesion, Dependency graph, SATD debt scanner, AI code detection, Format checking, Pyright type checking, Project health check, Release readiness, Test stub generation
 

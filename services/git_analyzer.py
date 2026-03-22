@@ -8,12 +8,9 @@ import logging
 import os
 import subprocess
 
-logger = logging.getLogger(__name__)
+from xray.constants import SKIP_DIRS as _SATD_SKIP_DIRS
 
-_SATD_SKIP_DIRS = {
-    "__pycache__", ".git", ".venv", "venv", "node_modules", ".tox",
-    "build", "dist", "_rustified", ".mypy_cache", ".pytest_cache", "target",
-}
+logger = logging.getLogger(__name__)
 
 
 def analyze_git_hotspots(directory: str, days: int = 90) -> dict:

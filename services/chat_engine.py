@@ -8,6 +8,7 @@ import re as _re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+_FIX_MARK = " \u2705fix"
 
 _GUIDE_TEXT = ""
 
@@ -173,21 +174,21 @@ def chat_reply(message: str, context: dict) -> str:
 
     if _re.search(r"\bsecurity|vuln|xss|inject|sql|ssrf|cors|eval|pickle|secret|password", lo):
         sec = [
-            f"<strong>{k}</strong>: {v[0]} ({v[1]}){' \u2705fix' if v[2] else ''}"
+            f"<strong>{k}</strong>: {v[0]} ({v[1]}){_FIX_MARK if v[2] else ''}"
             for k, v in _RULES.items() if k.startswith("SEC")
         ]
         return "<strong>Security Rules (14):</strong><br>" + "<br>".join(sec)
 
     if _re.search(r"\bquality|smell|except|magic|dup|long func|param", lo):
         qual = [
-            f"<strong>{k}</strong>: {v[0]} ({v[1]}){' \u2705fix' if v[2] else ''}"
+            f"<strong>{k}</strong>: {v[0]} ({v[1]}){_FIX_MARK if v[2] else ''}"
             for k, v in _RULES.items() if k.startswith("QUAL")
         ]
         return "<strong>Quality Rules (13):</strong><br>" + "<br>".join(qual)
 
     if _re.search(r"\bpython rule|py rule|print|assert|wildcard|import\b", lo):
         py = [
-            f"<strong>{k}</strong>: {v[0]} ({v[1]}){' \u2705fix' if v[2] else ''}"
+            f"<strong>{k}</strong>: {v[0]} ({v[1]}){_FIX_MARK if v[2] else ''}"
             for k, v in _RULES.items() if k.startswith("PY")
         ]
         return "<strong>Python Rules (11):</strong><br>" + "<br>".join(py)

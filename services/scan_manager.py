@@ -10,25 +10,53 @@ import os
 import platform
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
 
 from services.app_state import state
+from xray.constants import fwd as _fwd
+from xray.types import BrowseResult, DriveInfo
 
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# --- Browse allow-list ---------------------------------------------------
+# Comma-separated base directories the file browser may access.
+# Set XRAY_BROWSE_ROOTS env-var to override (empty string = unrestricted).
+_BROWSE_ROOTS_RAW = os.environ.get("XRAY_BROWSE_ROOTS")
+
+
+def _default_browse_roots() -> list[Path]:
+    """Return safe default roots: user home + project root."""
+    roots = [ROOT]
+    home = Path.home()
+    if home.exists():
+        roots.append(home)
+    return roots
+
+
+def _browse_roots() -> list[Path] | None:
+    """Parse the allow-list. Returns None if unrestricted."""
+    if _BROWSE_ROOTS_RAW is None:
+        return _default_browse_roots()
+    if _BROWSE_ROOTS_RAW.strip() == "":
+        return None  # explicitly unrestricted
+    return [Path(r.strip()).resolve() for r in _BROWSE_ROOTS_RAW.split(",") if r.strip()]
+
+
+def _is_path_allowed(target: Path) -> bool:
+    """Check *target* is under one of the allowed browse roots."""
+    roots = _browse_roots()
+    if roots is None:
+        return True
+    resolved = target.resolve()
+    return any(resolved == root or root in resolved.parents for root in roots)
 SCANNER_DIR = ROOT / "scanner"
 
 
-class _ScanAborted(Exception):
+class _ScanAbortedError(Exception):
     """Raised inside on_progress to abort a scan early."""
-
-
-def _fwd(path: str) -> str:
-    """Normalize path to forward slashes."""
-    return path.replace("\\", "/")
 
 
 def get_rust_binary() -> str | None:
@@ -53,6 +81,7 @@ def get_rust_binary() -> str | None:
 def count_scannable_files(directory: str, exclude_patterns: list[str] | None = None) -> int:
     """Fast pre-count of scannable files (mirrors scanner's walk logic)."""
     import re as _re
+
     from xray.scanner import _EXT_LANG, _SKIP_DIRS
 
     skip_dirs = _SKIP_DIRS
@@ -98,7 +127,7 @@ def scan_with_python(directory: str, severity: str, excludes: list[str],
 
     def on_progress(files_scanned, findings_count, current_file):
         if state.abort.is_set():
-            raise _ScanAborted()
+            raise _ScanAbortedError()
         if sse_write:
             elapsed_ms = round((time.perf_counter() - scan_start) * 1000, 1)
             fsize = 0
@@ -124,7 +153,7 @@ def scan_with_python(directory: str, severity: str, excludes: list[str],
         result = scan_directory(directory, rules=rules,
                                 exclude_patterns=excludes or None,
                                 on_progress=on_progress)
-    except _ScanAborted:
+    except _ScanAbortedError:
         logger.debug("Scan aborted by user")
         return {"aborted": True, "engine": "python", "files_scanned": 0, "findings_count": 0}
     elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
@@ -235,10 +264,12 @@ def background_scan(directory: str, engine: str, severity: str,
                 result.get("summary", {}).get("total", 0))
 
 
-def browse_directory(path: str) -> dict:
+def browse_directory(path: str) -> BrowseResult:
     """List directory contents for the file browser."""
     try:
         p = Path(path).resolve()
+        if not _is_path_allowed(p):
+            return {"error": f"Access denied — path outside allowed roots: {path}"}
         if not p.exists():
             return {"error": f"Path not found: {path}"}
         if not p.is_dir():
@@ -259,14 +290,14 @@ def browse_directory(path: str) -> dict:
             logger.debug("Permission denied listing %s", path)
             return {"error": f"Permission denied: {path}"}
 
-        parent = _fwd(str(p.parent)) if p.parent != p else None
+        parent = _fwd(str(p.parent)) if p.parent != p and _is_path_allowed(p.parent) else None
         return {"current": _fwd(str(p)), "parent": parent, "items": items}
     except Exception as e:
         logger.debug("browse_directory error: %s", e)
         return {"error": str(e)}
 
 
-def get_drives() -> list[dict]:
+def get_drives() -> list[DriveInfo]:
     """List available drives (Windows) or root (Unix)."""
     if platform.system() == "Windows":
         drives = []

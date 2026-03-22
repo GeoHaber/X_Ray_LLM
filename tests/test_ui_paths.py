@@ -122,8 +122,9 @@ class TestBrowseDirectory:
         assert ".env" in names
 
     @pytest.mark.skipif(platform.system() != "Windows", reason="Windows-specific")
-    def test_browse_windows_root(self):
-        """C:/ must work and return forward-slash paths."""
+    def test_browse_windows_root(self, monkeypatch):
+        """C:/ must work and return forward-slash paths (unrestricted mode)."""
+        monkeypatch.setattr("services.scan_manager._BROWSE_ROOTS_RAW", "")
         result = browse_directory("C:/")
         assert "error" not in result
         assert "\\" not in result["current"]
@@ -379,3 +380,58 @@ class TestScanPaths:
         p = Path(".").resolve()
         safe = _fwd(str(p))
         assert "\\" not in safe
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. Browse directory — path restriction (P1 #6)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestBrowseRestriction:
+    """Ensure browse_directory respects the allowed-roots allowlist."""
+
+    def test_allowed_under_project_root(self):
+        """Project root is always an allowed base."""
+        result = browse_directory(str(Path(__file__).resolve().parent.parent))
+        assert "error" not in result
+
+    def test_allowed_under_home(self, tmp_path):
+        """tmp_path lives under user home — should be allowed by default."""
+        (tmp_path / "f.txt").write_text("ok")
+        result = browse_directory(str(tmp_path))
+        assert "error" not in result
+        assert any(i["name"] == "f.txt" for i in result["items"])
+
+    def test_blocked_outside_roots(self, tmp_path, monkeypatch):
+        """Set a restrictive allowlist; paths outside must be denied."""
+        # Allow only tmp_path itself
+        monkeypatch.setattr(
+            "services.scan_manager._BROWSE_ROOTS_RAW", str(tmp_path)
+        )
+        # Browsing tmp_path works
+        assert "error" not in browse_directory(str(tmp_path))
+        # Browsing a sibling of tmp_path fails
+        sibling = tmp_path.parent / "nonexistent_sibling"
+        sibling.mkdir(exist_ok=True)
+        try:
+            result = browse_directory(str(sibling))
+            assert "error" in result
+            assert "Access denied" in result["error"]
+        finally:
+            sibling.rmdir()
+
+    def test_unrestricted_when_env_empty(self, monkeypatch):
+        """XRAY_BROWSE_ROOTS='' means unrestricted."""
+        monkeypatch.setattr("services.scan_manager._BROWSE_ROOTS_RAW", "")
+        # Should be able to browse project root regardless
+        result = browse_directory(str(Path(__file__).resolve().parent.parent))
+        assert "error" not in result
+
+    def test_parent_link_hidden_at_boundary(self, tmp_path, monkeypatch):
+        """Parent link must be None when parent is outside allowed roots."""
+        monkeypatch.setattr(
+            "services.scan_manager._BROWSE_ROOTS_RAW", str(tmp_path)
+        )
+        result = browse_directory(str(tmp_path))
+        assert "error" not in result
+        # Parent of tmp_path is NOT in the allowlist, so parent should be None
+        assert result["parent"] is None

@@ -23,15 +23,8 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 
-# ── Constants ─────────────────────────────────────────────────────────────
-
-_SKIP_DIRS = {
-    "__pycache__", "node_modules", ".git", ".venv", "venv", "target", "dist",
-    "build", ".mypy_cache", ".ruff_cache", ".pytest_cache", "env", ".env",
-    ".tox", "eggs", "*.egg-info", "site-packages", "_OLD_JUNK",
-}
+from xray.constants import SKIP_DIRS as _SKIP_DIRS
 
 # Well-known stdlib top-level modules (subset — enough for common false positives)
 _STDLIB = {
@@ -61,8 +54,7 @@ _STDLIB = {
     "wave", "weakref", "webbrowser", "winreg", "winsound", "wsgiref", "xml",
     "xmlrpc", "zipapp", "zipfile", "zipimport", "zlib",
     # Common sub-packages that look like top-level
-    "encodings", "email", "http", "xml", "xmlrpc", "urllib",
-    "_thread", "__future__", "typing_extensions",
+    "encodings", "_thread", "__future__", "typing_extensions",
 }
 
 # Map from import name → pip package name (common mismatches)
@@ -412,9 +404,8 @@ def _extract_imports(filepath: str) -> set[str]:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 imports.add(alias.name.split(".")[0])
-        elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                imports.add(node.module.split(".")[0])
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imports.add(node.module.split(".")[0])
     return imports
 
 
@@ -675,10 +666,7 @@ def main():
         print(f"Error: {target} is not a directory", file=sys.stderr)
         sys.exit(1)
 
-    if args.all:
-        results = audit_all_projects(target)
-    else:
-        results = [audit_project(target)]
+    results = audit_all_projects(target) if args.all else [audit_project(target)]
 
     if args.json:
         print(json.dumps([r.to_dict() for r in results], indent=2))

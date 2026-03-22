@@ -166,7 +166,7 @@ class TestDoesNoHarm:
             config = AgentConfig(project_root=root, dry_run=True)
             agent = XRayAgent(config=config, quiet=True)
             result = agent.scan()
-            original_count = len(result.findings)
+            len(result.findings)
             result.findings.clear()  # mutate the returned list
             # Agent's internal report should still hold the data
             assert agent.report.scan_result is not None
@@ -375,7 +375,7 @@ class TestFindsRealBugs_Python:
         assert any(f.rule_id == "PY-005" for f in findings), "Missed PY-005 json without try"
 
     def test_PY_006_global(self):
-        path = _write_temp(".py", "global counter\ncounter += 1\n")
+        path = _write_temp(".py", "def inc():\n    global counter\n    counter += 1\n")
         findings = scan_file(path)
         os.unlink(path)
         assert any(f.rule_id == "PY-006" for f in findings), "Missed PY-006 global mutation"

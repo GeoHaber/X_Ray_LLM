@@ -1,0 +1,9 @@
+include ui.html
+include ui_server.py
+include LICENSE
+include README.md
+include pyproject.toml
+recursive-include xray *.py
+recursive-include analyzers *.py
+recursive-include services *.py
+recursive-include api *.py

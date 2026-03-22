@@ -21,7 +21,7 @@
 
 ## 1. Executive Summary
 
-**X_Ray_LLM** is a well-structured self-improving code quality agent with solid foundations: 38 scan rules, 7 deterministic auto-fixers, dual Python/Rust scan engines, and a clean SCAN→TEST→FIX→VERIFY→LOOP architecture.
+**X_Ray_LLM** is a well-structured self-improving code quality agent with solid foundations: 42 scan rules, 7 deterministic auto-fixers, dual Python/Rust scan engines, and a clean SCAN→TEST→FIX→VERIFY→LOOP architecture.
 
 **Test suite**: 385 tests, 382 passing, 3 skipped — excellent coverage.
 
@@ -97,7 +97,7 @@ xray/
   ├── llm.py        — Local LLM inference
   ├── runner.py     — pytest execution
   ├── wire_connector.py — API stress testing
-  └── rules/        — 38 scan rules
+  └── rules/        — 42 scan rules
 ```
 
 ### Recommended Refactoring
@@ -364,4 +364,4 @@ Current α=0.5–0.6 weights sparse/dense roughly equally. Research shows α=0.3
 
 ---
 
-*Reviewed: X_Ray_LLM test suite (382/382 pass), 38 scan rules, 7 fixers, full ui_server.py + xray/* codebase, ZEN_AI_RAG RAG layer, academic RAG literature (3 survey papers, EMNLP 2024 best practices), LLM benchmark data (Qwen2.5-Coder, DeepSeek-Coder, Codestral).*
+*Reviewed: X_Ray_LLM test suite (382/382 pass), 42 scan rules, 7 fixers, full ui_server.py + xray/* codebase, ZEN_AI_RAG RAG layer, academic RAG literature (3 survey papers, EMNLP 2024 best practices), LLM benchmark data (Qwen2.5-Coder, DeepSeek-Coder, Codestral).*

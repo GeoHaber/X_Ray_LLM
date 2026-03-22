@@ -3,18 +3,14 @@
 import importlib
 import importlib.metadata
 import json
-import sys
 import types
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from xray.compat import (
     API_REGISTRY,
-    APICheckResult,
     DEPENDENCIES,
+    APICheckResult,
     DependencyStatus,
-    MIN_PYTHON,
     _fetch_pypi_version,
     _is_major_upgrade,
     _parse_version,
@@ -29,7 +25,6 @@ from xray.compat import (
     dependency_freshness_summary,
     environment_summary,
 )
-
 
 # ── _parse_version ───────────────────────────────────────────────────────
 
@@ -117,7 +112,7 @@ class TestCheckDependency:
 
 class TestCheckEnvironment:
     def test_current_env_ok_for_python(self):
-        ok, problems = check_environment(warn_optional=False)
+        _ok, problems = check_environment(warn_optional=False)
         python_issues = [p for p in problems if "Python" in p]
         assert python_issues == []
 
@@ -129,7 +124,7 @@ class TestCheckEnvironment:
     def test_required_failure_sets_ok_false(self):
         with patch("xray.compat.check_dependency", return_value="missing"):
             with patch("xray.compat.DEPENDENCIES", [("fake-pkg", (1, 0), "fake", True)]):
-                ok, problems = check_environment()
+                ok, _problems = check_environment()
         assert ok is False
 
 
@@ -159,7 +154,7 @@ class TestResolveAttrChain:
     def test_nested_attr_found(self):
         inner = types.SimpleNamespace(bar=99)
         mod = types.SimpleNamespace(foo=inner)
-        found, error = _resolve_attr_chain(mod, "foo.bar")
+        found, _error = _resolve_attr_chain(mod, "foo.bar")
         assert found is True
 
     def test_missing_attr(self):
@@ -181,7 +176,7 @@ class TestResolveAttrChain:
         b = types.SimpleNamespace(c=c)
         a = types.SimpleNamespace(b=b)
         mod = types.SimpleNamespace(a=a)
-        found, error = _resolve_attr_chain(mod, "a.b.c.d")
+        found, _error = _resolve_attr_chain(mod, "a.b.c.d")
         assert found is True
 
 
@@ -296,7 +291,7 @@ class TestCheckEnvironmentWithAPI:
                            "fake", found=False, error="library not installed"),
         ]
         with patch("xray.compat.check_api_compatibility", return_value=skipped):
-            ok, problems = check_environment(warn_optional=False)
+            _ok, problems = check_environment(warn_optional=False)
         api_breaks = [p for p in problems if "[API BREAK]" in p]
         assert api_breaks == []
 
@@ -435,9 +430,8 @@ class TestCheckDependencyFreshness:
 
     def test_missing_package_handled(self):
         fake_deps = [("nonexistent-pkg-xyz", (1, 0), "nonexistent", False)]
-        with patch("xray.compat.DEPENDENCIES", fake_deps):
-            with self._mock_pypi({}):
-                results = check_dependency_freshness(timeout=1)
+        with patch("xray.compat.DEPENDENCIES", fake_deps), self._mock_pypi({}):
+            results = check_dependency_freshness(timeout=1)
         assert results[0].error == "not installed"
 
     def test_major_upgrade_detected(self):

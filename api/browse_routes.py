@@ -31,9 +31,11 @@ def handle_info(params: dict, handler) -> tuple[dict, int]:
 
 def handle_env_check(params: dict, handler) -> tuple[dict, int]:
     from xray.compat import (
-        check_environment, environment_summary,
-        check_api_compatibility, api_compatibility_summary,
-        DEPENDENCIES, MIN_PYTHON,
+        MIN_PYTHON,
+        api_compatibility_summary,
+        check_api_compatibility,
+        check_environment,
+        environment_summary,
     )
     ok, problems = check_environment()
     api_results = check_api_compatibility()

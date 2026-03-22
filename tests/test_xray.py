@@ -18,7 +18,7 @@ sys.path.insert(0, REPO_ROOT)
 
 from xray.agent import AgentConfig, XRayAgent, _get_source_context
 from xray.llm import LLMConfig, LLMEngine
-from xray.rules import ALL_RULES, PYTHON_RULES, QUALITY_RULES, SECURITY_RULES, PORTABILITY_RULES
+from xray.rules import ALL_RULES, PORTABILITY_RULES, PYTHON_RULES, QUALITY_RULES, SECURITY_RULES
 from xray.runner import TestResult, run_tests
 from xray.scanner import Finding, ScanResult, _detect_lang, scan_directory, scan_file
 

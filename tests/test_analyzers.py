@@ -12,7 +12,7 @@ import textwrap
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
-from analyzers import (  # noqa: E402
+from analyzers import (
     analyze_connections,
     check_format,
     check_project_health,
@@ -38,7 +38,7 @@ from analyzers import (  # noqa: E402
 )
 
 # scan_satd, analyze_git_hotspots, parse_imports live in ui_server.py
-from ui_server import analyze_git_hotspots, parse_imports, scan_satd  # noqa: E402
+from ui_server import analyze_git_hotspots, parse_imports, scan_satd
 
 
 def _write_file(directory, name, content):

@@ -8,7 +8,8 @@ from pathlib import Path
 
 from services.app_state import state
 from services.scan_manager import (
-    background_scan, count_scannable_files,
+    background_scan,
+    count_scannable_files,
 )
 
 

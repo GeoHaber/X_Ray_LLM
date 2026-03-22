@@ -3,6 +3,7 @@ X-Ray Scanner — Pattern-based code analysis engine.
 Scans files against the rule database and reports findings.
 """
 
+import ast
 import hashlib
 import json
 import logging
@@ -13,9 +14,11 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from xray.constants import SKIP_DIRS as _SKIP_DIRS
 
 from .rules import ALL_RULES
+
+logger = logging.getLogger(__name__)
 
 # File extensions → language mapping
 _EXT_LANG = {
@@ -27,26 +30,6 @@ _EXT_LANG = {
     ".jsx": "javascript",
     ".tsx": "javascript",
     ".rs": "rust",
-}
-
-# Directories to always skip
-_SKIP_DIRS = {
-    "__pycache__",
-    "node_modules",
-    ".git",
-    ".venv",
-    "venv",
-    "target",
-    "dist",
-    "build",
-    ".mypy_cache",
-    ".ruff_cache",
-    ".pytest_cache",
-    "env",
-    ".env",
-    ".tox",
-    "eggs",
-    "*.egg-info",
 }
 
 # Max file size to scan (1 MB)
@@ -99,6 +82,81 @@ def _get_compiled(pattern: str) -> re.Pattern | None:
         except re.error:
             _COMPILED_CACHE[pattern] = None
     return _COMPILED_CACHE[pattern]
+
+
+# ── AST-based validation ────────────────────────────────────────────────
+# Post-regex validators that reduce false positives by inspecting the AST.
+# Each validator takes (filepath, content, line_num, ast_tree) and returns
+# True if the finding is a TRUE positive (should be kept).
+
+def _ast_validate_py001(filepath: str, content: str, line_num: int, tree: ast.AST) -> bool:
+    """PY-001: 'def X() -> None' — only flag if the function actually returns
+    a non-None value (a real type mismatch)."""
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.lineno != line_num:
+            continue
+        # Check if the function body has a return with a non-None value
+        for child in ast.walk(node):
+            if isinstance(child, ast.Return) and child.value is not None:
+                # Return of None literal is okay for -> None
+                if isinstance(child.value, ast.Constant) and child.value.value is None:
+                    continue
+                return True  # Real mismatch: returns non-None value
+        return False  # No non-None return — annotation is correct
+    return True  # Not found in AST, keep the finding as-is
+
+
+def _ast_validate_py005(filepath: str, content: str, line_num: int, tree: ast.AST) -> bool:
+    """PY-005: 'json.loads/load(...)' — suppress if the call is inside a
+    try/except block that catches JSONDecodeError or a broad exception."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Try):
+            continue
+        # Check if the json call line falls within this try block
+        try_start = node.lineno
+        # The try body ends at the first handler
+        try_end = node.handlers[0].lineno if node.handlers else node.end_lineno or try_start
+        if try_start <= line_num < try_end:
+            # Check if any handler catches JSONDecodeError or broad exception
+            for handler in node.handlers:
+                if handler.type is None:
+                    return False  # bare except: — json is handled
+                if isinstance(handler.type, ast.Name) and handler.type.id in (
+                    "Exception", "BaseException", "JSONDecodeError", "ValueError",
+                ):
+                    return False  # properly handled
+                if isinstance(handler.type, ast.Attribute) and handler.type.attr in (
+                    "JSONDecodeError", "JSONError",
+                ):
+                    return False
+                if isinstance(handler.type, ast.Tuple):
+                    for elt in handler.type.elts:
+                        name = getattr(elt, "id", getattr(elt, "attr", ""))
+                        if name in ("Exception", "BaseException", "JSONDecodeError", "ValueError"):
+                            return False
+    return True  # Not inside a try — valid finding
+
+
+def _ast_validate_py006(filepath: str, content: str, line_num: int, tree: ast.AST) -> bool:
+    """PY-006: 'global X' — suppress if it appears at module level (no-op)
+    rather than inside a function."""
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.lineno <= line_num <= (node.end_lineno or node.lineno + 1000):
+            # Inside a function — legitimate global usage
+            return True
+    return False  # At module level — no-op, suppress
+
+
+# Map rule IDs to their AST validators
+_AST_VALIDATORS: dict[str, Callable] = {
+    "PY-001": _ast_validate_py001,
+    "PY-005": _ast_validate_py005,
+    "PY-006": _ast_validate_py006,
+}
 
 
 # ── Inline suppression parsing ──────────────────────────────────────────
@@ -310,10 +368,16 @@ def scan_file(filepath: str, rules: list[dict] | None = None) -> list[Finding]:
     non_code_all: list[tuple[int, int]] | None = None     # strings + comments
     non_code_strings: list[tuple[int, int]] | None = None  # strings only
     suppressions: dict[int, set[str]] = {}
+    ast_tree: ast.AST | None = None
     if lang == "python":
         non_code_all = _build_non_code_ranges(content)
         non_code_strings = _build_non_code_ranges(content, strings_only=True)
         suppressions = _parse_suppressions(content)
+        # Parse AST once for AST-based validators
+        try:
+            ast_tree = ast.parse(content, filename=filepath)
+        except SyntaxError:
+            pass
 
     for rule in applicable:
         pattern = _get_compiled(rule["pattern"])
@@ -342,6 +406,12 @@ def scan_file(filepath: str, rules: list[dict] | None = None) -> list[Finding]:
             line_start = content.rfind("\n", 0, match.start()) + 1
             col = match.start() - line_start + 1
 
+            # AST-based validation: reduce false positives
+            ast_validator = _AST_VALIDATORS.get(rule["id"])
+            if ast_validator and ast_tree is not None:
+                if not ast_validator(filepath, content, line_num, ast_tree):
+                    continue
+
             findings.append(
                 Finding(
                     rule_id=rule["id"],
@@ -359,6 +429,32 @@ def scan_file(filepath: str, rules: list[dict] | None = None) -> list[Finding]:
     return findings
 
 
+def git_changed_files(root: str, since: str) -> list[str] | None:
+    """Return files changed since a git ref/commit. None if git unavailable."""
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["git", "diff", "--name-only", "--diff-filter=ACMR", since, "--", "."],
+            capture_output=True,
+            text=True,
+            cwd=root,
+            timeout=30,
+        )
+        if proc.returncode != 0:
+            return None
+        files = []
+        for line in proc.stdout.strip().splitlines():
+            line = line.strip()
+            if line:
+                full = os.path.join(root, line)
+                if os.path.isfile(full):
+                    files.append(full)
+        return files
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+
 def scan_directory(
     root: str,
     rules: list[dict] | None = None,
@@ -367,6 +463,7 @@ def scan_directory(
     *,
     parallel: bool = False,
     incremental: bool = False,
+    since: str = "",
 ) -> ScanResult:
     """Recursively scan a directory for code issues.
 
@@ -374,6 +471,7 @@ def scan_directory(
         on_progress: Optional callback(files_scanned, findings_count, current_file)
         parallel: Use ProcessPoolExecutor for CPU-bound regex work.
         incremental: Skip files unchanged since last scan.
+        since: Git ref/commit — only scan files changed since that ref.
     """
     result = ScanResult()
     if rules is None:
@@ -389,6 +487,15 @@ def scan_directory(
                 exclude_res.append(re.compile(pat))
             except re.error:
                 result.errors.append(f"Invalid exclude pattern: {pat}")
+
+    # Git-aware diff scanning: only files changed since a ref
+    diff_set: set[str] | None = None
+    if since:
+        changed = git_changed_files(root, since)
+        if changed is not None:
+            diff_set = {os.path.normpath(f) for f in changed}
+        else:
+            result.errors.append(f"git diff failed for --since={since}")
 
     # Collect files to scan
     file_list: list[str] = []
@@ -410,6 +517,10 @@ def scan_directory(
 
             lang = _detect_lang(filepath)
             if lang is None:
+                continue
+
+            # Git diff filter
+            if diff_set is not None and os.path.normpath(filepath) not in diff_set:
                 continue
 
             if cache and not cache.is_changed(filepath):
@@ -455,9 +566,11 @@ def scan_project(root: str, config: dict | None = None) -> ScanResult:
         exclude = config.get("exclude_patterns", [])
     parallel = bool(config.get("parallel")) if config else False
     incremental = bool(config.get("incremental")) if config else False
+    since = config.get("since", "") if config else ""
     return scan_directory(
         root,
         exclude_patterns=exclude,
         parallel=parallel,
         incremental=incremental,
+        since=since,
     )

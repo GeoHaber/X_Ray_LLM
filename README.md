@@ -53,8 +53,8 @@ python update_tools.py         # Update all tools to latest
 
 ```
   ┌───────────┐
-  │   SCAN    │  38 rules (security / quality / python)
-  └─────┬─────┘  Python regex scanner (38 rules) + Rust scanner (28 rules)
+  │   SCAN    │  42 rules (security / quality / python / portability)
+  └─────┬─────┘  Python regex scanner (42 rules) + Rust scanner (28 rules)
         │
   ┌─────▼─────┐
   │   TEST    │  Auto-generate pytest tests for each finding
@@ -77,18 +77,19 @@ python update_tools.py         # Update all tools to latest
   └───────────┘
 ```
 
-## Pattern Rules (38 total)
+## Pattern Rules (42 total)
 
 | Category | Count | Examples |
 |----------|-------|---------|
 | Security | 14 | XSS, SQL injection, command injection, SSRF, eval, secrets, deserialization, path traversal, timing attacks, debug mode, weak hash, TLS bypass |
 | Quality | 13 | Bare except, silent swallow, unchecked int(), non-daemon threads, TODO markers, broad Exception, string concat in loops, long lines |
 | Python | 11 | Wildcard imports, print debug, JSON without try, global mutation, os.environ[], captured-but-ignored exception, sys.exit in lib, long isinstance |
+| Portability | 4 | Hardcoded user paths, hardcoded C:\AI\ paths, Windows-only imports without guards |
 
 All rules sourced from real bugs found in real projects.
 
-> **Note:** The Python scanner implements all 38 rules. The Rust scanner currently has
-> the original 28 rules; run `python generate_rust_rules.py` to sync the 10 new rules.
+> **Note:** The Python scanner implements all 42 rules. The Rust scanner currently has
+> the original 28 rules; run `python generate_rust_rules.py` to sync the 14 new rules.
 
 ## Recommended Models
 

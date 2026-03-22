@@ -10,7 +10,6 @@ Generates SARIF JSON compatible with:
 import json
 from datetime import datetime, timezone
 
-
 _SARIF_VERSION = "2.1.0"
 _SARIF_SCHEMA = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"
 

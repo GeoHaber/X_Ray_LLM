@@ -67,9 +67,7 @@ def check_file(filepath: Path) -> list[str]:
             continue
 
         # Check for deprecated font_family in TextField (not in text_style=)
-        if "ft.TextField" in line and "font_family" in line:
-            # Make sure it's not inside text_style=ft.TextStyle(font_family=...)
-            if not re.search(r"text_style\s*=\s*ft\.TextStyle\(.*font_family", line):
+        if "ft.TextField" in line and "font_family" in line and not re.search(r"text_style\s*=\s*ft\.TextStyle\(.*font_family", line):
                 issues.append(
                     f"{filepath}:{line_num}: TextField uses deprecated 'font_family' "
                     "(use text_style=ft.TextStyle(font_family=...) instead)"
@@ -100,7 +98,7 @@ def check_file(filepath: Path) -> list[str]:
 
         # Check for wrap=True on ft.Row — broken in Flet 0.80.2
         # Causes WrapParentData vs FlexParentData crash
-        if re.search(r"ft\.Row\(.*wrap\s*=\s*True", line) or (
+        if re.search(r"ft\.Row\(.*wrap\s*=\s*True", line) or (  # noqa: SIM102
             "wrap=True" in line
             and any(
                 kw in content.split("\n")[max(0, line_num - 5) : line_num]

@@ -37,6 +37,7 @@ class AgentConfig:
     severity_threshold: str = "MEDIUM"  # skip LOW findings
     exclude_patterns: list[str] = field(default_factory=list)
     python_exe: str | None = None
+    since: str = ""  # git ref for diff-only scanning
 
     @property
     def severity_levels(self) -> list[str]:
@@ -118,7 +119,10 @@ class XRayAgent:
         self.log("\n🔍 Step 1: SCANNING project...")
         result = scan_project(
             self.config.project_root,
-            config={"exclude_patterns": self.config.exclude_patterns},
+            config={
+                "exclude_patterns": self.config.exclude_patterns,
+                "since": self.config.since,
+            },
         )
         # Filter by severity threshold
         allowed = self.config.severity_levels
@@ -287,7 +291,7 @@ def main():
     """CLI entry point."""
     import argparse
 
-    from .compat import check_environment, environment_summary
+    from .compat import check_environment
     from .config import XRayConfig
     from .sarif import write_sarif
 
@@ -309,6 +313,7 @@ def main():
             "  python -m xray . --format sarif -o out.sarif  # SARIF output\n"
             "  python -m xray . --incremental                # incremental scan\n"
             "  python -m xray . --baseline prev.json         # show new findings only\n"
+            "  python -m xray . --since HEAD~5                # scan only files changed in last 5 commits\n"
         ),
     )
     parser.add_argument("project", nargs="?", default=".", help="Project root directory to scan")
@@ -335,6 +340,7 @@ def main():
     parser.add_argument("--baseline", default="", help="Baseline JSON to filter out known findings")
     parser.add_argument("--incremental", action="store_true", help="Skip files unchanged since last scan")
     parser.add_argument("--no-parallel", action="store_true", help="Disable parallel scanning")
+    parser.add_argument("--since", default="", help="Git ref — only scan files changed since (e.g. HEAD~5, main)")
 
     # Keep legacy --json flag for backwards compatibility
     parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
@@ -363,6 +369,7 @@ def main():
         severity_threshold=effective_severity,
         max_fix_retries=args.max_retries,
         exclude_patterns=xray_config.exclude_patterns,
+        since=args.since,
     )
 
     llm_config = LLMConfig(model_path=args.model or os.environ.get("XRAY_MODEL_PATH", ""))

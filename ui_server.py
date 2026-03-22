@@ -16,7 +16,6 @@ Usage:
 import argparse
 import json
 import logging
-import platform
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from socketserver import ThreadingMixIn
@@ -24,18 +23,25 @@ from urllib.parse import parse_qs, urlparse
 
 from services.app_state import state
 from services.chat_engine import load_guide
-from services.scan_manager import (
-    get_rust_binary, _fwd, browse_directory, get_drives,
-    scan_with_python, scan_with_rust, background_scan,
-    count_scannable_files, execute_monkey_tests, execute_wire_test,
-)
-from services.git_analyzer import analyze_git_hotspots, parse_imports, run_ruff
+from services.git_analyzer import analyze_git_hotspots, parse_imports
 from services.satd_scanner import scan_satd
+from services.scan_manager import (
+    _fwd,
+    background_scan,
+    browse_directory,
+    count_scannable_files,
+    execute_monkey_tests,
+    execute_wire_test,
+    get_drives,
+    get_rust_binary,
+)
 
 # ── Backward compatibility aliases ───────────────────────────────────────
 # Tests and external code import these names from ui_server directly.
 _load_guide = load_guide
 _fwd = _fwd  # re-export
+browse_directory = browse_directory  # re-export
+get_drives = get_drives  # re-export
 _count_scannable_files = count_scannable_files
 _background_scan = background_scan
 _execute_monkey_tests = execute_monkey_tests
@@ -45,51 +51,34 @@ analyze_git_hotspots = analyze_git_hotspots  # re-export
 parse_imports = parse_imports  # re-export
 
 
-# Backward-compat: tests access module-level _last_scan_result etc.
-# Python 3.7+ supports module-level __getattr__ and __setattr__ (PEP 562).
-# However __setattr__ is not directly supported. We use a property-like wrapper.
-# The simplest solution: make them real module attributes but keep them in sync.
-_last_scan_result = None  # will be read/written by tests
+# Backward-compat: tests may read module-level _last_scan_result etc.
+# Use PEP 562 module __getattr__ for reads.  Direct writes should use
+# services.app_state.state instead.
+_last_scan_result = None
 _scan_progress = None
 
 
-class _ModuleProxy:
-    """Intercept attribute access on this module to keep state in sync."""
-    _PROXIED = {"_last_scan_result", "_scan_progress"}
-
-    def __init__(self, module):
-        object.__setattr__(self, '_module', module)
-
-    def __getattr__(self, name):
-        if name == "_last_scan_result":
-            return state.last_scan_result
-        if name == "_scan_progress":
-            return state.scan_progress
-        return getattr(object.__getattribute__(self, '_module'), name)
-
-    def __setattr__(self, name, value):
-        if name == "_last_scan_result":
-            state.last_scan_result = value
-            return
-        if name == "_scan_progress":
-            state.scan_progress = value
-            return
-        setattr(object.__getattribute__(self, '_module'), name, value)
-
-
-import sys as _sys
-_sys.modules[__name__] = _ModuleProxy(_sys.modules[__name__])
+def __getattr__(name):
+    if name == "_last_scan_result":
+        return state.last_scan_result
+    if name == "_scan_progress":
+        return state.scan_progress
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # ── Collect route tables from api/ modules ───────────────────────────────
 
-from api.scan_routes import GET_ROUTES as _scan_get, POST_ROUTES as _scan_post
-from api.fix_routes import POST_ROUTES as _fix_post
 from api.analysis_routes import POST_ROUTES as _analysis_post
 from api.browse_routes import GET_ROUTES as _browse_get
+from api.fix_routes import POST_ROUTES as _fix_post
 from api.pm_routes import (
-    GET_ROUTES as _pm_get, POST_ROUTES as _pm_post,
+    GET_ROUTES as _pm_get,
 )
+from api.pm_routes import (
+    POST_ROUTES as _pm_post,
+)
+from api.scan_routes import GET_ROUTES as _scan_get
+from api.scan_routes import POST_ROUTES as _scan_post
 
 _GET_ROUTES: dict[str, object] = {}
 _POST_ROUTES: dict[str, object] = {}
@@ -102,6 +91,13 @@ for table in (_scan_post, _fix_post, _analysis_post, _pm_post):
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).parent
+
+# ── CORS configuration ──────────────────────────────────────────────────
+# Set XRAY_CORS_ORIGIN to allow cross-origin requests (e.g. "http://localhost:3000").
+# Use "*" for any origin. Leave unset to disable CORS headers.
+import os as _os
+
+_CORS_ORIGIN = _os.environ.get("XRAY_CORS_ORIGIN", "")
 
 
 # ── HTTP Handler ─────────────────────────────────────────────────────────
@@ -119,6 +115,19 @@ class XRayHandler(BaseHTTPRequestHandler):
         except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
             logger.debug("Client connection lost during request")
 
+    def _add_cors_headers(self):
+        if _CORS_ORIGIN:
+            self.send_header("Access-Control-Allow-Origin", _CORS_ORIGIN)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def do_OPTIONS(self):
+        """Handle CORS preflight requests."""
+        self.send_response(204)
+        self._add_cors_headers()
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def _send_json(self, data: dict, status: int = 200):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -127,6 +136,7 @@ class XRayHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")
+        self._add_cors_headers()
         self.end_headers()
         self.wfile.write(body)
 

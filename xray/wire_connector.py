@@ -100,7 +100,6 @@ class WireConnector:
                 duration = round((time.perf_counter() - start_time) * 1000, 2)
                 # Count as "wired" if the server responded (connection works),
                 # but track the actual status so 404/400 can be flagged separately.
-                connected = resp.status_code != 0
                 success = 200 <= resp.status_code < 500  # server responded
                 # We want to know if the "wire" works, i.e., the server responds.
                 # 4xx means wired but possibly wrong payload; 5xx is a server bug.

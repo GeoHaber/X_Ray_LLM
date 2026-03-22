@@ -66,7 +66,7 @@ def python_pattern_to_rust_literal(pattern: str) -> str:
 
 def rust_langs(langs: list[str]) -> str:
     """Format language list as Rust slice literal."""
-    items = ", ".join(f'"{l}"' for l in langs)
+    items = ", ".join(f'"{lang}"' for lang in langs)
     return f"&[{items}]"
 
 
@@ -296,7 +296,7 @@ def check_parity() -> bool:
         # Show first difference
         gen_lines = generated.splitlines()
         cur_lines = current.splitlines()
-        for i, (g, c) in enumerate(zip(gen_lines, cur_lines), 1):
+        for i, (g, c) in enumerate(zip(gen_lines, cur_lines, strict=False), 1):
             if g != c:
                 logger.error("  First diff at line %d:", i)
                 logger.error("    Generated: %s", g[:120])

@@ -19,7 +19,6 @@ sys.path.insert(0, REPO_ROOT)
 from xray.scanner import (
     _MAX_FILE_SIZE,
     _SKIP_DIRS,
-    Finding,
     ScanResult,
     _detect_lang,
     _should_skip,
@@ -303,3 +302,159 @@ class TestScanResultAggregation:
         summary = result.summary()
         assert "HIGH" in summary
         assert str(result.files_scanned) in summary
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# AST-based validators (PY-001, PY-005, PY-006)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestASTValidators:
+    """Tests for AST-based false-positive reduction."""
+
+    # ── PY-001: -> None annotation ──────────────────────────────────────
+
+    def test_py001_fires_on_real_mismatch(self):
+        """def f() -> None that actually returns a dict should fire."""
+        code = "def process() -> None:\n    return {'key': 'val'}\n"
+        path = _write_temp(".py", code)
+        findings = scan_file(path)
+        os.unlink(path)
+        assert any(f.rule_id == "PY-001" for f in findings)
+
+    def test_py001_suppressed_when_returns_none(self):
+        """def f() -> None that only returns None should NOT fire."""
+        code = "def cleanup() -> None:\n    do_stuff()\n    return None\n"
+        path = _write_temp(".py", code)
+        findings = scan_file(path)
+        os.unlink(path)
+        assert not any(f.rule_id == "PY-001" for f in findings)
+
+    def test_py001_suppressed_when_no_return(self):
+        """def f() -> None with no return at all should NOT fire."""
+        code = "def setup() -> None:\n    x = 1\n    do_stuff()\n"
+        path = _write_temp(".py", code)
+        findings = scan_file(path)
+        os.unlink(path)
+        assert not any(f.rule_id == "PY-001" for f in findings)
+
+    # ── PY-005: json.loads without try ──────────────────────────────────
+
+    def test_py005_fires_without_try(self):
+        """json.loads() without try/except should fire."""
+        code = "import json\ndata = json.loads(raw)\n"
+        path = _write_temp(".py", code)
+        findings = scan_file(path)
+        os.unlink(path)
+        assert any(f.rule_id == "PY-005" for f in findings)
+
+    def test_py005_suppressed_inside_try(self):
+        """json.loads() inside try/except JSONDecodeError should NOT fire."""
+        code = (
+            "import json\n"
+            "try:\n"
+            "    data = json.loads(raw)\n"
+            "except json.JSONDecodeError:\n"
+            "    data = {}\n"
+        )
+        path = _write_temp(".py", code)
+        findings = scan_file(path)
+        os.unlink(path)
+        assert not any(f.rule_id == "PY-005" for f in findings)
+
+    def test_py005_suppressed_inside_bare_except(self):
+        """json.loads() inside bare except should NOT fire."""
+        code = (
+            "import json\n"
+            "try:\n"
+            "    data = json.loads(raw)\n"
+            "except:\n"
+            "    data = {}\n"
+        )
+        path = _write_temp(".py", code)
+        findings = scan_file(path)
+        os.unlink(path)
+        assert not any(f.rule_id == "PY-005" for f in findings)
+
+    def test_py005_suppressed_inside_valueerror(self):
+        """json.loads() inside try/except ValueError should NOT fire."""
+        code = (
+            "import json\n"
+            "try:\n"
+            "    data = json.loads(raw)\n"
+            "except ValueError:\n"
+            "    data = {}\n"
+        )
+        path = _write_temp(".py", code)
+        findings = scan_file(path)
+        os.unlink(path)
+        assert not any(f.rule_id == "PY-005" for f in findings)
+
+    # ── PY-006: global in function vs module level ──────────────────────
+
+    def test_py006_fires_inside_function(self):
+        """'global x' inside a function should fire."""
+        code = "counter = 0\ndef inc():\n    global counter\n    counter += 1\n"
+        path = _write_temp(".py", code)
+        findings = scan_file(path)
+        os.unlink(path)
+        assert any(f.rule_id == "PY-006" for f in findings)
+
+    def test_py006_suppressed_at_module_level(self):
+        """'global x' at module level is a no-op — should NOT fire."""
+        code = "global counter\ncounter = 0\n"
+        path = _write_temp(".py", code)
+        findings = scan_file(path)
+        os.unlink(path)
+        assert not any(f.rule_id == "PY-006" for f in findings)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Git-aware diff scanning (--since)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestGitDiffScanning:
+    """Tests for --since (git diff) scanning."""
+
+    def test_since_filters_to_changed_files(self, tmp_path):
+        """scan_directory with since= should only scan git-changed files."""
+        from unittest.mock import patch
+
+        # Create two files with issues
+        (tmp_path / "changed.py").write_text("x = eval('1')\n")
+        (tmp_path / "unchanged.py").write_text("y = eval('2')\n")
+
+        changed_abs = str(tmp_path / "changed.py")
+
+        with patch("xray.scanner.git_changed_files", return_value=[changed_abs]):
+            result = scan_directory(str(tmp_path), since="HEAD~1")
+
+        scanned_files = {f.file for f in result.findings}
+        # Should only have findings from changed.py
+        assert result.files_scanned == 1
+        assert all("changed.py" in f for f in scanned_files)
+
+    def test_since_empty_diff_scans_nothing(self, tmp_path):
+        """If git diff returns empty list, nothing is scanned."""
+        from unittest.mock import patch
+
+        (tmp_path / "test.py").write_text("x = eval('1')\n")
+
+        with patch("xray.scanner.git_changed_files", return_value=[]):
+            result = scan_directory(str(tmp_path), since="HEAD")
+
+        assert result.files_scanned == 0
+        assert len(result.findings) == 0
+
+    def test_since_git_failure_adds_error(self, tmp_path):
+        """If git is unavailable, an error is recorded but scan continues."""
+        from unittest.mock import patch
+
+        (tmp_path / "test.py").write_text("x = eval('1')\n")
+
+        with patch("xray.scanner.git_changed_files", return_value=None):
+            result = scan_directory(str(tmp_path), since="bad-ref")
+
+        # Error recorded
+        assert any("git diff failed" in e for e in result.errors)
+        # Scan still runs all files (no filter applied)
+        assert result.files_scanned >= 1

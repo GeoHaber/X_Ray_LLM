@@ -26,8 +26,8 @@ import importlib.metadata
 import json
 import logging
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,7 @@ def require_environment() -> None:
     ok, problems = check_environment()
     if problems:
         for p in problems:
-            level = logging.ERROR if p.startswith("[REQUIRED]") or "too old" in p.lower() and "Python" in p else logging.WARNING
+            level = logging.ERROR if p.startswith("[REQUIRED]") or ("too old" in p.lower() and "Python" in p) else logging.WARNING
             logger.log(level, p)
     if not ok:
         sys.exit(
@@ -242,8 +242,14 @@ API_REGISTRY: list[tuple[str, str, str, str]] = [
 class APICheckResult:
     """Result of checking one API symbol."""
 
-    __slots__ = ("import_path", "attr_chain", "used_in", "description",
-                 "found", "error")
+    __slots__ = (
+        "attr_chain",
+        "description",
+        "error",
+        "found",
+        "import_path",
+        "used_in",
+    )
 
     def __init__(self, import_path: str, attr_chain: str, used_in: str,
                  description: str, found: bool, error: str = ""):
@@ -349,7 +355,7 @@ def _fetch_pypi_version(package_name: str, timeout: int = 5) -> str | None:
     """
     url = f"https://pypi.org/pypi/{package_name}/json"
     try:
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})  # noqa: S310
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
             data = json.loads(resp.read())
     except (urllib.error.URLError, OSError, json.JSONDecodeError, ValueError):
@@ -379,11 +385,19 @@ class DependencyStatus:
     """Full status of one dependency: installed vs latest vs API impact."""
 
     __slots__ = (
-        "package", "import_name", "required",
-        "installed_version", "min_version", "latest_version",
-        "is_outdated", "is_major_upgrade",
-        "api_symbols_used", "api_symbols_ok", "api_symbols_broken",
-        "upgrade_risk", "error",
+        "api_symbols_broken",
+        "api_symbols_ok",
+        "api_symbols_used",
+        "error",
+        "import_name",
+        "installed_version",
+        "is_major_upgrade",
+        "is_outdated",
+        "latest_version",
+        "min_version",
+        "package",
+        "required",
+        "upgrade_risk",
     )
 
     def __init__(self, package: str, import_name: str, required: bool):
@@ -495,9 +509,7 @@ def check_dependency_freshness(
         # 5. Assess upgrade risk
         if not status.is_outdated:
             status.upgrade_risk = "none"
-        elif status.api_symbols_broken:
-            status.upgrade_risk = "high"
-        elif status.is_major_upgrade:
+        elif status.api_symbols_broken or status.is_major_upgrade:
             status.upgrade_risk = "high"
         elif status.is_outdated and status.api_symbols_used:
             status.upgrade_risk = "medium"

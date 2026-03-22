@@ -11,12 +11,13 @@
 1. [What Is X-Ray LLM?](#1-what-is-x-ray-llm)
 2. [Quick Start](#2-quick-start)
 3. [Architecture Overview](#3-architecture-overview)
-4. [The 38 Scan Rules](#4-the-38-scan-rules)
+4. [The 42 Scan Rules](#4-the-42-scan-rules)
 5. [The Web UI](#5-the-web-ui)
 6. [How To: Scan a Project](#6-how-to-scan-a-project)
 7. [How To: Read & Filter Results](#7-how-to-read--filter-results)
 8. [How To: Auto-Fix Issues](#8-how-to-auto-fix-issues)
 9. [How To: Use the 19 Analysis Tools](#9-how-to-use-the-19-analysis-tools)
+9a. [Dependency Freshness Checker](#9a-dependency-freshness-checker)
 10. [How To: Use the PM Dashboard](#10-how-to-use-the-pm-dashboard)
 11. [How To: Use the CLI & Agent Loop](#11-how-to-use-the-cli--agent-loop)
 12. [How To: Build & Use the Rust Scanner](#12-how-to-build--use-the-rust-scanner)
@@ -38,17 +39,20 @@ X-Ray LLM is a **self-improving code quality agent** that automates the full cyc
 SCAN → TEST → FIX → VERIFY → LOOP
 ```
 
-It scans codebases for security vulnerabilities, quality issues, and Python-specific bugs using
-**28 pattern-based rules** sourced from real bugs found in real projects — not synthetic patterns.
+It scans codebases for security vulnerabilities, quality issues, Python-specific bugs, and
+portability problems using **42 pattern-based rules** sourced from real bugs found in real
+projects — not synthetic patterns.
 
 **Key capabilities:**
-- **Dual scan engines** — Python (38 rules, cross-platform) + Rust (28 rules, optional, ~10× faster)
+- **Dual scan engines** — Python (42 rules, cross-platform) + Rust (28 rules, optional, ~10× faster)
 - **7 deterministic auto-fixers** — no LLM needed for common fixes
 - **LLM-powered fixes** — uses local models (Qwen, DeepSeek, Codestral) via llama-cpp-python
 - **Rich web UI** — 28+ views, interactive graphs, one-click tools
-- **19 analysis tools** — dead code, smells, duplicates, formatting, type checking, circular calls, coupling, unused imports, and more
+- **19+ analysis tools** — dead code, smells, duplicates, formatting, type checking, circular calls, coupling, unused imports, connections, and more
 - **9 PM Dashboard features** — risk heatmaps, module grades, release confidence, sprint planning, architecture mapping, call graphs, circular call detection, coupling metrics, unused import analysis
-- **Export** — all data available as JSON via REST API
+- **Dependency freshness checker** — PyPI version checks with upgrade impact analysis
+- **AST-based false positive reduction** — 3 AST validators suppress noise for PY-001, PY-005, PY-006
+- **Export** — JSON, SARIF (GitHub Code Scanning compatible), and text output via REST API and CLI
 
 ---
 
@@ -100,7 +104,7 @@ Only `pytest` is strictly required for scanning. The rest unlock additional anal
 ```
   ┌───────────┐
   │   SCAN    │  28 rules (10 Security + 10 Quality + 8 Python)
-  └─────┬─────┘  Python scanner (38 rules) + Rust scanner (28 rules)
+  └─────┬─────┘  Python scanner (42 rules) + Rust scanner (28 rules)
         │
   ┌─────▼─────┐
   │   TEST    │  Auto-generate pytest tests for each finding
@@ -127,27 +131,31 @@ Only `pytest` is strictly required for scanning. The rest unlock additional anal
 
 | Component | File(s) | Role |
 |-----------|---------|------|
-| Scanner (Python) | `xray/scanner.py`, `xray/rules/*.py` | Pattern-based scanning engine (38 rules) with string/comment-aware filtering |
+| Scanner (Python) | `xray/scanner.py`, `xray/rules/*.py` | Pattern-based scanning engine (42 rules) with string/comment-aware filtering + AST validators |
 | Scanner (Rust) | `scanner/src/` | Optional high-performance scanner (28 rules) |
 | Agent Loop | `xray/agent.py` | Orchestrates SCAN→TEST→FIX→VERIFY→LOOP |
 | LLM Interface | `xray/llm.py` | Local LLM inference via llama-cpp-python |
-| Compat Checker | `xray/compat.py` | Python version, dependency version, and API compatibility verification |
+| Compat Checker | `xray/compat.py` | Python version, dependency version, API compatibility, and PyPI freshness verification |
 | Test Runner | `xray/runner.py` | Executes pytest, parses results |
 | Auto-Fixer | `xray/fixer.py` | 7 deterministic fixers + LLM fallback |
-| Web Server | `ui_server.py` | HTTP API (34+ endpoints) on port 8077 |
+| Web Server | `ui_server.py` | HTTP API (31+ endpoints) on port 8077 |
 | Web UI | `ui.html` | Single-page app with 28+ views |
-| Analyzers | `analyzers.py` | 21 analysis functions (smells, dead code, coupling, circular calls, PM Dashboard, etc.) |
+| Analyzers | `analyzers/` | Package of 11 modules: 23+ analysis functions (smells, dead code, coupling, circular calls, PM Dashboard, etc.) |
 | Build System | `build.py` | Rust cross-compilation + validation |
+| Services | `services/` | Business logic: app state, scan manager, git analyzer, chat engine, SATD scanner |
+| API Routes | `api/` | 5 route modules: scan, fix, analysis, PM dashboard, browse |
+| Constants | `xray/constants.py` | Shared constants (SKIP_DIRS, file extensions, path normalizer) |
+| Types | `xray/types.py` | TypedDict definitions for all API responses |
 
 ---
 
-## 4. The 38 Scan Rules
+## 4. The 42 Scan Rules
 
 Every rule was sourced from a real bug found in a real project.
 
-> **Note:** The Python scanner implements all 38 rules. The Rust scanner currently has the
+> **Note:** The Python scanner implements all 42 rules. The Rust scanner currently has the
 > original 28 rules (SEC-001–010, QUAL-001–010, PY-001–008). Run `python generate_rust_rules.py`
-> to sync the 10 new rules to Rust.
+> to sync the 14 new rules to Rust.
 
 ### Security Rules (14) — Prefix: SEC
 
@@ -201,6 +209,26 @@ Every rule was sourced from a real bug found in a real project.
 | PY-009 | Captured but ignored exception | MEDIUM | `except SomeError as e: pass` | No |
 | PY-010 | sys.exit() in library code | MEDIUM | `sys.exit(1)` (kills process) | No |
 | PY-011 | Long isinstance chain | LOW | `isinstance(x, (A,B,C,D,E,...))` | No |
+
+### Portability Rules (4) — Prefix: PORT
+
+| ID | Name | Severity | What It Detects | Auto-Fix? |
+|----|------|----------|-----------------|-----------|
+| PORT-001 | Hardcoded user path | HIGH | `C:\Users\<username>\...` in code | No |
+| PORT-002 | Hardcoded C:\AI\ path | HIGH | `C:\AI\...` paths | No |
+| PORT-003 | Hardcoded Windows path | MEDIUM | Absolute `X:\...` paths | No |
+| PORT-004 | Windows-only import | MEDIUM | `import winreg` without guard | No |
+
+### AST-Based False Positive Reduction
+
+Three rules have AST validators (inline in `xray/scanner.py`) that suppress false positives
+by inspecting the parsed AST tree after the initial regex match:
+
+| Rule | AST Validator | What It Checks |
+|------|--------------|----------------|
+| PY-001 | `_ast_validate_py001` | Only flags if function actually returns non-None value |
+| PY-005 | `_ast_validate_py005` | Suppresses if `json.loads()` is inside try/except |
+| PY-006 | `_ast_validate_py006` | Suppresses `global` at module level (no-op) |
 
 ---
 
@@ -334,7 +362,7 @@ python -m xray.agent /path/to/project --dry-run --exclude vendor/ node_modules/
 
 1. The scanner traverses the directory (skipping `__pycache__`, `.git`, `node_modules`, `venv`)
 2. For each file, it detects the language (`.py` → Python, `.js/.ts` → JavaScript, `.html` → HTML)
-3. Each line is tested against all applicable rules' regex patterns (Python scanner: 38 rules; Rust scanner: 28 rules)
+3. Each line is tested against all applicable rules' regex patterns (Python scanner: 42 rules; Rust scanner: 28 rules)
 4. Matches are collected as **findings** with: rule ID, severity, file, line, description, fix hint
 5. Results are returned with a summary (total, high, medium, low counts)
 
@@ -794,6 +822,20 @@ python -m xray.agent /path/to/project --severity HIGH --dry-run
 
 # Exclude paths
 python -m xray.agent /path/to/project --dry-run --exclude vendor/ node_modules/
+
+# Git-diff scan — only check files changed since a reference
+python -m xray.agent /path/to/project --dry-run --since HEAD~5
+python -m xray.agent /path/to/project --dry-run --since main
+
+# Incremental scan — skip unchanged files since last scan
+python -m xray.agent /path/to/project --dry-run --incremental
+
+# Baseline — only show NEW findings vs previous scan
+python -m xray.agent /path/to/project --dry-run --baseline previous_scan.json
+
+# Output formats
+python -m xray.agent /path/to/project --format json -o results.json
+python -m xray.agent /path/to/project --format sarif -o results.sarif
 ```
 
 ### Auto-Fix Loop (Requires LLM Model)
@@ -811,7 +853,7 @@ python -m xray.agent /path/to/project --fix --max-retries 3
 
 ### What the Agent Loop Does
 
-1. **SCAN** — runs all 38 rules against the codebase (Python engine) or 28 rules (Rust engine)
+1. **SCAN** — runs all 42 rules against the codebase (Python engine) or 28 rules (Rust engine)
 2. **TEST** — generates pytest tests for each finding (via LLM)
 3. **FIX** — applies deterministic fixers first, then LLM-generated patches
 4. **VERIFY** — runs `pytest` to confirm no regressions
@@ -838,10 +880,11 @@ cd scanner && cargo build --release && cd ..
 The Rust scanner is an optional, high-performance alternative to the Python scanner.
 It currently implements the original 28 rules with identical regex patterns, running ~10× faster.
 
-> **Syncing new rules:** The Python scanner has 38 rules (10 new rules were added for
-> timing attacks, debug mode, weak hashing, TLS bypass, broad Exception catching,
+> **Syncing new rules:** The Python scanner has 42 rules (14 new rules added: timing
+> attacks, debug mode, weak hashing, TLS bypass, broad Exception catching,
 > string concat in loops, long lines, captured-ignored exceptions, sys.exit in library
-> code, and long isinstance chains). Run `python generate_rust_rules.py` to sync them.
+> code, long isinstance chains, and 4 portability rules for hardcoded paths/imports).
+> Run `python generate_rust_rules.py` to sync them.
 
 ### Prerequisites
 
@@ -935,13 +978,15 @@ The server listens on **port 8077** (configurable via `--port`) and exposes thes
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/` | Serve the web UI (ui.html) |
-| GET | `/api/info` | Platform, Python version, Rust status, rules count (38), fixable rules |
+| GET | `/api/info` | Platform, Python version, Rust status, rules count (42), fixable rules |
+| GET | `/api/env-check` | Check tool availability (ruff, bandit, ty, git, etc.) |
+| GET | `/api/dependency-check` | PyPI freshness check for all dependencies |
 
 ### File Browsing
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/browse?path=...` | List directory contents (folders first, sorted) |
+| GET | `/api/browse?path=...` | List directory contents (folders first, sorted, respects XRAY_BROWSE_ROOTS) |
 
 ### Scanning
 
@@ -981,6 +1026,8 @@ The server listens on **port 8077** (configurable via `--port`) and exposes thes
 | POST | `/api/web-smells` | `{directory}` | Web anti-pattern detection |
 | POST | `/api/test-gen` | `{directory}` | Generate pytest stubs |
 | POST | `/api/remediation-time` | `{findings}` | Estimate fix time per finding |
+| POST | `/api/typecheck-pyright` | `{directory}` | Run pyright type checker (alternative to ty) |
+| POST | `/api/connection-test` | `{directory}` | Analyze web framework route wiring |
 
 ### PM Dashboard
 
@@ -1002,12 +1049,16 @@ The server listens on **port 8077** (configurable via `--port`) and exposes thes
 |--------|------|------|-------------|
 | POST | `/api/chat` | `{message}` | Knowledge-based chatbot (rules, tools, features) |
 | POST | `/api/project-review` | `{directory, findings, smells, ...}` | Comprehensive project review |
+| POST | `/api/monkey-test` | `{directory}` | Random endpoint testing |
+| POST | `/api/wire-test` | `{directory}` | Web framework route wiring tests |
+| GET | `/api/wire-progress` | | Poll wire-test progress |
+| GET | `/api/monkey-progress` | | Poll monkey-test progress |
 
 ---
 
 ## 15. All Analyzer Functions Reference
 
-Located in `analyzers.py`. Each function can be called programmatically or via its API endpoint.
+Located in `analyzers/` package (11 sub-modules). Each function can be called programmatically or via its API endpoint.
 
 | Function | Input | Returns |
 |----------|-------|---------|
@@ -1062,6 +1113,19 @@ XRAY_N_CTX=8192                         # Context window size
 XRAY_GPU_LAYERS=-1                      # GPU offload (-1 = all layers)
 XRAY_TEMPERATURE=0.3                    # Low temperature for code generation
 XRAY_MAX_TOKENS=2048                    # Max output tokens
+```
+
+### Security & Access Configuration
+
+```bash
+# Restrict file browser to specific directories (comma-separated)
+# Default: project root + user home directory
+# Set to empty string for unrestricted access
+XRAY_BROWSE_ROOTS=/home/user/projects,/opt/code
+
+# Enable CORS for cross-origin requests (e.g. from a frontend dev server)
+# Use "*" for any origin. Leave unset to disable CORS.
+XRAY_CORS_ORIGIN=http://localhost:3000
 ```
 
 ### Recommended LLM Models
@@ -1127,9 +1191,8 @@ This verifies that:
 
 ```
 X_Ray_LLM/
-├── ui_server.py          # Web server (34+ REST endpoints, port 8077)
+├── ui_server.py          # Thin HTTP dispatcher (31+ REST endpoints, port 8077)
 ├── ui.html               # Single-page web UI (28+ views)
-├── analyzers.py          # 21 analysis functions
 ├── build.py              # Rust build system + cross-compilation
 ├── setup_tools.py        # First-time bootstrap (installs uv, ruff, ty)
 ├── update_tools.py       # One-command updater for uv + ruff + ty
@@ -1138,20 +1201,58 @@ X_Ray_LLM/
 ├── README.md             # Project README
 ├── X_RAY_LLM_GUIDE.md   # This document
 ├── pyproject.toml        # Project configuration (ruff + ty config)
+├── Dockerfile            # Docker deployment
+├── docker-compose.yml    # Docker Compose config
+├── MANIFEST.in           # PyPI source distribution manifest
 │
 ├── xray/                 # Core scanner package
 │   ├── __init__.py
-│   ├── scanner.py        # Python scanning engine (string/comment-aware)
-│   ├── compat.py         # Python/dependency/API compatibility checker
-│   ├── agent.py          # SCAN→TEST→FIX→VERIFY→LOOP orchestrator
+│   ├── scanner.py        # Python scanning engine (string/comment-aware + AST validators)
+│   ├── compat.py         # Python/dependency/API/PyPI freshness compatibility checker
+│   ├── agent.py          # SCAN→TEST→FIX→VERIFY→LOOP orchestrator + CLI
 │   ├── llm.py            # LLM inference (llama-cpp-python)
-│   ├── fixer.py          # 7 deterministic auto-fixers
+│   ├── fixer.py          # 7 deterministic auto-fixers + LLM fallback
 │   ├── runner.py         # Test execution (pytest)
+│   ├── sarif.py          # SARIF output format (GitHub Code Scanning)
+│   ├── config.py         # XRayConfig from pyproject.toml
+│   ├── constants.py      # Shared constants (SKIP_DIRS, file extensions)
+│   ├── types.py          # TypedDict definitions for API responses
+│   ├── sca.py            # Software Composition Analysis (pip-audit)
+│   ├── wire_connector.py # Web framework route wiring analysis
+│   ├── portability_audit.py # Cross-platform portability checker
 │   └── rules/
-│       ├── __init__.py   # Exports ALL_RULES (38 total)
+│       ├── __init__.py   # Exports ALL_RULES (42 total)
 │       ├── security.py   # SEC-001 through SEC-014 (14 rules)
 │       ├── quality.py    # QUAL-001 through QUAL-013 (13 rules)
-│       └── python_rules.py  # PY-001 through PY-011 (11 rules)
+│       ├── python_rules.py  # PY-001 through PY-011 (11 rules)
+│       └── portability.py   # PORT-001 through PORT-004 (4 rules)
+│
+├── analyzers/            # Analysis functions package (11 sub-modules)
+│   ├── __init__.py       # Re-exports all 23+ public functions
+│   ├── _shared.py        # Shared helpers: _walk_py, _walk_ext, _safe_parse
+│   ├── format_check.py   # check_format, check_types, run_typecheck
+│   ├── health.py         # check_project_health, estimate_remediation_time, etc.
+│   ├── security.py       # run_bandit
+│   ├── smells.py         # detect_dead_functions, detect_code_smells, detect_duplicates
+│   ├── temporal.py       # analyze_temporal_coupling
+│   ├── detection.py      # detect_ai_code, detect_web_smells, generate_test_stubs
+│   ├── pm_dashboard.py   # Risk heatmap, module cards, confidence, sprint batches, etc.
+│   ├── graph.py          # detect_circular_calls, compute_coupling_metrics, detect_unused_imports
+│   └── connections.py    # analyze_connections (web framework wiring)
+│
+├── services/             # Business logic layer
+│   ├── app_state.py      # Thread-safe AppState singleton
+│   ├── scan_manager.py   # Scan orchestration, browse, Rust/Python engines
+│   ├── git_analyzer.py   # Git hotspots, import parsing, ruff integration
+│   ├── chat_engine.py    # Knowledge chatbot, guide loading
+│   └── satd_scanner.py   # Self-Admitted Technical Debt scanning
+│
+├── api/                  # HTTP route modules
+│   ├── scan_routes.py    # /api/scan, /api/abort, /api/scan-progress, /api/scan-result
+│   ├── fix_routes.py     # /api/preview-fix, /api/apply-fix, /api/apply-fixes-bulk
+│   ├── analysis_routes.py # 19 analysis POST endpoints
+│   ├── pm_routes.py      # 13 PM Dashboard + utility POST endpoints
+│   └── browse_routes.py  # /api/browse, /api/info, /api/env-check, /api/dependency-check
 │
 ├── scanner/              # Optional Rust scanner
 │   ├── Cargo.toml
@@ -1160,10 +1261,27 @@ X_Ray_LLM/
 │       ├── lib.rs        # Core engine (scan_directory, detect_lang)
 │       └── rules/        # Rust rule implementations
 │
-└── tests/                # Test suite
-    ├── test_xray.py      # Rule DB + scanner tests
-    ├── test_verify.py    # Does-no-harm + finds-real-bugs
-    └── test_ui_paths.py  # Path handling tests
+└── tests/                # Test suite (800+ tests)
+    ├── test_xray.py           # Rule DB + scanner tests
+    ├── test_verify.py         # Does-no-harm + finds-real-bugs
+    ├── test_ui_paths.py       # Path handling + browse restrictions
+    ├── test_analyzers.py      # Analyzer function tests
+    ├── test_compat.py         # Version/dependency compatibility tests
+    ├── test_compat_stress.py  # Stress tests for compatibility
+    ├── test_http_integration.py # Real HTTP server integration tests
+    ├── test_connection_analyzer.py # Web framework wiring tests
+    ├── test_fixer.py          # Auto-fixer tests
+    ├── test_fixer_regression.py # Fixer quality assurance
+    ├── test_false_positives.py  # False positive regression tests
+    ├── test_portability.py    # PORT-* rules tests
+    ├── test_sarif.py          # SARIF output tests
+    ├── test_sca.py            # SCA analysis tests
+    ├── test_config.py         # Config loading tests
+    ├── test_scanner_boundary.py # Scanner edge cases
+    ├── test_agent_loop.py     # Agent pipeline tests
+    ├── test_build.py          # Rust build tests
+    ├── test_llm_mock.py       # LLM mock tests
+    └── test_monkey.py         # Monkey/integration tests
 ```
 
 ---

@@ -71,7 +71,7 @@
 - [ ] **Keyboard shortcuts** — Ctrl+Enter to scan, Escape to stop, arrow keys for navigation
 - [ ] **Dark/light theme persistence** — Remember theme choice in localStorage
 - [ ] **Sidebar collapse** — Toggle sidebar to give more space to results on small screens
-- [ ] **Rust scanner parity** — Bring Rust scanner up to 38 rules (currently 28)
+- [ ] **Rust scanner parity** — Bring Rust scanner up to 42 rules (currently 28)
 - [ ] **WebSocket for progress** — Replace polling with WebSocket for instant updates (lower overhead than 400ms polls)
 
 ---

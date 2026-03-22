@@ -16,7 +16,6 @@ sys.path.insert(0, REPO_ROOT)
 from xray.fixer import FIXABLE_RULES, apply_fix
 from xray.scanner import scan_file
 
-
 # Sample source and finding info for each fixable rule
 _SAMPLES = {
     "QUAL-001": {

@@ -7,7 +7,7 @@ Run:  python -m pytest tests/test_llm_mock.py -v --tb=short
 
 import os
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -41,7 +41,7 @@ class TestGenerate:
     """Test the raw generate() method with mocked model."""
 
     def test_generate_returns_string(self):
-        engine, mock = _make_engine_with_mock()
+        engine, _mock = _make_engine_with_mock()
         result = engine.generate("Hello")
         assert result == "MOCK_RESPONSE"
 
@@ -97,7 +97,7 @@ class TestGenerateTest:
     """Test the generate_test() method."""
 
     def test_returns_string(self):
-        engine, mock = _make_engine_with_mock()
+        engine, _mock = _make_engine_with_mock()
         finding = {
             "rule_id": "SEC-007",
             "severity": "HIGH",
@@ -122,7 +122,7 @@ class TestGenerateTest:
         engine.generate_test(finding, "context")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", [])
-        user_msg = [m for m in messages if m["role"] == "user"][0]["content"]
+        user_msg = next(m for m in messages if m["role"] == "user")["content"]
         assert "SEC-003" in user_msg
         assert "shell=True" in user_msg
 
@@ -133,7 +133,7 @@ class TestGenerateTest:
         engine.generate_test(finding, "ctx")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", [])
-        system_msg = [m for m in messages if m["role"] == "system"][0]["content"]
+        system_msg = next(m for m in messages if m["role"] == "system")["content"]
         assert "pytest" in system_msg
 
 
@@ -145,7 +145,7 @@ class TestGenerateFix:
     """Test the generate_fix() method."""
 
     def test_returns_string(self):
-        engine, mock = _make_engine_with_mock()
+        engine, _mock = _make_engine_with_mock()
         finding = {
             "rule_id": "QUAL-001",
             "severity": "MEDIUM",
@@ -170,7 +170,7 @@ class TestGenerateFix:
         engine.generate_fix(finding, "ctx")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", [])
-        user_msg = [m for m in messages if m["role"] == "user"][0]["content"]
+        user_msg = next(m for m in messages if m["role"] == "user")["content"]
         assert "Use .get() with default" in user_msg
 
     def test_includes_test_error_when_provided(self):
@@ -180,7 +180,7 @@ class TestGenerateFix:
         engine.generate_fix(finding, "ctx", test_error="AssertionError: x != y")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", [])
-        user_msg = [m for m in messages if m["role"] == "user"][0]["content"]
+        user_msg = next(m for m in messages if m["role"] == "user")["content"]
         assert "AssertionError" in user_msg
 
     def test_no_test_error_omits_section(self):
@@ -190,7 +190,7 @@ class TestGenerateFix:
         engine.generate_fix(finding, "ctx", test_error="")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", [])
-        user_msg = [m for m in messages if m["role"] == "user"][0]["content"]
+        user_msg = next(m for m in messages if m["role"] == "user")["content"]
         assert "previous fix attempt" not in user_msg
 
 
@@ -202,7 +202,7 @@ class TestAnalyzeCodebase:
     """Test the analyze_codebase() method."""
 
     def test_returns_string(self):
-        engine, mock = _make_engine_with_mock()
+        engine, _mock = _make_engine_with_mock()
         result = engine.analyze_codebase("5 HIGH, 3 MEDIUM findings")
         assert isinstance(result, str)
 
@@ -211,7 +211,7 @@ class TestAnalyzeCodebase:
         engine.analyze_codebase("summary")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", [])
-        system_msg = [m for m in messages if m["role"] == "system"][0]["content"]
+        system_msg = next(m for m in messages if m["role"] == "system")["content"]
         assert "auditor" in system_msg.lower()
 
 

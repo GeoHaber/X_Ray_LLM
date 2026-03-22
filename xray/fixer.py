@@ -52,8 +52,7 @@ def _in_try_block(lines: list[str], target_idx: int) -> bool:
         stripped = lines[i].strip()
         if stripped == "try:" and _get_indent(lines[i]) < indent:
             return True
-        if stripped and not stripped.startswith("#") and _get_indent(lines[i]) <= indent:
-            if not stripped.startswith(("try:", "if ", "elif ", "else:", "for ", "while ")):
+        if stripped and not stripped.startswith("#") and _get_indent(lines[i]) <= indent and not stripped.startswith(("try:", "if ", "elif ", "else:", "for ", "while ")):
                 break
     return False
 
@@ -120,7 +119,7 @@ def _fix_py007_os_environ(filepath, line_num, matched_text, lines):
     if new_line == line:
         return FixResult(error="Could not match pattern")
 
-    new_lines = lines[:idx] + [new_line] + lines[idx + 1:]
+    new_lines = [*lines[:idx], new_line, *lines[idx + 1:]]
     return FixResult(
         fixable=True,
         description="Replaced " + _OS_ENV_BRACKET + "'KEY'] with " + _OS_ENV_GET + "('KEY', \"\")",
@@ -142,7 +141,7 @@ def _fix_qual001_bare_except(filepath, line_num, matched_text, lines):
     if new_line == line:
         return FixResult(error="Could not match bare except")
 
-    new_lines = lines[:idx] + [new_line] + lines[idx + 1:]
+    new_lines = [*lines[:idx], new_line, *lines[idx + 1:]]
     return FixResult(
         fixable=True,
         description="Replaced bare '" + _BARE + "' with '" + _TYPED + "'",
@@ -233,7 +232,7 @@ def _fix_sec003_shell_true(filepath, line_num, matched_text, lines):
     if new_line == line:
         return FixResult(error="Could not find shell=True on this line")
 
-    new_lines = lines[:idx] + [new_line] + lines[idx + 1:]
+    new_lines = [*lines[:idx], new_line, *lines[idx + 1:]]
     return FixResult(
         fixable=True,
         description="Changed shell=True to shell=False (review: args must be a list)",
@@ -263,7 +262,7 @@ def _fix_sec009_pickle_yaml(filepath, line_num, matched_text, lines):
             return FixResult(error="pickle requires manual review — replace with json")
         return FixResult(error="Could not auto-fix this pattern")
 
-    new_lines = lines[:idx] + [new_line] + lines[idx + 1:]
+    new_lines = [*lines[:idx], new_line, *lines[idx + 1:]]
     return FixResult(
         fixable=True,
         description="Replaced unsafe YAML loading with safe_load()",

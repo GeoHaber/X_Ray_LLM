@@ -16,7 +16,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source
 COPY xray/ xray/
-COPY analyzers.py ui_server.py ui.html pyproject.toml ./
+COPY analyzers/ analyzers/
+COPY services/ services/
+COPY api/ api/
+COPY ui_server.py ui.html pyproject.toml ./
 
 EXPOSE 8077
 

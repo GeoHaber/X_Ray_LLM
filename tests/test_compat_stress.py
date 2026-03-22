@@ -4,31 +4,25 @@ These tests hammer edge cases, simulate upgrade disasters, and verify
 the checker catches real-world breaking-change scenarios.
 """
 
-import importlib
-import importlib.metadata
 import types
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from xray.compat import (
     API_REGISTRY,
-    APICheckResult,
     DEPENDENCIES,
-    MIN_PYTHON,
+    APICheckResult,
     _fmt,
     _parse_version,
-    _resolve_attr_chain,
     _version_gte,
     api_compatibility_summary,
     check_api_compatibility,
     check_dependency,
     check_environment,
-    check_python_version,
     environment_summary,
     require_environment,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  PART 1 — Version parsing edge cases

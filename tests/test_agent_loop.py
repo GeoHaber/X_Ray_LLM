@@ -7,9 +7,6 @@ Run:  python -m pytest tests/test_agent_loop.py -v --tb=short
 
 import os
 import sys
-import tempfile
-
-import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
@@ -17,7 +14,6 @@ sys.path.insert(0, REPO_ROOT)
 from xray.agent import AgentConfig, AgentReport, XRayAgent
 from xray.fixer import FIXABLE_RULES, apply_fix, apply_fixes_bulk
 from xray.scanner import scan_directory, scan_file
-
 
 # ═════════════════════════════════════════════════════════════════════════════
 # 1. Scan → Fix → Re-scan cycle

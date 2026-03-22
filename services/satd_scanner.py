@@ -7,6 +7,10 @@ Extracted from ui_server.py.
 import os
 import re
 
+from xray.constants import SKIP_DIRS as _SATD_SKIP_DIRS
+from xray.constants import TEXT_EXTS as _TEXT_EXTENSIONS
+from xray.constants import fwd as _fwd
+
 _SATD_MARKERS = [
     (re.compile(r"\b(FIXME)\b", re.IGNORECASE), "defect", 1.0),
     (re.compile(r"\b(BUG|BUGFIX)\b", re.IGNORECASE), "defect", 1.0),
@@ -22,21 +26,7 @@ _SATD_MARKERS = [
     (re.compile(r"\b(DOCME|DOCUMENT|UNDOCUMENTED)\b", re.IGNORECASE), "documentation", 0.25),
 ]
 
-_SATD_SKIP_DIRS = {
-    "__pycache__", ".git", ".venv", "venv", "node_modules", ".tox",
-    "build", "dist", "_rustified", ".mypy_cache", ".pytest_cache", "target",
-}
-
 _COMMENT_RE = re.compile(r"#\s*(.*)")
-
-_TEXT_EXTENSIONS = {
-    ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".c", ".cpp", ".h",
-    ".cs", ".go", ".rb", ".rs", ".sh", ".bat", ".yaml", ".yml", ".toml", ".md",
-}
-
-
-def _fwd(path: str) -> str:
-    return path.replace("\\", "/")
 
 
 def scan_satd(directory: str) -> dict:

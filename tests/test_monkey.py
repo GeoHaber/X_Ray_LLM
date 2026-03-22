@@ -194,7 +194,7 @@ def post_sse(url, body, timeout=120):
     import time as _time
 
     # 1. Start the scan (server returns immediately)
-    start_resp = post(url, body, timeout=30)
+    post(url, body, timeout=30)
     base = url.rsplit("/api/", 1)[0]
 
     # 2. Poll /api/scan-progress until done
@@ -1064,13 +1064,12 @@ class TestScanCompletion:
         post(f"{server_url}/api/scan", {"directory": test_project, "engine": "python", "severity": "LOW"})
         # Poll until done
         deadline = time.time() + 30
-        saw_scanning = False
         saw_done = False
         while time.time() < deadline:
             time.sleep(0.2)
             progress = get(f"{server_url}/api/scan-progress")
             if progress.get("status") == "scanning":
-                saw_scanning = True
+                pass
             elif progress.get("status") == "done":
                 saw_done = True
                 break
@@ -1092,17 +1091,17 @@ class TestScanCompletion:
         """Before any scan has run, /api/scan-result should return a 404 or error.
         (Note: if another test already ran a scan on this server instance,
         _last_scan_result will be set. We test the error key if present.)"""
-        import ui_server
+        from services.app_state import state
 
         # Temporarily clear the stored result
-        original = ui_server._last_scan_result
-        ui_server._last_scan_result = None
+        original = state.last_scan_result
+        state.last_scan_result = None
         try:
             with pytest.raises(HTTPError) as exc_info:
                 get(f"{server_url}/api/scan-result", timeout=10)
             assert exc_info.value.code == 404
         finally:
-            ui_server._last_scan_result = original
+            state.last_scan_result = original
 
     def test_scan_result_finding_fields_complete(self, server_url, test_project):
         """Every finding from /api/scan-result has all required fields."""

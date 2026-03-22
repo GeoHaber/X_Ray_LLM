@@ -4,10 +4,25 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "xray-llm"
-version = "0.2.0"
+version = "0.3.0"
 description = "Self-improving code quality agent — SCAN → TEST → FIX → VERIFY → LOOP"
 requires-python = ">=3.10"
 license = "MIT"
+readme = "README.md"
+keywords = ["code-quality", "scanner", "security", "linter", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Security",
+]
 dependencies = [
     "llama-cpp-python>=0.3.0",
     "pytest>=7.0",
@@ -15,9 +30,21 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["ruff>=0.15", "ty>=0.0.1"]
+web = ["tomli>=2.0; python_version < '3.11'"]
+
+[project.urls]
+Homepage = "https://github.com/Yo930/X_Ray_LLM"
+Repository = "https://github.com/Yo930/X_Ray_LLM"
+Issues = "https://github.com/Yo930/X_Ray_LLM/issues"
 
 [project.scripts]
 xray = "xray.agent:main"
+
+[tool.setuptools.packages.find]
+include = ["xray*", "analyzers*", "services*", "api*"]
+
+[tool.setuptools.package-data]
+xray = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -48,11 +75,20 @@ ignore = [
     "S101",   # assert usage (fine in tests)
     "T201",   # print() (X-Ray is a CLI tool)
     "E501",   # line length (handled by formatter)
+    "S603",   # subprocess call check (X-Ray invokes ruff/bandit/git by design)
+    "S607",   # partial executable path (ruff, git, bandit are on PATH)
+    "N806",   # UPPER_CASE constants inside functions are intentional
+    "RUF013", # implicit-optional (we target 3.10+)
+    "RUF059", # unused-unpacked-variable (intentional in pattern matches)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S", "B"]   # relax security/bugbear in test files
-"build.py" = ["T201"]    # print() is the UI in build scripts
+"tests/*" = ["S", "B", "N801", "N802", "SIM117", "E402"]
+"build.py" = ["T201"]
+"generate_rust_rules.py" = ["E402"]
+"xray/agent.py" = ["E402"]
+"xray/scanner.py" = ["E402", "SIM102", "SIM105"]
+"ui_server.py" = ["E402", "N811", "RUF012"]
 
 [tool.ruff.format]
 quote-style = "double"
