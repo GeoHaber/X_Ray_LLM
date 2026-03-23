@@ -14,11 +14,11 @@ from pathlib import Path
 
 # ── Fix Result ───────────────────────────────────────────────────────────
 
+
 class FixResult:
     __slots__ = ("description", "diff", "error", "fixable", "new_lines")
 
-    def __init__(self, *, fixable=False, description="", diff="",
-                 new_lines=None, error=""):
+    def __init__(self, *, fixable=False, description="", diff="", new_lines=None, error=""):
         self.fixable = fixable
         self.description = description
         self.diff = diff
@@ -28,17 +28,21 @@ class FixResult:
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+
 def _read_file(path: str) -> list[str]:
     return Path(path).read_text(encoding="utf-8", errors="replace").splitlines(True)
 
 
 def _make_diff(old_lines: list[str], new_lines: list[str], filepath: str) -> str:
-    return "".join(difflib.unified_diff(
-        old_lines, new_lines,
-        fromfile=f"a/{Path(filepath).name}",
-        tofile=f"b/{Path(filepath).name}",
-        lineterm="\n",
-    ))
+    return "".join(
+        difflib.unified_diff(
+            old_lines,
+            new_lines,
+            fromfile=f"a/{Path(filepath).name}",
+            tofile=f"b/{Path(filepath).name}",
+            lineterm="\n",
+        )
+    )
 
 
 def _get_indent(line: str) -> str:
@@ -52,8 +56,13 @@ def _in_try_block(lines: list[str], target_idx: int) -> bool:
         stripped = lines[i].strip()
         if stripped == "try:" and _get_indent(lines[i]) < indent:
             return True
-        if stripped and not stripped.startswith("#") and _get_indent(lines[i]) <= indent and not stripped.startswith(("try:", "if ", "elif ", "else:", "for ", "while ")):
-                break
+        if (
+            stripped
+            and not stripped.startswith("#")
+            and _get_indent(lines[i]) <= indent
+            and not stripped.startswith(("try:", "if ", "elif ", "else:", "for ", "while "))
+        ):
+            break
     return False
 
 
@@ -61,6 +70,7 @@ def _in_try_block(lines: list[str], target_idx: int) -> bool:
 #
 # Each fixer: (filepath, line_num_1based, matched_text, lines) -> FixResult
 # lines = full file as list of strings (with newlines)
+
 
 def _fix_py005_json_parse(filepath, line_num, matched_text, lines):
     """PY-005: Wrap json.loads/json.load in try/except JSONDecodeError."""
@@ -77,7 +87,7 @@ def _fix_py005_json_parse(filepath, line_num, matched_text, lines):
     code = line.rstrip("\n\r")
 
     # Find the variable being assigned (if any)
-    assign_match = re.match(r'^(\s*\w[\w.]*)\s*=\s*', line)
+    assign_match = re.match(r"^(\s*\w[\w.]*)\s*=\s*", line)
     default_var = assign_match.group(1).strip() if assign_match else None
 
     new = []
@@ -90,7 +100,7 @@ def _fix_py005_json_parse(filepath, line_num, matched_text, lines):
     else:
         new.append(f"{inner}pass  # handle malformed JSON\n")
 
-    new_lines = lines[:idx] + new + lines[idx + 1:]
+    new_lines = lines[:idx] + new + lines[idx + 1 :]
     return FixResult(
         fixable=True,
         description="Wrapped json.loads() in try/except json.JSONDecodeError",
@@ -119,7 +129,7 @@ def _fix_py007_os_environ(filepath, line_num, matched_text, lines):
     if new_line == line:
         return FixResult(error="Could not match pattern")
 
-    new_lines = [*lines[:idx], new_line, *lines[idx + 1:]]
+    new_lines = [*lines[:idx], new_line, *lines[idx + 1 :]]
     return FixResult(
         fixable=True,
         description="Replaced " + _OS_ENV_BRACKET + "'KEY'] with " + _OS_ENV_GET + "('KEY', \"\")",
@@ -137,11 +147,11 @@ def _fix_qual001_bare_except(filepath, line_num, matched_text, lines):
     line = lines[idx]
     _BARE = "except" + ":"
     _TYPED = "except" + " Exception:"
-    new_line = re.sub(r'except\s*:', _TYPED, line)
+    new_line = re.sub(r"except\s*:", _TYPED, line)
     if new_line == line:
         return FixResult(error="Could not match bare except")
 
-    new_lines = [*lines[:idx], new_line, *lines[idx + 1:]]
+    new_lines = [*lines[:idx], new_line, *lines[idx + 1 :]]
     return FixResult(
         fixable=True,
         description="Replaced bare '" + _BARE + "' with '" + _TYPED + "'",
@@ -164,7 +174,7 @@ def _fix_qual003_int_input(filepath, line_num, matched_text, lines):
     inner = indent + "    "
     code = line.rstrip("\n\r")
 
-    assign_match = re.match(r'^(\s*\w[\w.]*)\s*=\s*', line)
+    assign_match = re.match(r"^(\s*\w[\w.]*)\s*=\s*", line)
     default_var = assign_match.group(1).strip() if assign_match else None
 
     new = []
@@ -176,7 +186,7 @@ def _fix_qual003_int_input(filepath, line_num, matched_text, lines):
     else:
         new.append(f"{inner}pass  # handle non-numeric input\n")
 
-    new_lines = lines[:idx] + new + lines[idx + 1:]
+    new_lines = lines[:idx] + new + lines[idx + 1 :]
     return FixResult(
         fixable=True,
         description="Wrapped int() in try/except (ValueError, TypeError)",
@@ -199,7 +209,7 @@ def _fix_qual004_float_input(filepath, line_num, matched_text, lines):
     inner = indent + "    "
     code = line.rstrip("\n\r")
 
-    assign_match = re.match(r'^(\s*\w[\w.]*)\s*=\s*', line)
+    assign_match = re.match(r"^(\s*\w[\w.]*)\s*=\s*", line)
     default_var = assign_match.group(1).strip() if assign_match else None
 
     new = []
@@ -211,7 +221,7 @@ def _fix_qual004_float_input(filepath, line_num, matched_text, lines):
     else:
         new.append(f"{inner}pass  # handle non-numeric input\n")
 
-    new_lines = lines[:idx] + new + lines[idx + 1:]
+    new_lines = lines[:idx] + new + lines[idx + 1 :]
     return FixResult(
         fixable=True,
         description="Wrapped float() in try/except (ValueError, TypeError)",
@@ -232,7 +242,7 @@ def _fix_sec003_shell_true(filepath, line_num, matched_text, lines):
     if new_line == line:
         return FixResult(error="Could not find shell=True on this line")
 
-    new_lines = [*lines[:idx], new_line, *lines[idx + 1:]]
+    new_lines = [*lines[:idx], new_line, *lines[idx + 1 :]]
     return FixResult(
         fixable=True,
         description="Changed shell=True to shell=False (review: args must be a list)",
@@ -256,13 +266,13 @@ def _fix_sec009_pickle_yaml(filepath, line_num, matched_text, lines):
     new_line = line
     new_line = new_line.replace(_UNSAFE_YAML, _SAFE_YAML)
     # Remove Loader= arg since safe_load doesn't need it
-    new_line = re.sub(r',\s*Loader\s*=\s*\w+\.?\w*', '', new_line)
+    new_line = re.sub(r",\s*Loader\s*=\s*\w+\.?\w*", "", new_line)
     if new_line == line:
         if "pickle" + ".load" in line:
             return FixResult(error="pickle requires manual review — replace with json")
         return FixResult(error="Could not auto-fix this pattern")
 
-    new_lines = [*lines[:idx], new_line, *lines[idx + 1:]]
+    new_lines = [*lines[:idx], new_line, *lines[idx + 1 :]]
     return FixResult(
         fixable=True,
         description="Replaced unsafe YAML loading with safe_load()",
@@ -289,6 +299,7 @@ FIXABLE_RULES = set(FIXERS.keys())
 
 # ── Public API ───────────────────────────────────────────────────────────
 
+
 def preview_fix(finding: dict) -> dict:
     """Generate a fix preview (diff) without modifying the file.
 
@@ -301,12 +312,15 @@ def preview_fix(finding: dict) -> dict:
     matched = finding.get("matched_text", "")
 
     if rule_id not in FIXERS:
-        return {"fixable": False, "diff": "", "description": "",
-                "error": f"No auto-fixer for {rule_id}. Fix hint: {finding.get('fix_hint', '')}"}
+        return {
+            "fixable": False,
+            "diff": "",
+            "description": "",
+            "error": f"No auto-fixer for {rule_id}. Fix hint: {finding.get('fix_hint', '')}",
+        }
 
     if not Path(filepath).is_file():
-        return {"fixable": False, "diff": "", "description": "",
-                "error": f"File not found: {filepath}"}
+        return {"fixable": False, "diff": "", "description": "", "error": f"File not found: {filepath}"}
 
     lines = _read_file(filepath)
     fixer = FIXERS[rule_id]
@@ -396,8 +410,10 @@ def run_ruff_fix(filepath: str) -> dict:
 
     try:
         proc = subprocess.run(
-            [ruff, "check", "--fix", "--unsafe-fixes", filepath],
-            capture_output=True, text=True, timeout=30,
+            [ruff, "check", "--fix", filepath],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         return {"ok": True, "output": proc.stdout + proc.stderr}
     except Exception as e:

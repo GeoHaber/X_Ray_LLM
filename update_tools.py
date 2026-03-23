@@ -5,6 +5,7 @@ Usage:
     python update_tools.py          # update all three
     python update_tools.py --check  # show current versions only
 """
+
 import logging
 import subprocess
 import sys

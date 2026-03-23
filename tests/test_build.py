@@ -27,6 +27,7 @@ from build import (
 # 1. TARGET_MAP completeness
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestTargetMap:
     """Verify the target map covers all major platforms."""
 
@@ -61,6 +62,7 @@ class TestTargetMap:
 # ═════════════════════════════════════════════════════════════════════════════
 # 2. detect_target()
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestDetectTarget:
     """Verify auto-detection works and falls back correctly."""
@@ -109,6 +111,7 @@ class TestDetectTarget:
 # 3. resolve_target()
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestResolveTarget:
     """Verify target resolution from aliases and auto-detect."""
 
@@ -137,6 +140,7 @@ class TestResolveTarget:
 # ═════════════════════════════════════════════════════════════════════════════
 # 4. get_binary_path()
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestGetBinaryPath:
     """Verify binary path construction."""
@@ -170,6 +174,7 @@ class TestGetBinaryPath:
 # ═════════════════════════════════════════════════════════════════════════════
 # 5. BINARY_NAME map
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestBinaryName:
     """Verify binary name map is complete."""

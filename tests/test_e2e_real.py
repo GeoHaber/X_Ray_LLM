@@ -14,10 +14,7 @@ Run:  python -m pytest tests/test_e2e_real.py -v --tb=short
 """
 
 import json
-import os
-import shutil
 import sys
-import tempfile
 import textwrap
 import threading
 import time
@@ -31,25 +28,24 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from ui_server import XRayHandler
-from xray.scanner import scan_directory, scan_file, ScanResult, Finding
-from xray.fixer import preview_fix, apply_fix, apply_fixes_bulk, FIXABLE_RULES
-from xray.agent import AgentConfig, XRayAgent
-from xray.config import XRayConfig
-from xray.sarif import findings_to_sarif, sarif_to_json_string
-from xray.runner import TestResult
-from xray.rules import ALL_RULES
-from services.scan_manager import (
-    count_scannable_files,
-    browse_directory,
-    get_drives,
-)
-from services.satd_scanner import scan_satd
 from services.chat_engine import chat_reply
 from services.git_analyzer import parse_imports
-
+from services.satd_scanner import scan_satd
+from services.scan_manager import (
+    browse_directory,
+    count_scannable_files,
+    get_drives,
+)
+from ui_server import XRayHandler
+from xray.agent import AgentConfig, XRayAgent
+from xray.config import XRayConfig
+from xray.fixer import apply_fix, apply_fixes_bulk, preview_fix
+from xray.rules import ALL_RULES
+from xray.sarif import findings_to_sarif, sarif_to_json_string
+from xray.scanner import scan_directory, scan_file
 
 # ── HTTP Server Fixtures ────────────────────────────────────────────────
+
 
 class _TestServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
@@ -96,9 +92,10 @@ def _post(server, path, payload=None):
     conn = HTTPConnection(host, port, timeout=60)
     body_bytes = json.dumps(payload or {}).encode("utf-8")
     conn.request(
-        "POST", path, body=body_bytes,
-        headers={"Content-Type": "application/json",
-                 "Content-Length": str(len(body_bytes))},
+        "POST",
+        path,
+        body=body_bytes,
+        headers={"Content-Type": "application/json", "Content-Length": str(len(body_bytes))},
     )
     resp = conn.getresponse()
     raw = resp.read()
@@ -112,10 +109,12 @@ def _post(server, path, payload=None):
 
 # ── Temp Project Fixtures ───────────────────────────────────────────────
 
+
 @pytest.fixture
 def vuln_project(tmp_path):
     """Create a temp project with known vulnerabilities."""
-    (tmp_path / "vuln.py").write_text(textwrap.dedent("""\
+    (tmp_path / "vuln.py").write_text(
+        textwrap.dedent("""\
         import subprocess, json, os, yaml
 
         def run_cmd(cmd):
@@ -135,23 +134,31 @@ def vuln_project(tmp_path):
             x = 1
         except:
             pass
-    """), encoding="utf-8")
+    """),
+        encoding="utf-8",
+    )
 
-    (tmp_path / "clean.py").write_text(textwrap.dedent("""\
+    (tmp_path / "clean.py").write_text(
+        textwrap.dedent("""\
         def add(a: int, b: int) -> int:
             return a + b
 
         def greet(name: str) -> str:
             return f"Hello, {name}"
-    """), encoding="utf-8")
+    """),
+        encoding="utf-8",
+    )
 
-    (tmp_path / "todo_file.py").write_text(textwrap.dedent("""\
+    (tmp_path / "todo_file.py").write_text(
+        textwrap.dedent("""\
         # TODO: Fix this later
         # FIXME: Performance issue
         # HACK: Temporary workaround
         def placeholder():
             pass
-    """), encoding="utf-8")
+    """),
+        encoding="utf-8",
+    )
 
     return tmp_path
 
@@ -161,7 +168,8 @@ def large_project(tmp_path):
     """Create a project with many files for performance testing."""
     for i in range(50):
         (tmp_path / f"module_{i}.py").write_text(
-            f"def func_{i}():\n    return {i}\n", encoding="utf-8",
+            f"def func_{i}():\n    return {i}\n",
+            encoding="utf-8",
         )
     return tmp_path
 
@@ -169,6 +177,7 @@ def large_project(tmp_path):
 # ══════════════════════════════════════════════════════════════════════════
 # 1. SCANNER INTEGRATION
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestScannerIntegration:
     """Real scan_directory and scan_file calls — no mocks."""
@@ -220,6 +229,7 @@ class TestScannerIntegration:
 
     def test_scan_50_file_project_performance(self, large_project):
         import time
+
         start = time.perf_counter()
         result = scan_directory(str(large_project))
         elapsed = time.perf_counter() - start
@@ -245,6 +255,7 @@ class TestScannerIntegration:
 # ══════════════════════════════════════════════════════════════════════════
 # 2. FIXER INTEGRATION
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestFixerIntegration:
     """Real fix operations on actual files — no mocks."""
@@ -297,7 +308,12 @@ class TestFixerIntegration:
                 environ_line = i
                 break
         if environ_line:
-            finding = {"rule_id": "PY-007", "file": fpath, "line": environ_line, "matched_text": "os.environ['SECRET_KEY']"}
+            finding = {
+                "rule_id": "PY-007",
+                "file": fpath,
+                "line": environ_line,
+                "matched_text": "os.environ['SECRET_KEY']",
+            }
             apply_fix(finding)
             modified = Path(fpath).read_text(encoding="utf-8")
             assert "os.environ.get(" in modified
@@ -308,12 +324,11 @@ class TestFixerIntegration:
         assert result is None or (isinstance(result, dict) and "error" in result)
 
     def test_apply_fixes_bulk_multiple(self, vuln_project):
-        fpath = str(vuln_project / "vuln.py")
         result = scan_directory(str(vuln_project))
         fixable = [
-            f.to_dict() for f in result.findings
-            if f.rule_id in {"SEC-003", "QUAL-001", "PY-007"}
-            and f.file.endswith("vuln.py")
+            f.to_dict()
+            for f in result.findings
+            if f.rule_id in {"SEC-003", "QUAL-001", "PY-007"} and f.file.endswith("vuln.py")
         ]
         if fixable:
             applied = apply_fixes_bulk(fixable)
@@ -329,6 +344,7 @@ class TestFixerIntegration:
 # ══════════════════════════════════════════════════════════════════════════
 # 3. AGENT LOOP INTEGRATION
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestAgentLoopIntegration:
     """Real Agent executions — no LLM required for deterministic fixes."""
@@ -360,7 +376,8 @@ class TestAgentLoopIntegration:
         sub.mkdir()
         (sub / "bad.py").write_text("eval('x')\n", encoding="utf-8")
         config = AgentConfig(
-            project_root=str(vuln_project), dry_run=True,
+            project_root=str(vuln_project),
+            dry_run=True,
             exclude_patterns=["ignored"],
         )
         agent = XRayAgent(config=config, quiet=True)
@@ -379,6 +396,7 @@ class TestAgentLoopIntegration:
 # ══════════════════════════════════════════════════════════════════════════
 # 4. API ROUTES — REAL HTTP REQUESTS
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestAPIInfo:
     """Test info-class endpoints via real HTTP."""
@@ -403,11 +421,15 @@ class TestAPIScan:
     """Test scan endpoints via real HTTP."""
 
     def test_scan_start_returns_status(self, server, vuln_project):
-        status, data = _post(server, "/api/scan", {
-            "directory": str(vuln_project),
-            "engine": "python",
-            "severity": "ALL",
-        })
+        status, data = _post(
+            server,
+            "/api/scan",
+            {
+                "directory": str(vuln_project),
+                "engine": "python",
+                "severity": "ALL",
+            },
+        )
         assert status == 200
         assert data["status"] in ("started", "scanning", "done", "already_running")
 
@@ -427,10 +449,14 @@ class TestAPIScan:
         assert status == 200
 
     def test_scan_invalid_directory(self, server):
-        status, data = _post(server, "/api/scan", {
-            "directory": "/nonexistent/path/xyz",
-            "engine": "python",
-        })
+        status, data = _post(
+            server,
+            "/api/scan",
+            {
+                "directory": "/nonexistent/path/xyz",
+                "engine": "python",
+            },
+        )
         assert status in (200, 400)
         if status == 200:
             assert "error" in data or data.get("status") == "error"
@@ -445,19 +471,27 @@ class TestAPIFix:
     """Test fix endpoints via real HTTP."""
 
     def test_preview_fix_endpoint(self, server, vuln_project):
-        status, data = _post(server, "/api/preview-fix", {
-            "rule_id": "SEC-003",
-            "file": str(vuln_project / "vuln.py"),
-            "line": 5,
-        })
+        status, data = _post(
+            server,
+            "/api/preview-fix",
+            {
+                "rule_id": "SEC-003",
+                "file": str(vuln_project / "vuln.py"),
+                "line": 5,
+            },
+        )
         assert status == 200
 
     def test_apply_fix_endpoint(self, server, vuln_project):
-        status, data = _post(server, "/api/apply-fix", {
-            "rule_id": "QUAL-001",
-            "file": str(vuln_project / "vuln.py"),
-            "line": 17,
-        })
+        status, data = _post(
+            server,
+            "/api/apply-fix",
+            {
+                "rule_id": "QUAL-001",
+                "file": str(vuln_project / "vuln.py"),
+                "line": 17,
+            },
+        )
         assert status == 200
 
 
@@ -519,59 +553,99 @@ class TestAPIPMDashboard:
     """Test PM Dashboard endpoints via real HTTP."""
 
     def test_risk_heatmap_endpoint(self, server, vuln_project):
-        status, data = _post(server, "/api/risk-heatmap", {
-            "directory": str(vuln_project), "findings": [],
-        })
+        status, data = _post(
+            server,
+            "/api/risk-heatmap",
+            {
+                "directory": str(vuln_project),
+                "findings": [],
+            },
+        )
         assert status == 200
 
     def test_module_cards_endpoint(self, server, vuln_project):
-        status, data = _post(server, "/api/module-cards", {
-            "directory": str(vuln_project), "findings": [],
-        })
+        status, data = _post(
+            server,
+            "/api/module-cards",
+            {
+                "directory": str(vuln_project),
+                "findings": [],
+            },
+        )
         assert status == 200
 
     def test_confidence_endpoint(self, server, vuln_project):
-        status, data = _post(server, "/api/confidence", {
-            "directory": str(vuln_project), "findings": [],
-        })
+        status, data = _post(
+            server,
+            "/api/confidence",
+            {
+                "directory": str(vuln_project),
+                "findings": [],
+            },
+        )
         assert status == 200
         assert "confidence" in data
 
     def test_sprint_batches_endpoint(self, server):
-        status, data = _post(server, "/api/sprint-batches", {
-            "findings": [], "smells": [],
-        })
+        status, data = _post(
+            server,
+            "/api/sprint-batches",
+            {
+                "findings": [],
+                "smells": [],
+            },
+        )
         assert status == 200
         assert "batches" in data
 
     def test_architecture_endpoint(self, server, vuln_project):
-        status, data = _post(server, "/api/architecture", {
-            "directory": str(vuln_project),
-        })
+        status, data = _post(
+            server,
+            "/api/architecture",
+            {
+                "directory": str(vuln_project),
+            },
+        )
         assert status == 200
 
     def test_call_graph_endpoint(self, server, vuln_project):
-        status, data = _post(server, "/api/call-graph", {
-            "directory": str(vuln_project),
-        })
+        status, data = _post(
+            server,
+            "/api/call-graph",
+            {
+                "directory": str(vuln_project),
+            },
+        )
         assert status == 200
 
     def test_circular_calls_endpoint(self, server, vuln_project):
-        status, data = _post(server, "/api/circular-calls", {
-            "directory": str(vuln_project),
-        })
+        status, data = _post(
+            server,
+            "/api/circular-calls",
+            {
+                "directory": str(vuln_project),
+            },
+        )
         assert status == 200
 
     def test_coupling_endpoint(self, server, vuln_project):
-        status, data = _post(server, "/api/coupling", {
-            "directory": str(vuln_project),
-        })
+        status, data = _post(
+            server,
+            "/api/coupling",
+            {
+                "directory": str(vuln_project),
+            },
+        )
         assert status == 200
 
     def test_unused_imports_endpoint(self, server, vuln_project):
-        status, data = _post(server, "/api/unused-imports", {
-            "directory": str(vuln_project),
-        })
+        status, data = _post(
+            server,
+            "/api/unused-imports",
+            {
+                "directory": str(vuln_project),
+            },
+        )
         assert status == 200
 
 
@@ -588,9 +662,13 @@ class TestAPIChat:
         assert status in (200, 400)
 
     def test_project_review_endpoint(self, server, vuln_project):
-        status, data = _post(server, "/api/project-review", {
-            "directory": str(vuln_project),
-        })
+        status, data = _post(
+            server,
+            "/api/project-review",
+            {
+                "directory": str(vuln_project),
+            },
+        )
         assert status == 200
 
 
@@ -600,9 +678,9 @@ class TestAPIErrorHandling:
     def test_invalid_json_body(self, server):
         host, port = server
         conn = HTTPConnection(host, port, timeout=10)
-        conn.request("POST", "/api/scan", body=b"not json",
-                     headers={"Content-Type": "application/json",
-                              "Content-Length": "8"})
+        conn.request(
+            "POST", "/api/scan", body=b"not json", headers={"Content-Type": "application/json", "Content-Length": "8"}
+        )
         resp = conn.getresponse()
         resp.read()
         conn.close()
@@ -620,6 +698,7 @@ class TestAPIErrorHandling:
 # ══════════════════════════════════════════════════════════════════════════
 # 5. SERVICES — DIRECT FUNCTION CALLS
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestScanManagerServices:
     """Test scan_manager functions directly."""
@@ -687,6 +766,7 @@ class TestGitAnalyzer:
 # 6. SARIF OUTPUT
 # ══════════════════════════════════════════════════════════════════════════
 
+
 class TestSARIFIntegration:
     """Real SARIF generation from actual scan results."""
 
@@ -715,6 +795,7 @@ class TestSARIFIntegration:
 # 7. CONFIG INTEGRATION
 # ══════════════════════════════════════════════════════════════════════════
 
+
 class TestConfigIntegration:
     """Real config loading from actual project."""
 
@@ -731,56 +812,67 @@ class TestConfigIntegration:
 # 8. ANALYZER FUNCTIONS — DIRECT CALLS
 # ══════════════════════════════════════════════════════════════════════════
 
+
 class TestAnalyzersDirect:
     """Direct function calls to analyzers — no HTTP layer."""
 
     def test_detect_code_smells_real(self, vuln_project):
         from analyzers import detect_code_smells
+
         result = detect_code_smells(str(vuln_project))
         assert "smells" in result or "total" in result
 
     def test_detect_duplicates_real(self, vuln_project):
         from analyzers import detect_duplicates
+
         result = detect_duplicates(str(vuln_project))
         assert "duplicate_groups" in result or "total_groups" in result
 
     def test_detect_dead_functions_real(self, vuln_project):
         from analyzers import detect_dead_functions
+
         result = detect_dead_functions(str(vuln_project))
         assert "dead_functions" in result
 
     def test_detect_unused_imports_real(self, vuln_project):
         from analyzers import detect_unused_imports
+
         result = detect_unused_imports(str(vuln_project))
         assert "unused_imports" in result
 
     def test_compute_architecture_map_real(self, vuln_project):
         from analyzers import compute_architecture_map
+
         result = compute_architecture_map(str(vuln_project))
         assert "nodes" in result
 
     def test_compute_call_graph_real(self, vuln_project):
         from analyzers import compute_call_graph
+
         result = compute_call_graph(str(vuln_project))
         assert "nodes" in result
 
     def test_detect_circular_calls_real(self, vuln_project):
         from analyzers import detect_circular_calls
+
         result = detect_circular_calls(str(vuln_project))
         assert "circular_calls" in result or "total_cycles" in result
 
     def test_compute_coupling_metrics_real(self, vuln_project):
         from analyzers import compute_coupling_metrics
+
         result = compute_coupling_metrics(str(vuln_project))
         assert "modules" in result
 
     def test_check_project_health_real(self, vuln_project):
         from analyzers import check_project_health
+
         result = check_project_health(str(vuln_project))
         assert "score" in result
 
     def test_estimate_remediation_time_real(self, vuln_project):
         from analyzers import estimate_remediation_time
+
         scan_result = scan_directory(str(vuln_project))
         findings = [f.to_dict() for f in scan_result.findings]
         result = estimate_remediation_time(findings)
@@ -788,16 +880,19 @@ class TestAnalyzersDirect:
 
     def test_generate_test_stubs_real(self, vuln_project):
         from analyzers import generate_test_stubs
+
         result = generate_test_stubs(str(vuln_project))
         assert "total_functions" in result
 
     def test_detect_ai_code_real(self, vuln_project):
         from analyzers import detect_ai_code
+
         result = detect_ai_code(str(vuln_project))
         assert "indicators" in result or "total" in result
 
     def test_compute_confidence_meter_real(self, vuln_project):
         from analyzers import compute_confidence_meter
+
         scan_result = scan_directory(str(vuln_project))
         findings = [f.to_dict() for f in scan_result.findings]
         result = compute_confidence_meter(str(vuln_project), findings)
@@ -806,6 +901,7 @@ class TestAnalyzersDirect:
 
     def test_compute_sprint_batches_real(self, vuln_project):
         from analyzers import compute_sprint_batches
+
         scan_result = scan_directory(str(vuln_project))
         findings = [f.to_dict() for f in scan_result.findings]
         result = compute_sprint_batches(findings, [])
@@ -813,6 +909,7 @@ class TestAnalyzersDirect:
 
     def test_compute_project_review_real(self, vuln_project):
         from analyzers import compute_project_review
+
         result = compute_project_review(str(vuln_project))
         assert isinstance(result, dict)
 
@@ -820,6 +917,7 @@ class TestAnalyzersDirect:
 # ══════════════════════════════════════════════════════════════════════════
 # 9. RULES DATABASE INTEGRITY
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestRulesIntegrity:
     """Validate rule definitions are internally consistent."""
@@ -833,6 +931,7 @@ class TestRulesIntegrity:
 
     def test_all_rules_have_regex(self):
         import re
+
         for rule in ALL_RULES:
             pat = rule.get("pattern")
             assert pat, f"Rule {rule['id']} missing pattern"
@@ -852,18 +951,18 @@ class TestRulesIntegrity:
     def test_each_rule_fires_on_sample(self, tmp_path):
         """Each rule should fire on its own sample pattern."""
         samples = {
-            "SEC-003": ('subprocess.run(cmd, shell=True)', '.py'),
-            "SEC-004": ('cursor.execute(f"SELECT * FROM {table}")', '.py'),
-            "SEC-007": ('result = eval(user_input)', '.py'),
-            "SEC-009": ('data = yaml.load(raw)', '.py'),
-            "SEC-012": ('DEBUG = True', '.py'),
-            "QUAL-001": ('except:\n    pass', '.py'),
-            "QUAL-007": ('# TODO: fix this', '.py'),
-            "PY-003": ('from os import *', '.py'),
-            "PY-004": ('print(debug_value)', '.py'),
-            "PY-007": ("key = os.environ['SECRET']", '.py'),
-            "SEC-001": ('el.innerHTML = `${userInput}`;', '.js'),
-            "SEC-002": ('el.innerHTML = "prefix" + variable;', '.js'),
+            "SEC-003": ("subprocess.run(cmd, shell=True)", ".py"),
+            "SEC-004": ('cursor.execute(f"SELECT * FROM {table}")', ".py"),
+            "SEC-007": ("result = eval(user_input)", ".py"),
+            "SEC-009": ("data = yaml.load(raw)", ".py"),
+            "SEC-012": ("DEBUG = True", ".py"),
+            "QUAL-001": ("except:\n    pass", ".py"),
+            "QUAL-007": ("# TODO: fix this", ".py"),
+            "PY-003": ("from os import *", ".py"),
+            "PY-004": ("print(debug_value)", ".py"),
+            "PY-007": ("key = os.environ['SECRET']", ".py"),
+            "SEC-001": ("el.innerHTML = `${userInput}`;", ".js"),
+            "SEC-002": ('el.innerHTML = "prefix" + variable;', ".js"),
         }
         for rule_id, (code, ext) in samples.items():
             f = tmp_path / f"test_{rule_id}{ext}"
@@ -877,6 +976,7 @@ class TestRulesIntegrity:
 # 10. FULL WORKFLOW — SCAN → ANALYZE → FIX → VERIFY
 # ══════════════════════════════════════════════════════════════════════════
 
+
 class TestFullWorkflow:
     """Complete end-to-end workflow test."""
 
@@ -889,10 +989,7 @@ class TestFullWorkflow:
 
         # 2. Apply all deterministic fixes
         fixable_rules = {"SEC-003", "SEC-009", "QUAL-001", "PY-005", "PY-007"}
-        fixable = [
-            f.to_dict() for f in result1.findings
-            if f.rule_id in fixable_rules
-        ]
+        fixable = [f.to_dict() for f in result1.findings if f.rule_id in fixable_rules]
 
         if fixable:
             apply_fixes_bulk(fixable)
@@ -902,15 +999,13 @@ class TestFullWorkflow:
         final_count = len(result2.findings)
 
         # Should have fewer findings after fixing
-        assert final_count < initial_count, (
-            f"Expected fewer findings after fix: {final_count} >= {initial_count}"
-        )
+        assert final_count < initial_count, f"Expected fewer findings after fix: {final_count} >= {initial_count}"
 
     def test_scan_to_sarif_pipeline(self, vuln_project):
         """Scan → SARIF → validate output."""
         result = scan_directory(str(vuln_project))
         findings_dicts = [f.to_dict() for f in result.findings]
-        sarif = findings_to_sarif(findings_dicts)
+        _sarif = findings_to_sarif(findings_dicts)
         json_str = sarif_to_json_string(findings_dicts)
         parsed = json.loads(json_str)
         assert parsed["version"] == "2.1.0"

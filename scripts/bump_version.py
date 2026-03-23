@@ -29,7 +29,9 @@ def bump(new_version: str, *, dry_run: bool = False) -> None:
             continue
 
         old = match.group(1)
-        updated = pattern.sub(f'version = "{new_version}"' if "toml" in relpath else f'__version__ = "{new_version}"', text, count=1)
+        updated = pattern.sub(
+            f'version = "{new_version}"' if "toml" in relpath else f'__version__ = "{new_version}"', text, count=1
+        )
         if dry_run:
             print(f"DRY   {relpath}: {old} -> {new_version}")
         else:

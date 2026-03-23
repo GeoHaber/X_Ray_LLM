@@ -47,6 +47,7 @@ def handle_ruff(body, handler):
 
 def handle_format(body, handler):
     from analyzers import check_format
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -55,6 +56,7 @@ def handle_format(body, handler):
 
 def handle_typecheck(body, handler):
     from analyzers import check_types
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -63,6 +65,7 @@ def handle_typecheck(body, handler):
 
 def handle_health(body, handler):
     from analyzers import check_project_health
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -71,6 +74,7 @@ def handle_health(body, handler):
 
 def handle_bandit(body, handler):
     from analyzers import run_bandit
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -79,6 +83,7 @@ def handle_bandit(body, handler):
 
 def handle_dead_code(body, handler):
     from analyzers import detect_dead_functions
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -87,6 +92,7 @@ def handle_dead_code(body, handler):
 
 def handle_smells(body, handler):
     from analyzers import detect_code_smells
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -95,6 +101,7 @@ def handle_smells(body, handler):
 
 def handle_duplicates(body, handler):
     from analyzers import detect_duplicates
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -103,6 +110,7 @@ def handle_duplicates(body, handler):
 
 def handle_temporal_coupling(body, handler):
     from analyzers import analyze_temporal_coupling
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -111,6 +119,7 @@ def handle_temporal_coupling(body, handler):
 
 def handle_typecheck_pyright(body, handler):
     from analyzers import run_typecheck
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -119,6 +128,7 @@ def handle_typecheck_pyright(body, handler):
 
 def handle_release_readiness(body, handler):
     from analyzers import check_release_readiness
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -127,6 +137,7 @@ def handle_release_readiness(body, handler):
 
 def handle_ai_detect(body, handler):
     from analyzers import detect_ai_code
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -135,6 +146,7 @@ def handle_ai_detect(body, handler):
 
 def handle_web_smells(body, handler):
     from analyzers import detect_web_smells
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -143,6 +155,7 @@ def handle_web_smells(body, handler):
 
 def handle_connection_test(body, handler):
     from analyzers import analyze_connections
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -151,6 +164,7 @@ def handle_connection_test(body, handler):
 
 def handle_test_gen(body, handler):
     from analyzers import generate_test_stubs
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -159,6 +173,7 @@ def handle_test_gen(body, handler):
 
 def handle_remediation_time(body, handler):
     from analyzers import estimate_remediation_time
+
     findings = body.get("findings", [])
     return estimate_remediation_time(findings), 200
 

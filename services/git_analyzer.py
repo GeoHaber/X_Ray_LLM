@@ -17,10 +17,13 @@ def analyze_git_hotspots(directory: str, days: int = 90) -> dict:
     """Analyze git log to find frequently-changed files (hotspots)."""
     try:
         result = subprocess.run(
-            ["git", "log", f"--since={days}.days", "--name-only",
-             "--pretty=format:", "--diff-filter=ACMR"],
-            capture_output=True, text=True, cwd=directory,
-            timeout=30, encoding="utf-8", errors="ignore",
+            ["git", "log", f"--since={days}.days", "--name-only", "--pretty=format:", "--diff-filter=ACMR"],
+            capture_output=True,
+            text=True,
+            cwd=directory,
+            timeout=30,
+            encoding="utf-8",
+            errors="ignore",
         )
     except FileNotFoundError:
         logger.debug("git not found for hotspot analysis")
@@ -33,8 +36,13 @@ def analyze_git_hotspots(directory: str, days: int = 90) -> dict:
         return {"error": f"git error: {result.stderr.strip()[:200]}"}
 
     skip_patterns = {
-        "__pycache__", ".min.js", ".min.css",
-        "package-lock.json", "uv.lock", "Cargo.lock", ".pyc",
+        "__pycache__",
+        ".min.js",
+        ".min.css",
+        "package-lock.json",
+        "uv.lock",
+        "Cargo.lock",
+        ".pyc",
     }
     churn: dict[str, int] = {}
     for line in result.stdout.strip().split("\n"):
@@ -68,8 +76,10 @@ def parse_imports(directory: str) -> dict:
             module = rel.replace("/", ".").removesuffix(".py").removesuffix(".__init__")
             if module not in nodes:
                 nodes[module] = {
-                    "id": module, "label": module.split(".")[-1],
-                    "external": False, "imports_count": 0,
+                    "id": module,
+                    "label": module.split(".")[-1],
+                    "external": False,
+                    "imports_count": 0,
                 }
 
             try:
@@ -90,8 +100,10 @@ def parse_imports(directory: str) -> dict:
                                 continue
                             if target not in nodes:
                                 nodes[target] = {
-                                    "id": target, "label": target,
-                                    "external": True, "imports_count": 0,
+                                    "id": target,
+                                    "label": target,
+                                    "external": True,
+                                    "imports_count": 0,
                                 }
                             nodes[module]["imports_count"] += 1
                             edge_key = f"{module}->{target}"
@@ -109,8 +121,11 @@ def run_ruff(directory: str) -> dict:
     try:
         result = subprocess.run(
             ["ruff", "check", "--fix", directory],
-            capture_output=True, text=True,
-            timeout=60, encoding="utf-8", errors="ignore",
+            capture_output=True,
+            text=True,
+            timeout=60,
+            encoding="utf-8",
+            errors="ignore",
         )
     except FileNotFoundError:
         logger.debug("ruff not found for autofix")

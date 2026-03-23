@@ -32,22 +32,25 @@ from xray.compat import (
 class TestParseVersionEdgeCases:
     """Stress _parse_version with exotic version strings from PyPI."""
 
-    @pytest.mark.parametrize("version_str, expected", [
-        ("0.0.0", (0, 0, 0)),
-        ("0.0.1", (0, 0, 1)),
-        ("999.999.999", (999, 999, 999)),
-        ("1.0.0a1", (1, 0, 0)),
-        ("1.0.0b2", (1, 0, 0)),
-        ("1.0.0rc3", (1, 0, 0)),
-        ("1.0.0.dev4", (1, 0, 0)),
-        ("1.0.0.post5", (1, 0, 0)),
-        ("2024.1.1", (2024, 1, 1)),          # CalVer used by pip, black
-        ("0.3.16", (0, 3, 16)),              # llama-cpp-python style
-        ("9.0.2", (9, 0, 2)),                # pytest style
-        ("0.80.5", (0, 80, 5)),              # flet style (high minor)
-        ("2.32.5", (2, 32, 5)),              # requests style
-        ("1.1.408", (1, 1, 408)),            # pyright style (high patch)
-    ])
+    @pytest.mark.parametrize(
+        "version_str, expected",
+        [
+            ("0.0.0", (0, 0, 0)),
+            ("0.0.1", (0, 0, 1)),
+            ("999.999.999", (999, 999, 999)),
+            ("1.0.0a1", (1, 0, 0)),
+            ("1.0.0b2", (1, 0, 0)),
+            ("1.0.0rc3", (1, 0, 0)),
+            ("1.0.0.dev4", (1, 0, 0)),
+            ("1.0.0.post5", (1, 0, 0)),
+            ("2024.1.1", (2024, 1, 1)),  # CalVer used by pip, black
+            ("0.3.16", (0, 3, 16)),  # llama-cpp-python style
+            ("9.0.2", (9, 0, 2)),  # pytest style
+            ("0.80.5", (0, 80, 5)),  # flet style (high minor)
+            ("2.32.5", (2, 32, 5)),  # requests style
+            ("1.1.408", (1, 1, 408)),  # pyright style (high patch)
+        ],
+    )
     def test_real_world_versions(self, version_str, expected):
         assert _parse_version(version_str) == expected
 
@@ -86,30 +89,33 @@ class TestParseVersionEdgeCases:
 class TestVersionGteStress:
     """Boundary cases and tricky comparisons."""
 
-    @pytest.mark.parametrize("installed, minimum, expected", [
-        # Exact boundary
-        ((3, 10), (3, 10), True),
-        ((3, 10, 0), (3, 10, 0), True),
-        ((3, 9, 99), (3, 10, 0), False),    # 3.9.99 < 3.10.0
-        ((3, 10, 0), (3, 9, 99), True),     # 3.10.0 > 3.9.99
-        # Zero-fill asymmetry
-        ((1,), (1, 0, 0), True),
-        ((1, 0, 0), (1,), True),
-        ((0,), (0, 0, 1), False),
-        # Major bump always wins
-        ((4, 0, 0), (3, 99, 99), True),
-        ((2, 99, 99), (3, 0, 0), False),
-        # Empty tuples (degenerate)
-        ((), (), True),
-        ((0,), (), True),
-        ((), (0,), True),                    # () pads to (0,)
-        # Real-world: llama-cpp-python 0.3.16 vs 0.3.0
-        ((0, 3, 16), (0, 3, 0), True),
-        # Real-world: flet 0.80.5 vs 0.25
-        ((0, 80, 5), (0, 25), True),
-        # Real-world: would flet 0.24 fail?
-        ((0, 24), (0, 25), False),
-    ])
+    @pytest.mark.parametrize(
+        "installed, minimum, expected",
+        [
+            # Exact boundary
+            ((3, 10), (3, 10), True),
+            ((3, 10, 0), (3, 10, 0), True),
+            ((3, 9, 99), (3, 10, 0), False),  # 3.9.99 < 3.10.0
+            ((3, 10, 0), (3, 9, 99), True),  # 3.10.0 > 3.9.99
+            # Zero-fill asymmetry
+            ((1,), (1, 0, 0), True),
+            ((1, 0, 0), (1,), True),
+            ((0,), (0, 0, 1), False),
+            # Major bump always wins
+            ((4, 0, 0), (3, 99, 99), True),
+            ((2, 99, 99), (3, 0, 0), False),
+            # Empty tuples (degenerate)
+            ((), (), True),
+            ((0,), (), True),
+            ((), (0,), True),  # () pads to (0,)
+            # Real-world: llama-cpp-python 0.3.16 vs 0.3.0
+            ((0, 3, 16), (0, 3, 0), True),
+            # Real-world: flet 0.80.5 vs 0.25
+            ((0, 80, 5), (0, 25), True),
+            # Real-world: would flet 0.24 fail?
+            ((0, 24), (0, 25), False),
+        ],
+    )
     def test_comparison(self, installed, minimum, expected):
         assert _version_gte(installed, minimum) is expected
 
@@ -286,8 +292,7 @@ class TestCheckEnvironmentTough:
     def test_api_break_overrides_version_ok(self):
         """Even if version is OK, an API break should fail the environment."""
         broken = [
-            APICheckResult("requests", "get", "wire.py", "HTTP GET",
-                           found=False, error="'get' not found on (root)"),
+            APICheckResult("requests", "get", "wire.py", "HTTP GET", found=False, error="'get' not found on (root)"),
         ]
         with patch("xray.compat.check_api_compatibility", return_value=broken):
             ok, problems = check_environment(warn_optional=False)
@@ -299,10 +304,10 @@ class TestCheckEnvironmentTough:
     def test_optional_missing_AND_api_break_on_required(self):
         """Optional missing = warning, required API break = failure."""
         api_results = [
-            APICheckResult("nonexistent", "Foo", "x.py", "opt",
-                           found=False, error="library not installed"),
-            APICheckResult("pytest", "gone_method", "tests/", "critical",
-                           found=False, error="'gone_method' not found on (root)"),
+            APICheckResult("nonexistent", "Foo", "x.py", "opt", found=False, error="library not installed"),
+            APICheckResult(
+                "pytest", "gone_method", "tests/", "critical", found=False, error="'gone_method' not found on (root)"
+            ),
         ]
         with patch("xray.compat.DEPENDENCIES", []):
             with patch("xray.compat.check_api_compatibility", return_value=api_results):
@@ -326,8 +331,7 @@ class TestCheckEnvironmentTough:
 
     def test_warn_optional_false_suppresses_optional_warnings(self):
         """warn_optional=False should hide optional dep warnings."""
-        with patch("xray.compat.DEPENDENCIES",
-                   [("nonexistent-pkg", (1, 0), "nope", False)]):
+        with patch("xray.compat.DEPENDENCIES", [("nonexistent-pkg", (1, 0), "nope", False)]):
             with patch("xray.compat.check_api_compatibility", return_value=[]):
                 _ok, problems = check_environment(warn_optional=False)
         optional_warnings = [p for p in problems if "[optional]" in p]
@@ -361,16 +365,14 @@ class TestReportingFormats:
     def test_environment_summary_shows_upgrade_needed(self):
         """If a dep is too old, summary should say UPGRADE."""
         fake_meta = {"Version": "0.1.0"}
-        with patch("xray.compat.DEPENDENCIES",
-                   [("fake-dep", (99, 0), "fake", False)]):
+        with patch("xray.compat.DEPENDENCIES", [("fake-dep", (99, 0), "fake", False)]):
             with patch("xray.compat.importlib.metadata.metadata", return_value=fake_meta):
                 summary = environment_summary()
         assert "UPGRADE" in summary
 
     def test_environment_summary_shows_missing(self):
         """If a dep is not installed, summary should say MISSING."""
-        with patch("xray.compat.DEPENDENCIES",
-                   [("nonexistent-pkg-xxx", (1, 0), "nope", False)]):
+        with patch("xray.compat.DEPENDENCIES", [("nonexistent-pkg-xxx", (1, 0), "nope", False)]):
             summary = environment_summary()
         assert "MISSING" in summary
 
@@ -439,11 +441,13 @@ class TestLiveRegistryIntegrity:
     def test_live_pytest_mark_parametrize_is_callable(self):
         """pytest.mark.parametrize must be callable (not just exist)."""
         import pytest as pt
+
         assert callable(pt.mark.parametrize)
 
     def test_live_requests_response_has_status_code(self):
         """requests.Response must have status_code attribute."""
         import requests
+
         resp = requests.Response()
         assert hasattr(resp, "status_code")
         assert hasattr(resp, "text")
@@ -455,9 +459,7 @@ class TestLiveRegistryIntegrity:
             issue = check_dependency(pkg_name, min_ver)
             if issue and "not installed" in issue:
                 continue  # optional, skip
-            assert issue is None, (
-                f"Installed {pkg_name} fails version check: {issue}"
-            )
+            assert issue is None, f"Installed {pkg_name} fails version check: {issue}"
 
     def test_fmt_helper(self):
         """_fmt should produce clean dotted version strings."""

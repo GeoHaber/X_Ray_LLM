@@ -28,33 +28,177 @@ from xray.constants import SKIP_DIRS as _SKIP_DIRS
 
 # Well-known stdlib top-level modules (subset — enough for common false positives)
 _STDLIB = {
-    "abc", "argparse", "ast", "asyncio", "base64", "binascii", "bisect",
-    "builtins", "calendar", "cgi", "cmd", "codecs", "collections", "colorsys",
-    "concurrent", "configparser", "contextlib", "copy", "copyreg", "cProfile",
-    "csv", "ctypes", "curses", "dataclasses", "datetime", "dbm", "decimal",
-    "difflib", "dis", "distutils", "email", "enum", "errno", "faulthandler",
-    "filecmp", "fileinput", "fnmatch", "fractions", "ftplib", "functools",
-    "gc", "getopt", "getpass", "gettext", "glob", "gzip", "hashlib", "heapq",
-    "hmac", "html", "http", "idlelib", "imaplib", "importlib", "inspect",
-    "io", "ipaddress", "itertools", "json", "keyword", "lib2to3", "linecache",
-    "locale", "logging", "lzma", "mailbox", "math", "mimetypes", "mmap",
-    "multiprocessing", "netrc", "numbers", "operator", "optparse", "os",
-    "pathlib", "pdb", "pickle", "pickletools", "pipes", "pkgutil", "platform",
-    "plistlib", "poplib", "posixpath", "pprint", "profile", "pstats",
-    "pty", "pwd", "py_compile", "pyclbr", "pydoc", "queue", "quopri",
-    "random", "re", "readline", "reprlib", "resource", "rlcompleter",
-    "runpy", "sched", "secrets", "select", "selectors", "shelve", "shlex",
-    "shutil", "signal", "site", "smtplib", "sndhdr", "socket", "socketserver",
-    "sqlite3", "ssl", "stat", "statistics", "string", "stringprep", "struct",
-    "subprocess", "sunau", "symtable", "sys", "sysconfig", "syslog",
-    "tabnanny", "tarfile", "tempfile", "test", "textwrap", "threading",
-    "time", "timeit", "tkinter", "token", "tokenize", "trace", "traceback",
-    "tracemalloc", "tty", "turtle", "turtledemo", "types", "typing",
-    "unicodedata", "unittest", "urllib", "uu", "uuid", "venv", "warnings",
-    "wave", "weakref", "webbrowser", "winreg", "winsound", "wsgiref", "xml",
-    "xmlrpc", "zipapp", "zipfile", "zipimport", "zlib",
+    "abc",
+    "argparse",
+    "ast",
+    "asyncio",
+    "base64",
+    "binascii",
+    "bisect",
+    "builtins",
+    "calendar",
+    "cgi",
+    "cmd",
+    "codecs",
+    "collections",
+    "colorsys",
+    "concurrent",
+    "configparser",
+    "contextlib",
+    "copy",
+    "copyreg",
+    "cProfile",
+    "csv",
+    "ctypes",
+    "curses",
+    "dataclasses",
+    "datetime",
+    "dbm",
+    "decimal",
+    "difflib",
+    "dis",
+    "distutils",
+    "email",
+    "enum",
+    "errno",
+    "faulthandler",
+    "filecmp",
+    "fileinput",
+    "fnmatch",
+    "fractions",
+    "ftplib",
+    "functools",
+    "gc",
+    "getopt",
+    "getpass",
+    "gettext",
+    "glob",
+    "gzip",
+    "hashlib",
+    "heapq",
+    "hmac",
+    "html",
+    "http",
+    "idlelib",
+    "imaplib",
+    "importlib",
+    "inspect",
+    "io",
+    "ipaddress",
+    "itertools",
+    "json",
+    "keyword",
+    "lib2to3",
+    "linecache",
+    "locale",
+    "logging",
+    "lzma",
+    "mailbox",
+    "math",
+    "mimetypes",
+    "mmap",
+    "multiprocessing",
+    "netrc",
+    "numbers",
+    "operator",
+    "optparse",
+    "os",
+    "pathlib",
+    "pdb",
+    "pickle",
+    "pickletools",
+    "pipes",
+    "pkgutil",
+    "platform",
+    "plistlib",
+    "poplib",
+    "posixpath",
+    "pprint",
+    "profile",
+    "pstats",
+    "pty",
+    "pwd",
+    "py_compile",
+    "pyclbr",
+    "pydoc",
+    "queue",
+    "quopri",
+    "random",
+    "re",
+    "readline",
+    "reprlib",
+    "resource",
+    "rlcompleter",
+    "runpy",
+    "sched",
+    "secrets",
+    "select",
+    "selectors",
+    "shelve",
+    "shlex",
+    "shutil",
+    "signal",
+    "site",
+    "smtplib",
+    "sndhdr",
+    "socket",
+    "socketserver",
+    "sqlite3",
+    "ssl",
+    "stat",
+    "statistics",
+    "string",
+    "stringprep",
+    "struct",
+    "subprocess",
+    "sunau",
+    "symtable",
+    "sys",
+    "sysconfig",
+    "syslog",
+    "tabnanny",
+    "tarfile",
+    "tempfile",
+    "test",
+    "textwrap",
+    "threading",
+    "time",
+    "timeit",
+    "tkinter",
+    "token",
+    "tokenize",
+    "trace",
+    "traceback",
+    "tracemalloc",
+    "tty",
+    "turtle",
+    "turtledemo",
+    "types",
+    "typing",
+    "unicodedata",
+    "unittest",
+    "urllib",
+    "uu",
+    "uuid",
+    "venv",
+    "warnings",
+    "wave",
+    "weakref",
+    "webbrowser",
+    "winreg",
+    "winsound",
+    "wsgiref",
+    "xml",
+    "xmlrpc",
+    "zipapp",
+    "zipfile",
+    "zipimport",
+    "zlib",
     # Common sub-packages that look like top-level
-    "encodings", "_thread", "__future__", "typing_extensions",
+    "encodings",
+    "_thread",
+    "__future__",
+    "typing_extensions",
 }
 
 # Map from import name → pip package name (common mismatches)
@@ -191,8 +335,9 @@ _IMPORT_TO_PKG = {
 @dataclass
 class PortIssue:
     """Single portability issue."""
-    category: str          # "hardcoded_path" | "missing_dep" | "env_crash"
-    severity: str          # "HIGH" | "MEDIUM" | "LOW"
+
+    category: str  # "hardcoded_path" | "missing_dep" | "env_crash"
+    severity: str  # "HIGH" | "MEDIUM" | "LOW"
     file: str
     line: int
     text: str
@@ -219,6 +364,7 @@ class PortIssue:
 @dataclass
 class AuditResult:
     """Full audit result for a project."""
+
     project: str
     project_path: str
     issues: list[PortIssue] = field(default_factory=list)
@@ -294,7 +440,7 @@ def _in_docstring(lines: list[str], idx: int) -> bool:
 def _is_in_discovery_chain(lines: list[str], idx: int) -> bool:
     """Check if the line is part of a candidate/discovery list that checks existence."""
     # Look ±5 lines for .is_dir(), .is_file(), .exists(), or in a for loop
-    context = lines[max(0, idx - 5): min(len(lines), idx + 6)]
+    context = lines[max(0, idx - 5) : min(len(lines), idx + 6)]
     context_text = "\n".join(context)
     return bool(re.search(r"\.(is_dir|is_file|exists)\s*\(\s*\)", context_text))
 
@@ -334,10 +480,10 @@ def scan_hardcoded_paths(filepath: str, project_root: str) -> list[PortIssue]:
             if re.search(r"(js_esc|_fwd|esc)\s*\(", stripped):
                 continue
             # Skip XSS/injection attack test strings
-            if re.search(r'<script>|&amp;|&quot;|xss|injection|attack', stripped, re.IGNORECASE):
+            if re.search(r"<script>|&amp;|&quot;|xss|injection|attack", stripped, re.IGNORECASE):
                 continue
             # Skip generic test paths like C:\Users\test (no real username >5 chars)
-            m = re.search(r'C:[/\\]Users[/\\](\w+)', line)
+            m = re.search(r"C:[/\\]Users[/\\](\w+)", line)
             if m:
                 username = m.group(1)
                 # Skip generic test usernames
@@ -349,16 +495,18 @@ def scan_hardcoded_paths(filepath: str, project_root: str) -> list[PortIssue]:
             # Skip UI placeholder text (e.g. placeholder with a path like /Users/Me/)
             if "placeholder" in stripped.lower():
                 continue
-            issues.append(PortIssue(
-                category="hardcoded_path",
-                severity="HIGH",
-                file=rel,
-                line=line_num,
-                text=line.strip()[:120],
-                description="User-specific path breaks on other machines",
-                fix_suggestion="Use Path.home(), Path(__file__).parent, or env vars",
-                fixable=True,
-            ))
+            issues.append(
+                PortIssue(
+                    category="hardcoded_path",
+                    severity="HIGH",
+                    file=rel,
+                    line=line_num,
+                    text=line.strip()[:120],
+                    description="User-specific path breaks on other machines",
+                    fix_suggestion="Use Path.home(), Path(__file__).parent, or env vars",
+                    fixable=True,
+                )
+            )
 
         # --- PORT-002: C:\AI paths ---
         elif _CAI_PATH_RE.search(line):
@@ -366,29 +514,34 @@ def scan_hardcoded_paths(filepath: str, project_root: str) -> list[PortIssue]:
                 continue
             # Skip mock/test strings that use fake paths
             stripped = line.strip()
-            if re.search(r'(mock|Mock|MagicMock|FakeInference|spec=|lambda\s+self)', stripped):
+            if re.search(r"(mock|Mock|MagicMock|FakeInference|spec=|lambda\s+self)", stripped):
                 continue
             # Skip test paths with synthetic names like test.gguf, model_a.gguf, x.gguf
-            if re.search(r'C:[/\\]AI[/\\]\S*(?:test|model[_.]|fake|dummy|[a-z]\.gguf)', stripped, re.IGNORECASE):
+            if re.search(r"C:[/\\]AI[/\\]\S*(?:test|model[_.]|fake|dummy|[a-z]\.gguf)", stripped, re.IGNORECASE):
                 continue
             # In test files, skip simple string assignments used as test fixtures
-            if os.path.basename(filepath).startswith('test_') and re.search(r'^\s*(path|model_path)\s*=\s*["\']', stripped):
+            if os.path.basename(filepath).startswith("test_") and re.search(
+                r'^\s*(path|model_path)\s*=\s*["\']', stripped
+            ):
                 continue
-            issues.append(PortIssue(
-                category="hardcoded_path",
-                severity="HIGH" if "Path(" in line or "= " in line else "MEDIUM",
-                file=rel,
-                line=line_num,
-                text=line.strip()[:120],
-                description="Hardcoded C:\\AI path — not portable",
-                fix_suggestion="Use ZENAI_MODEL_DIR env var → Path.home() / 'AI' fallback",
-                fixable=True,
-            ))
+            issues.append(
+                PortIssue(
+                    category="hardcoded_path",
+                    severity="HIGH" if "Path(" in line or "= " in line else "MEDIUM",
+                    file=rel,
+                    line=line_num,
+                    text=line.strip()[:120],
+                    description="Hardcoded C:\\AI path — not portable",
+                    fix_suggestion="Use ZENAI_MODEL_DIR env var → Path.home() / 'AI' fallback",
+                    fixable=True,
+                )
+            )
 
     return issues
 
 
 # ── Requirements analysis ─────────────────────────────────────────────────
+
 
 def _extract_imports(filepath: str) -> set[str]:
     """Extract top-level imported module names from a Python file via AST."""
@@ -489,11 +642,27 @@ def check_requirements(project_root: str) -> tuple[bool, list[str], bool]:
             local_modules.add(dname)
 
     # Platform-specific modules that aren't pip-installable
-    _PLATFORM_MODULES = {"msvcrt", "winreg", "winsound", "termios", "pty",
-                          "resource", "pwd", "grp", "fcntl", "atexit",
-                          "compileall", "readline", "win32com", "win32api",
-                          "win32gui", "win32con", "pywintypes", "pythoncom",
-                          "wmi"}
+    _PLATFORM_MODULES = {
+        "msvcrt",
+        "winreg",
+        "winsound",
+        "termios",
+        "pty",
+        "resource",
+        "pwd",
+        "grp",
+        "fcntl",
+        "atexit",
+        "compileall",
+        "readline",
+        "win32com",
+        "win32api",
+        "win32gui",
+        "win32con",
+        "pywintypes",
+        "pythoncom",
+        "wmi",
+    }
     local_modules |= _PLATFORM_MODULES
 
     # Also consider sibling project directories as "local" imports
@@ -506,8 +675,13 @@ def check_requirements(project_root: str) -> tuple[bool, list[str], bool]:
                 local_modules.add(entry)
 
     # Optional packages that are auto-installed at runtime (not required in reqs)
-    _OPTIONAL_AUTO_INSTALL = {"openvoice", "cosyvoice", "f5_tts", "argostranslate",
-                               "pyamdgpuinfo"}  # AMD GPU detection — platform-specific
+    _OPTIONAL_AUTO_INSTALL = {
+        "openvoice",
+        "cosyvoice",
+        "f5_tts",
+        "argostranslate",
+        "pyamdgpuinfo",
+    }  # AMD GPU detection — platform-specific
     local_modules |= _OPTIONAL_AUTO_INSTALL
 
     missing = []
@@ -534,6 +708,7 @@ def check_requirements(project_root: str) -> tuple[bool, list[str], bool]:
 
 # ── Full project audit ────────────────────────────────────────────────────
 
+
 def audit_project(project_path: str) -> AuditResult:
     """Run full portability audit on a single project."""
     project_name = os.path.basename(project_path)
@@ -559,29 +734,33 @@ def audit_project(project_path: str) -> AuditResult:
     result.missing_deps = missing
 
     if not has_req:
-        result.issues.append(PortIssue(
-            category="missing_dep",
-            severity="MEDIUM",
-            file="requirements.txt",
-            line=0,
-            text="",
-            description="No requirements.txt found — dependencies not documented",
-            fix_suggestion="Create requirements.txt listing all third-party packages",
-            fixable=False,
-        ))
+        result.issues.append(
+            PortIssue(
+                category="missing_dep",
+                severity="MEDIUM",
+                file="requirements.txt",
+                line=0,
+                text="",
+                description="No requirements.txt found — dependencies not documented",
+                fix_suggestion="Create requirements.txt listing all third-party packages",
+                fixable=False,
+            )
+        )
 
     if missing:
         for dep in missing:
-            result.issues.append(PortIssue(
-                category="missing_dep",
-                severity="LOW",
-                file="requirements.txt",
-                line=0,
-                text=dep,
-                description=f"Import '{dep}' not found in requirements.txt",
-                fix_suggestion=f"Add {_IMPORT_TO_PKG.get(dep, dep)} to requirements.txt",
-                fixable=False,
-            ))
+            result.issues.append(
+                PortIssue(
+                    category="missing_dep",
+                    severity="LOW",
+                    file="requirements.txt",
+                    line=0,
+                    text=dep,
+                    description=f"Import '{dep}' not found in requirements.txt",
+                    fix_suggestion=f"Add {_IMPORT_TO_PKG.get(dep, dep)} to requirements.txt",
+                    fixable=False,
+                )
+            )
 
     return result
 
@@ -597,9 +776,7 @@ def audit_all_projects(root: str) -> list[AuditResult]:
             continue
         # Must have at least one .py file to be a project
         has_py = any(
-            f.endswith(".py")
-            for f in os.listdir(project_path)
-            if os.path.isfile(os.path.join(project_path, f))
+            f.endswith(".py") for f in os.listdir(project_path) if os.path.isfile(os.path.join(project_path, f))
         )
         if not has_py:
             continue
@@ -608,6 +785,7 @@ def audit_all_projects(root: str) -> list[AuditResult]:
 
 
 # ── Report formatting ─────────────────────────────────────────────────────
+
 
 def format_report(results: list[AuditResult]) -> str:
     """Format audit results into a readable report."""
@@ -648,17 +826,13 @@ def format_report(results: list[AuditResult]) -> str:
 
 # ── CLI entry point ───────────────────────────────────────────────────────
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="X-Ray Portability Audit — detect cross-machine portability issues"
-    )
+    parser = argparse.ArgumentParser(description="X-Ray Portability Audit — detect cross-machine portability issues")
     parser.add_argument("path", help="Project directory to audit")
-    parser.add_argument("--all", action="store_true",
-                        help="Treat path as parent of multiple projects and audit all")
-    parser.add_argument("--json", action="store_true",
-                        help="Output results as JSON")
-    parser.add_argument("--fix", action="store_true",
-                        help="(Reserved) Auto-fix detected issues")
+    parser.add_argument("--all", action="store_true", help="Treat path as parent of multiple projects and audit all")
+    parser.add_argument("--json", action="store_true", help="Output results as JSON")
+    parser.add_argument("--fix", action="store_true", help="(Reserved) Auto-fix detected issues")
     args = parser.parse_args()
 
     target = os.path.abspath(args.path)

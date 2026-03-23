@@ -26,6 +26,7 @@ from ui_server import XRayHandler
 
 # ── Fixture: ephemeral HTTP server ──────────────────────────────────────
 
+
 class _TestServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -73,9 +74,9 @@ def _post(server, path, payload=None):
     host, port = server
     conn = HTTPConnection(host, port, timeout=30)
     body = json.dumps(payload or {}).encode("utf-8")
-    conn.request("POST", path, body=body,
-                 headers={"Content-Type": "application/json",
-                          "Content-Length": str(len(body))})
+    conn.request(
+        "POST", path, body=body, headers={"Content-Type": "application/json", "Content-Length": str(len(body))}
+    )
     resp = conn.getresponse()
     raw = resp.read()
     conn.close()
@@ -89,6 +90,7 @@ def _post(server, path, payload=None):
 # ══════════════════════════════════════════════════════════════════════════
 # 1. Static routes
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestStaticRoutes:
     def test_root_serves_html(self, server):
@@ -113,6 +115,7 @@ class TestStaticRoutes:
 # ══════════════════════════════════════════════════════════════════════════
 # 2. Browse / info APIs
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestBrowseAPI:
     def test_browse_returns_json(self, server):
@@ -144,6 +147,7 @@ class TestBrowseAPI:
 # ══════════════════════════════════════════════════════════════════════════
 # 3. Analysis API endpoints
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestAnalysisAPI:
     def test_smells_endpoint(self, server):
@@ -181,6 +185,7 @@ class TestAnalysisAPI:
 # 4. PM Dashboard APIs
 # ══════════════════════════════════════════════════════════════════════════
 
+
 class TestPMDashboardAPI:
     def test_risk_heatmap(self, server):
         status, data = _post(server, "/api/risk-heatmap", {"directory": REPO_ROOT})
@@ -207,6 +212,7 @@ class TestPMDashboardAPI:
 # 5. Chat API
 # ══════════════════════════════════════════════════════════════════════════
 
+
 class TestChatAPI:
     def test_chat_returns_reply(self, server):
         status, data = _post(server, "/api/chat", {"question": "hello"})
@@ -223,6 +229,7 @@ class TestChatAPI:
 # 6. Error handling
 # ══════════════════════════════════════════════════════════════════════════
 
+
 class TestErrorHandling:
     def test_post_to_get_only_route(self, server):
         """POST to a GET-only endpoint should 404."""
@@ -238,10 +245,9 @@ class TestErrorHandling:
         """POST with invalid JSON should not crash the server."""
         host, port = server
         conn = HTTPConnection(host, port, timeout=10)
-        conn.request("POST", "/api/chat",
-                     body=b"not-json",
-                     headers={"Content-Type": "application/json",
-                              "Content-Length": "8"})
+        conn.request(
+            "POST", "/api/chat", body=b"not-json", headers={"Content-Type": "application/json", "Content-Length": "8"}
+        )
         resp = conn.getresponse()
         resp.read()
         conn.close()

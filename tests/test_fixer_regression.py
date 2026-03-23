@@ -68,31 +68,27 @@ class TestFixerRegression:
 
         # Verify the finding exists before fix
         before = scan_file(str(fp))
-        assert any(f.rule_id == rule_id for f in before), \
-            f"Pre-condition failed: {rule_id} not found in sample code"
+        assert any(f.rule_id == rule_id for f in before), f"Pre-condition failed: {rule_id} not found in sample code"
 
         # Apply the fix
-        result = apply_fix({
-            "rule_id": rule_id,
-            "file": str(fp),
-            "line": sample["line"],
-            "matched_text": sample["matched_text"],
-        })
+        result = apply_fix(
+            {
+                "rule_id": rule_id,
+                "file": str(fp),
+                "line": sample["line"],
+                "matched_text": sample["matched_text"],
+            }
+        )
         assert result["ok"], f"Fix failed: {result.get('error')}"
 
         # Re-scan — the specific rule should no longer fire
         after = scan_file(str(fp))
         remaining = [f for f in after if f.rule_id == rule_id]
-        # QUAL-003/004: fixer wraps in try/except but regex still matches
-        # the int()/float() call inside the try block — known limitation
-        if rule_id in ("QUAL-003", "QUAL-004") and len(remaining) > 0:
-            pytest.skip(
-                f"Known limitation: {rule_id} regex fires inside try block after fix"
-            )
-        assert len(remaining) == 0, \
-            f"Fix for {rule_id} did not eliminate the finding! " \
-            f"Still found: {[str(f) for f in remaining]}\n" \
+        assert len(remaining) == 0, (
+            f"Fix for {rule_id} did not eliminate the finding! "
+            f"Still found: {[str(f) for f in remaining]}\n"
             f"Fixed code:\n{fp.read_text(encoding='utf-8')}"
+        )
 
     @pytest.mark.parametrize("rule_id", sorted(FIXABLE_RULES))
     def test_fix_produces_valid_python(self, tmp_path, rule_id):
@@ -101,12 +97,14 @@ class TestFixerRegression:
         fp = tmp_path / f"syntax_{rule_id.replace('-', '_')}.py"
         fp.write_text(sample["source"], encoding="utf-8")
 
-        apply_fix({
-            "rule_id": rule_id,
-            "file": str(fp),
-            "line": sample["line"],
-            "matched_text": sample["matched_text"],
-        })
+        apply_fix(
+            {
+                "rule_id": rule_id,
+                "file": str(fp),
+                "line": sample["line"],
+                "matched_text": sample["matched_text"],
+            }
+        )
 
         fixed_code = fp.read_text(encoding="utf-8")
         try:
@@ -121,17 +119,18 @@ class TestFixerRegression:
         fp = tmp_path / f"backup_{rule_id.replace('-', '_')}.py"
         fp.write_text(sample["source"], encoding="utf-8")
 
-        apply_fix({
-            "rule_id": rule_id,
-            "file": str(fp),
-            "line": sample["line"],
-            "matched_text": sample["matched_text"],
-        })
+        apply_fix(
+            {
+                "rule_id": rule_id,
+                "file": str(fp),
+                "line": sample["line"],
+                "matched_text": sample["matched_text"],
+            }
+        )
 
         bak = fp.with_suffix(".py.bak")
         assert bak.exists(), f"No .bak file created for {rule_id}"
-        assert bak.read_text(encoding="utf-8") == sample["source"], \
-            "Backup doesn't match original source"
+        assert bak.read_text(encoding="utf-8") == sample["source"], "Backup doesn't match original source"
 
     def test_double_fix_idempotent(self, tmp_path):
         """Fixing an already-fixed file should be a no-op (not corrupt it)."""

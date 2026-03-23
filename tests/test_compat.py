@@ -28,6 +28,7 @@ from xray.compat import (
 
 # ── _parse_version ───────────────────────────────────────────────────────
 
+
 class TestParseVersion:
     def test_simple(self):
         assert _parse_version("1.2.3") == (1, 2, 3)
@@ -49,6 +50,7 @@ class TestParseVersion:
 
 
 # ── _version_gte ─────────────────────────────────────────────────────────
+
 
 class TestVersionGte:
     def test_equal(self):
@@ -72,6 +74,7 @@ class TestVersionGte:
 
 # ── check_python_version ─────────────────────────────────────────────────
 
+
 class TestCheckPythonVersion:
     def test_current_python_passes(self):
         # We're running >= 3.10, so this should succeed
@@ -87,6 +90,7 @@ class TestCheckPythonVersion:
 
 
 # ── check_dependency ─────────────────────────────────────────────────────
+
 
 class TestCheckDependency:
     def test_pytest_installed(self):
@@ -110,6 +114,7 @@ class TestCheckDependency:
 
 # ── check_environment ────────────────────────────────────────────────────
 
+
 class TestCheckEnvironment:
     def test_current_env_ok_for_python(self):
         _ok, problems = check_environment(warn_optional=False)
@@ -130,6 +135,7 @@ class TestCheckEnvironment:
 
 # ── environment_summary ──────────────────────────────────────────────────
 
+
 class TestEnvironmentSummary:
     def test_returns_string(self):
         summary = environment_summary()
@@ -143,6 +149,7 @@ class TestEnvironmentSummary:
 
 
 # ── _resolve_attr_chain ──────────────────────────────────────────────────
+
 
 class TestResolveAttrChain:
     def test_single_attr_found(self):
@@ -182,19 +189,20 @@ class TestResolveAttrChain:
 
 # ── APICheckResult ───────────────────────────────────────────────────────
 
+
 class TestAPICheckResult:
     def test_repr_ok(self):
         r = APICheckResult("mod", "Klass", "file.py", "desc", found=True)
         assert "OK" in repr(r)
 
     def test_repr_missing(self):
-        r = APICheckResult("mod", "Klass", "file.py", "desc",
-                           found=False, error="not found")
+        r = APICheckResult("mod", "Klass", "file.py", "desc", found=False, error="not found")
         assert "MISSING" in repr(r)
         assert "not found" in repr(r)
 
 
 # ── check_api_compatibility (live) ───────────────────────────────────────
+
 
 class TestCheckAPICompatibility:
     def test_returns_list(self):
@@ -243,6 +251,7 @@ class TestCheckAPICompatibility:
 
 # ── api_compatibility_summary ────────────────────────────────────────────
 
+
 class TestAPICompatibilitySummary:
     def test_returns_string(self):
         summary = api_compatibility_summary()
@@ -255,8 +264,9 @@ class TestAPICompatibilitySummary:
 
     def test_broken_api_shows_warning(self):
         fake_results = [
-            APICheckResult("fake_lib", "Broken.method", "test.py",
-                           "gone", found=False, error="'method' not found on Broken"),
+            APICheckResult(
+                "fake_lib", "Broken.method", "test.py", "gone", found=False, error="'method' not found on Broken"
+            ),
         ]
         with patch("xray.compat.check_api_compatibility", return_value=fake_results):
             summary = api_compatibility_summary()
@@ -271,12 +281,14 @@ class TestAPICompatibilitySummary:
 
 # ── check_environment includes API checks ────────────────────────────────
 
+
 class TestCheckEnvironmentWithAPI:
     def test_api_break_fails_environment(self):
         """An API break should cause check_environment to return ok=False."""
         broken = [
-            APICheckResult("pytest", "nonexistent_method", "tests/",
-                           "fake", found=False, error="'nonexistent_method' not found"),
+            APICheckResult(
+                "pytest", "nonexistent_method", "tests/", "fake", found=False, error="'nonexistent_method' not found"
+            ),
         ]
         with patch("xray.compat.check_api_compatibility", return_value=broken):
             ok, problems = check_environment(warn_optional=False)
@@ -287,8 +299,7 @@ class TestCheckEnvironmentWithAPI:
     def test_uninstalled_lib_does_not_fail(self):
         """Missing optional libraries don't set ok=False via API check."""
         skipped = [
-            APICheckResult("nonexistent", "Foo", "test.py",
-                           "fake", found=False, error="library not installed"),
+            APICheckResult("nonexistent", "Foo", "test.py", "fake", found=False, error="library not installed"),
         ]
         with patch("xray.compat.check_api_compatibility", return_value=skipped):
             _ok, problems = check_environment(warn_optional=False)
@@ -298,13 +309,16 @@ class TestCheckEnvironmentWithAPI:
 
 # ── _fetch_pypi_version ──────────────────────────────────────────────────
 
+
 class TestFetchPypiVersion:
     def test_returns_string_for_known_package(self):
         # Mock a successful PyPI response
-        fake_response = json.dumps({
-            "info": {"version": "2.32.5"},
-            "releases": {},
-        }).encode()
+        fake_response = json.dumps(
+            {
+                "info": {"version": "2.32.5"},
+                "releases": {},
+            }
+        ).encode()
 
         mock_resp = MagicMock()
         mock_resp.read.return_value = fake_response
@@ -318,8 +332,7 @@ class TestFetchPypiVersion:
     def test_returns_none_on_network_error(self):
         import urllib.error
 
-        with patch("xray.compat.urllib.request.urlopen",
-                    side_effect=urllib.error.URLError("no network")):
+        with patch("xray.compat.urllib.request.urlopen", side_effect=urllib.error.URLError("no network")):
             result = _fetch_pypi_version("requests", timeout=1)
         assert result is None
 
@@ -334,15 +347,17 @@ class TestFetchPypiVersion:
         assert result is None
 
     def test_falls_back_to_releases_dict(self):
-        fake_response = json.dumps({
-            "info": {"version": ""},
-            "releases": {
-                "2.30.0": [],
-                "2.31.0": [],
-                "2.32.5": [],
-                "3.0.0a1": [],  # pre-release, should be skipped
-            },
-        }).encode()
+        fake_response = json.dumps(
+            {
+                "info": {"version": ""},
+                "releases": {
+                    "2.30.0": [],
+                    "2.31.0": [],
+                    "2.32.5": [],
+                    "3.0.0a1": [],  # pre-release, should be skipped
+                },
+            }
+        ).encode()
 
         mock_resp = MagicMock()
         mock_resp.read.return_value = fake_response
@@ -356,6 +371,7 @@ class TestFetchPypiVersion:
 
 # ── _is_major_upgrade ────────────────────────────────────────────────────
 
+
 class TestIsMajorUpgrade:
     def test_same_major(self):
         assert _is_major_upgrade("2.30.0", "2.32.5") is False
@@ -368,6 +384,7 @@ class TestIsMajorUpgrade:
 
 
 # ── DependencyStatus ─────────────────────────────────────────────────────
+
 
 class TestDependencyStatus:
     def test_to_dict_fields(self):
@@ -392,11 +409,14 @@ class TestDependencyStatus:
 
 # ── check_dependency_freshness ───────────────────────────────────────────
 
+
 class TestCheckDependencyFreshness:
     def _mock_pypi(self, versions: dict[str, str]):
         """Return a patcher that makes _fetch_pypi_version return from a dict."""
+
         def fake_fetch(pkg, timeout=5):
             return versions.get(pkg)
+
         return patch("xray.compat._fetch_pypi_version", side_effect=fake_fetch)
 
     def test_returns_list_of_dependency_status(self):
@@ -469,17 +489,20 @@ class TestCheckDependencyFreshness:
                 return fake_mod
             return real_import(name)
 
-        with patch("xray.compat.DEPENDENCIES", fake_deps), \
-             patch("xray.compat.API_REGISTRY", fake_registry), \
-             patch("xray.compat.importlib.metadata.metadata", return_value=fake_meta), \
-             patch("xray.compat.importlib.import_module", side_effect=fake_import), \
-             patch("xray.compat._fetch_pypi_version", return_value="2.0.0"):
+        with (
+            patch("xray.compat.DEPENDENCIES", fake_deps),
+            patch("xray.compat.API_REGISTRY", fake_registry),
+            patch("xray.compat.importlib.metadata.metadata", return_value=fake_meta),
+            patch("xray.compat.importlib.import_module", side_effect=fake_import),
+            patch("xray.compat._fetch_pypi_version", return_value="2.0.0"),
+        ):
             results = check_dependency_freshness(timeout=1)
         assert results[0].api_symbols_broken == ["Missing.method"]
         assert results[0].upgrade_risk == "high"
 
 
 # ── dependency_freshness_summary ─────────────────────────────────────────
+
 
 class TestDependencyFreshnessSummary:
     def test_returns_dict_with_expected_keys(self):

@@ -57,7 +57,7 @@ class TestFromPyproject:
 
     def test_no_xray_section(self, tmp_path):
         """Should return defaults if [tool.xray] section doesn't exist."""
-        (tmp_path / "pyproject.toml").write_text('[tool.ruff]\nline-length = 120\n')
+        (tmp_path / "pyproject.toml").write_text("[tool.ruff]\nline-length = 120\n")
         config = XRayConfig.from_pyproject(str(tmp_path))
         assert config.severity == "MEDIUM"
 
@@ -77,12 +77,12 @@ class TestFromPyproject:
         assert config.output_format == "sarif"
 
     def test_reads_incremental(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_text('[tool.xray]\nincremental = true\n')
+        (tmp_path / "pyproject.toml").write_text("[tool.xray]\nincremental = true\n")
         config = XRayConfig.from_pyproject(str(tmp_path))
         assert config.incremental is True
 
     def test_reads_parallel(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_text('[tool.xray]\nparallel = false\n')
+        (tmp_path / "pyproject.toml").write_text("[tool.xray]\nparallel = false\n")
         config = XRayConfig.from_pyproject(str(tmp_path))
         assert config.parallel is False
 
@@ -97,7 +97,7 @@ class TestFromPyproject:
         assert config.suppress_rules == ["PY-004", "QUAL-007"]
 
     def test_reads_max_file_size(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_text('[tool.xray]\nmax-file-size = 2097152\n')
+        (tmp_path / "pyproject.toml").write_text("[tool.xray]\nmax-file-size = 2097152\n")
         config = XRayConfig.from_pyproject(str(tmp_path))
         assert config.max_file_size == 2_097_152
 
@@ -112,7 +112,7 @@ class TestFromPyproject:
         assert config.output_format == "text"  # Default
 
     def test_corrupt_toml(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_text('not a [valid toml file !!!!\n')
+        (tmp_path / "pyproject.toml").write_text("not a [valid toml file !!!!\n")
         config = XRayConfig.from_pyproject(str(tmp_path))
         assert config.severity == "MEDIUM"  # Falls back to defaults
 

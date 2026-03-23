@@ -41,19 +41,19 @@ _MAX_FILE_SIZE = 1_048_576
 # Used to suppress false positives where a rule pattern matches inside
 # a string literal or comment rather than in executable code.
 _PY_NON_CODE_RE = re.compile(
-    r'"""[\s\S]*?"""|'   # triple-double-quoted string
-    r"'''[\s\S]*?'''|"   # triple-single-quoted string
+    r'"""[\s\S]*?"""|'  # triple-double-quoted string
+    r"'''[\s\S]*?'''|"  # triple-single-quoted string
     r'"(?:[^"\\]|\\.)*"|'  # double-quoted string
     r"'(?:[^'\\]|\\.)*'|"  # single-quoted string
-    r"#[^\n]*",            # comment
+    r"#[^\n]*",  # comment
 )
 
 # Variant that only matches string literals (NOT comments).
 # Used for rules like QUAL-007 (TODO/FIXME) that genuinely belong
 # in comments but should be suppressed in pattern-definition strings.
 _PY_STRING_ONLY_RE = re.compile(
-    r'"""[\s\S]*?"""|'   # triple-double-quoted string
-    r"'''[\s\S]*?'''|"   # triple-single-quoted string
+    r'"""[\s\S]*?"""|'  # triple-double-quoted string
+    r"'''[\s\S]*?'''|"  # triple-single-quoted string
     r'"(?:[^"\\]|\\.)*"|'  # double-quoted string
     r"'(?:[^'\\]|\\.)*'",  # single-quoted string
 )
@@ -63,11 +63,11 @@ _PY_STRING_ONLY_RE = re.compile(
 _STRING_AWARE_RULES: dict[str, str] = {
     # value = "all" → suppress in strings AND comments
     # value = "strings" → suppress in strings only (not comments)
-    "PY-004":   "all",      # print() — mentioned in strings/comments
-    "PY-006":   "all",      # global — appears in docstrings
-    "PY-007":   "all",      # os.environ[] — appears in help strings
+    "PY-004": "all",  # print() — mentioned in strings/comments
+    "PY-006": "all",  # global — appears in docstrings
+    "PY-007": "all",  # os.environ[] — appears in help strings
     "QUAL-007": "strings",  # TODO/FIXME — suppress in pattern strings, keep in comments
-    "QUAL-010": "all",      # localStorage — appears in test/pattern strings
+    "QUAL-010": "all",  # localStorage — appears in test/pattern strings
 }
 
 # ── Pre-compiled regex cache ────────────────────────────────────────────
@@ -88,6 +88,7 @@ def _get_compiled(pattern: str) -> re.Pattern | None:
 # Post-regex validators that reduce false positives by inspecting the AST.
 # Each validator takes (filepath, content, line_num, ast_tree) and returns
 # True if the finding is a TRUE positive (should be kept).
+
 
 def _ast_validate_py001(filepath: str, content: str, line_num: int, tree: ast.AST) -> bool:
     """PY-001: 'def X() -> None' — only flag if the function actually returns
@@ -124,11 +125,15 @@ def _ast_validate_py005(filepath: str, content: str, line_num: int, tree: ast.AS
                 if handler.type is None:
                     return False  # bare except: — json is handled
                 if isinstance(handler.type, ast.Name) and handler.type.id in (
-                    "Exception", "BaseException", "JSONDecodeError", "ValueError",
+                    "Exception",
+                    "BaseException",
+                    "JSONDecodeError",
+                    "ValueError",
                 ):
                     return False  # properly handled
                 if isinstance(handler.type, ast.Attribute) and handler.type.attr in (
-                    "JSONDecodeError", "JSONError",
+                    "JSONDecodeError",
+                    "JSONError",
                 ):
                     return False
                 if isinstance(handler.type, ast.Tuple):
@@ -151,11 +156,67 @@ def _ast_validate_py006(filepath: str, content: str, line_num: int, tree: ast.AS
     return False  # At module level — no-op, suppress
 
 
+def _ast_validate_qual003(filepath: str, content: str, line_num: int, tree: ast.AST) -> bool:
+    """QUAL-003: 'int(user_input)' — suppress if the call is inside a
+    try/except block that catches ValueError, TypeError, or a broad exception."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Try):
+            continue
+        try_start = node.lineno
+        try_end = node.handlers[0].lineno if node.handlers else node.end_lineno or try_start
+        if try_start <= line_num < try_end:
+            for handler in node.handlers:
+                if handler.type is None:
+                    return False  # bare except
+                if isinstance(handler.type, ast.Name) and handler.type.id in (
+                    "Exception",
+                    "BaseException",
+                    "ValueError",
+                    "TypeError",
+                ):
+                    return False
+                if isinstance(handler.type, ast.Tuple):
+                    for elt in handler.type.elts:
+                        name = getattr(elt, "id", getattr(elt, "attr", ""))
+                        if name in ("Exception", "BaseException", "ValueError", "TypeError"):
+                            return False
+    return True  # Not inside a try — valid finding
+
+
+def _ast_validate_qual004(filepath: str, content: str, line_num: int, tree: ast.AST) -> bool:
+    """QUAL-004: 'float(user_input)' — suppress if the call is inside a
+    try/except block that catches ValueError, TypeError, or a broad exception."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Try):
+            continue
+        try_start = node.lineno
+        try_end = node.handlers[0].lineno if node.handlers else node.end_lineno or try_start
+        if try_start <= line_num < try_end:
+            for handler in node.handlers:
+                if handler.type is None:
+                    return False  # bare except
+                if isinstance(handler.type, ast.Name) and handler.type.id in (
+                    "Exception",
+                    "BaseException",
+                    "ValueError",
+                    "TypeError",
+                ):
+                    return False
+                if isinstance(handler.type, ast.Tuple):
+                    for elt in handler.type.elts:
+                        name = getattr(elt, "id", getattr(elt, "attr", ""))
+                        if name in ("Exception", "BaseException", "ValueError", "TypeError"):
+                            return False
+    return True  # Not inside a try — valid finding
+
+
 # Map rule IDs to their AST validators
 _AST_VALIDATORS: dict[str, Callable] = {
     "PY-001": _ast_validate_py001,
     "PY-005": _ast_validate_py005,
     "PY-006": _ast_validate_py006,
+    "QUAL-003": _ast_validate_qual003,
+    "QUAL-004": _ast_validate_qual004,
 }
 
 
@@ -365,7 +426,7 @@ def scan_file(filepath: str, rules: list[dict] | None = None) -> list[Finding]:
     findings: list[Finding] = []
 
     # Build non-code ranges once per file for Python files
-    non_code_all: list[tuple[int, int]] | None = None     # strings + comments
+    non_code_all: list[tuple[int, int]] | None = None  # strings + comments
     non_code_strings: list[tuple[int, int]] | None = None  # strings only
     suppressions: dict[int, set[str]] = {}
     ast_tree: ast.AST | None = None

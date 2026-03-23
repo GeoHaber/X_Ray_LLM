@@ -11,6 +11,7 @@ from typing import TypedDict
 
 # ── Browse / File browser ────────────────────────────────────────────────
 
+
 class FileItem(TypedDict):
     name: str
     path: str
@@ -32,6 +33,7 @@ class DriveInfo(TypedDict):
 
 
 # ── Scanner findings ─────────────────────────────────────────────────────
+
 
 class FindingDict(TypedDict, total=False):
     rule_id: str
@@ -62,6 +64,7 @@ class ScanResult(TypedDict, total=False):
 
 # ── Format / Type checking ───────────────────────────────────────────────
 
+
 class FormatResult(TypedDict, total=False):
     needs_format: int
     files: list[str]
@@ -87,6 +90,7 @@ class TypeCheckResult(TypedDict, total=False):
 
 # ── Project health ───────────────────────────────────────────────────────
 
+
 class HealthCheck(TypedDict):
     name: str
     status: str
@@ -110,6 +114,7 @@ class RemediationEstimate(TypedDict):
 
 # ── Code smells ──────────────────────────────────────────────────────────
 
+
 class SmellItem(TypedDict):
     file: str
     line: int
@@ -127,6 +132,7 @@ class SmellResult(TypedDict):
 
 # ── Dead functions ───────────────────────────────────────────────────────
 
+
 class DeadFunction(TypedDict):
     name: str
     file: str
@@ -142,6 +148,7 @@ class DeadFunctionResult(TypedDict):
 
 
 # ── Security (Bandit) ───────────────────────────────────────────────────
+
 
 class BanditIssue(TypedDict, total=False):
     file: str
@@ -171,6 +178,7 @@ class SecurityResult(TypedDict, total=False):
 
 # ── PM Dashboard ─────────────────────────────────────────────────────────
 
+
 class RiskFileEntry(TypedDict, total=False):
     file: str
     risk_score: float
@@ -192,6 +200,7 @@ class RiskHeatmapResult(TypedDict):
 
 
 # ── Generic API response ────────────────────────────────────────────────
+
 
 class ErrorResponse(TypedDict):
     error: str

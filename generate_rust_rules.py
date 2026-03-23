@@ -266,12 +266,13 @@ fn make_rule(
     }})
 }}"""
 
-    sec_fn = generate_fn("security_rules", SECURITY_RULES,
-                         f"SECURITY RULES (SEC-001 through SEC-{len(SECURITY_RULES):03d})")
-    qual_fn = generate_fn("quality_rules", QUALITY_RULES,
-                          f"QUALITY RULES (QUAL-001 through QUAL-{len(QUALITY_RULES):03d})")
-    py_fn = generate_fn("python_rules", PYTHON_RULES,
-                        f"PYTHON RULES (PY-001 through PY-{len(PYTHON_RULES):03d})")
+    sec_fn = generate_fn(
+        "security_rules", SECURITY_RULES, f"SECURITY RULES (SEC-001 through SEC-{len(SECURITY_RULES):03d})"
+    )
+    qual_fn = generate_fn(
+        "quality_rules", QUALITY_RULES, f"QUALITY RULES (QUAL-001 through QUAL-{len(QUALITY_RULES):03d})"
+    )
+    py_fn = generate_fn("python_rules", PYTHON_RULES, f"PYTHON RULES (PY-001 through PY-{len(PYTHON_RULES):03d})")
     tests = generate_tests(all_rules)
 
     return f"{header}\n\n{sec_fn}\n\n{qual_fn}\n\n{py_fn}\n\n{tests}\n"
@@ -304,13 +305,13 @@ def check_parity() -> bool:
                 break
         else:
             if len(gen_lines) != len(cur_lines):
-                logger.error("  Line count differs: generated=%d current=%d",
-                             len(gen_lines), len(cur_lines))
+                logger.error("  Line count differs: generated=%d current=%d", len(gen_lines), len(cur_lines))
         return False
 
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Generate Rust rules from Python source of truth")
     parser.add_argument("--check", action="store_true", help="Verify parity without writing")
     parser.add_argument("--dry-run", action="store_true", help="Print to stdout instead of file")
@@ -330,17 +331,23 @@ def main():
             f.write(output)
         all_rules = SECURITY_RULES + QUALITY_RULES + PYTHON_RULES
         logger.info("Generated %s", target)
-        logger.info("  %d rules (%d security, %d quality, %d python)",
-                     len(all_rules), len(SECURITY_RULES), len(QUALITY_RULES), len(PYTHON_RULES))
+        logger.info(
+            "  %d rules (%d security, %d quality, %d python)",
+            len(all_rules),
+            len(SECURITY_RULES),
+            len(QUALITY_RULES),
+            len(PYTHON_RULES),
+        )
 
         # Verify the patterns round-trip correctly
         import re as re_mod
+
         errors = 0
         for rule in all_rules:
             try:
                 re_mod.compile(rule["pattern"])
             except re_mod.error as e:
-                logger.error("  %s regex doesn't compile: %s", rule['id'], e)
+                logger.error("  %s regex doesn't compile: %s", rule["id"], e)
                 errors += 1
 
         # Sanity: ensure generated output has the right number of make_rule calls

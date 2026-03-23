@@ -67,13 +67,24 @@ _RULES = {
 }
 
 _TOOLS_LIST = [
-    "Dead Code", "Code Smells", "Duplicates", "Formatting (ruff)",
-    "Type Check (pyright)", "Bandit (security)", "Ruff --fix",
-    "Import Graph", "Git Hotspots", "Project Health",
-    "SATD (tech debt)", "Release Readiness",
-    "AI-Generated Code Detection", "Web Smells",
-    "Test Stub Generator", "Remediation Time Estimate",
-    "Circular Call Detection", "Module Coupling & Cohesion",
+    "Dead Code",
+    "Code Smells",
+    "Duplicates",
+    "Formatting (ruff)",
+    "Type Check (pyright)",
+    "Bandit (security)",
+    "Ruff --fix",
+    "Import Graph",
+    "Git Hotspots",
+    "Project Health",
+    "SATD (tech debt)",
+    "Release Readiness",
+    "AI-Generated Code Detection",
+    "Web Smells",
+    "Test Stub Generator",
+    "Remediation Time Estimate",
+    "Circular Call Detection",
+    "Module Coupling & Cohesion",
     "Unused Imports",
 ]
 
@@ -111,9 +122,12 @@ def chat_reply(message: str, context: dict) -> str:
         py = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("PY")]
         return (
             "<strong>38 Scan Rules:</strong><br><br>"
-            "<strong>Security (14):</strong><br>" + "<br>".join(sec)
-            + "<br><br><strong>Quality (13):</strong><br>" + "<br>".join(qual)
-            + "<br><br><strong>Python (11):</strong><br>" + "<br>".join(py)
+            "<strong>Security (14):</strong><br>"
+            + "<br>".join(sec)
+            + "<br><br><strong>Quality (13):</strong><br>"
+            + "<br>".join(qual)
+            + "<br><br><strong>Python (11):</strong><br>"
+            + "<br>".join(py)
         )
 
     if _re.search(r"\bfix|auto.?fix|fixable|fixer", lo):
@@ -175,21 +189,24 @@ def chat_reply(message: str, context: dict) -> str:
     if _re.search(r"\bsecurity|vuln|xss|inject|sql|ssrf|cors|eval|pickle|secret|password", lo):
         sec = [
             f"<strong>{k}</strong>: {v[0]} ({v[1]}){_FIX_MARK if v[2] else ''}"
-            for k, v in _RULES.items() if k.startswith("SEC")
+            for k, v in _RULES.items()
+            if k.startswith("SEC")
         ]
         return "<strong>Security Rules (14):</strong><br>" + "<br>".join(sec)
 
     if _re.search(r"\bquality|smell|except|magic|dup|long func|param", lo):
         qual = [
             f"<strong>{k}</strong>: {v[0]} ({v[1]}){_FIX_MARK if v[2] else ''}"
-            for k, v in _RULES.items() if k.startswith("QUAL")
+            for k, v in _RULES.items()
+            if k.startswith("QUAL")
         ]
         return "<strong>Quality Rules (13):</strong><br>" + "<br>".join(qual)
 
     if _re.search(r"\bpython rule|py rule|print|assert|wildcard|import\b", lo):
         py = [
             f"<strong>{k}</strong>: {v[0]} ({v[1]}){_FIX_MARK if v[2] else ''}"
-            for k, v in _RULES.items() if k.startswith("PY")
+            for k, v in _RULES.items()
+            if k.startswith("PY")
         ]
         return "<strong>Python Rules (11):</strong><br>" + "<br>".join(py)
 

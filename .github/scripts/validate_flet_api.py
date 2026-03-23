@@ -67,11 +67,15 @@ def check_file(filepath: Path) -> list[str]:
             continue
 
         # Check for deprecated font_family in TextField (not in text_style=)
-        if "ft.TextField" in line and "font_family" in line and not re.search(r"text_style\s*=\s*ft\.TextStyle\(.*font_family", line):
-                issues.append(
-                    f"{filepath}:{line_num}: TextField uses deprecated 'font_family' "
-                    "(use text_style=ft.TextStyle(font_family=...) instead)"
-                )
+        if (
+            "ft.TextField" in line
+            and "font_family" in line
+            and not re.search(r"text_style\s*=\s*ft\.TextStyle\(.*font_family", line)
+        ):
+            issues.append(
+                f"{filepath}:{line_num}: TextField uses deprecated 'font_family' "
+                "(use text_style=ft.TextStyle(font_family=...) instead)"
+            )
 
         # Check for deprecated font_family in Text (not in style=)
         # NOTE: ft.Text still accepts font_family in 0.80.2; only ft.TextField broke.
@@ -83,14 +87,11 @@ def check_file(filepath: Path) -> list[str]:
         # Check for Border.left()
         if "ft.Border.left" in line:
             issues.append(
-                f"{filepath}:{line_num}: Border.left() removed "
-                "(use Border.only(left=BorderSide(...)) instead)"
+                f"{filepath}:{line_num}: Border.left() removed (use Border.only(left=BorderSide(...)) instead)"
             )
 
         # Check for Padding.symmetric with positional args (heuristic)
-        if "ft.Padding.symmetric" in line and re.search(
-            r"Padding\.symmetric\(\s*\d+\s*,\s*\d+", line
-        ):
+        if "ft.Padding.symmetric" in line and re.search(r"Padding\.symmetric\(\s*\d+\s*,\s*\d+", line):
             issues.append(
                 f"{filepath}:{line_num}: Padding.symmetric() uses positional args "
                 "(use vertical=..., horizontal=... keyword args instead)"
@@ -98,21 +99,22 @@ def check_file(filepath: Path) -> list[str]:
 
         # Check for wrap=True on ft.Row — broken in Flet 0.80.2
         # Causes WrapParentData vs FlexParentData crash
-        if re.search(r"ft\.Row\(.*wrap\s*=\s*True", line) or (  # noqa: SIM102
-            "wrap=True" in line
-            and any(
-                kw in content.split("\n")[max(0, line_num - 5) : line_num]
-                for kw in ["ft.Row("]
-                if kw
-            )
-        ):
-            # Simple heuristic: line itself has both ft.Row and wrap=True
-            if "ft.Row" in line and "wrap=True" in line:
-                issues.append(
-                    f"{filepath}:{line_num}: ft.Row uses wrap=True "
-                    "(broken in Flet 0.80.2 — causes WrapParentData crash. "
-                    "Use scroll=ft.ScrollMode.AUTO instead)"
+        if (
+            (
+                re.search(r"ft\.Row\(.*wrap\s*=\s*True", line)
+                or (
+                    "wrap=True" in line
+                    and any(kw in content.split("\n")[max(0, line_num - 5) : line_num] for kw in ["ft.Row("] if kw)
                 )
+            )
+            and "ft.Row" in line
+            and "wrap=True" in line
+        ):
+            issues.append(
+                f"{filepath}:{line_num}: ft.Row uses wrap=True "
+                "(broken in Flet 0.80.2 — causes WrapParentData crash. "
+                "Use scroll=ft.ScrollMode.AUTO instead)"
+            )
 
     return issues
 

@@ -26,6 +26,7 @@ from xray.scanner import Finding, ScanResult, _detect_lang, scan_directory, scan
 # TEST 1: Rule Database
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestRuleDatabase:
     """Verify the rule database is well-formed and complete."""
 
@@ -79,6 +80,7 @@ class TestRuleDatabase:
 # TEST 2: Scanner Engine
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestScanner:
     """Verify the pattern scanner works correctly."""
 
@@ -97,7 +99,7 @@ class TestScanner:
     def test_scan_file_finds_xss(self):
         """Create a temp file with XSS vulnerability and verify scanner finds it."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False, encoding="utf-8") as f:
-            f.write('<script>el.innerHTML = `<b>${userInput}</b>`;</script>')
+            f.write("<script>el.innerHTML = `<b>${userInput}</b>`;</script>")
             f.flush()
             findings = scan_file(f.name)
         os.unlink(f.name)
@@ -162,9 +164,15 @@ class TestScanner:
 
     def test_finding_to_dict(self):
         f = Finding(
-            rule_id="TEST-001", severity="HIGH", file="test.py",
-            line=1, col=1, matched_text="eval(x)",
-            description="test", fix_hint="fix", test_hint="test",
+            rule_id="TEST-001",
+            severity="HIGH",
+            file="test.py",
+            line=1,
+            col=1,
+            matched_text="eval(x)",
+            description="test",
+            fix_hint="fix",
+            test_hint="test",
         )
         d = f.to_dict()
         assert d["rule_id"] == "TEST-001"
@@ -172,9 +180,15 @@ class TestScanner:
 
     def test_finding_str(self):
         f = Finding(
-            rule_id="TEST-001", severity="HIGH", file="test.py",
-            line=1, col=1, matched_text="eval(x)",
-            description="test issue", fix_hint="fix", test_hint="test",
+            rule_id="TEST-001",
+            severity="HIGH",
+            file="test.py",
+            line=1,
+            col=1,
+            matched_text="eval(x)",
+            description="test issue",
+            fix_hint="fix",
+            test_hint="test",
         )
         assert "TEST-001" in str(f)
         assert "HIGH" in str(f)
@@ -183,6 +197,7 @@ class TestScanner:
 # ═══════════════════════════════════════════════════════════════════════════════
 # TEST 3: LLM Engine (config only — no model required)
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestLLMConfig:
     """Verify LLM configuration without requiring an actual model."""
@@ -226,6 +241,7 @@ class TestLLMConfig:
 # TEST 4: Test Runner
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestTestRunner:
     """Verify the pytest runner wrapper."""
 
@@ -253,7 +269,11 @@ class TestTestRunner:
         """Verify run_tests creates a subprocess and captures output."""
         # Create a minimal passing test file instead of running ourselves (avoids recursion)
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False, prefix="test_mini_", encoding="utf-8",
+            mode="w",
+            suffix=".py",
+            delete=False,
+            prefix="test_mini_",
+            encoding="utf-8",
         ) as f:
             f.write("def test_trivial():\n    assert 1 + 1 == 2\n")
             f.flush()
@@ -266,6 +286,7 @@ class TestTestRunner:
 # ═══════════════════════════════════════════════════════════════════════════════
 # TEST 5: Agent Configuration
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestAgentConfig:
     """Verify agent configuration."""
@@ -292,6 +313,7 @@ class TestAgentConfig:
 # TEST 6: Agent Core
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestAgent:
     """Verify the agent orchestrator."""
 
@@ -303,7 +325,7 @@ class TestAgent:
     def test_get_source_context(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
             for i in range(20):
-                f.write(f"line_{i+1} = {i}\n")
+                f.write(f"line_{i + 1} = {i}\n")
             f.flush()
             ctx = _get_source_context(f.name, 10, context=3)
         os.unlink(f.name)
@@ -334,9 +356,12 @@ class TestAgent:
 
     def test_report_summary(self):
         from xray.agent import AgentReport
+
         report = AgentReport(
-            tests_generated=3, fixes_applied=2,
-            fix_attempts=1, duration_sec=1.5,
+            tests_generated=3,
+            fixes_applied=2,
+            fix_attempts=1,
+            duration_sec=1.5,
         )
         summary = report.summary()
         assert "Tests generated" in summary
@@ -346,6 +371,7 @@ class TestAgent:
 # ═══════════════════════════════════════════════════════════════════════════════
 # TEST 7: Self-Scan (X-Ray scans itself!)
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSelfScan:
     """X-Ray scans its own codebase — dogfooding at its finest."""

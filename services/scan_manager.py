@@ -52,6 +52,8 @@ def _is_path_allowed(target: Path) -> bool:
         return True
     resolved = target.resolve()
     return any(resolved == root or root in resolved.parents for root in roots)
+
+
 SCANNER_DIR = ROOT / "scanner"
 
 
@@ -112,8 +114,7 @@ def count_scannable_files(directory: str, exclude_patterns: list[str] | None = N
     return count
 
 
-def scan_with_python(directory: str, severity: str, excludes: list[str],
-                     sse_write=None, total_files: int = 0) -> dict:
+def scan_with_python(directory: str, severity: str, excludes: list[str], sse_write=None, total_files: int = 0) -> dict:
     """Run scan using Python scanner."""
     sys.path.insert(0, str(ROOT))
     from xray.rules import ALL_RULES
@@ -139,39 +140,47 @@ def scan_with_python(directory: str, severity: str, excludes: list[str],
             except OSError:
                 logger.debug("Could not stat file %s", current_file)
             if state.debug and files_scanned % 50 == 0:
-                logger.debug("progress: %s/%s files, %s findings, %s",
-                             files_scanned, total_files, findings_count, current_file)
-            sse_write("progress", {
-                "files_scanned": files_scanned, "total_files": total_files,
-                "findings_count": findings_count, "current_file": current_file,
-                "file_size": fsize, "file_type": fext, "elapsed_ms": elapsed_ms,
-            })
+                logger.debug(
+                    "progress: %s/%s files, %s findings, %s", files_scanned, total_files, findings_count, current_file
+                )
+            sse_write(
+                "progress",
+                {
+                    "files_scanned": files_scanned,
+                    "total_files": total_files,
+                    "findings_count": findings_count,
+                    "current_file": current_file,
+                    "file_size": fsize,
+                    "file_type": fext,
+                    "elapsed_ms": elapsed_ms,
+                },
+            )
 
     state.abort.clear()
     start = time.perf_counter()
     try:
-        result = scan_directory(directory, rules=rules,
-                                exclude_patterns=excludes or None,
-                                on_progress=on_progress)
+        result = scan_directory(directory, rules=rules, exclude_patterns=excludes or None, on_progress=on_progress)
     except _ScanAbortedError:
         logger.debug("Scan aborted by user")
         return {"aborted": True, "engine": "python", "files_scanned": 0, "findings_count": 0}
     elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
 
     return {
-        "engine": "python", "elapsed_ms": elapsed_ms,
+        "engine": "python",
+        "elapsed_ms": elapsed_ms,
         "files_scanned": result.files_scanned,
         "summary": {
-            "total": len(result.findings), "high": result.high_count,
-            "medium": result.medium_count, "low": result.low_count,
+            "total": len(result.findings),
+            "high": result.high_count,
+            "medium": result.medium_count,
+            "low": result.low_count,
         },
         "findings": [f.to_dict() for f in result.findings],
         "errors": result.errors,
     }
 
 
-def scan_with_rust(directory: str, severity: str, excludes: list[str],
-                   sse_write=None, total_files: int = 0) -> dict:
+def scan_with_rust(directory: str, severity: str, excludes: list[str], sse_write=None, total_files: int = 0) -> dict:
     """Run scan using Rust binary."""
     binary = get_rust_binary()
     if not binary:
@@ -183,16 +192,27 @@ def scan_with_rust(directory: str, severity: str, excludes: list[str],
 
     state.abort.clear()
     if sse_write:
-        sse_write("progress", {
-            "files_scanned": 0, "total_files": total_files,
-            "findings_count": 0, "current_file": "(rust binary)",
-            "file_size": 0, "file_type": "", "elapsed_ms": 0,
-        })
+        sse_write(
+            "progress",
+            {
+                "files_scanned": 0,
+                "total_files": total_files,
+                "findings_count": 0,
+                "current_file": "(rust binary)",
+                "file_size": 0,
+                "file_type": "",
+                "elapsed_ms": 0,
+            },
+        )
 
     start = time.perf_counter()
     proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        text=True, encoding="utf-8", errors="ignore",
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="ignore",
     )
     with state.rust_proc_lock:
         state.rust_proc = proc
@@ -213,16 +233,22 @@ def scan_with_rust(directory: str, severity: str, excludes: list[str],
     return data
 
 
-def background_scan(directory: str, engine: str, severity: str,
-                    excludes: list[str], total_files: int):
+def background_scan(directory: str, engine: str, severity: str, excludes: list[str], total_files: int):
     """Run scan in background thread, updating state.scan_progress."""
     scan_start = time.perf_counter()
     state.set_scan_result(None)  # type: ignore[arg-type]
-    state.set_scan_progress({
-        "status": "scanning", "files_scanned": 0, "total_files": total_files,
-        "findings_count": 0, "current_file": "Starting scan...",
-        "file_size": 0, "file_type": "", "elapsed_ms": 0,
-    })
+    state.set_scan_progress(
+        {
+            "status": "scanning",
+            "files_scanned": 0,
+            "total_files": total_files,
+            "findings_count": 0,
+            "current_file": "Starting scan...",
+            "file_size": 0,
+            "file_type": "",
+            "elapsed_ms": 0,
+        }
+    )
 
     def progress_writer(_event_type, data):
         if _event_type == "progress":
@@ -230,38 +256,44 @@ def background_scan(directory: str, engine: str, severity: str,
 
     try:
         if engine == "rust":
-            result = scan_with_rust(directory, severity, excludes,
-                                    sse_write=progress_writer, total_files=total_files)
+            result = scan_with_rust(directory, severity, excludes, sse_write=progress_writer, total_files=total_files)
         else:
-            result = scan_with_python(directory, severity, excludes,
-                                      sse_write=progress_writer, total_files=total_files)
+            result = scan_with_python(directory, severity, excludes, sse_write=progress_writer, total_files=total_files)
     except Exception as exc:
         if state.debug:
             logger.debug("SCAN CRASHED: %s: %s", type(exc).__name__, exc)
         result = {
             "error": f"Scan crashed: {type(exc).__name__}: {exc}",
-            "engine": engine, "aborted": False, "files_scanned": 0,
-            "findings": [], "errors": [],
+            "engine": engine,
+            "aborted": False,
+            "files_scanned": 0,
+            "findings": [],
+            "errors": [],
             "summary": {"total": 0, "high": 0, "medium": 0, "low": 0},
         }
 
     elapsed_ms = round((time.perf_counter() - scan_start) * 1000, 1)
     state.set_scan_result(result)
-    state.set_scan_progress({
-        "status": "done",
-        "files_scanned": result.get("files_scanned", 0),
-        "total_files": total_files,
-        "findings_count": result.get("summary", {}).get("total", 0),
-        "elapsed_ms": result.get("elapsed_ms", elapsed_ms),
-    })
+    state.set_scan_progress(
+        {
+            "status": "done",
+            "files_scanned": result.get("files_scanned", 0),
+            "total_files": total_files,
+            "findings_count": result.get("summary", {}).get("total", 0),
+            "elapsed_ms": result.get("elapsed_ms", elapsed_ms),
+        }
+    )
 
     if state.debug:
-        logger.debug("background scan done — %s files, %s findings, elapsed=%.0fms",
-                      result.get("files_scanned", "?"),
-                      result.get("summary", {}).get("total", "?"), elapsed_ms)
-    logger.info("[scan] done — %s files, %s findings",
-                result.get("files_scanned", 0),
-                result.get("summary", {}).get("total", 0))
+        logger.debug(
+            "background scan done — %s files, %s findings, elapsed=%.0fms",
+            result.get("files_scanned", "?"),
+            result.get("summary", {}).get("total", "?"),
+            elapsed_ms,
+        )
+    logger.info(
+        "[scan] done — %s files, %s findings", result.get("files_scanned", 0), result.get("summary", {}).get("total", 0)
+    )
 
 
 def browse_directory(path: str) -> BrowseResult:
@@ -281,11 +313,14 @@ def browse_directory(path: str) -> BrowseResult:
                 name = entry.name
                 if name.startswith(".") and name not in (".env",):
                     continue
-                items.append({
-                    "name": name, "path": _fwd(str(entry)),
-                    "is_dir": entry.is_dir(),
-                    "size": entry.stat().st_size if entry.is_file() else None,
-                })
+                items.append(
+                    {
+                        "name": name,
+                        "path": _fwd(str(entry)),
+                        "is_dir": entry.is_dir(),
+                        "size": entry.stat().st_size if entry.is_file() else None,
+                    }
+                )
         except PermissionError:
             logger.debug("Permission denied listing %s", path)
             return {"error": f"Permission denied: {path}"}
@@ -319,8 +354,12 @@ def execute_monkey_tests(base_url: str):
     try:
         proc = subprocess.Popen(
             [sys.executable, "-m", "pytest", test_file, "-v", "--tb=short", "--no-header"],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, cwd=repo_root, encoding="utf-8", errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            cwd=repo_root,
+            encoding="utf-8",
+            errors="replace",
         )
         passed = 0
         failed = 0
@@ -331,13 +370,19 @@ def execute_monkey_tests(base_url: str):
             elif " FAILED" in line:
                 failed += 1
             state.monkey_test_progress = {
-                "status": "running", "passed": passed, "failed": failed,
-                "line_count": len(proc_lines), "last_line": proc_lines[-1] if proc_lines else "",
+                "status": "running",
+                "passed": passed,
+                "failed": failed,
+                "line_count": len(proc_lines),
+                "last_line": proc_lines[-1] if proc_lines else "",
             }
         proc.wait(timeout=300)
         state.monkey_test_results = {
-            "status": "done", "exit_code": proc.returncode,
-            "passed": passed, "failed": failed, "total": passed + failed,
+            "status": "done",
+            "exit_code": proc.returncode,
+            "passed": passed,
+            "failed": failed,
+            "total": passed + failed,
             "output": "\n".join(proc_lines[-200:]),
         }
         state.monkey_test_progress = {"status": "done"}
@@ -347,7 +392,8 @@ def execute_monkey_tests(base_url: str):
             proc.kill()
             proc.wait()
         state.monkey_test_results = {
-            "status": "error", "error": "Monkey tests timed out after 300 seconds",
+            "status": "error",
+            "error": "Monkey tests timed out after 300 seconds",
             "output": "\n".join(proc_lines[-100:]),
         }
         state.monkey_test_progress = {"status": "done"}
@@ -357,7 +403,8 @@ def execute_monkey_tests(base_url: str):
             proc.kill()
             proc.wait()
         state.monkey_test_results = {
-            "status": "error", "error": str(e),
+            "status": "error",
+            "error": str(e),
             "output": "\n".join(proc_lines[-100:]),
         }
         state.monkey_test_progress = {"status": "done"}

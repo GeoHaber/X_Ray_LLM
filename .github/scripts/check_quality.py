@@ -93,50 +93,30 @@ def main():
     failures = []
 
     if critical_count > QUALITY_GATES["max_critical_smells"]:
-        failures.append(
-            f"CRITICAL: {critical_count} critical smells (limit: {QUALITY_GATES['max_critical_smells']})"
-        )
+        failures.append(f"CRITICAL: {critical_count} critical smells (limit: {QUALITY_GATES['max_critical_smells']})")
     if total_smells > QUALITY_GATES["max_total_smells"]:
-        failures.append(
-            f"CRITICAL: {total_smells} total smells (limit: {QUALITY_GATES['max_total_smells']})"
-        )
+        failures.append(f"CRITICAL: {total_smells} total smells (limit: {QUALITY_GATES['max_total_smells']})")
 
     if warning_count > QUALITY_GATES["max_warning_smells"]:
-        failures.append(
-            f"WARNING: {warning_count} warning smells (limit: {QUALITY_GATES['max_warning_smells']})"
-        )
+        failures.append(f"WARNING: {warning_count} warning smells (limit: {QUALITY_GATES['max_warning_smells']})")
     if long_funcs > QUALITY_GATES["max_long_functions"]:
-        failures.append(
-            f"WARNING: {long_funcs} long functions (limit: {QUALITY_GATES['max_long_functions']})"
-        )
+        failures.append(f"WARNING: {long_funcs} long functions (limit: {QUALITY_GATES['max_long_functions']})")
     if complex_funcs > QUALITY_GATES["max_complex_functions"]:
-        failures.append(
-            f"WARNING: {complex_funcs} complex functions (limit: {QUALITY_GATES['max_complex_functions']})"
-        )
+        failures.append(f"WARNING: {complex_funcs} complex functions (limit: {QUALITY_GATES['max_complex_functions']})")
     if deep_nesting > QUALITY_GATES["max_deep_nesting"]:
-        failures.append(
-            f"WARNING: {deep_nesting} deep-nesting (limit: {QUALITY_GATES['max_deep_nesting']})"
-        )
+        failures.append(f"WARNING: {deep_nesting} deep-nesting (limit: {QUALITY_GATES['max_deep_nesting']})")
     if god_classes > QUALITY_GATES["max_god_classes"]:
-        failures.append(
-            f"WARNING: {god_classes} god-classes (limit: {QUALITY_GATES['max_god_classes']})"
-        )
+        failures.append(f"WARNING: {god_classes} god-classes (limit: {QUALITY_GATES['max_god_classes']})")
     if bare_except > QUALITY_GATES["max_bare_except"]:
-        failures.append(
-            f"WARNING: {bare_except} bare-except (limit: {QUALITY_GATES['max_bare_except']})"
-        )
+        failures.append(f"WARNING: {bare_except} bare-except (limit: {QUALITY_GATES['max_bare_except']})")
     if mutable_default > QUALITY_GATES["max_mutable_default_arg"]:
         failures.append(
             f"WARNING: {mutable_default} mutable-default-arg (limit: {QUALITY_GATES['max_mutable_default_arg']})"
         )
     if too_many_params > QUALITY_GATES["max_too_many_params"]:
-        failures.append(
-            f"WARNING: {too_many_params} too-many-params (limit: {QUALITY_GATES['max_too_many_params']})"
-        )
+        failures.append(f"WARNING: {too_many_params} too-many-params (limit: {QUALITY_GATES['max_too_many_params']})")
     if dup_groups > QUALITY_GATES["max_duplicate_groups"]:
-        failures.append(
-            f"WARNING: {dup_groups} duplicate groups (limit: {QUALITY_GATES['max_duplicate_groups']})"
-        )
+        failures.append(f"WARNING: {dup_groups} duplicate groups (limit: {QUALITY_GATES['max_duplicate_groups']})")
 
     # Final status
     report_lines.append("")

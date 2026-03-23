@@ -19,6 +19,7 @@ def _dir_from_body(body: dict) -> tuple[str | None, dict | None]:
 
 def handle_risk_heatmap(body, handler):
     from analyzers import compute_risk_heatmap
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -27,6 +28,7 @@ def handle_risk_heatmap(body, handler):
 
 def handle_module_cards(body, handler):
     from analyzers import compute_module_cards
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -35,6 +37,7 @@ def handle_module_cards(body, handler):
 
 def handle_confidence(body, handler):
     from analyzers import compute_confidence_meter
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -43,11 +46,13 @@ def handle_confidence(body, handler):
 
 def handle_sprint_batches(body, handler):
     from analyzers import compute_sprint_batches
+
     return compute_sprint_batches(body.get("findings"), body.get("smells")), 200
 
 
 def handle_architecture(body, handler):
     from analyzers import compute_architecture_map
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -56,6 +61,7 @@ def handle_architecture(body, handler):
 
 def handle_call_graph(body, handler):
     from analyzers import compute_call_graph
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -64,6 +70,7 @@ def handle_call_graph(body, handler):
 
 def handle_chat(body, handler):
     from services.chat_engine import chat_reply
+
     message = body.get("message", "").strip()
     if not message:
         return {"reply": "Please type a message."}, 200
@@ -72,6 +79,7 @@ def handle_chat(body, handler):
 
 def handle_project_review(body, handler):
     from analyzers import compute_project_review
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -90,6 +98,7 @@ def handle_project_review(body, handler):
 
 def handle_circular_calls(body, handler):
     from analyzers import detect_circular_calls
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -98,6 +107,7 @@ def handle_circular_calls(body, handler):
 
 def handle_coupling(body, handler):
     from analyzers import compute_coupling_metrics
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -106,6 +116,7 @@ def handle_coupling(body, handler):
 
 def handle_unused_imports(body, handler):
     from analyzers import detect_unused_imports
+
     d, err = _dir_from_body(body)
     if err:
         return err, 400
@@ -134,7 +145,9 @@ def handle_wire_test(body, handler):
     port = handler.server.server_address[1]
     base_url = f"http://{host}:{port}"
     t = threading.Thread(
-        target=execute_wire_test, args=(d, base_url), daemon=True,
+        target=execute_wire_test,
+        args=(d, base_url),
+        daemon=True,
     )
     t.start()
     state.wire_test_thread = t
@@ -150,8 +163,7 @@ def handle_wire_progress(params, handler):
 
 
 def handle_monkey_progress(params, handler):
-    if (state.monkey_test_progress is not None
-            and state.monkey_test_progress.get("status") == "running"):
+    if state.monkey_test_progress is not None and state.monkey_test_progress.get("status") == "running":
         return state.monkey_test_progress, 200
     if state.monkey_test_results is not None:
         return state.monkey_test_results, 200

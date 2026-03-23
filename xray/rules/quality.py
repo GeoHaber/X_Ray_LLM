@@ -107,7 +107,7 @@ QUALITY_RULES = [
         "id": "QUAL-012",
         "severity": "LOW",
         "lang": ["python"],
-        "pattern": r"for\s+\w+\s+in\s+.*:\s*\n\s+\w+\s*\+=\s*['\\\"]|for\s+\w+\s+in\s+.*:\s*\n\s+\w+\s*=\s*\w+\s*\+\s*['\\\"]" ,
+        "pattern": r"for\s+\w+\s+in\s+.*:\s*\n\s+\w+\s*\+=\s*['\\\"]|for\s+\w+\s+in\s+.*:\s*\n\s+\w+\s*=\s*\w+\s*\+\s*['\\\"]",
         "description": "String concatenation in loop — O(n²) performance, use str.join() or list append",
         "fix_hint": "Collect parts in a list, then ''.join(parts) after the loop",
         "test_hint": "Verify string building in loops uses list+join pattern, not += concatenation",

@@ -45,6 +45,7 @@ def _write_temp_bytes(suffix: str, data: bytes) -> str:
 # 1. File size boundary — exactly at and around the 1MB limit
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestFileSizeLimit:
     """Scanner must handle files at the exact 1MB boundary."""
 
@@ -62,8 +63,7 @@ class TestFileSizeLimit:
         path = _write_temp_bytes(".py", full_bytes)
         findings = scan_file(path)
         os.unlink(path)
-        assert any(f.rule_id == "SEC-007" for f in findings), \
-            "File at exactly 1MB should be scanned"
+        assert any(f.rule_id == "SEC-007" for f in findings), "File at exactly 1MB should be scanned"
 
     def test_file_one_byte_over_limit_skipped(self):
         """A file 1 byte over _MAX_FILE_SIZE should be skipped."""
@@ -87,6 +87,7 @@ class TestFileSizeLimit:
 # ═════════════════════════════════════════════════════════════════════════════
 # 2. Encoding edge cases
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestEncodingEdgeCases:
     """Scanner must handle various text encodings gracefully."""
@@ -145,27 +146,47 @@ class TestEncodingEdgeCases:
 # 3. Language detection edge cases
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestLanguageDetection:
     """Verify language detection covers all expected extensions."""
 
-    @pytest.mark.parametrize("ext,expected", [
-        (".py", "python"),
-        (".js", "javascript"),
-        (".ts", "javascript"),
-        (".jsx", "javascript"),
-        (".tsx", "javascript"),
-        (".html", "html"),
-        (".htm", "html"),
-        (".rs", "rust"),
-    ])
+    @pytest.mark.parametrize(
+        "ext,expected",
+        [
+            (".py", "python"),
+            (".js", "javascript"),
+            (".ts", "javascript"),
+            (".jsx", "javascript"),
+            (".tsx", "javascript"),
+            (".html", "html"),
+            (".htm", "html"),
+            (".rs", "rust"),
+        ],
+    )
     def test_known_extensions(self, ext, expected):
         assert _detect_lang(f"file{ext}") == expected
 
-    @pytest.mark.parametrize("ext", [
-        ".md", ".txt", ".csv", ".json", ".yaml", ".toml",
-        ".cfg", ".ini", ".xml", ".svg", ".png", ".jpg",
-        ".whl", ".tar", ".gz", ".zip",
-    ])
+    @pytest.mark.parametrize(
+        "ext",
+        [
+            ".md",
+            ".txt",
+            ".csv",
+            ".json",
+            ".yaml",
+            ".toml",
+            ".cfg",
+            ".ini",
+            ".xml",
+            ".svg",
+            ".png",
+            ".jpg",
+            ".whl",
+            ".tar",
+            ".gz",
+            ".zip",
+        ],
+    )
     def test_unknown_extensions(self, ext):
         assert _detect_lang(f"file{ext}") is None
 
@@ -185,6 +206,7 @@ class TestLanguageDetection:
 # ═════════════════════════════════════════════════════════════════════════════
 # 4. _should_skip directory filter
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestShouldSkip:
     """Verify skip directory logic."""
@@ -215,6 +237,7 @@ class TestShouldSkip:
 # ═════════════════════════════════════════════════════════════════════════════
 # 5. Concurrent scan safety
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestConcurrentScan:
     """Scanner should be safe to use from multiple threads."""
@@ -274,15 +297,12 @@ class TestConcurrentScan:
 # 6. ScanResult aggregation
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestScanResultAggregation:
     """Verify ScanResult computes counts correctly."""
 
     def test_severity_counts_match_findings(self, tmp_path):
-        code = (
-            "eval(input())\n"
-            "# TODO: fix\n"
-            "password = 'bad'\n"
-        )
+        code = "eval(input())\n# TODO: fix\npassword = 'bad'\n"
         (tmp_path / "multi.py").write_text(code, encoding="utf-8")
         result = scan_directory(str(tmp_path))
 
@@ -307,6 +327,7 @@ class TestScanResultAggregation:
 # ══════════════════════════════════════════════════════════════════════════
 # AST-based validators (PY-001, PY-005, PY-006)
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestASTValidators:
     """Tests for AST-based false-positive reduction."""
@@ -349,13 +370,7 @@ class TestASTValidators:
 
     def test_py005_suppressed_inside_try(self):
         """json.loads() inside try/except JSONDecodeError should NOT fire."""
-        code = (
-            "import json\n"
-            "try:\n"
-            "    data = json.loads(raw)\n"
-            "except json.JSONDecodeError:\n"
-            "    data = {}\n"
-        )
+        code = "import json\ntry:\n    data = json.loads(raw)\nexcept json.JSONDecodeError:\n    data = {}\n"
         path = _write_temp(".py", code)
         findings = scan_file(path)
         os.unlink(path)
@@ -363,13 +378,7 @@ class TestASTValidators:
 
     def test_py005_suppressed_inside_bare_except(self):
         """json.loads() inside bare except should NOT fire."""
-        code = (
-            "import json\n"
-            "try:\n"
-            "    data = json.loads(raw)\n"
-            "except:\n"
-            "    data = {}\n"
-        )
+        code = "import json\ntry:\n    data = json.loads(raw)\nexcept:\n    data = {}\n"
         path = _write_temp(".py", code)
         findings = scan_file(path)
         os.unlink(path)
@@ -377,13 +386,7 @@ class TestASTValidators:
 
     def test_py005_suppressed_inside_valueerror(self):
         """json.loads() inside try/except ValueError should NOT fire."""
-        code = (
-            "import json\n"
-            "try:\n"
-            "    data = json.loads(raw)\n"
-            "except ValueError:\n"
-            "    data = {}\n"
-        )
+        code = "import json\ntry:\n    data = json.loads(raw)\nexcept ValueError:\n    data = {}\n"
         path = _write_temp(".py", code)
         findings = scan_file(path)
         os.unlink(path)
@@ -411,6 +414,7 @@ class TestASTValidators:
 # ══════════════════════════════════════════════════════════════════════════
 # Git-aware diff scanning (--since)
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestGitDiffScanning:
     """Tests for --since (git diff) scanning."""

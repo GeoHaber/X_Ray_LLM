@@ -125,7 +125,7 @@ class TestFindingsToSarif:
     def test_result_severity_mapping(self):
         sarif = findings_to_sarif(_SAMPLE_FINDINGS)
         results = sarif["runs"][0]["results"]
-        assert results[0]["level"] == "error"   # HIGH
+        assert results[0]["level"] == "error"  # HIGH
         assert results[1]["level"] == "warning"  # MEDIUM
 
     def test_result_location(self):
@@ -171,14 +171,16 @@ class TestFindingsToSarif:
         assert loc["startColumn"] >= 1
 
     def test_backslash_normalized(self):
-        finding = [{
-            "rule_id": "T-001",
-            "severity": "LOW",
-            "file": "src\\utils\\helper.py",
-            "line": 5,
-            "col": 1,
-            "description": "test",
-        }]
+        finding = [
+            {
+                "rule_id": "T-001",
+                "severity": "LOW",
+                "file": "src\\utils\\helper.py",
+                "line": 5,
+                "col": 1,
+                "description": "test",
+            }
+        ]
         sarif = findings_to_sarif(finding)
         uri = sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
         assert "\\" not in uri

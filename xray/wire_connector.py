@@ -32,7 +32,9 @@ class WireConnector:
             # matches api('/api/something') or api("/api/something")
             matches = re.findall(r"api\(['\"](/api/[a-zA-Z0-9\-_]+)['\"]", content)
             for m in matches:
-                endpoints.add(("POST" if "method: 'POST'" in content[content.find(m):content.find(m)+200] else "GET", m))
+                endpoints.add(
+                    ("POST" if "method: 'POST'" in content[content.find(m) : content.find(m) + 200] else "GET", m)
+                )
 
         # 2. Parse ui_server.py for endpoint handlers
         if ui_server.exists():
@@ -40,7 +42,11 @@ class WireConnector:
             matches = re.findall(r"path == ['\"](/api/[a-zA-Z0-9\-_]+)['\"]", content)
             for m in matches:
                 # Default to POST for most endpoints in this app unless known otherwise
-                method = "GET" if m in ["/api/info", "/api/browse", "/api/scan-progress", "/api/scan-result", "/api/wire-progress"] else "POST"
+                method = (
+                    "GET"
+                    if m in ["/api/info", "/api/browse", "/api/scan-progress", "/api/scan-result", "/api/wire-progress"]
+                    else "POST"
+                )
                 endpoints.add((method, m))
 
         # Sort for consistency
@@ -62,7 +68,7 @@ class WireConnector:
             "/api/apply-fixes-bulk": {"findings": []},
             "/api/preview-fix": {"finding": {}},
             "/api/apply-fix": {"finding": {}},
-            "/api/wire-test": {"directory": directory}, # recursion check prevented below
+            "/api/wire-test": {"directory": directory},  # recursion check prevented below
         }
 
         for i, (method, endpoint) in enumerate(found_wires):
@@ -78,18 +84,13 @@ class WireConnector:
             if endpoint == "/api/browse" and method == "GET":
                 payload = {"path": directory}
             elif method == "GET":
-                payload = None # Default GET params
+                payload = None  # Default GET params
 
             target_url = f"{self.base_url}{endpoint}"
             start_time = time.perf_counter()
 
             if progress_callback:
-                progress_callback({
-                    "step": i + 1,
-                    "total": total,
-                    "endpoint": endpoint,
-                    "status": "testing"
-                })
+                progress_callback({"step": i + 1, "total": total, "endpoint": endpoint, "status": "testing"})
 
             try:
                 if method == "GET":
@@ -110,7 +111,7 @@ class WireConnector:
                     "status_code": resp.status_code,
                     "duration_ms": duration,
                     "success": success,
-                    "error": None if success else resp.text[:200]
+                    "error": None if success else resp.text[:200],
                 }
             except Exception as e:
                 duration = round((time.perf_counter() - start_time) * 1000, 2)
@@ -120,19 +121,21 @@ class WireConnector:
                     "status_code": 0,
                     "duration_ms": duration,
                     "success": False,
-                    "error": str(e)
+                    "error": str(e),
                 }
 
             self.results.append(result)
 
             if progress_callback:
-                progress_callback({
-                    "step": i + 1,
-                    "total": total,
-                    "endpoint": endpoint,
-                    "status": "testing", # status is still testing until we finish all
-                    "result": result
-                })
+                progress_callback(
+                    {
+                        "step": i + 1,
+                        "total": total,
+                        "endpoint": endpoint,
+                        "status": "testing",  # status is still testing until we finish all
+                        "result": result,
+                    }
+                )
 
             time.sleep(0.05)
 
@@ -142,6 +145,7 @@ class WireConnector:
     def stop(self):
         self._stop_event.set()
         self.running = False
+
 
 def start_wire_test(directory, base_url, callback):
     """Entry point for ui_server to run the test in a thread."""

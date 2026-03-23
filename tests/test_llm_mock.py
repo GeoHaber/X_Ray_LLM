@@ -24,11 +24,7 @@ def _make_engine_with_mock():
 
     # Mock the model
     mock_model = MagicMock()
-    mock_model.create_chat_completion.return_value = {
-        "choices": [
-            {"message": {"content": "MOCK_RESPONSE"}}
-        ]
-    }
+    mock_model.create_chat_completion.return_value = {"choices": [{"message": {"content": "MOCK_RESPONSE"}}]}
     engine._model = mock_model
     return engine, mock_model
 
@@ -36,6 +32,7 @@ def _make_engine_with_mock():
 # ═════════════════════════════════════════════════════════════════════════════
 # 1. generate() basics
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestGenerate:
     """Test the raw generate() method with mocked model."""
@@ -93,6 +90,7 @@ class TestGenerate:
 # 2. generate_test()
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestGenerateTest:
     """Test the generate_test() method."""
 
@@ -128,8 +126,7 @@ class TestGenerateTest:
 
     def test_system_prompt_mentions_pytest(self):
         engine, mock = _make_engine_with_mock()
-        finding = {"rule_id": "X", "severity": "LOW", "description": "x",
-                   "file": "x.py", "line": 1, "test_hint": "x"}
+        finding = {"rule_id": "X", "severity": "LOW", "description": "x", "file": "x.py", "line": 1, "test_hint": "x"}
         engine.generate_test(finding, "ctx")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", [])
@@ -140,6 +137,7 @@ class TestGenerateTest:
 # ═════════════════════════════════════════════════════════════════════════════
 # 3. generate_fix()
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestGenerateFix:
     """Test the generate_fix() method."""
@@ -175,8 +173,7 @@ class TestGenerateFix:
 
     def test_includes_test_error_when_provided(self):
         engine, mock = _make_engine_with_mock()
-        finding = {"rule_id": "X", "severity": "LOW", "description": "x",
-                   "fix_hint": "fix", "file": "x.py", "line": 1}
+        finding = {"rule_id": "X", "severity": "LOW", "description": "x", "fix_hint": "fix", "file": "x.py", "line": 1}
         engine.generate_fix(finding, "ctx", test_error="AssertionError: x != y")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", [])
@@ -185,8 +182,7 @@ class TestGenerateFix:
 
     def test_no_test_error_omits_section(self):
         engine, mock = _make_engine_with_mock()
-        finding = {"rule_id": "X", "severity": "LOW", "description": "x",
-                   "fix_hint": "fix", "file": "x.py", "line": 1}
+        finding = {"rule_id": "X", "severity": "LOW", "description": "x", "fix_hint": "fix", "file": "x.py", "line": 1}
         engine.generate_fix(finding, "ctx", test_error="")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", [])
@@ -197,6 +193,7 @@ class TestGenerateFix:
 # ═════════════════════════════════════════════════════════════════════════════
 # 4. analyze_codebase()
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestAnalyzeCodebase:
     """Test the analyze_codebase() method."""
@@ -218,6 +215,7 @@ class TestAnalyzeCodebase:
 # ═════════════════════════════════════════════════════════════════════════════
 # 5. _ensure_model thread safety
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestEnsureModel:
     """Test model loading edge cases."""

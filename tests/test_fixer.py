@@ -48,12 +48,14 @@ class TestFixer:
         fp = tmp_path / "bare_except.py"
         fp.write_text("try:\n    x = 1\nexcept:\n    pass\n", encoding="utf-8")
 
-        result = preview_fix({
-            "rule_id": "QUAL-001",
-            "file": str(fp),
-            "line": 3,
-            "matched_text": "except:",
-        })
+        result = preview_fix(
+            {
+                "rule_id": "QUAL-001",
+                "file": str(fp),
+                "line": 3,
+                "matched_text": "except:",
+            }
+        )
 
         assert result["fixable"] is True
         assert "except Exception:" in result["diff"]
@@ -65,12 +67,14 @@ class TestFixer:
         fp = tmp_path / "json_parse.py"
         fp.write_text("import json\ndata = json.loads(text)\n", encoding="utf-8")
 
-        result = preview_fix({
-            "rule_id": "PY-005",
-            "file": str(fp),
-            "line": 2,
-            "matched_text": "json.loads(text)",
-        })
+        result = preview_fix(
+            {
+                "rule_id": "PY-005",
+                "file": str(fp),
+                "line": 2,
+                "matched_text": "json.loads(text)",
+            }
+        )
 
         assert result["fixable"] is True
         assert "try" in result["diff"]
@@ -85,12 +89,14 @@ class TestFixer:
             encoding="utf-8",
         )
 
-        result = preview_fix({
-            "rule_id": "SEC-003",
-            "file": str(fp),
-            "line": 2,
-            "matched_text": "shell=True",
-        })
+        result = preview_fix(
+            {
+                "rule_id": "SEC-003",
+                "file": str(fp),
+                "line": 2,
+                "matched_text": "shell=True",
+            }
+        )
 
         assert result["fixable"] is True
         assert "shell=False" in result["diff"]
@@ -102,12 +108,14 @@ class TestFixer:
         fp = tmp_path / "apply_bare.py"
         fp.write_text("try:\n    x = 1\nexcept:\n    pass\n", encoding="utf-8")
 
-        result = apply_fix({
-            "rule_id": "QUAL-001",
-            "file": str(fp),
-            "line": 3,
-            "matched_text": "except:",
-        })
+        result = apply_fix(
+            {
+                "rule_id": "QUAL-001",
+                "file": str(fp),
+                "line": 3,
+                "matched_text": "except:",
+            }
+        )
 
         assert result["ok"] is True
         content = fp.read_text(encoding="utf-8")
@@ -119,8 +127,7 @@ class TestFixer:
     def test_apply_fixes_bulk_counts(self, tmp_path):
         fp = tmp_path / "multi_bare.py"
         fp.write_text(
-            "try:\n    a = 1\nexcept:\n    pass\n\n"
-            "try:\n    b = 2\nexcept:\n    pass\n",
+            "try:\n    a = 1\nexcept:\n    pass\n\ntry:\n    b = 2\nexcept:\n    pass\n",
             encoding="utf-8",
         )
 
@@ -136,12 +143,14 @@ class TestFixer:
     # 6. Unknown rule returns not fixable
     # ------------------------------------------------------------------
     def test_preview_unknown_rule(self):
-        result = preview_fix({
-            "rule_id": "UNKNOWN-999",
-            "file": "x.py",
-            "line": 1,
-            "matched_text": "",
-        })
+        result = preview_fix(
+            {
+                "rule_id": "UNKNOWN-999",
+                "file": "x.py",
+                "line": 1,
+                "matched_text": "",
+            }
+        )
 
         assert result["fixable"] is False
         assert "No auto-fixer" in result["error"]
@@ -150,12 +159,14 @@ class TestFixer:
     # 7. Missing file returns not fixable
     # ------------------------------------------------------------------
     def test_preview_missing_file(self):
-        result = preview_fix({
-            "rule_id": "QUAL-001",
-            "file": "/nonexistent/file.py",
-            "line": 1,
-            "matched_text": "except:",
-        })
+        result = preview_fix(
+            {
+                "rule_id": "QUAL-001",
+                "file": "/nonexistent/file.py",
+                "line": 1,
+                "matched_text": "except:",
+            }
+        )
 
         assert result["fixable"] is False
 
@@ -169,12 +180,14 @@ class TestFixer:
         fp.write_text(source, encoding="utf-8")
 
         info = _RULE_FINDING[rule_id]
-        result = preview_fix({
-            "rule_id": rule_id,
-            "file": str(fp),
-            "line": info["line"],
-            "matched_text": info["matched_text"],
-        })
+        result = preview_fix(
+            {
+                "rule_id": rule_id,
+                "file": str(fp),
+                "line": info["line"],
+                "matched_text": info["matched_text"],
+            }
+        )
 
         # Must not crash; result is a dict with expected keys
         assert isinstance(result, dict)

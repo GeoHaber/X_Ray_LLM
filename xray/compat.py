@@ -39,12 +39,12 @@ MIN_PYTHON = (3, 10)
 #   required=True  → hard dependency, blocks startup
 #   required=False → optional, warn only
 DEPENDENCIES: list[tuple[str, tuple[int, ...], str, bool]] = [
-    ("pytest",            (7, 0),       "pytest",     True),
-    ("llama-cpp-python",  (0, 3, 0),    "llama_cpp",  False),
-    ("requests",          (2, 30),      "requests",   False),
-    ("flet",              (0, 25),      "flet",       False),
-    ("ruff",              (0, 15),      "ruff",       False),
-    ("bandit",            (1, 9),       "bandit",     False),
+    ("pytest", (7, 0), "pytest", True),
+    ("llama-cpp-python", (0, 3, 0), "llama_cpp", False),
+    ("requests", (2, 30), "requests", False),
+    ("flet", (0, 25), "flet", False),
+    ("ruff", (0, 15), "ruff", False),
+    ("bandit", (1, 9), "bandit", False),
 ]
 
 
@@ -78,14 +78,12 @@ def _fmt(ver: tuple[int, ...]) -> str:
 
 # ── Public API ───────────────────────────────────────────────────────────
 
+
 def check_python_version() -> list[str]:
     """Return problems (empty list = OK) for the running Python version."""
     current = sys.version_info[:3]
     if current < MIN_PYTHON:
-        return [
-            f"Python {_fmt(current)} is too old — "
-            f"X-Ray LLM requires Python >= {_fmt(MIN_PYTHON)}"
-        ]
+        return [f"Python {_fmt(current)} is too old — X-Ray LLM requires Python >= {_fmt(MIN_PYTHON)}"]
     return []
 
 
@@ -99,10 +97,7 @@ def check_dependency(pkg_name: str, min_version: tuple[int, ...]) -> str | None:
     installed_str = meta["Version"]
     installed = _parse_version(installed_str)
     if not _version_gte(installed, min_version):
-        return (
-            f"{pkg_name} {installed_str} is too old "
-            f"(need >= {_fmt(min_version)})"
-        )
+        return f"{pkg_name} {installed_str} is too old (need >= {_fmt(min_version)})"
     return None
 
 
@@ -137,10 +132,7 @@ def check_environment(*, warn_optional: bool = True) -> tuple[bool, list[str]]:
     api_results = check_api_compatibility()
     for r in api_results:
         if not r.found and r.error != "library not installed":
-            problems.append(
-                f"[API BREAK] {r.import_path}.{r.attr_chain} — "
-                f"{r.error} (used in {r.used_in})"
-            )
+            problems.append(f"[API BREAK] {r.import_path}.{r.attr_chain} — {r.error} (used in {r.used_in})")
             ok = False
 
     return ok, problems
@@ -151,7 +143,11 @@ def require_environment() -> None:
     ok, problems = check_environment()
     if problems:
         for p in problems:
-            level = logging.ERROR if p.startswith("[REQUIRED]") or ("too old" in p.lower() and "Python" in p) else logging.WARNING
+            level = (
+                logging.ERROR
+                if p.startswith("[REQUIRED]") or ("too old" in p.lower() and "Python" in p)
+                else logging.WARNING
+            )
             logger.log(level, p)
     if not ok:
         sys.exit(
@@ -175,8 +171,7 @@ def require_environment() -> None:
 def environment_summary() -> str:
     """Return a human-readable summary of the current environment."""
     lines = [
-        f"Python {_fmt(sys.version_info[:3])} "
-        f"({'OK' if sys.version_info[:2] >= MIN_PYTHON else 'TOO OLD'})",
+        f"Python {_fmt(sys.version_info[:3])} ({'OK' if sys.version_info[:2] >= MIN_PYTHON else 'TOO OLD'})",
     ]
     for pkg_name, min_ver, _import_name, required in DEPENDENCIES:
         try:
@@ -212,30 +207,18 @@ def environment_summary() -> str:
 
 API_REGISTRY: list[tuple[str, str, str, str]] = [
     # ── llama-cpp-python ─────────────────────────────────────────────
-    ("llama_cpp", "Llama",
-     "xray/llm.py", "Core LLM class for model loading"),
-    ("llama_cpp", "Llama.create_chat_completion",
-     "xray/llm.py", "Chat completion API used for code generation"),
-
+    ("llama_cpp", "Llama", "xray/llm.py", "Core LLM class for model loading"),
+    ("llama_cpp", "Llama.create_chat_completion", "xray/llm.py", "Chat completion API used for code generation"),
     # ── pytest (core API surface we rely on) ─────────────────────────
-    ("pytest", "fixture",
-     "tests/", "Decorator for test fixtures"),
-    ("pytest", "mark.parametrize",
-     "tests/", "Parametrized test decorator"),
-    ("pytest", "raises",
-     "tests/", "Exception assertion context manager"),
-    ("pytest", "skip",
-     "tests/", "Conditional test skip"),
-    ("pytest", "fail",
-     "tests/", "Explicit test failure"),
-
+    ("pytest", "fixture", "tests/", "Decorator for test fixtures"),
+    ("pytest", "mark.parametrize", "tests/", "Parametrized test decorator"),
+    ("pytest", "raises", "tests/", "Exception assertion context manager"),
+    ("pytest", "skip", "tests/", "Conditional test skip"),
+    ("pytest", "fail", "tests/", "Explicit test failure"),
     # ── requests ─────────────────────────────────────────────────────
-    ("requests", "get",
-     "xray/wire_connector.py", "HTTP GET for endpoint testing"),
-    ("requests", "post",
-     "xray/wire_connector.py", "HTTP POST for endpoint testing"),
-    ("requests", "Response",
-     "xray/wire_connector.py", "Response class (status_code, text, headers)"),
+    ("requests", "get", "xray/wire_connector.py", "HTTP GET for endpoint testing"),
+    ("requests", "post", "xray/wire_connector.py", "HTTP POST for endpoint testing"),
+    ("requests", "Response", "xray/wire_connector.py", "Response class (status_code, text, headers)"),
 ]
 
 
@@ -251,8 +234,7 @@ class APICheckResult:
         "used_in",
     )
 
-    def __init__(self, import_path: str, attr_chain: str, used_in: str,
-                 description: str, found: bool, error: str = ""):
+    def __init__(self, import_path: str, attr_chain: str, used_in: str, description: str, found: bool, error: str = ""):
         self.import_path = import_path
         self.attr_chain = attr_chain
         self.used_in = used_in
@@ -294,17 +276,29 @@ def check_api_compatibility() -> list[APICheckResult]:
             mod = importlib.import_module(import_path)
         except ImportError:
             # Library not installed — already flagged by version check
-            results.append(APICheckResult(
-                import_path, attr_chain, used_in, description,
-                found=False, error="library not installed",
-            ))
+            results.append(
+                APICheckResult(
+                    import_path,
+                    attr_chain,
+                    used_in,
+                    description,
+                    found=False,
+                    error="library not installed",
+                )
+            )
             continue
 
         found, error = _resolve_attr_chain(mod, attr_chain)
-        results.append(APICheckResult(
-            import_path, attr_chain, used_in, description,
-            found=found, error=error,
-        ))
+        results.append(
+            APICheckResult(
+                import_path,
+                attr_chain,
+                used_in,
+                description,
+                found=found,
+                error=error,
+            )
+        )
 
     return results
 
@@ -320,8 +314,10 @@ def api_compatibility_summary() -> str:
     fail_count = len(results) - ok_count
     skip_count = sum(1 for r in results if r.error == "library not installed")
 
-    lines.append(f"API compatibility: {ok_count} OK, {fail_count} issues"
-                 + (f" ({skip_count} skipped — not installed)" if skip_count else ""))
+    lines.append(
+        f"API compatibility: {ok_count} OK, {fail_count} issues"
+        + (f" ({skip_count} skipped — not installed)" if skip_count else "")
+    )
 
     # Group by library
     by_lib: dict[str, list[APICheckResult]] = {}
@@ -346,6 +342,7 @@ def api_compatibility_summary() -> str:
 
 
 # ── PyPI Version Fetcher ─────────────────────────────────────────────────
+
 
 def _fetch_pypi_version(package_name: str, timeout: int = 5) -> str | None:
     """Query PyPI JSON API for the latest stable version of *package_name*.
@@ -380,6 +377,7 @@ def _fetch_pypi_version(package_name: str, timeout: int = 5) -> str | None:
 
 
 # ── Dependency Freshness Checker ─────────────────────────────────────────
+
 
 class DependencyStatus:
     """Full status of one dependency: installed vs latest vs API impact."""
@@ -443,7 +441,8 @@ def _is_major_upgrade(installed: str, latest: str) -> bool:
 
 
 def check_dependency_freshness(
-    *, timeout: int = 5,
+    *,
+    timeout: int = 5,
 ) -> list[DependencyStatus]:
     """Check all registered dependencies against PyPI and API registry.
 
@@ -486,9 +485,7 @@ def check_dependency_freshness(
             inst_tuple = _parse_version(status.installed_version)
             lat_tuple = _parse_version(latest)
             status.is_outdated = not _version_gte(inst_tuple, lat_tuple)
-            status.is_major_upgrade = _is_major_upgrade(
-                status.installed_version, latest
-            )
+            status.is_major_upgrade = _is_major_upgrade(status.installed_version, latest)
 
         # 3. API symbols cross-reference
         symbols = api_by_import.get(import_name, [])
@@ -547,17 +544,10 @@ def dependency_freshness_summary(
         "dependencies": deps,
         "summary": {
             "total": len(statuses),
-            "up_to_date": sum(
-                1 for s in statuses
-                if not s.is_outdated and not s.error
-            ),
+            "up_to_date": sum(1 for s in statuses if not s.is_outdated and not s.error),
             "outdated": sum(1 for s in statuses if s.is_outdated),
             "major_upgrades": sum(1 for s in statuses if s.is_major_upgrade),
-            "broken_apis": sum(
-                1 for s in statuses if s.api_symbols_broken
-            ),
-            "not_installed": sum(
-                1 for s in statuses if s.error == "not installed"
-            ),
+            "broken_apis": sum(1 for s in statuses if s.api_symbols_broken),
+            "not_installed": sum(1 for s in statuses if s.error == "not installed"),
         },
     }

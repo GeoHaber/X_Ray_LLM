@@ -86,23 +86,23 @@ def scan_dependencies(project_root: str) -> dict:
         for dep in dependencies:
             for vuln in dep.get("vulns", []):
                 severity = _map_severity(vuln.get("aliases", []), vuln.get("id", ""))
-                vulns.append({
-                    "rule_id": f"SCA-{vuln.get('id', 'UNKNOWN')[:20]}",
-                    "severity": severity,
-                    "package": dep.get("name", "unknown"),
-                    "installed_version": dep.get("version", "?"),
-                    "fixed_versions": vuln.get("fix_versions", []),
-                    "description": (
-                        f"Vulnerability {vuln.get('id', '')} in "
-                        f"{dep.get('name', '')} {dep.get('version', '')}"
-                    ),
-                    "vuln_id": vuln.get("id", ""),
-                    "aliases": vuln.get("aliases", []),
-                    "fix_hint": (
-                        f"Upgrade {dep.get('name', '')} to "
-                        f"{', '.join(vuln.get('fix_versions', ['latest']))}"
-                    ),
-                })
+                vulns.append(
+                    {
+                        "rule_id": f"SCA-{vuln.get('id', 'UNKNOWN')[:20]}",
+                        "severity": severity,
+                        "package": dep.get("name", "unknown"),
+                        "installed_version": dep.get("version", "?"),
+                        "fixed_versions": vuln.get("fix_versions", []),
+                        "description": (
+                            f"Vulnerability {vuln.get('id', '')} in {dep.get('name', '')} {dep.get('version', '')}"
+                        ),
+                        "vuln_id": vuln.get("id", ""),
+                        "aliases": vuln.get("aliases", []),
+                        "fix_hint": (
+                            f"Upgrade {dep.get('name', '')} to {', '.join(vuln.get('fix_versions', ['latest']))}"
+                        ),
+                    }
+                )
     except (json.JSONDecodeError, KeyError) as e:
         logger.warning("Failed to parse pip-audit output: %s", e)
         if proc.stderr:

@@ -28,6 +28,7 @@ def _write_temp(suffix: str, content: str) -> str:
 # Security rule false positives
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestSecurityFalsePositives:
     """Code that resembles security issues but is actually safe."""
 
@@ -108,7 +109,7 @@ class TestSecurityFalsePositives:
 
     def test_sanitized_innerhtml_no_fire(self):
         """innerHTML with _escHtml sanitizer should not fire SEC-001."""
-        code = '<script>el.innerHTML = `<b>${_escHtml(name)}</b>`;</script>'
+        code = "<script>el.innerHTML = `<b>${_escHtml(name)}</b>`;</script>"
         path = _write_temp(".html", code)
         findings = scan_file(path)
         os.unlink(path)
@@ -118,6 +119,7 @@ class TestSecurityFalsePositives:
 # ═════════════════════════════════════════════════════════════════════════════
 # Quality rule false positives
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestQualityFalsePositives:
     """Code that resembles quality issues but is acceptable."""
@@ -146,10 +148,9 @@ class TestQualityFalsePositives:
         path = _write_temp(".py", code)
         findings = scan_file(path)
         os.unlink(path)
-        # QUAL-003 regex checks for int() without try — in try block is harder to detect
+        # QUAL-003 AST validator suppresses int() inside try/except ValueError
         qual003 = [f for f in findings if f.rule_id == "QUAL-003"]
-        if qual003:
-            pytest.skip("Known limitation: regex can't verify surrounding try block")
+        assert not qual003, "QUAL-003 should not fire for int() inside try/except"
 
     def test_short_sleep_no_fire(self):
         """Short sleep (< 60s) should NOT fire QUAL-008."""
@@ -179,6 +180,7 @@ class TestQualityFalsePositives:
 # ═════════════════════════════════════════════════════════════════════════════
 # Python rule false positives
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestPythonFalsePositives:
     """Code that resembles Python anti-patterns but is acceptable."""
@@ -221,10 +223,9 @@ class TestPythonFalsePositives:
         path = _write_temp(".py", code)
         findings = scan_file(path)
         os.unlink(path)
-        # PY-005 regex has negative lookahead for try/except but it's on the same line
+        # PY-005 AST validator suppresses json.loads inside try/except JSONDecodeError
         py005 = [f for f in findings if f.rule_id == "PY-005"]
-        if py005:
-            pytest.skip("Known limitation: regex can't detect surrounding try block")
+        assert not py005, "PY-005 should not fire for json.loads inside try/except"
 
     def test_return_dict_with_none_annotation(self):
         """-> None with return dict SHOULD fire PY-001 (not a false positive)."""
@@ -250,6 +251,7 @@ class TestPythonFalsePositives:
 # Cross-language false positives
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestCrossLanguageFalsePositives:
     """Rules should not fire on wrong languages."""
 
@@ -260,8 +262,7 @@ class TestCrossLanguageFalsePositives:
         findings = scan_file(path)
         os.unlink(path)
         python_findings = [f for f in findings if f.rule_id.startswith("PY-")]
-        assert len(python_findings) == 0, \
-            f"Python rules fired on JS: {[f.rule_id for f in python_findings]}"
+        assert len(python_findings) == 0, f"Python rules fired on JS: {[f.rule_id for f in python_findings]}"
 
     def test_js_rules_dont_fire_on_python(self):
         """JavaScript-only rules (like QUAL-010 localStorage) must not fire on .py."""

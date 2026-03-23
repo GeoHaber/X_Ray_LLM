@@ -19,21 +19,14 @@ from xray.scanner import scan_directory, scan_file
 # 1. Scan → Fix → Re-scan cycle
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestScanFixRescan:
     """Verify the scan→fix→re-scan cycle reduces findings."""
 
     def test_fix_reduces_finding_count(self, tmp_path):
         """After fixing all fixable findings, re-scan should have fewer issues."""
         # Create file with multiple fixable issues
-        code = (
-            "try:\n"
-            "    x = 1\n"
-            "except:\n"
-            "    pass\n"
-            "\n"
-            "import subprocess\n"
-            "subprocess.run(['ls'], shell=True)\n"
-        )
+        code = "try:\n    x = 1\nexcept:\n    pass\n\nimport subprocess\nsubprocess.run(['ls'], shell=True)\n"
         fp = tmp_path / "multi_issue.py"
         fp.write_text(code, encoding="utf-8")
 
@@ -54,20 +47,13 @@ class TestScanFixRescan:
         # Re-scan
         after = scan_directory(str(tmp_path))
         fixable_after = [f for f in after.findings if f.rule_id in FIXABLE_RULES]
-        assert len(fixable_after) < len(fixable_before), \
+        assert len(fixable_after) < len(fixable_before), (
             f"Fix didn't reduce findings: {len(fixable_before)} → {len(fixable_after)}"
+        )
 
     def test_bulk_fix_reduces_findings(self, tmp_path):
         """apply_fixes_bulk should fix multiple issues in one call."""
-        code = (
-            "import yaml\n"
-            "data = yaml.load(open('f.yml'))\n"
-            "\n"
-            "try:\n"
-            "    x = 1\n"
-            "except:\n"
-            "    pass\n"
-        )
+        code = "import yaml\ndata = yaml.load(open('f.yml'))\n\ntry:\n    x = 1\nexcept:\n    pass\n"
         fp = tmp_path / "bulk.py"
         fp.write_text(code, encoding="utf-8")
 
@@ -86,6 +72,7 @@ class TestScanFixRescan:
 # ═════════════════════════════════════════════════════════════════════════════
 # 2. Agent dry-run produces correct report
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestAgentDryRun:
     """Agent in dry-run mode should scan but never modify files."""
@@ -130,6 +117,7 @@ class TestAgentDryRun:
 # 3. Agent severity filtering
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestAgentSeverityFilter:
     """Agent should respect severity threshold."""
 
@@ -168,6 +156,7 @@ class TestAgentSeverityFilter:
 # ═════════════════════════════════════════════════════════════════════════════
 # 4. Agent without LLM
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestAgentWithoutLLM:
     """Agent should gracefully handle missing LLM."""
@@ -211,6 +200,7 @@ class TestAgentWithoutLLM:
 # ═════════════════════════════════════════════════════════════════════════════
 # 5. Agent exclude patterns
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestAgentExcludePatterns:
     """Agent should respect exclude patterns."""

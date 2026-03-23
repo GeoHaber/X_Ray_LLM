@@ -51,7 +51,9 @@ class AppState:
 
         # Debug mode
         self.debug = os.environ.get("XRAY_DEBUG", "").lower() in (
-            "1", "true", "yes",
+            "1",
+            "true",
+            "yes",
         )
 
         self._initialized = True

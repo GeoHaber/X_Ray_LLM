@@ -51,7 +51,7 @@ projects — not synthetic patterns.
 - **19+ analysis tools** — dead code, smells, duplicates, formatting, type checking, circular calls, coupling, unused imports, connections, and more
 - **9 PM Dashboard features** — risk heatmaps, module grades, release confidence, sprint planning, architecture mapping, call graphs, circular call detection, coupling metrics, unused import analysis
 - **Dependency freshness checker** — PyPI version checks with upgrade impact analysis
-- **AST-based false positive reduction** — 3 AST validators suppress noise for PY-001, PY-005, PY-006
+- **AST-based false positive reduction** — 5 AST validators suppress noise for PY-001, PY-005, PY-006, QUAL-003, QUAL-004
 - **Export** — JSON, SARIF (GitHub Code Scanning compatible), and text output via REST API and CLI
 
 ---
@@ -1164,7 +1164,7 @@ llama-cpp-python >= 0.3.0
 python -m pytest tests/ -v
 ```
 
-### Test Files (1013 tests, 999 passing + 14 skipped)
+### Test Files (1013 tests, 1001 passing + 12 skipped)
 
 | File | Tests | What It Tests |
 |------|------:|---------------|

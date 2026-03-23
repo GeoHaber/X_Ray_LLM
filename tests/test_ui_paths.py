@@ -26,6 +26,7 @@ from ui_server import _fwd, browse_directory, get_drives
 # 1. _fwd() — backslash normalization
 # ══════════════════════════════════════════════════════════════════════════
 
+
 class TestFwd:
     """Test the _fwd path normalizer."""
 
@@ -57,6 +58,7 @@ class TestFwd:
 # ══════════════════════════════════════════════════════════════════════════
 # 2. browse_directory() — real filesystem
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestBrowseDirectory:
     """Test directory browsing returns safe paths."""
@@ -134,6 +136,7 @@ class TestBrowseDirectory:
 # 3. get_drives() — safe drive paths
 # ══════════════════════════════════════════════════════════════════════════
 
+
 class TestGetDrives:
     """Test drive listing returns safe paths."""
 
@@ -159,6 +162,7 @@ class TestGetDrives:
 # ══════════════════════════════════════════════════════════════════════════
 # 4. JS esc() simulation — dangerous characters in inline handlers
 # ══════════════════════════════════════════════════════════════════════════
+
 
 def js_esc(s: str) -> str:
     """Python simulation of the JS esc() function from ui.html.
@@ -214,6 +218,7 @@ class TestJsEsc:
 # 5. Dangerous path characters — complete inventory
 # ══════════════════════════════════════════════════════════════════════════
 
+
 class TestDangerousChars:
     """
     Test every character class that could break inline JS handlers.
@@ -252,10 +257,10 @@ class TestDangerousChars:
         """_fwd() must eliminate all backslashes from paths."""
         paths = [
             r"C:\Users\test",
-            r"C:\new\test",         # \n and \t sequences!
-            r"C:\0data\readme",     # \0 sequence!
-            r"C:\return\file",      # \r sequence!
-            r"\\network\share",     # UNC path
+            r"C:\new\test",  # \n and \t sequences!
+            r"C:\0data\readme",  # \0 sequence!
+            r"C:\return\file",  # \r sequence!
+            r"\\network\share",  # UNC path
         ]
         for p in paths:
             result = _fwd(p)
@@ -303,6 +308,7 @@ class TestDangerousChars:
 # ══════════════════════════════════════════════════════════════════════════
 # 6. Round-trip: real path → _fwd() → esc() → safe for inline JS
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestRoundTrip:
     """Test that real filesystem paths survive the full pipeline."""
@@ -363,6 +369,7 @@ class TestRoundTrip:
 # 7. Scan API path handling
 # ══════════════════════════════════════════════════════════════════════════
 
+
 class TestScanPaths:
     """Test that scan API accepts forward-slash paths."""
 
@@ -370,6 +377,7 @@ class TestScanPaths:
         """Python scanner must accept forward-slash paths on all OSes."""
         (tmp_path / "test.py").write_text("x = eval(input())")
         from xray.scanner import scan_directory
+
         fwd_path = _fwd(str(tmp_path))
         result = scan_directory(fwd_path)
         assert result.files_scanned == 1
@@ -385,6 +393,7 @@ class TestScanPaths:
 # ══════════════════════════════════════════════════════════════════════════
 # 8. Browse directory — path restriction (P1 #6)
 # ══════════════════════════════════════════════════════════════════════════
+
 
 class TestBrowseRestriction:
     """Ensure browse_directory respects the allowed-roots allowlist."""
@@ -404,9 +413,7 @@ class TestBrowseRestriction:
     def test_blocked_outside_roots(self, tmp_path, monkeypatch):
         """Set a restrictive allowlist; paths outside must be denied."""
         # Allow only tmp_path itself
-        monkeypatch.setattr(
-            "services.scan_manager._BROWSE_ROOTS_RAW", str(tmp_path)
-        )
+        monkeypatch.setattr("services.scan_manager._BROWSE_ROOTS_RAW", str(tmp_path))
         # Browsing tmp_path works
         assert "error" not in browse_directory(str(tmp_path))
         # Browsing a sibling of tmp_path fails
@@ -428,9 +435,7 @@ class TestBrowseRestriction:
 
     def test_parent_link_hidden_at_boundary(self, tmp_path, monkeypatch):
         """Parent link must be None when parent is outside allowed roots."""
-        monkeypatch.setattr(
-            "services.scan_manager._BROWSE_ROOTS_RAW", str(tmp_path)
-        )
+        monkeypatch.setattr("services.scan_manager._BROWSE_ROOTS_RAW", str(tmp_path))
         result = browse_directory(str(tmp_path))
         assert "error" not in result
         # Parent of tmp_path is NOT in the allowlist, so parent should be None

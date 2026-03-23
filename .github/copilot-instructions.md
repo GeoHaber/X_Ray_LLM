@@ -16,7 +16,7 @@ analyzers, PM Dashboard, auto-fixers, UI views, or architecture:
 
 - **42 scan rules**: 14 Security (SEC-001–014), 13 Quality (QUAL-001–013), 11 Python (PY-001–011), 4 Portability (PORT-001–004)
 - **7 deterministic auto-fixers**: SEC-003, SEC-009, QUAL-001, QUAL-003, QUAL-004, PY-005, PY-007
-- **3 AST validators**: Reduce false positives for PY-001, PY-005, PY-006
+- **5 AST validators**: Reduce false positives for PY-001, PY-005, PY-006, QUAL-003, QUAL-004
 - **Dual engines**: Python scanner (`xray/scanner.py`) + optional Rust scanner (`scanner/src/`)
 - **Web UI**: `ui.html` served by `ui_server.py` on port 8077 — 28+ views
 - **31 API endpoints**: All under `http://127.0.0.1:8077/api/`
@@ -42,7 +42,7 @@ analyzers, PM Dashboard, auto-fixers, UI views, or architecture:
 | `xray/llm.py` | Local LLM inference |
 | `xray/constants.py` | Shared constants (SKIP_DIRS, file extensions) |
 | `xray/types.py` | TypedDict definitions for API responses |
-| `tests/` | 1013 tests (22 files, pytest) — 999 passing, 14 skipped |
+| `tests/` | 1013 tests (22 files, pytest) — 1001 passing, 12 skipped |
 
 ## Coding Conventions
 

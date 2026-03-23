@@ -27,6 +27,7 @@ def _write_temp(suffix: str, content: str) -> str:
 # PORT-001: Hardcoded C:\Users\<username> paths
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestPORT001:
     """Detect hardcoded user-specific paths."""
 
@@ -60,6 +61,7 @@ class TestPORT001:
 # PORT-002: Hardcoded C:\AI\ paths
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestPORT002:
     """Detect hardcoded C:\\AI\\ paths."""
 
@@ -86,6 +88,7 @@ class TestPORT002:
 # PORT-003: Hardcoded absolute Windows paths
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestPORT003:
     """Detect hardcoded absolute Windows paths (not Users/AI/Windows/Program)."""
 
@@ -111,6 +114,7 @@ class TestPORT003:
 # ═════════════════════════════════════════════════════════════════════════════
 # PORT-004: Windows-only module imports
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestPORT004:
     """Detect unguarded Windows-only module imports."""
@@ -152,6 +156,7 @@ class TestPORT004:
 # ═════════════════════════════════════════════════════════════════════════════
 # Rule database integrity
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestPortabilityRuleDB:
     """Verify portability rules are well-formed."""

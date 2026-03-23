@@ -68,21 +68,23 @@ class TestScanDependencies:
     def test_successful_scan(self, tmp_path):
         """Simulates a successful pip-audit scan with vulnerabilities."""
         (tmp_path / "requirements.txt").write_text("flask==2.0.0\n")
-        mock_output = json.dumps({
-            "dependencies": [
-                {
-                    "name": "flask",
-                    "version": "2.0.0",
-                    "vulns": [
-                        {
-                            "id": "CVE-2023-12345",
-                            "aliases": ["CVE-2023-12345"],
-                            "fix_versions": ["2.3.3"],
-                        }
-                    ],
-                }
-            ]
-        })
+        mock_output = json.dumps(
+            {
+                "dependencies": [
+                    {
+                        "name": "flask",
+                        "version": "2.0.0",
+                        "vulns": [
+                            {
+                                "id": "CVE-2023-12345",
+                                "aliases": ["CVE-2023-12345"],
+                                "fix_versions": ["2.3.3"],
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
         mock_proc = MagicMock()
         mock_proc.stdout = mock_output
         mock_proc.stderr = ""

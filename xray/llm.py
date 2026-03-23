@@ -12,6 +12,7 @@ from pathlib import Path
 @dataclass
 class LLMConfig:
     """Configuration for the local LLM."""
+
     model_path: str = ""
     n_ctx: int = 8192
     n_gpu_layers: int = -1  # -1 = offload all layers to GPU
@@ -23,6 +24,7 @@ class LLMConfig:
     @classmethod
     def from_env(cls) -> "LLMConfig":
         """Load config from environment variables."""
+
         def _int(key: str, default: str) -> int:
             try:
                 return int(os.environ.get(key, default))
@@ -68,6 +70,7 @@ class LLMEngine:
                     "  - Codestral-22B-v0.1-Q4_K_M.gguf (good balance)"
                 )
             from llama_cpp import Llama  # lazy import
+
             self._model = Llama(
                 model_path=self.config.model_path,
                 n_ctx=self.config.n_ctx,
@@ -111,8 +114,7 @@ class LLMEngine:
         )
         return self.generate(prompt, system=system)
 
-    def generate_fix(self, finding: dict, source_context: str,
-                     test_error: str = "") -> str:
+    def generate_fix(self, finding: dict, source_context: str, test_error: str = "") -> str:
         """Generate a code fix for a specific finding."""
         system = (
             "You are an expert programmer. Fix the described code issue. "

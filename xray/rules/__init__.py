@@ -2,6 +2,7 @@
 X-Ray Pattern Rules — Built from real bugs found in production code.
 Each rule has: id, severity, pattern (regex), description, fix_hint, test_hint.
 """
+
 from .portability import PORTABILITY_RULES
 from .python_rules import PYTHON_RULES
 from .quality import QUALITY_RULES

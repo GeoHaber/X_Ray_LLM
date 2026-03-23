@@ -52,14 +52,16 @@ def scan_satd(directory: str) -> dict:
                                 cm = _COMMENT_RE.search(line)
                                 if cm:
                                     text = cm.group(1).strip()
-                                items.append({
-                                    "file": _fwd(fpath),
-                                    "line": lineno,
-                                    "category": category,
-                                    "marker": m.group(1).upper(),
-                                    "text": text[:200],
-                                    "hours": hours,
-                                })
+                                items.append(
+                                    {
+                                        "file": _fwd(fpath),
+                                        "line": lineno,
+                                        "category": category,
+                                        "marker": m.group(1).upper(),
+                                        "text": text[:200],
+                                        "hours": hours,
+                                    }
+                                )
                                 total_hours += hours
                                 by_category.setdefault(category, []).append(items[-1])
                                 break

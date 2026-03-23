@@ -1,4 +1,5 @@
 """Quick script to display self-scan results from scan_self.json."""
+
 import json
 import sys
 

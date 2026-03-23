@@ -18,6 +18,7 @@ def handle_browse(params: dict, handler) -> tuple[dict, int]:
 def handle_info(params: dict, handler) -> tuple[dict, int]:
     rust_bin = get_rust_binary()
     from xray.fixer import FIXABLE_RULES
+
     return {
         "platform": f"{platform.system()} {platform.machine()}",
         "python": platform.python_version(),
@@ -37,13 +38,17 @@ def handle_env_check(params: dict, handler) -> tuple[dict, int]:
         check_environment,
         environment_summary,
     )
+
     ok, problems = check_environment()
     api_results = check_api_compatibility()
     api_report = [
         {
-            "library": r.import_path, "symbol": r.attr_chain,
-            "used_in": r.used_in, "description": r.description,
-            "found": r.found, "error": r.error,
+            "library": r.import_path,
+            "symbol": r.attr_chain,
+            "used_in": r.used_in,
+            "description": r.description,
+            "found": r.found,
+            "error": r.error,
         }
         for r in api_results
     ]
@@ -60,6 +65,7 @@ def handle_env_check(params: dict, handler) -> tuple[dict, int]:
 
 def handle_dependency_check(params: dict, handler) -> tuple[dict, int]:
     from xray.compat import dependency_freshness_summary
+
     return dependency_freshness_summary(), 200
 
 

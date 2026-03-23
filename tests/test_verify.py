@@ -30,6 +30,7 @@ from xray.scanner import ScanResult, scan_directory, scan_file
 # HELPERS
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def _write_temp(suffix: str, content: str) -> str:
     """Write content to a temp file and return the path."""
     fd, path = tempfile.mkstemp(suffix=suffix)
@@ -59,6 +60,7 @@ def _build_project(root: str, files: dict[str, str]):
 # ═════════════════════════════════════════════════════════════════════════════
 # GOAL 1: DOES NO HARM
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestDoesNoHarm:
     """Prove the scanner and agent never modify files they scan."""
@@ -132,8 +134,10 @@ class TestDoesNoHarm:
             hash_before = _sha256(path)
 
             config = AgentConfig(
-                project_root=root, dry_run=False,
-                auto_fix=True, auto_test=True,
+                project_root=root,
+                dry_run=False,
+                auto_fix=True,
+                auto_test=True,
             )
             agent = XRayAgent(config=config, quiet=True)
             agent.run()
@@ -176,17 +180,18 @@ class TestDoesNoHarm:
 # GOAL 2: FINDS REAL BUGS — Every rule must fire on vulnerable code
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestFindsRealBugs_Security:
     """Each security rule is tested with crafted vulnerable code."""
 
     def test_SEC_001_xss_template_literal(self):
-        path = _write_temp(".html", '<script>el.innerHTML = `<b>${name}</b>`;</script>')
+        path = _write_temp(".html", "<script>el.innerHTML = `<b>${name}</b>`;</script>")
         findings = scan_file(path)
         os.unlink(path)
         assert any(f.rule_id == "SEC-001" for f in findings), "Missed SEC-001 XSS template literal"
 
     def test_SEC_001_safe_code_no_fire(self):
-        path = _write_temp(".html", '<script>el.innerHTML = `<b>${_escHtml(name)}</b>`;</script>')
+        path = _write_temp(".html", "<script>el.innerHTML = `<b>${_escHtml(name)}</b>`;</script>")
         findings = scan_file(path)
         os.unlink(path)
         assert not any(f.rule_id == "SEC-001" for f in findings), "SEC-001 false positive on sanitized code"
@@ -198,7 +203,7 @@ class TestFindsRealBugs_Security:
         assert any(f.rule_id == "SEC-002" for f in findings), "Missed SEC-002 XSS concatenation"
 
     def test_SEC_003_command_injection(self):
-        path = _write_temp(".py", 'subprocess.run(cmd, shell=True)\n')
+        path = _write_temp(".py", "subprocess.run(cmd, shell=True)\n")
         findings = scan_file(path)
         os.unlink(path)
         assert any(f.rule_id == "SEC-003" for f in findings), "Missed SEC-003 command injection"
@@ -210,7 +215,7 @@ class TestFindsRealBugs_Security:
         assert not any(f.rule_id == "SEC-003" for f in findings), "SEC-003 false positive on shell=False"
 
     def test_SEC_004_sql_injection_fstring(self):
-        path = _write_temp(".py", "cursor.execute(f\"SELECT * FROM users WHERE id={uid}\")\n")
+        path = _write_temp(".py", 'cursor.execute(f"SELECT * FROM users WHERE id={uid}")\n')
         findings = scan_file(path)
         os.unlink(path)
         assert any(f.rule_id == "SEC-004" for f in findings), "Missed SEC-004 SQL injection f-string"
@@ -441,8 +446,9 @@ class TestFindsRealBugs_MultiVuln:
         os.unlink(path)
         eval_findings = [f for f in findings if f.rule_id == "SEC-007"]
         # eval is on line 5
-        assert any(f.line == 5 for f in eval_findings), \
+        assert any(f.line == 5 for f in eval_findings), (
             f"eval should be on line 5, found on: {[f.line for f in eval_findings]}"
+        )
 
     def test_finding_metadata_complete(self):
         path = _write_temp(".py", self.VULNERABLE_CODE)
@@ -465,6 +471,7 @@ class TestFindsRealBugs_MultiVuln:
 # ═════════════════════════════════════════════════════════════════════════════
 # GOAL 3: RELIABLE — Edge cases that must not crash
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestReliable_EdgeCases:
     """Scanner must handle garbage, edge cases, and hostile input gracefully."""
@@ -595,10 +602,13 @@ class TestReliable_ExcludePatterns:
 
     def test_exclude_pattern_works(self):
         with tempfile.TemporaryDirectory() as root:
-            _build_project(root, {
-                "src/app.py": "eval(input())\n",
-                "vendor/lib.py": "eval(input())\n",
-            })
+            _build_project(
+                root,
+                {
+                    "src/app.py": "eval(input())\n",
+                    "vendor/lib.py": "eval(input())\n",
+                },
+            )
             result = scan_directory(root, exclude_patterns=[r"vendor/"])
             found_files = {f.file for f in result.findings}
             assert not any("vendor" in f for f in found_files), "Excluded dir was scanned"
@@ -620,13 +630,17 @@ class TestReliable_ScanResult:
     def test_severity_counts_accurate(self):
         with tempfile.TemporaryDirectory() as root:
             # Create file with known HIGH + LOW findings
-            _build_project(root, {
-                "test.py": "eval(input())\n# TODO: fix this\n",
-            })
+            _build_project(
+                root,
+                {
+                    "test.py": "eval(input())\n# TODO: fix this\n",
+                },
+            )
             result = scan_directory(root)
             total = result.high_count + result.medium_count + result.low_count
-            assert total == len(result.findings), \
+            assert total == len(result.findings), (
                 f"Severity counts ({total}) don't match total ({len(result.findings)})"
+            )
 
     def test_summary_format(self):
         result = ScanResult(files_scanned=10, rules_checked=28)
@@ -641,18 +655,24 @@ class TestReliable_CLI:
 
     def test_cli_dry_run_exit_code(self):
         import subprocess as sp
+
         proc = sp.run(
             [sys.executable, "-m", "xray.agent", ".", "--dry-run", "--severity", "HIGH"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
             cwd=REPO_ROOT,
         )
         assert proc.returncode == 0, f"CLI crashed: {proc.stderr}"
 
     def test_cli_json_valid_json(self):
         import subprocess as sp
+
         proc = sp.run(
             [sys.executable, "-m", "xray.agent", ".", "--dry-run", "--json", "--severity", "HIGH"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
             cwd=REPO_ROOT,
         )
         assert proc.returncode == 0
@@ -663,9 +683,12 @@ class TestReliable_CLI:
 
     def test_cli_nonexistent_dir_no_crash(self):
         import subprocess as sp
+
         proc = sp.run(
             [sys.executable, "-m", "xray.agent", "/tmp/nonexistent_xray_dir", "--dry-run"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
             cwd=REPO_ROOT,
         )
         # Should not crash — exit 0 with 0 findings is fine
@@ -714,11 +737,14 @@ class TestReliable_Agent:
 
     def test_runner_timeout_returns_result(self):
         """A test that takes too long should return TIMEOUT, not crash."""
-        path = _write_temp(".py", textwrap.dedent("""\
+        path = _write_temp(
+            ".py",
+            textwrap.dedent("""\
             import time
             def test_hang():
                 time.sleep(100)
-        """))
+        """),
+        )
         result = run_tests(path, timeout=3)
         os.unlink(path)
         # Should either have TIMEOUT in output or have 0 passed (not crash)
@@ -735,6 +761,7 @@ class TestReliable_Agent:
 # ═════════════════════════════════════════════════════════════════════════════
 
 SWARM_DIR = os.path.join(REPO_ROOT, "..", "Swarm")
+
 
 class TestIntegrationRealProject:
     """Run X-Ray against the actual Zen LLM Compare codebase (if available)."""
@@ -772,8 +799,9 @@ class TestIntegrationRealProject:
                     lines = fh.readlines()
                 if f.line <= len(lines):
                     line_text = lines[f.line - 1]
-                    assert "_escHtml" not in line_text, \
+                    assert "_escHtml" not in line_text, (
                         f"SEC-001 false positive on sanitized line {f.line}: {line_text.strip()}"
+                    )
 
     def test_agent_dry_run_on_swarm_no_crash(self):
         """Full agent dry-run on Swarm must complete without exception."""
@@ -787,6 +815,7 @@ class TestIntegrationRealProject:
 # ═════════════════════════════════════════════════════════════════════════════
 # SELF-SCAN: X-Ray on its own code (expanded)
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestSelfScanExpanded:
     """Extended self-scan to verify X-Ray's own code is clean."""

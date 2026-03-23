@@ -400,10 +400,13 @@ def main():
             else:
                 from .sarif import sarif_to_json_string
 
-                sys.stdout.write(sarif_to_json_string(
-                    [f.to_dict() for f in result.findings],
-                    tool_version=__version__,
-                ) + "\n")
+                sys.stdout.write(
+                    sarif_to_json_string(
+                        [f.to_dict() for f in result.findings],
+                        tool_version=__version__,
+                    )
+                    + "\n"
+                )
         else:
             output = {
                 "files_scanned": result.files_scanned,

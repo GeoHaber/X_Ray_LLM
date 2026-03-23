@@ -247,17 +247,19 @@ def detect_code_smells(directory: str) -> SmellResult:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 for child in ast.walk(node):
                     if isinstance(child, ast.Constant) and isinstance(child.value, (int, float)):  # noqa: SIM102
-                        if child.value not in (0, 1, -1, 2, 0.0, 1.0, 100, True, False, None) and hasattr(child, "lineno"):
-                                smells.append(
-                                    {
-                                        "file": _fwd(rel),
-                                        "line": child.lineno,
-                                        "severity": "LOW",
-                                        "smell": "magic_number",
-                                        "description": f"Magic number {child.value} — extract to named constant",
-                                        "metric": child.value,
-                                    }
-                                )
+                        if child.value not in (0, 1, -1, 2, 0.0, 1.0, 100, True, False, None) and hasattr(
+                            child, "lineno"
+                        ):
+                            smells.append(
+                                {
+                                    "file": _fwd(rel),
+                                    "line": child.lineno,
+                                    "severity": "LOW",
+                                    "smell": "magic_number",
+                                    "description": f"Magic number {child.value} — extract to named constant",
+                                    "metric": child.value,
+                                }
+                            )
 
     # Deduplicate magic numbers (keep max 50 per file)
     seen = set()
