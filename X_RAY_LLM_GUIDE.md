@@ -44,7 +44,7 @@ portability problems using **42 pattern-based rules** sourced from real bugs fou
 projects — not synthetic patterns.
 
 **Key capabilities:**
-- **Dual scan engines** — Python (42 rules, cross-platform) + Rust (28 rules, optional, ~10× faster)
+- **Dual scan engines** — Python (42 rules, cross-platform) + Rust (42 rules, ~10× faster, full HTTP server with 18/18 API parity)
 - **7 deterministic auto-fixers** — no LLM needed for common fixes
 - **LLM-powered fixes** — uses local models (Qwen, DeepSeek, Codestral) via llama-cpp-python
 - **Rich web UI** — 28+ views, interactive graphs, one-click tools
@@ -103,8 +103,8 @@ Only `pytest` is strictly required for scanning. The rest unlock additional anal
 
 ```
   ┌───────────┐
-  │   SCAN    │  28 rules (10 Security + 10 Quality + 8 Python)
-  └─────┬─────┘  Python scanner (42 rules) + Rust scanner (28 rules)
+  │   SCAN    │  42 rules (security / quality / python / portability)
+  └─────┬─────┘  Python scanner (42 rules) + Rust scanner (42 rules)
         │
   ┌─────▼─────┐
   │   TEST    │  Auto-generate pytest tests for each finding
@@ -132,7 +132,7 @@ Only `pytest` is strictly required for scanning. The rest unlock additional anal
 | Component | File(s) | Role |
 |-----------|---------|------|
 | Scanner (Python) | `xray/scanner.py`, `xray/rules/*.py` | Pattern-based scanning engine (42 rules) with string/comment-aware filtering + AST validators |
-| Scanner (Rust) | `scanner/src/` | Optional high-performance scanner (28 rules) |
+| Scanner (Rust) | `scanner/src/` | Optional high-performance scanner (42 rules, 91 tests, full HTTP server with 18 API endpoints) |
 | Agent Loop | `xray/agent.py` | Orchestrates SCAN→TEST→FIX→VERIFY→LOOP |
 | LLM Interface | `xray/llm.py` | Local LLM inference via llama-cpp-python |
 | Compat Checker | `xray/compat.py` | Python version, dependency version, API compatibility, and PyPI freshness verification |
@@ -153,9 +153,9 @@ Only `pytest` is strictly required for scanning. The rest unlock additional anal
 
 Every rule was sourced from a real bug found in a real project.
 
-> **Note:** The Python scanner implements all 42 rules. The Rust scanner currently has the
-> original 28 rules (SEC-001–010, QUAL-001–010, PY-001–008). Run `python generate_rust_rules.py`
-> to sync the 14 new rules to Rust.
+> **Note:** Both the Python and Rust scanners implement all 42 rules with identical patterns.
+> The Rust scanner has 91 unit/integration tests and a full HTTP server mode with 18 API
+> endpoints producing identical JSON shapes to the Python server.
 
 ### Security Rules (14) — Prefix: SEC
 
@@ -362,7 +362,7 @@ python -m xray.agent /path/to/project --dry-run --exclude vendor/ node_modules/
 
 1. The scanner traverses the directory (skipping `__pycache__`, `.git`, `node_modules`, `venv`)
 2. For each file, it detects the language (`.py` → Python, `.js/.ts` → JavaScript, `.html` → HTML)
-3. Each line is tested against all applicable rules' regex patterns (Python scanner: 42 rules; Rust scanner: 28 rules)
+3. Each line is tested against all applicable rules' regex patterns (Python scanner: 42 rules; Rust scanner: 42 rules)
 4. Matches are collected as **findings** with: rule ID, severity, file, line, description, fix hint
 5. Results are returned with a summary (total, high, medium, low counts)
 
@@ -877,14 +877,91 @@ cd scanner && cargo build --release && cd ..
 
 ## 12. How To: Build & Use the Rust Scanner
 
-The Rust scanner is an optional, high-performance alternative to the Python scanner.
-It currently implements the original 28 rules with identical regex patterns, running ~10× faster.
+The Rust scanner is a high-performance alternative to the Python scanner.
+It implements all 42 scan rules with identical regex patterns, running ~10× faster,
+and now includes a **full HTTP server mode** with **18 REST API endpoints** that produce
+JSON responses shape-compatible with the Python server (verified by automated tests).
 
-> **Syncing new rules:** The Python scanner has 42 rules (14 new rules added: timing
-> attacks, debug mode, weak hashing, TLS bypass, broad Exception catching,
-> string concat in loops, long lines, captured-ignored exceptions, sys.exit in library
-> code, long isinstance chains, and 4 portability rules for hardcoded paths/imports).
-> Run `python generate_rust_rules.py` to sync them.
+### Architecture
+
+The Rust scanner is a standalone binary (~4.9 MB) at `scanner/target/release/xray-scanner.exe`.
+It supports two modes:
+
+| Mode | Command | Description |
+|------|---------|-------------|
+| **CLI scan** | `xray-scanner /path --json` | One-shot scan, outputs to stdout |
+| **HTTP server** | `xray-scanner --serve --port 8078` | Persistent server with REST API + web UI |
+
+#### Source Structure (18 files)
+
+```
+scanner/src/
+├── main.rs               # CLI + --serve entry point
+├── lib.rs                # Core scanner (scan_file, scan_directory, Finding, ScanResult)
+├── config.rs             # pyproject.toml [tool.xray] config loader
+├── constants.rs          # SKIP_DIRS, TEXT_EXTS (matches Python constants.py)
+├── fixer.rs              # 7 deterministic auto-fixers
+├── sarif.rs              # SARIF 2.1.0 output
+├── types.rs              # TypedDict-equivalent structs
+├── rules/
+│   └── mod.rs            # 42 compiled regex rules (get_all_rules)
+├── server/
+│   ├── mod.rs            # axum HTTP server setup, embedded ui.html
+│   ├── routes.rs         # 18 route handlers
+│   └── state.rs          # Thread-safe AppState (scan progress, results)
+└── analyzers/
+    ├── mod.rs             # Module exports
+    ├── smells.rs          # detect_dead_functions, detect_code_smells, detect_duplicates
+    ├── health.rs          # check_project_health, release_readiness, remediation_time
+    ├── graph.rs           # circular_calls, coupling_metrics, unused_imports
+    ├── connections.rs     # Frontend↔backend connection wiring analyzer
+    ├── format_check.rs    # ruff format + ty typecheck integration
+    └── detection.rs       # AI code detection, web smells
+```
+
+### API Parity: 18/18 Endpoints
+
+The Rust server exposes these endpoints with identical JSON response shapes to the Python server:
+
+| Category | Endpoints |
+|----------|-----------|
+| **Info** | `GET /api/info`, `GET /api/browse` |
+| **Scanning** | `POST /api/scan`, `GET /api/scan-progress`, `GET /api/scan-result` |
+| **Analysis** | `POST /api/health`, `POST /api/smells`, `POST /api/dead-code`, `POST /api/duplicates`, `POST /api/format`, `POST /api/typecheck`, `POST /api/connection-test`, `POST /api/release-readiness`, `POST /api/remediation-time` |
+| **Graph** | `POST /api/circular-calls`, `POST /api/coupling`, `POST /api/unused-imports` |
+
+Shape compatibility is verified automatically with `tests/test_api_compat.py`.
+
+### Rust Test Suite (91 Tests)
+
+The Rust scanner has comprehensive test coverage across all modules:
+
+| Module | Tests | Coverage |
+|--------|------:|----------|
+| `lib.rs` | 20 | Core scanner: scan_file, detect_lang, skip_dirs, suppressions, grading, rules |
+| `smells.rs` | 20 | Code smells (11), duplicates (3), dead functions (6) |
+| `connections.rs` | 18 | normalize_route (6), char_boundary (5), is_relative_api (2), infer_method (3), integration (6) |
+| `graph.rs` | 18 | circular_calls (4), coupling_metrics (6), unused_imports (5), path helpers (1), plus 2 existing |
+| `rules/mod.rs` | 3 | 10 security, 10 quality, 8 python rule compilation |
+| `config.rs` | 2 | Config defaults, nonexistent pyproject.toml |
+| `fixer.rs` | 4 | SEC-003, QUAL-001 fixers, fixable rule list, try-block detection |
+| `sarif.rs` | 3 | SARIF structure, rule categorization, severity mapping |
+| `format_check.rs` | 1 | Path normalization |
+| **Total** | **91** | All passing on Windows (MSVC x86_64 target) |
+
+Run the Rust tests:
+```bash
+cd scanner
+cargo test --target x86_64-pc-windows-msvc
+```
+
+### Rust-Only Analyzer Details
+
+- **Smells**: detects magic numbers (> 2), mutable defaults (= [] or = {}), bare excepts, long functions (> 100 lines), deep nesting (> 5 levels), god functions (> 6 params)
+- **Duplicates**: SHA-256 grouped format — `{duplicate_groups, total_groups, total_duplicated_blocks}`; each group has `{hash, occurrences, locations[{file, line}], lines}`
+- **Connection analyzer**: 3-phase frontend→backend wiring — scans for fetch/axios/jquery/api/xhr/form/href patterns in UI files, flask/fastapi/django/express route patterns in backend files, then wires by normalized URL with cardinality (1:1, 1:many, many:1)
+- **Coupling**: includes `cohesion`, `imports`, `imported_by`, `health_summary`, `god_modules`, `fragile_modules`, `isolated_modules`
+- **Circular calls**: each cycle includes `functions[{name, file, line}]` array
 
 ### Prerequisites
 
@@ -905,6 +982,10 @@ python build.py --validate
 
 # Show detected OS/arch/target triple
 python build.py --info
+
+# Direct cargo build (Windows with MSVC)
+cd scanner
+cargo build --release --target x86_64-pc-windows-msvc
 ```
 
 ### Cross-Compilation
@@ -929,11 +1010,24 @@ python build.py --target macos
 
 Once built, the binary is at `scanner/target/release/xray-scanner` (or `.exe` on Windows).
 
-The web UI auto-detects the Rust binary and enables the **Rust engine option** in the scan
-controls. You can also use it directly from the command line:
-
+**CLI mode** — one-shot scan:
 ```bash
 ./xray-scanner /path/to/project --json
+```
+
+**Server mode** — full REST API + web UI:
+```bash
+./xray-scanner --serve --port 8078
+# Web UI at http://127.0.0.1:8078
+# All 18 API endpoints available at /api/*
+```
+
+The web UI auto-detects the Rust binary and enables the **Rust engine option** in the scan
+controls. You can also validate Rust↔Python API compatibility:
+
+```bash
+# Start Python server on 8077, Rust on 8078, then:
+python tests/test_api_compat.py --py-port 8077 --rs-port 8078 --scan-dir /path
 ```
 
 ---
@@ -1113,6 +1207,11 @@ XRAY_N_CTX=8192                         # Context window size
 XRAY_GPU_LAYERS=-1                      # GPU offload (-1 = all layers)
 XRAY_TEMPERATURE=0.3                    # Low temperature for code generation
 XRAY_MAX_TOKENS=2048                    # Max output tokens
+
+# KV Cache Quantization (TurboQuant) — reduces VRAM, enables longer contexts
+XRAY_TYPE_K=q8_0                        # KV cache key type: q8_0 (2x), q4_0 (4x), f16 (default)
+XRAY_TYPE_V=q8_0                        # KV cache value type (same options)
+XRAY_FLASH_ATTN=true                    # Enable flash attention (recommended with KV quant)
 ```
 
 ### Security & Access Configuration
@@ -1164,7 +1263,7 @@ llama-cpp-python >= 0.3.0
 python -m pytest tests/ -v
 ```
 
-### Test Files (1013 tests, 1001 passing + 12 skipped)
+### Test Files (1153+ Python tests, 91 Rust tests)
 
 | File | Tests | What It Tests |
 |------|------:|---------------|
@@ -1273,17 +1372,35 @@ X_Ray_LLM/
 │   ├── pm_routes.py      # 13 PM Dashboard + utility POST endpoints
 │   └── browse_routes.py  # /api/browse, /api/info, /api/env-check, /api/dependency-check
 │
-├── scanner/              # Optional Rust scanner
+├── scanner/              # Optional Rust scanner (42 rules, 91 tests, 18 API endpoints)
 │   ├── Cargo.toml
 │   └── src/
-│       ├── main.rs       # CLI entry point
-│       ├── lib.rs        # Core engine (scan_directory, detect_lang)
-│       └── rules/        # Rust rule implementations
+│       ├── main.rs       # CLI + --serve entry point
+│       ├── lib.rs        # Core engine (scan_directory, detect_lang) + tests
+│       ├── config.rs     # pyproject.toml config loader + tests
+│       ├── constants.rs  # SKIP_DIRS, TEXT_EXTS
+│       ├── fixer.rs      # 7 deterministic auto-fixers + tests
+│       ├── sarif.rs      # SARIF 2.1.0 output + tests
+│       ├── types.rs      # TypedDict-equivalent structs
+│       ├── rules/
+│       │   └── mod.rs    # 42 compiled regex rules + tests
+│       ├── server/
+│       │   ├── mod.rs    # axum HTTP server, embedded ui.html
+│       │   ├── routes.rs # 18 route handlers
+│       │   └── state.rs  # Thread-safe AppState
+│       └── analyzers/
+│           ├── mod.rs     # Module exports
+│           ├── smells.rs  # Dead functions, code smells, duplicates + 20 tests
+│           ├── health.rs  # Project health, release readiness, remediation
+│           ├── graph.rs   # Circular calls, coupling, unused imports + 18 tests
+│           ├── connections.rs # Frontend↔backend connection wiring + 18 tests
+│           ├── format_check.rs # ruff format + ty typecheck
+│           └── detection.rs # AI code detection, web smells
 │
 ├── docs/                 # Documentation
 │   └── TESTING.md        # Complete testing guide (all 22 test files, CI pipeline)
 │
-└── tests/                # Test suite (1013 collected, 999 passing + 14 skipped)
+└── tests/                # Test suite (1153+ Python tests, 1141 passing + 12 skipped)
     ├── test_xray.py           # Rule DB + scanner tests
     ├── test_verify.py         # Does-no-harm + finds-real-bugs
     ├── test_ui_paths.py       # Path handling + browse restrictions

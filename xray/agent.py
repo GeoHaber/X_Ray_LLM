@@ -108,9 +108,12 @@ class XRayAgent:
         self._log_lines.append(msg)
         if not self._quiet:
             try:
+                print(msg)
                 logger.info(msg)
             except UnicodeEncodeError:
-                logger.info(msg.encode("ascii", errors="replace").decode("ascii"))
+                safe = msg.encode("ascii", errors="replace").decode("ascii")
+                print(safe)
+                logger.info(safe)
 
     # ── Step 1: SCAN ────────────────────────────────────────────────────────
 
@@ -434,6 +437,9 @@ def main():
             with open(args.output, "w", encoding="utf-8") as f:
                 f.write(report.summary())
             print(f"Report written to {args.output}")
+        else:
+            # Ensure summary is visible even without --output
+            print(report.summary())
 
 
 if __name__ == "__main__":

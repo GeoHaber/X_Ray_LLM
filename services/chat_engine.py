@@ -64,6 +64,11 @@ _RULES = {
     "PY-009": ("Captured but ignored exception", "MEDIUM", False),
     "PY-010": ("sys.exit() in library code", "MEDIUM", False),
     "PY-011": ("Long isinstance chain", "LOW", False),
+    # Portability (4)
+    "PORT-001": ("Hardcoded Unix path separator", "MEDIUM", False),
+    "PORT-002": ("Platform-specific module", "MEDIUM", False),
+    "PORT-003": ("Hardcoded /tmp or C:\\ path", "MEDIUM", False),
+    "PORT-004": ("os.chmod with Unix-only mode bits", "MEDIUM", False),
 }
 
 _TOOLS_LIST = [
@@ -116,18 +121,21 @@ def chat_reply(message: str, context: dict) -> str:
         if feature in lo or feature.replace(" ", "") in lo.replace(" ", ""):
             return f"<strong>{feature.title()}</strong>: {desc}"
 
-    if _re.search(r"\brule|all rule|38 rule|28 rule|list rule", lo):
+    if _re.search(r"\brule|all rule|42 rule|38 rule|28 rule|list rule", lo):
         sec = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("SEC")]
         qual = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("QUAL")]
         py = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("PY")]
+        port = [f"<strong>{k}</strong>: {v[0]} ({v[1]})" for k, v in _RULES.items() if k.startswith("PORT")]
         return (
-            "<strong>38 Scan Rules:</strong><br><br>"
+            "<strong>42 Scan Rules:</strong><br><br>"
             "<strong>Security (14):</strong><br>"
             + "<br>".join(sec)
             + "<br><br><strong>Quality (13):</strong><br>"
             + "<br>".join(qual)
             + "<br><br><strong>Python (11):</strong><br>"
             + "<br>".join(py)
+            + "<br><br><strong>Portability (4):</strong><br>"
+            + "<br>".join(port)
         )
 
     if _re.search(r"\bfix|auto.?fix|fixable|fixer", lo):
@@ -167,7 +175,7 @@ def chat_reply(message: str, context: dict) -> str:
 
     if _re.search(r"\bapi|endpoint|rest|http", lo):
         return (
-            "<strong>34+ API Endpoints</strong> on <code>localhost:8077/api/</code>:<br><br>"
+            "<strong>45 API Endpoints</strong> on <code>localhost:8077/api/</code>:<br><br>"
             "Core: <code>/api/scan</code> (SSE), <code>/api/browse</code>, <code>/api/info</code>, <code>/api/abort</code><br>"
             "Fix: <code>/api/preview-fix</code>, <code>/api/apply-fix</code>, <code>/api/apply-fixes-bulk</code><br>"
             "Analysis: <code>/api/dead-code</code>, <code>/api/smells</code>, <code>/api/duplicates</code>, "
@@ -213,13 +221,13 @@ def chat_reply(message: str, context: dict) -> str:
     if _re.search(r"\bhello|hi\b|hey|help|what can you", lo):
         return (
             "Hello! I'm the <strong>X-Ray Assistant</strong>. I can help with:<br><br>"
-            "\u2022 <strong>rules</strong> \u2014 all 38 scan rules (14 security + 13 quality + 11 Python)<br>"
+            "\u2022 <strong>rules</strong> \u2014 all 42 scan rules (14 security + 13 quality + 11 Python + 4 portability)<br>"
             "\u2022 <strong>auto-fix</strong> \u2014 which rules have automatic fixes<br>"
             "\u2022 <strong>tools</strong> \u2014 19 analysis tools<br>"
             "\u2022 <strong>PM Dashboard</strong> \u2014 9 project management features<br>"
             "\u2022 <strong>scanning</strong> \u2014 how to scan a project<br>"
             "\u2022 <strong>grading</strong> \u2014 score and letter grade system<br>"
-            "\u2022 <strong>API</strong> \u2014 34+ REST endpoints<br>"
+            "\u2022 <strong>API</strong> \u2014 45 REST endpoints<br>"
             "\u2022 <strong>engines</strong> \u2014 Python vs Rust<br><br>"
             "Or ask about a specific rule like <code>SEC-003</code>!"
         )
@@ -235,8 +243,8 @@ def chat_reply(message: str, context: dict) -> str:
         )
 
     return (
-        "I know about X-Ray's <strong>38 rules</strong>, <strong>7 auto-fixers</strong>, "
+        "I know about X-Ray's <strong>42 rules</strong>, <strong>7 auto-fixers</strong>, "
         "<strong>19 tools</strong>, <strong>9 PM Dashboard features</strong>, <strong>grading</strong>, "
-        "and <strong>34+ API endpoints</strong>. "
+        "and <strong>45 API endpoints</strong>. "
         "Try asking about any of those, or a specific rule like <code>SEC-003</code>!"
     )

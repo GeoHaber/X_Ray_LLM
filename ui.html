@@ -344,9 +344,9 @@ body.light {
   display: flex; flex-direction: column; overflow: hidden;
   backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
 .browser-overlay .browser-ov-header { display: flex; align-items: center; gap: 8px;
-  padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  padding: 12px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .browser-overlay .browser-ov-header h3 { font-size: 13px; color: var(--text2);
-  text-transform: uppercase; letter-spacing: 0.5px; flex: 1; }
+  text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
 .browser-overlay .browser { flex: 1; max-height: none; border: none; border-radius: 0; }
 
 /* ── Path Row ─── */
@@ -1500,6 +1500,10 @@ async function init() {
   } else {
     document.getElementById('statusRust').textContent = 'Rust: unavailable';
   }
+  // Auto-select engine based on server
+  if (info.engine === 'rust') {
+    document.getElementById('engine').value = 'rust';
+  }
   if (info.fixable_rules) fixableRules = new Set(info.fixable_rules);
   // Start browsing from home
   await browse(info.home || '');
@@ -1751,10 +1755,15 @@ async function runScan() {
           updatePipelineStatus('Scan complete! Loading results...');
           done = true;
         } else if (p.status === 'idle') {
-          // Scan finished so fast _scan_progress was already cleared, or never set
-          console.log('[xray] got idle — scan may have finished already');
-          updatePipelineStatus('Scan complete! Loading results...');
-          done = true;
+          // On early polls, idle means spawn_blocking hasn't set progress yet — keep waiting
+          if (pollCount <= 5) {
+            console.log('[xray] got idle early — scan task starting, keep polling');
+          } else {
+            // After several polls, assume scan finished without setting progress
+            console.log('[xray] got idle — scan may have finished already');
+            updatePipelineStatus('Scan complete! Loading results...');
+            done = true;
+          }
         }
       } catch(e) {
         console.warn('[xray] poll error (will retry):', e.message);

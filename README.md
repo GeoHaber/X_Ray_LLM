@@ -54,7 +54,7 @@ python update_tools.py         # Update all tools to latest
 ```
   ┌───────────┐
   │   SCAN    │  42 rules (security / quality / python / portability)
-  └─────┬─────┘  Python regex scanner (42 rules) + Rust scanner (28 rules)
+  └─────┬─────┘  Python regex scanner (42 rules) + Rust scanner (42 rules, 91 tests)
         │
   ┌─────▼─────┐
   │   TEST    │  Auto-generate pytest tests for each finding
@@ -88,8 +88,9 @@ python update_tools.py         # Update all tools to latest
 
 All rules sourced from real bugs found in real projects.
 
-> **Note:** The Python scanner implements all 42 rules. The Rust scanner currently has
-> the original 28 rules; run `python generate_rust_rules.py` to sync the 14 new rules.
+> **Note:** Both the Python and Rust scanners implement all 42 rules with identical patterns.
+> The Rust scanner additionally provides a full HTTP server mode with 18 API endpoints
+> producing identical JSON shapes to the Python server.
 
 ## Recommended Models
 
@@ -121,11 +122,28 @@ Both launchers use `uv run` when available, falling back to plain `python`.
 
 ## Rust Scanner (optional speed boost)
 
+The Rust scanner is a standalone ~4.9 MB binary with **full API parity** — 18/18 REST
+endpoints produce identical JSON shapes to the Python server (verified by automated tests).
+
 ```bash
+# Build
 cd scanner
 cargo build --release
-./target/release/xray-scanner /path/to/project --json
+cd ..
+
+# CLI scan mode
+./scanner/target/release/xray-scanner /path/to/project --json
+
+# HTTP server mode (full REST API + web UI)
+./scanner/target/release/xray-scanner --serve --port 8078
+# Open http://127.0.0.1:8078
+
+# Validate Rust↔Python API parity (both servers must be running)
+python tests/test_api_compat.py --py-port 8077 --rs-port 8078 --scan-dir /path
 ```
+
+Includes: 42 scan rules, 7 auto-fixers, 18 REST endpoints, 91 unit/integration tests,
+code analyzers (smells, dead code, duplicates, coupling, connections, health), and the full web UI.
 
 ## License
 

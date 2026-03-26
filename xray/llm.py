@@ -9,6 +9,38 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+# GGML type enum values for KV cache quantization.
+# See llama.cpp ggml_type enum — only the most useful subset listed here.
+# When TurboQuant lands upstream, GGML_TYPE_TQ3_0 / TQ4_0 will be added.
+GGML_KV_TYPES: dict[str, int] = {
+    "f16": 1,
+    "q8_0": 8,
+    "q5_1": 7,
+    "q5_0": 6,
+    "q4_1": 3,
+    "q4_0": 2,
+}
+
+
+def _resolve_kv_type(value: str) -> int | None:
+    """Convert a KV cache type name or integer string to its GGML enum value."""
+    if not value:
+        return None
+    # Accept raw integer (e.g. "8" for q8_0)
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    # Accept name (e.g. "q8_0", "q4_0", "f16")
+    name = value.strip().lower()
+    if name in GGML_KV_TYPES:
+        return GGML_KV_TYPES[name]
+    raise ValueError(
+        f"Unknown KV cache type '{value}'. "
+        f"Valid names: {', '.join(GGML_KV_TYPES)}  or raw int."
+    )
+
+
 @dataclass
 class LLMConfig:
     """Configuration for the local LLM."""
@@ -20,6 +52,12 @@ class LLMConfig:
     max_tokens: int = 2048
     top_p: float = 0.9
     repeat_penalty: float = 1.1
+    # KV cache quantization (TurboQuant / llama.cpp cache types)
+    # Set to GGML type int (e.g. 8 = q8_0, 2 = q4_0) to compress KV cache.
+    # None = use model default (f16).
+    type_k: int | None = None
+    type_v: int | None = None
+    flash_attn: bool = False  # required for quantized KV cache on most backends
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
@@ -43,6 +81,9 @@ class LLMConfig:
             n_gpu_layers=_int("XRAY_GPU_LAYERS", "-1"),
             temperature=_float("XRAY_TEMPERATURE", "0.3"),
             max_tokens=_int("XRAY_MAX_TOKENS", "2048"),
+            type_k=_resolve_kv_type(os.environ.get("XRAY_TYPE_K", "")),
+            type_v=_resolve_kv_type(os.environ.get("XRAY_TYPE_V", "")),
+            flash_attn=os.environ.get("XRAY_FLASH_ATTN", "").lower() in ("1", "true", "yes"),
         )
 
 
@@ -71,12 +112,18 @@ class LLMEngine:
                 )
             from llama_cpp import Llama  # lazy import
 
-            self._model = Llama(
-                model_path=self.config.model_path,
-                n_ctx=self.config.n_ctx,
-                n_gpu_layers=self.config.n_gpu_layers,
-                verbose=False,
-            )
+            kwargs: dict = {
+                "model_path": self.config.model_path,
+                "n_ctx": self.config.n_ctx,
+                "n_gpu_layers": self.config.n_gpu_layers,
+                "verbose": False,
+                "flash_attn": self.config.flash_attn,
+            }
+            if self.config.type_k is not None:
+                kwargs["type_k"] = self.config.type_k
+            if self.config.type_v is not None:
+                kwargs["type_v"] = self.config.type_v
+            self._model = Llama(**kwargs)
 
     def generate(self, prompt: str, system: str = "", max_tokens: int | None = None) -> str:
         """Generate text from a prompt using the local model."""

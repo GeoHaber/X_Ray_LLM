@@ -31,3 +31,10 @@ _trash_*.py
 *.bak
 
 .xray_cache.json
+
+# Built binary (rebuild with: cd scanner && cargo build --release)
+xray-scanner.exe
+xray-scanner
+
+# Ad-hoc scan output
+python_scan.json

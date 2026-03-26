@@ -1,8 +1,8 @@
 [package]
 name = "xray-scanner"
-version = "0.2.0"
+version = "1.0.0"
 edition = "2021"
-description = "High-performance code scanner for X-Ray LLM agent"
+description = "X-Ray LLM — Full Rust implementation with scanner, fixer, HTTP server, and UI"
 
 [dependencies]
 # fancy-regex supports lookaheads/lookbehinds for Python parity
@@ -12,6 +12,38 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 walkdir = "2"
 clap = { version = "4", features = ["derive"] }
+
+# HTTP server (axum ecosystem)
+axum = { version = "0.7", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "cors", "set-header"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Hashing (for incremental scan cache)
+sha2 = "0.10"
+hex = "0.4"
+
+# Date/time (for SARIF output)
+chrono = { version = "0.4", features = ["serde"] }
+
+# Diff generation (for fixer)
+similar = "2"
+
+# TOML config parsing
+toml = "0.8"
+
+# Process management
+which = "7"
+
+# Error handling
+anyhow = "1"
+
+# Path diff
+pathdiff = "0.2"
 
 [lib]
 name = "xray_scanner"
@@ -24,6 +56,8 @@ path = "src/main.rs"
 [profile.release]
 opt-level = 3
 lto = true
+codegen-units = 1
+strip = true
 
 [dev-dependencies]
 tempfile = "3"

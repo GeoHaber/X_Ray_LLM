@@ -21,14 +21,14 @@
 | Item | Hours | Hourly Rate | Total |
 |------|-------|------------|-------|
 | Initial build (42 rules, 7 fixers, web UI) | 27 | $150 | $4,050 |
-| Testing & QA (999 tests) | 8 | $150 | $1,200 |
+| Testing & QA (1153 tests) | 8 | $150 | $1,200 |
 | Documentation | 5 | $100 | $500 |
 | **Total development cost** | **40** | | **$5,750** |
 
 **Notes:**
 - Rate assumes mid-level engineer ($150/hr = ~$80k/year salary)
 - Covers entire rebuild from specification (Rebuild_Prompt.md)
-- Includes all 42 rules, 7 fixers, 11 analyzers, 46 API endpoints
+- Includes all 42 rules, 7 fixers, 11 analyzers, 45 API endpoints
 - Includes web UI with 28+ views
 - Build time can be parallelized (multiple engineers = faster)
 
