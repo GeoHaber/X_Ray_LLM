@@ -41,7 +41,22 @@
       "Bash(grep -E \"\\\\.py$\")",
       "Bash(ls C:/Users/dvdze/Documents/GitHub/Regression-Testing/requirements*)",
       "Bash(wc -l /c/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM/xray/rules/*.py)",
-      "Bash(python -m pytest tests/test_build.py tests/test_portability.py tests/test_fixer_regression.py tests/test_false_positives.py tests/test_llm_mock.py tests/test_agent_loop.py tests/test_scanner_boundary.py -v --tb=short)"
+      "Bash(python -m pytest tests/test_build.py tests/test_portability.py tests/test_fixer_regression.py tests/test_false_positives.py tests/test_llm_mock.py tests/test_agent_loop.py tests/test_scanner_boundary.py -v --tb=short)",
+      "Bash(wc -l /c/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM/tests/*.py)",
+      "Bash(grep -r \"pass\\\\|except\\\\|Error\\\\|raise\" /c/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM/xray/*.py)",
+      "Bash(grep -v \"except:$\")",
+      "Bash(python -m pytest tests/ --collect-only)",
+      "Bash(find /c/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM -maxdepth 2 -type d ! -path */.* ! -path */__pycache__* ! -path *.venv*)",
+      "Bash(ls -1 /c/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM/*.md)",
+      "WebSearch",
+      "Bash(python3 -c \"from xray.rules import ALL_RULES, SECURITY_RULES, QUALITY_RULES, PYTHON_RULES, PORTABILITY_RULES; print\\(f''Total: {len\\(ALL_RULES\\)}, Security: {len\\(SECURITY_RULES\\)}, Quality: {len\\(QUALITY_RULES\\)}, Python: {len\\(PYTHON_RULES\\)}, Portability: {len\\(PORTABILITY_RULES\\)}''\\)\")",
+      "Bash(python -m pytest tests/ --collect-only -q)",
+      "Read(//tmp/**)",
+      "Bash(wc -l /c/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM/api/*.py)",
+      "Bash(grep -E \"^\\\\s*\"\"/api/\" /c/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM/api/*.py)",
+      "Bash(ls -1 /c/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM/tests/test_*.py)",
+      "Bash(find /c/Users/dvdze/Documents/GitHub/GeorgeHaber/X_Ray_LLM -name test_*.py -o -name *_test.py)",
+      "Bash(python -m pytest tests/ -v --tb=short -q)"
     ]
   }
 }
