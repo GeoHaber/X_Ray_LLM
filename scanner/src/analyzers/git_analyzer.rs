@@ -2,16 +2,10 @@
 //! Rust transpilation of services/git_analyzer.py.
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 use std::process::Command;
 use walkdir::WalkDir;
 
 use crate::constants::SKIP_DIRS;
-
-/// Forward-slash normaliser.
-fn fwd(p: &str) -> String {
-    p.replace('\\', "/")
-}
 
 /// Analyze git log to find frequently-changed files (hotspots).
 /// Transpiled from git_analyzer.py::analyze_git_hotspots().

@@ -122,6 +122,67 @@ fn fwd(p: &str) -> String {
     p.replace('\\', "/")
 }
 
+/// Run `pyright` type checker (transpilation of `run_typecheck()` in format_check.py).
+pub fn check_types_pyright(directory: &str) -> serde_json::Value {
+    let output = Command::new("pyright")
+        .args(["--outputjson", directory])
+        .output();
+
+    match output {
+        Err(_) => serde_json::json!({"error": "pyright not found. Install: npm install -g pyright"}),
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
+            match parsed {
+                Err(_) => {
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    let snippet: String = stderr.chars().take(300).collect();
+                    serde_json::json!({"error": format!("pyright output error: {}", snippet)})
+                }
+                Ok(data) => {
+                    let diagnostics = data.get("generalDiagnostics")
+                        .and_then(|v| v.as_array())
+                        .cloned()
+                        .unwrap_or_default();
+                    let mut issues: Vec<serde_json::Value> = Vec::new();
+                    for d in diagnostics.iter().take(500) {
+                        let file = d.get("file").and_then(|v| v.as_str()).unwrap_or("");
+                        let line = d.get("range")
+                            .and_then(|r| r.get("start"))
+                            .and_then(|s| s.get("line"))
+                            .and_then(|l| l.as_u64())
+                            .unwrap_or(0) + 1;
+                        let severity = d.get("severity")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("information")
+                            .to_uppercase();
+                        let rule = d.get("rule").and_then(|v| v.as_str()).unwrap_or("");
+                        let message = d.get("message").and_then(|v| v.as_str()).unwrap_or("");
+                        issues.push(serde_json::json!({
+                            "file": fwd(file),
+                            "line": line,
+                            "severity": severity,
+                            "rule": rule,
+                            "message": message,
+                        }));
+                    }
+                    let summary = data.get("summary").cloned().unwrap_or(serde_json::json!({}));
+                    let errors = summary.get("errorCount").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let warnings = summary.get("warningCount").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let informations = summary.get("informationCount").and_then(|v| v.as_u64()).unwrap_or(0);
+                    serde_json::json!({
+                        "issues": issues,
+                        "total": issues.len(),
+                        "errors": errors,
+                        "warnings": warnings,
+                        "informations": informations,
+                    })
+                }
+            }
+        }
+    }
+}
+
 /// Simple path difference.
 fn pathdiff(path: &str, base: &str) -> Result<String, ()> {
     let p = std::path::Path::new(path);

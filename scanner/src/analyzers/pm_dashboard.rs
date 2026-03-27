@@ -53,7 +53,7 @@ fn walk_py(directory: &str) -> Vec<(std::path::PathBuf, String)> {
 /// Composite risk score per file — combines scanner findings, smells, duplicates, git churn.
 /// Transpiled from pm_dashboard.py::compute_risk_heatmap().
 pub fn compute_risk_heatmap(directory: &str, findings: &[serde_json::Value]) -> serde_json::Value {
-    let smells_result = detect_code_smells(directory);
+    let smells_result = serde_json::to_value(detect_code_smells(directory)).unwrap_or_default();
     let dups_result = detect_duplicates(directory);
 
     // Git churn (best-effort)
@@ -212,7 +212,7 @@ pub fn compute_risk_heatmap(directory: &str, findings: &[serde_json::Value]) -> 
 /// Per-directory grade cards — module-level quality breakdown.
 /// Transpiled from pm_dashboard.py::compute_module_cards().
 pub fn compute_module_cards(directory: &str, findings: &[serde_json::Value]) -> serde_json::Value {
-    let smells_result = detect_code_smells(directory);
+    let smells_result = serde_json::to_value(detect_code_smells(directory)).unwrap_or_default();
     let test_result = generate_test_stubs(directory);
 
     #[derive(Default)]
@@ -709,11 +709,11 @@ pub fn compute_call_graph(directory: &str) -> serde_json::Value {
 /// Release confidence synthesis — one number + narrative.
 /// Transpiled from pm_dashboard.py::compute_confidence_meter().
 pub fn compute_confidence_meter(directory: &str, findings: &[serde_json::Value]) -> serde_json::Value {
-    let health = check_project_health(directory);
+    let health = serde_json::to_value(check_project_health(directory)).unwrap_or_default();
     let release = check_release_readiness(directory);
     let dead = detect_dead_functions(directory);
     let test = generate_test_stubs(directory);
-    let smells = detect_code_smells(directory);
+    let smells = serde_json::to_value(detect_code_smells(directory)).unwrap_or_default();
     let arch = compute_architecture_map(directory);
 
     let mut checks: Vec<serde_json::Value> = Vec::new();

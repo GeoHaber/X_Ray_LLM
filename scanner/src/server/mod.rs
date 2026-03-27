@@ -54,7 +54,26 @@ pub fn build_router(shared: Arc<AppState>) -> Router {
         .route("/api/connection-test", post(routes::connection_test))
         .route("/api/release-readiness", post(routes::release_readiness))
         .route("/api/remediation-time", post(routes::remediation_time))
-        // ── POST API – graph / PM dashboard ──────────────────────────
+        // ── POST API – SATD / git / security / temporal ──────────────
+        .route("/api/satd", post(routes::satd))
+        .route("/api/git-hotspots", post(routes::git_hotspots))
+        .route("/api/imports", post(routes::imports))
+        .route("/api/ruff", post(routes::ruff))
+        .route("/api/bandit", post(routes::bandit))
+        .route("/api/temporal-coupling", post(routes::temporal_coupling))
+        .route("/api/ai-detect", post(routes::ai_detect))
+        .route("/api/web-smells", post(routes::web_smells))
+        .route("/api/test-gen", post(routes::test_gen))
+        .route("/api/typecheck-pyright", post(routes::type_check_pyright))
+        // ── POST API – PM dashboard ──────────────────────────────────
+        .route("/api/risk-heatmap", post(routes::risk_heatmap))
+        .route("/api/module-cards", post(routes::module_cards))
+        .route("/api/confidence", post(routes::confidence))
+        .route("/api/sprint-batches", post(routes::sprint_batches))
+        .route("/api/architecture", post(routes::architecture))
+        .route("/api/call-graph", post(routes::call_graph))
+        .route("/api/project-review", post(routes::project_review))
+        // ── POST API – graph ─────────────────────────────────────────
         .route("/api/circular-calls", post(routes::circular_calls))
         .route("/api/coupling", post(routes::coupling))
         .route("/api/unused-imports", post(routes::unused_imports))

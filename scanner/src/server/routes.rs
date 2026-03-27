@@ -440,6 +440,170 @@ pub async fn unused_imports(Json(body): Json<DirBody>) -> impl IntoResponse {
     Json(result).into_response()
 }
 
+// ── POST routes – SATD / git / security / temporal ──────────────────────────
+
+pub async fn satd(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::satd::scan_satd(&dir);
+    Json(result).into_response()
+}
+
+pub async fn git_hotspots(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let days = body.days.unwrap_or(90);
+    let result = analyzers::git_analyzer::analyze_git_hotspots(&dir, days);
+    Json(result).into_response()
+}
+
+pub async fn imports(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::git_analyzer::parse_imports(&dir);
+    Json(result).into_response()
+}
+
+pub async fn ruff(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::git_analyzer::run_ruff(&dir);
+    Json(result).into_response()
+}
+
+pub async fn bandit(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::security::run_bandit(&dir);
+    Json(result).into_response()
+}
+
+pub async fn temporal_coupling(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let days = body.days.unwrap_or(90);
+    let result = analyzers::temporal::analyze_temporal_coupling(&dir, days);
+    Json(result).into_response()
+}
+
+pub async fn ai_detect(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::detection::detect_ai_code(&dir);
+    Json(result).into_response()
+}
+
+pub async fn web_smells(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::detection::detect_web_smells(&dir);
+    Json(result).into_response()
+}
+
+pub async fn test_gen(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::detection::generate_test_stubs(&dir);
+    Json(result).into_response()
+}
+
+pub async fn type_check_pyright(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::format_check::check_types_pyright(&dir);
+    Json(result).into_response()
+}
+
+// ── POST routes – PM Dashboard ───────────────────────────────────────────────
+
+pub async fn risk_heatmap(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::pm_dashboard::compute_risk_heatmap(&dir, &body.findings);
+    Json(result).into_response()
+}
+
+pub async fn module_cards(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::pm_dashboard::compute_module_cards(&dir, &body.findings);
+    Json(result).into_response()
+}
+
+pub async fn confidence(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::pm_dashboard::compute_confidence_meter(&dir, &body.findings);
+    Json(result).into_response()
+}
+
+pub async fn sprint_batches(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let result = analyzers::pm_dashboard::compute_sprint_batches(&body.findings, &body.smells);
+    Json(result).into_response()
+}
+
+pub async fn architecture(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::pm_dashboard::compute_architecture_map(&dir);
+    Json(result).into_response()
+}
+
+pub async fn call_graph(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::pm_dashboard::compute_call_graph(&dir);
+    Json(result).into_response()
+}
+
+pub async fn project_review(Json(body): Json<DirBody>) -> impl IntoResponse {
+    let dir = match validate_dir(&body.directory) {
+        Ok(d) => d,
+        Err(e) => return e.into_response(),
+    };
+    let result = analyzers::pm_dashboard::compute_project_review(
+        &dir,
+        &body.findings,
+        body.files_scanned,
+        &body.smells,
+        &body.dead_functions,
+        body.health.as_ref(),
+        body.satd.as_ref(),
+        body.duplicates.as_ref(),
+    );
+    Json(result).into_response()
+}
+
 // ── SARIF ────────────────────────────────────────────────────────────────────
 
 pub async fn sarif_export(
