@@ -1,5 +1,67 @@
 # Changelog
 
+## v0.4.2 — 2026-03-27
+
+### Added — Dual-Server Comparison Test Framework (36/36)
+
+A new exhaustive test suite (`tests/test_dual_server.py`) compares the Python server
+(port 8077) and Rust server (port 8078) end-to-end across **36 endpoints**, verifying
+identical HTTP status codes and top-level JSON key shapes for every API route.
+
+- **`TestGetEndpoints`** (5 tests): `/api/info`, `/api/browse`, `/api/scan-progress`, `/api/scan-result`, root `/`
+- **`TestAnalysisEndpoints`** (19 tests): all POST analysis routes (`/api/smells`, `/api/health`, `/api/duplicates`, `/api/format`, `/api/typecheck`, `/api/dead-code`, `/api/connection-test`, `/api/release-readiness`, `/api/remediation-time`, `/api/circular-calls`, `/api/coupling`, `/api/unused-imports`, `/api/web-smells`, `/api/detect-language`, `/api/tech-stack`, `/api/satd`, `/api/git-summary`, `/api/pm-dashboard`, `/api/module-cards`)
+- **`TestDashboardEndpoints`** (10 tests): PM Dashboard sub-routes
+- **`TestFixEndpoints`** (2 tests): `/api/preview-fix`, `/api/apply-fix`
+
+All **36/36 pass**. Run with:
+
+```bash
+python -m pytest tests/test_dual_server.py -v -s --tb=short
+```
+
+### Fixed
+
+- **`/api/web-smells` panic — negative lookahead in `regex` crate**: `detect_web_smells()`
+  in `scanner/src/analyzers/detection.rs` used patterns like `==(?!=)` and
+  `<img(?![^>]*alt\s*=)` which the standard `regex` crate rejects at runtime (panics on
+  `unwrap()`). Fixed by switching to `fancy_regex::Regex` for all 12 web-smell patterns,
+  with `pat.is_match(line).unwrap_or(false)` for safe evaluation.
+
+- **UTF-8 char-boundary panics (6 files)**: Several Rust analyzers truncated evidence
+  strings with `&s[..120]` byte-slice notation. On strings containing multi-byte UTF-8
+  characters (e.g., em-dashes `—` in `ui.html`), byte index 120 could fall mid-codepoint,
+  causing a runtime panic. Fixed across all affected files using char-safe slicing:
+
+  ```rust
+  // Before (panics on multi-byte chars)
+  &evidence[..120]
+  // After (safe)
+  let n = evidence.chars().count().min(120);
+  let end = evidence.char_indices().nth(n).map(|(i,_)| i).unwrap_or(evidence.len());
+  &evidence[..end]
+  ```
+
+  **Files fixed**: `detection.rs` (2 sites), `satd.rs`, `security.rs` (2 sites),
+  `git_analyzer.rs`, `temporal.rs`, `lib.rs`.
+
+- **`/api/apply-fix` response shape mismatch**: Rust failure branch was returning
+  `{ok, description, error}` (extra `description` key). Python returns `{ok, error}` on
+  failure. Fixed to omit `description` in the error path.
+
+- **`/api/preview-fix` response shape mismatch**: Rust was serializing the full `FixResult`
+  struct (including `new_lines` key absent from Python). Fixed to explicitly construct
+  `{fixable, diff, description, error}` matching exact Python shape.
+
+### Changed
+
+- Rust test count: **91 → 102** (all passing, 0 failures).
+- API route count: **38 routes → 40 routes, 38 API endpoints** (route table includes
+  static file serving and root handler).
+- `tests/test_api_compat.py`: Refined endpoint coverage (user-updated, committed `3c6f6e3`).
+- `tests/test_llm_mock.py`, `xray/llm.py`: User-updated, committed `3c6f6e3`.
+
+---
+
 ## v0.4.1 — 2026-03-26
 
 ### Added — Comprehensive Rust Test Suite (91 Tests)

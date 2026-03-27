@@ -63,7 +63,7 @@ python update_tools.py         # Update all tools to latest
 ```
   ┌───────────┐
   │   SCAN    │  42 rules (security / quality / python / portability)
-  └─────┬─────┘  Python regex scanner (42 rules) + Rust scanner (42 rules, 91 tests)
+  └─────┬─────┘  Python regex scanner (42 rules) + Rust scanner (42 rules, 102 tests)
         │
   ┌─────▼─────┐
   │   TEST    │  Auto-generate pytest tests for each finding
@@ -98,8 +98,9 @@ python update_tools.py         # Update all tools to latest
 All rules sourced from real bugs found in real projects.
 
 > **Note:** Both the Python and Rust scanners implement all 42 rules with identical patterns.
-> The Rust scanner additionally provides a full HTTP server mode with 18 API endpoints
-> producing identical JSON shapes to the Python server.
+> The Rust scanner additionally provides a full HTTP server mode with **38 API endpoints**
+> producing identical JSON shapes to the Python server (36/36 endpoints verified by
+> `tests/test_dual_server.py`).
 
 ## Recommended Models
 
@@ -131,8 +132,8 @@ Both launchers use `uv run` when available, falling back to plain `python`.
 
 ## Rust Scanner (optional speed boost)
 
-The Rust scanner is a standalone ~4.9 MB binary with **full API parity** — 18/18 REST
-endpoints produce identical JSON shapes to the Python server (verified by automated tests).
+The Rust scanner is a standalone ~4.9 MB binary with **full API parity** — 36/36 REST
+endpoints produce identical JSON shapes to the Python server (verified by `tests/test_dual_server.py`).
 
 ```bash
 # Build
@@ -149,9 +150,12 @@ cd ..
 
 # Validate Rust↔Python API parity (both servers must be running)
 python tests/test_api_compat.py --py-port 8077 --rs-port 8078 --scan-dir /path
+
+# Exhaustive 36-endpoint dual-server comparison (both servers must be running)
+python -m pytest tests/test_dual_server.py -v
 ```
 
-Includes: 42 scan rules, 7 auto-fixers, 18 REST endpoints, 91 unit/integration tests,
+Includes: 42 scan rules, 7 auto-fixers, 38 REST endpoints, 102 unit/integration tests,
 code analyzers (smells, dead code, duplicates, coupling, connections, health), and the full web UI.
 
 ## License
