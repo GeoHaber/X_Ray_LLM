@@ -497,7 +497,7 @@ if __name__ == "__main__":
     parser.add_argument("--scan-dir", type=str, default=SCAN_DIR, help="Directory to scan for comparison")
     args = parser.parse_args()
 
-    print(f"API Compatibility Test")
+    print("API Compatibility Test")
     print(f"  Python server: http://127.0.0.1:{args.py_port}")
     print(f"  Rust server:   http://127.0.0.1:{args.rs_port}")
     print(f"  Scan target:   {args.scan_dir}")
@@ -510,7 +510,7 @@ if __name__ == "__main__":
             print(f"  {name} server: OK")
         except Exception as e:
             print(f"  {name} server: UNREACHABLE ({e})")
-            print(f"\nStart both servers first:")
+            print("\nStart both servers first:")
             print(f"  python ui_server.py --port {args.py_port}")
             print(f"  ./xray-scanner.exe --serve --port {args.rs_port}")
             sys.exit(2)

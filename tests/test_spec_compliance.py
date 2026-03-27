@@ -7,7 +7,6 @@ against the actual implementation. All tests use real execution — zero mocks.
 Run: python -m pytest tests/test_spec_compliance.py -v --tb=short
 """
 
-import ast
 import json
 import os
 import re
@@ -141,7 +140,7 @@ class TestScannerSpec:
             assert all(f.file != str(Path(d) / "bad.py") for f in result.findings)
 
     def test_max_file_size_skip(self):
-        from xray.scanner import scan_file, _MAX_FILE_SIZE
+        from xray.scanner import _MAX_FILE_SIZE, scan_file
         with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False, encoding="utf-8") as f:
             f.write("x = 1\n" * (_MAX_FILE_SIZE // 5))  # > 1MB
             f.flush()
@@ -171,7 +170,7 @@ class TestScannerSpec:
         assert f2.rule_id == f.rule_id
 
     def test_scan_result_summary(self):
-        from xray.scanner import ScanResult, Finding
+        from xray.scanner import Finding, ScanResult
         r = ScanResult(
             findings=[
                 Finding("R1", "HIGH", "f.py", 1, 1, "", "", "", ""),
@@ -325,9 +324,9 @@ class TestFixerSpec:
     """Spec: 7 deterministic auto-fixers."""
 
     def test_fixer_registry_has_7_fixers(self):
-        from xray.fixer import FIXERS, FIXABLE_RULES
+        from xray.fixer import FIXABLE_RULES, FIXERS
         assert len(FIXERS) == 7
-        assert FIXABLE_RULES == {"PY-005", "PY-007", "QUAL-001", "QUAL-003", "QUAL-004", "SEC-003", "SEC-009"}
+        assert {"PY-005", "PY-007", "QUAL-001", "QUAL-003", "QUAL-004", "SEC-003", "SEC-009"} == FIXABLE_RULES
 
     @pytest.mark.parametrize("rule_id,code,check_desc", [
         ("QUAL-001", "try:\n    pass\nexcept:\n    pass\n", "bare except"),
@@ -702,6 +701,7 @@ class TestAppStateSpec:
 
     def test_thread_safe_lock(self):
         import threading
+
         from services.app_state import state
         assert isinstance(state.lock, type(threading.RLock()))
 

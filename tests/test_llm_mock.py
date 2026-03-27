@@ -346,7 +346,6 @@ class TestKVCacheQuantization:
 
         monkeypatch.setattr("xray.llm.Llama", FakeLlama, raising=False)
         # Need to patch the import path used inside _ensure_model
-        import xray.llm as llm_mod
 
         original_ensure = LLMEngine._ensure_model
 

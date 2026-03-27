@@ -8,7 +8,6 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-
 # GGML type enum values for KV cache quantization.
 # See llama.cpp ggml_type enum — only the most useful subset listed here.
 # When TurboQuant lands upstream, GGML_TYPE_TQ3_0 / TQ4_0 will be added.
