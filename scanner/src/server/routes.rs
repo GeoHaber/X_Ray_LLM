@@ -31,6 +31,10 @@ pub struct DirBody {
     #[serde(default)]
     pub findings: Vec<serde_json::Value>,
     #[serde(default)]
+    pub smells: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub dead_functions: Vec<serde_json::Value>,
+    #[serde(default)]
     pub file: String,
     #[serde(default)]
     pub line: usize,
@@ -38,6 +42,16 @@ pub struct DirBody {
     pub rule_id: String,
     #[serde(default)]
     pub days: Option<u32>,
+    #[serde(default)]
+    pub files_scanned: usize,
+    #[serde(default)]
+    pub summary: Option<serde_json::Value>,
+    #[serde(default)]
+    pub health: Option<serde_json::Value>,
+    #[serde(default)]
+    pub satd: Option<serde_json::Value>,
+    #[serde(default)]
+    pub duplicates: Option<serde_json::Value>,
 }
 
 fn validate_dir(directory: &str) -> Result<String, (StatusCode, Json<serde_json::Value>)> {

@@ -43,6 +43,24 @@ It scans codebases for security vulnerabilities, quality issues, Python-specific
 portability problems using **42 pattern-based rules** sourced from real bugs found in real
 projects — not synthetic patterns.
 
+### Core Philosophy: Python → Rust Transpilation
+
+The **entire purpose** of this project is:
+
+```
+Python code → Analyze → Simplify → Fix → Transpile to Rust (for speed & security)
+```
+
+The Rust scanner (`scanner/src/`) is a **faithful transpilation** of the Python codebase — not a rewrite.
+Every Rust module mirrors its Python counterpart 1:1 in logic and output.
+
+**Rules for working on the Rust code:**
+- Python is **always** the source of truth
+- Never write Rust from scratch — always transpile from the working Python
+- JSON response shapes must be identical (verified by `tests/test_api_compat.py`)
+- When Python changes, Rust must follow
+- Do not diverge or "improve" — mirror Python logic exactly
+
 **Key capabilities:**
 - **Dual scan engines** — Python (42 rules, cross-platform) + Rust (42 rules, ~10× faster, full HTTP server with 18/18 API parity)
 - **7 deterministic auto-fixers** — no LLM needed for common fixes

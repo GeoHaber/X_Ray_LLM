@@ -11,6 +11,23 @@ X-Ray LLM is a self-improving code quality agent that scans Python/JS/HTML codeb
 
 **Core loop:** SCAN → TEST → FIX → VERIFY → LOOP
 
+### Transpilation Philosophy — Python Is the Source of Truth
+
+The entire purpose of X-Ray LLM is:
+```
+Python code → Analyze → Simplify → Fix → Transpile to Rust (for speed & security)
+```
+
+The Rust scanner (`scanner/src/`) is a **faithful transpilation** of the Python codebase — NOT a rewrite.
+Every Rust module must mirror its Python counterpart 1:1 in logic and JSON output shapes.
+
+**Rules:**
+1. Python is always the source of truth — every Rust file has a Python counterpart
+2. Never write Rust from scratch — read the Python first, then transpile
+3. JSON responses must be field-for-field identical (verified by `tests/test_api_compat.py`)
+4. When Python changes, Rust must follow
+5. Do not diverge — mirror Python logic exactly (perf optimizations OK if output unchanged)
+
 **Key capabilities:**
 - 42 pattern-based scan rules (14 Security, 13 Quality, 11 Python, 4 Portability)
 - 7 deterministic auto-fixers (no LLM needed): SEC-003, SEC-009, QUAL-001, QUAL-003, QUAL-004, PY-005, PY-007

@@ -6,6 +6,24 @@
 
 **X-Ray** is an AI-powered Python code quality scanner and Rust accelerator. It diagnoses (smells, duplicates, lint, security, format) and helps cure (Rust transpilation, library suggestions). Entry points: CLI (`x_ray_claude.py`), Flet GUI (`x_ray_flet.py`), Streamlit (`x_ray_web.py`).
 
+## CRITICAL: Python → Rust Transpilation Philosophy
+
+The entire purpose of X-Ray LLM is:
+
+```
+Python code → Analyze → Simplify → Fix → Transpile to Rust (for speed & security)
+```
+
+**The Rust scanner is NOT a rewrite — it is a faithful transpilation of the Python codebase.**
+
+1. **Python is always the source of truth.** Every Rust module mirrors its Python counterpart.
+2. **Never write Rust from scratch.** Read the Python file first, then convert its logic to Rust line-by-line.
+3. **JSON shapes must be identical.** `tests/test_api_compat.py` verifies Python↔Rust response parity.
+4. **When Python changes, Rust follows.** New Python features must be transpiled to Rust.
+5. **Do not diverge or "improve".** Mirror Python logic 1:1. Perf optimizations OK only if output is unchanged.
+
+See `.github/copilot-instructions.md` for the full Python→Rust file mapping table.
+
 ## Development Workflow
 
 - **Default branch:** `main`. Use `develop` for integration if you adopt a two-branch flow.

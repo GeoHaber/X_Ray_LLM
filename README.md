@@ -4,6 +4,15 @@ Self-improving code quality agent.  **SCAN → TEST → FIX → VERIFY → LOOP*
 
 Built from real bugs discovered in production projects — not synthetic patterns.
 
+### Core Philosophy: Python → Rust Transpilation
+
+```
+Python code → Analyze → Simplify → Fix → Transpile to Rust (for speed & security)
+```
+
+The Rust scanner is a **faithful transpilation** of the Python codebase — not a rewrite.
+Python is **always** the source of truth. See `X_RAY_LLM_GUIDE.md` § 1 for full rules.
+
 ## Quick Start
 
 ```bash

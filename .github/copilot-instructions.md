@@ -4,6 +4,43 @@ You are working inside the **X-Ray LLM** project — a self-improving code quali
 that scans codebases for security vulnerabilities, quality issues, Python-specific bugs,
 and portability problems.
 
+## CRITICAL: Transpilation Philosophy — Python Is the Source of Truth
+
+The **entire purpose** of X-Ray LLM is:
+
+```
+Python code → Analyze → Simplify → Fix → Transpile to Rust (for speed & security)
+```
+
+**Rules for the Rust scanner (`scanner/src/`):**
+1. **Python is always the source of truth.** Every Rust module is a direct transpilation of its Python counterpart.
+2. **Never write Rust from scratch.** Always read the corresponding Python file first, then faithfully convert its logic to Rust.
+3. **JSON response shapes must be identical.** The Rust server's API responses must match the Python server's responses field-for-field (verified by `tests/test_api_compat.py`).
+4. **When Python changes, Rust must follow.** If a Python analyzer gets a new feature, the Rust version must be updated to match.
+5. **Do not "improve" or diverge.** The Rust code should mirror Python logic 1:1. Performance optimizations are fine only if they don't change behavior or output.
+
+**Mapping:** Each Python file has a Rust counterpart:
+| Python | Rust |
+|--------|------|
+| `analyzers/smells.py` | `scanner/src/analyzers/smells.rs` |
+| `analyzers/health.py` | `scanner/src/analyzers/health.rs` |
+| `analyzers/graph.py` | `scanner/src/analyzers/graph.rs` |
+| `analyzers/connections.py` | `scanner/src/analyzers/connections.rs` |
+| `analyzers/format_check.py` | `scanner/src/analyzers/format_check.rs` |
+| `analyzers/detection.py` | `scanner/src/analyzers/detection.rs` |
+| `analyzers/temporal.py` | `scanner/src/analyzers/temporal.rs` |
+| `analyzers/security.py` | `scanner/src/analyzers/security.rs` |
+| `analyzers/pm_dashboard.py` | `scanner/src/analyzers/pm_dashboard.rs` |
+| `services/satd_scanner.py` | `scanner/src/analyzers/satd.rs` |
+| `services/git_analyzer.py` | `scanner/src/analyzers/git_analyzer.rs` |
+| `xray/scanner.py` | `scanner/src/lib.rs` |
+| `xray/fixer.py` | `scanner/src/fixer.rs` |
+| `xray/sarif.py` | `scanner/src/sarif.rs` |
+| `xray/constants.py` | `scanner/src/constants.rs` |
+| `xray/types.py` | `scanner/src/types.rs` |
+| `api/*_routes.py` | `scanner/src/server/routes.rs` |
+| `ui_server.py` | `scanner/src/server/mod.rs` |
+
 ## IMPORTANT: Read the Full Guide First
 
 Before answering ANY question about X-Ray LLM's features, capabilities, rules, API endpoints,
