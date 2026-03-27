@@ -1,6 +1,7 @@
 //! Detection utilities — function/class/import counting, AI detection, web smells, test stubs.
 //! Rust transpilation of analyzers/detection.py.
 
+use fancy_regex::Regex as FancyRegex;
 use regex::Regex;
 use std::collections::HashMap;
 use walkdir::WalkDir;
@@ -211,8 +212,12 @@ pub fn detect_ai_code(directory: &str) -> serde_json::Value {
             for (pat, desc) in &ai_patterns {
                 if pat.is_match(line) {
                     let evidence = line.trim();
-                    let evidence = if evidence.len() > 120 {
-                        &evidence[..120]
+                    // Truncate at a char boundary to avoid panicking on multi-byte UTF-8
+                    let evidence_truncated: String;
+                    let evidence = if evidence.chars().count() > 120 {
+                        let end = evidence.char_indices().nth(120).map(|(i, _)| i).unwrap_or(evidence.len());
+                        evidence_truncated = evidence[..end].to_string();
+                        evidence_truncated.as_str()
                     } else {
                         evidence
                     };
@@ -241,19 +246,19 @@ pub fn detect_ai_code(directory: &str) -> serde_json::Value {
 /// Detect common web development anti-patterns in JS/TS/HTML/CSS.
 /// Transpiled from detection.py::detect_web_smells().
 pub fn detect_web_smells(directory: &str) -> serde_json::Value {
-    let web_patterns: Vec<(Regex, &str, &str)> = vec![
-        (Regex::new(r"\bdocument\.write\b").unwrap(), "HIGH", "document.write() \u{2014} XSS risk and performance issue"),
-        (Regex::new(r"\beval\s*\(").unwrap(), "HIGH", "eval() \u{2014} code injection risk"),
-        (Regex::new(r"\binnerHTML\s*=").unwrap(), "MEDIUM", "innerHTML assignment \u{2014} XSS risk, use textContent"),
-        (Regex::new(r"console\.(log|debug|info|warn|error)\s*\(").unwrap(), "LOW", "Console statement left in code"),
-        (Regex::new(r"font-size:\s*\d+px").unwrap(), "LOW", "Pixel font-size \u{2014} use rem/em for accessibility"),
-        (Regex::new(r"!important").unwrap(), "LOW", "!important in CSS \u{2014} specificity issue"),
-        (Regex::new(r"\bvar\s+").unwrap(), "MEDIUM", "var keyword \u{2014} use let/const instead"),
-        (Regex::new(r"==(?!=)").unwrap(), "MEDIUM", "Loose equality (==) \u{2014} use strict equality (===)"),
-        (Regex::new(r"\.then\s*\(.*\.then\s*\(").unwrap(), "MEDIUM", "Nested .then() \u{2014} use async/await"),
-        (Regex::new(r"setTimeout\s*\([^,]+,\s*0\s*\)").unwrap(), "LOW", "setTimeout(fn, 0) \u{2014} use queueMicrotask"),
-        (Regex::new(r#"<script\s+src\s*=\s*["']http:"#).unwrap(), "HIGH", "HTTP script src \u{2014} use HTTPS"),
-        (Regex::new(r"<img(?![^>]*alt\s*=)[^>]*>").unwrap(), "MEDIUM", "Missing alt attribute on img \u{2014} accessibility"),
+    let web_patterns: Vec<(FancyRegex, &str, &str)> = vec![
+        (FancyRegex::new(r"\bdocument\.write\b").unwrap(), "HIGH", "document.write() \u{2014} XSS risk and performance issue"),
+        (FancyRegex::new(r"\beval\s*\(").unwrap(), "HIGH", "eval() \u{2014} code injection risk"),
+        (FancyRegex::new(r"\binnerHTML\s*=").unwrap(), "MEDIUM", "innerHTML assignment \u{2014} XSS risk, use textContent"),
+        (FancyRegex::new(r"console\.(log|debug|info|warn|error)\s*\(").unwrap(), "LOW", "Console statement left in code"),
+        (FancyRegex::new(r"font-size:\s*\d+px").unwrap(), "LOW", "Pixel font-size \u{2014} use rem/em for accessibility"),
+        (FancyRegex::new(r"!important").unwrap(), "LOW", "!important in CSS \u{2014} specificity issue"),
+        (FancyRegex::new(r"\bvar\s+").unwrap(), "MEDIUM", "var keyword \u{2014} use let/const instead"),
+        (FancyRegex::new(r"==(?!=)").unwrap(), "MEDIUM", "Loose equality (==) \u{2014} use strict equality (===)"),
+        (FancyRegex::new(r"\.then\s*\(.*\.then\s*\(").unwrap(), "MEDIUM", "Nested .then() \u{2014} use async/await"),
+        (FancyRegex::new(r"setTimeout\s*\([^,]+,\s*0\s*\)").unwrap(), "LOW", "setTimeout(fn, 0) \u{2014} use queueMicrotask"),
+        (FancyRegex::new(r#"<script\s+src\s*=\s*["']http:"#).unwrap(), "HIGH", "HTTP script src \u{2014} use HTTPS"),
+        (FancyRegex::new(r"<img(?![^>]*alt\s*=)[^>]*>").unwrap(), "MEDIUM", "Missing alt attribute on img \u{2014} accessibility"),
     ];
 
     let mut smells: Vec<serde_json::Value> = Vec::new();
@@ -267,10 +272,12 @@ pub fn detect_web_smells(directory: &str) -> serde_json::Value {
         for (lineno, line) in content.lines().enumerate() {
             let lineno = lineno + 1;
             for (pat, severity, desc) in &web_patterns {
-                if pat.is_match(line) {
+                if pat.is_match(line).unwrap_or(false) {
                     let evidence = line.trim();
-                    let evidence = if evidence.len() > 120 {
-                        &evidence[..120]
+                    // Truncate at a char boundary to avoid panicking on multi-byte UTF-8
+                    let evidence = if evidence.chars().count() > 120 {
+                        let end = evidence.char_indices().nth(120).map(|(i, _)| i).unwrap_or(evidence.len());
+                        &evidence[..end]
                     } else {
                         evidence
                     };

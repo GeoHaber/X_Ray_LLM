@@ -157,8 +157,9 @@ pub fn run_bandit(directory: &str) -> serde_json::Value {
             for akp in &api_key_patterns {
                 if akp.pattern.is_match(line) {
                     let matched = line.trim();
-                    let matched = if matched.len() > 100 {
-                        &matched[..100]
+                    let matched = if matched.chars().count() > 100 {
+                        let end = matched.char_indices().nth(100).map(|(i, _)| i).unwrap_or(matched.len());
+                        &matched[..end]
                     } else {
                         matched
                     };
@@ -186,8 +187,9 @@ pub fn run_bandit(directory: &str) -> serde_json::Value {
                         let value = caps.get(1).map(|m| m.as_str()).unwrap_or("");
                         if entropy(value) > 4.0 {
                             let matched = line.trim();
-                            let matched = if matched.len() > 100 {
-                                &matched[..100]
+                            let matched = if matched.chars().count() > 100 {
+                                let end = matched.char_indices().nth(100).map(|(i, _)| i).unwrap_or(matched.len());
+                                &matched[..end]
                             } else {
                                 matched
                             };

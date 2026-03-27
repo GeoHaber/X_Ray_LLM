@@ -319,7 +319,13 @@ pub async fn preview_fix(Json(body): Json<DirBody>) -> impl IntoResponse {
         "rule_id": body.rule_id,
     });
     let result = fixer::preview_fix(&finding);
-    Json(serde_json::to_value(result).unwrap_or_default())
+    // Match Python shape: {fixable, diff, description, error} — no new_lines
+    Json(serde_json::json!({
+        "fixable": result.fixable,
+        "diff": result.diff,
+        "description": result.description,
+        "error": result.error,
+    }))
 }
 
 pub async fn apply_fix(Json(body): Json<DirBody>) -> impl IntoResponse {
@@ -329,7 +335,19 @@ pub async fn apply_fix(Json(body): Json<DirBody>) -> impl IntoResponse {
         "rule_id": body.rule_id,
     });
     let result = fixer::apply_fix(&finding);
-    Json(serde_json::to_value(result).unwrap_or_default())
+    // Match Python shape: {ok, description, error} on fail / {ok, description, diff} on success
+    if result.fixable {
+        Json(serde_json::json!({
+            "ok": true,
+            "description": result.description,
+            "diff": result.diff,
+        }))
+    } else {
+        Json(serde_json::json!({
+            "ok": false,
+            "error": result.error,
+        }))
+    }
 }
 
 // ── POST routes – analyzers ──────────────────────────────────────────────────

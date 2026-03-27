@@ -82,7 +82,10 @@ pub fn scan_satd(directory: &str) -> serde_json::Value {
                     } else {
                         line.trim()
                     };
-                    let text = if text.len() > 200 { &text[..200] } else { text };
+                    let text = if text.chars().count() > 200 {
+                        let end = text.char_indices().nth(200).map(|(i, _)| i).unwrap_or(text.len());
+                        &text[..end]
+                    } else { text };
                     let matched_marker = m.as_str().to_uppercase();
                     let item = serde_json::json!({
                         "file": fwd(&rel),

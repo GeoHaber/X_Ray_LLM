@@ -395,8 +395,9 @@ pub fn scan_file(path: &Path, rules: &[Rule]) -> Vec<Finding> {
                     let col = abs_start - line_start + 1;
 
                     let matched = mat.as_str();
-                    let truncated = if matched.len() > 200 {
-                        &matched[..200]
+                    let truncated = if matched.chars().count() > 200 {
+                        let end = matched.char_indices().nth(200).map(|(i, _)| i).unwrap_or(matched.len());
+                        &matched[..end]
                     } else {
                         matched
                     };

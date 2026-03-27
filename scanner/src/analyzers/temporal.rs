@@ -28,7 +28,8 @@ pub fn analyze_temporal_coupling(directory: &str, days: u32) -> serde_json::Valu
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let msg = if stderr.len() > 200 { &stderr[..200] } else { &stderr };
+        let msg_end = stderr.char_indices().nth(200).map(|(i, _)| i).unwrap_or(stderr.len());
+        let msg = &stderr[..msg_end];
         return serde_json::json!({"error": format!("git error: {}", msg.trim())});
     }
 
