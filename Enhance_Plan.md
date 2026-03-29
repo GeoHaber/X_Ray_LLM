@@ -1,7 +1,7 @@
 ﻿# X-Ray LLM — Enhancement Plan (Unified Roadmap)
 
-**Date:** 2026-03-26  
-**Status as of this date:** 42 rules, 45 endpoints, 1330+ tests (1141 passing + 12 skipped), 7 fixers, 5 AST validators, 9 PM Dashboard features
+**Date:** 2026-03-28  
+**Status as of this date:** 42 rules, 45 endpoints, 1355+ tests (1166 passing + 12 skipped), 7 fixers, 7 AST validators, 6 context validators, 6 string-aware rules, 9 PM Dashboard features
 
 ---
 
@@ -148,11 +148,12 @@
 
 ## P3 — Nice to Have
 
-### 18. SEC-007 False Positive Suppression
+### 18. SEC-007 False Positive Suppression ✅ DONE (v0.4.3)
 - **Source:** Enhance_Plan v1 #7
 - **Description:** SEC-007 fires on eval() in comments and docstrings. Add string/comment awareness for this rule.
 - **Effort:** 1 hour
 - **Verification:** test_eval_in_comment_no_fire and test_eval_in_docstring_no_fire pass
+- **Resolution:** Added SEC-007 to `_STRING_AWARE_RULES` with `"all"` mode + added `_ctx_validate_sec007` for JS `.exec()`, regex patterns, and test meta-assertions. 24 FP tests passing.
 
 ### 19. Python 3.14 Compatibility
 - **Source:** Enhance_Plan v1 #8
@@ -166,11 +167,12 @@
 - **Effort:** 4 hours
 - **Verification:** 10K-file scan completes in <30s
 
-### 21. CHANGELOG.md Updates
+### 21. CHANGELOG.md Updates ✅ DONE (v0.4.3)
 - **Source:** Enhance_Plan v1 #10
 - **Description:** Document all features added since v0.2.0: 14 new rules, AST validators, PM Dashboard, portability category.
 - **Effort:** 30 minutes
 - **Verification:** CHANGELOG reflects all features in X_RAY_LLM_GUIDE.md
+- **Resolution:** CHANGELOG updated through v0.4.3 with full context validation pipeline, FP elimination tables, and scan progression data.
 
 ### 22. Scan History Timeline
 - **Source:** TODO.md P3
@@ -243,10 +245,10 @@
 | 15 | Auth for web server | P2 | 3 hrs | Network deployment |
 | 16 | LSP integration | P2 | 12-16 hrs | IDE-native scanning |
 | 17 | Incremental web scan | P2 | 4 hrs | Fast re-scans |
-| 18 | SEC-007 false positive | P3 | 1 hr | 2 more tests pass |
+| 18 | SEC-007 false positive | P3 | 1 hr | ✅ Done (v0.4.3) |
 | 19 | Python 3.14 compat | P3 | 30 min | Future-proof |
 | 20 | Parallel scanning | P3 | 4 hrs | Performance at scale |
-| 21 | CHANGELOG updates | P3 | 30 min | Docs complete |
+| 21 | CHANGELOG updates | P3 | 30 min | ✅ Done (v0.4.3) |
 | 22 | Scan history timeline | P3 | 6 hrs | Trend visualization |
 | 23 | Auto-refresh watch mode | P3 | 4 hrs | Developer workflow |
 | 24 | UI polish | P3 | 4 hrs | UX quality |

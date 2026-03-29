@@ -965,7 +965,7 @@ class TestRulesIntegrity:
             "SEC-002": ('el.innerHTML = "prefix" + variable;', ".js"),
         }
         for rule_id, (code, ext) in samples.items():
-            f = tmp_path / f"test_{rule_id}{ext}"
+            f = tmp_path / f"sample_{rule_id}{ext}"
             f.write_text(code + "\n", encoding="utf-8")
             result = scan_file(str(f))
             found_ids = {r.rule_id for r in result} if result else set()

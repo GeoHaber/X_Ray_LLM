@@ -283,7 +283,7 @@ class TestASTValidators:
 
     def test_validators_registered(self):
         from xray.scanner import _AST_VALIDATORS
-        assert set(_AST_VALIDATORS.keys()) == {"PY-001", "PY-005", "PY-006", "QUAL-003", "QUAL-004"}
+        assert set(_AST_VALIDATORS.keys()) == {"PY-001", "PY-005", "PY-006", "PY-007", "PY-008", "QUAL-003", "QUAL-004"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════

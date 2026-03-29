@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.4.3 — 2026-03-28
+
+### Added — Context Validation Pipeline & False-Positive Elimination
+
+New **`_CTX_VALIDATORS`** pipeline for language-agnostic context-aware validation,
+complementing the existing Python AST validators. Applied to a real-world scan of
+ZenAIos-Dashboard (50K+ LOC), reducing findings from **763 → 542** (29% FP reduction).
+
+#### New Context Validators (6)
+
+| Validator | Rule | What it suppresses | FPs eliminated |
+|-----------|------|--------------------|----------------|
+| `_ctx_validate_sec001` | SEC-001 (XSS) | Multi-line template literals with sanitizer functions (forward 20-line search) | 4 |
+| `_ctx_validate_sec002` | SEC-002 (XSS) | Wider window (-6/+15 lines) for `escapeHtml`, `DOMPurify`, numeric-only values | 6 |
+| `_ctx_validate_sec004` | SEC-004 (SQLi) | Parameterized `%s` queries + f-string table names from hardcoded loops/regex-validated vars | 13 |
+| `_ctx_validate_sec005` | SEC-005 (SSRF) | Test file paths and localhost URLs | 6 |
+| `_ctx_validate_sec007` | SEC-007 (eval) | JS `.exec()` on RegExp, regex pattern objects, test file meta-assertions | 5 |
+| `_ctx_validate_qual010` | QUAL-010 (localStorage) | Backward try/catch search + test file suppression | 34 |
+
+#### Improved AST Validators (2)
+
+| Validator | Rule | Improvement | FPs eliminated |
+|-----------|------|-------------|----------------|
+| `_ast_validate_py008` | PY-008 (encoding) | Detects `Image.open()`, binary mode `'rb'/'wb'`, `encoding=` keyword arg | 22 |
+| `_ast_validate_py007` | PY-007 (os.environ) | Suppresses test files, `os.environ[k]=v` setting, try/except KeyError | 18 |
+| `_ast_validate_qual004` | QUAL-004 (float cast) | argparse `float(args.X)` pattern detection | 3 |
+
+#### String-Aware Rule Additions
+
+- **SEC-007** added to `_STRING_AWARE_RULES` — suppresses `eval`/`exec` mentions in
+  comments and docstrings (1 FP eliminated)
+
+### Changed
+
+- Validation pipeline: `_STRING_AWARE_RULES` → `_AST_VALIDATORS` → **`_CTX_VALIDATORS`** → inline suppression
+- Test count: 201 core + **24 new FP tests** = 225 total (all passing)
+- ZenAIos-Dashboard scan progression: 763 → 654 (code fixes) → 564 → 551 → 542 (scanner enhancements)
+
+---
+
 ## v0.4.2 — 2026-03-27
 
 ### Added — Dual-Server Comparison Test Framework (36/36)

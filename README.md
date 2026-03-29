@@ -97,6 +97,23 @@ python update_tools.py         # Update all tools to latest
 
 All rules sourced from real bugs found in real projects.
 
+## False-Positive Elimination Pipeline (v0.4.3)
+
+X-Ray uses a **4-stage validation pipeline** to suppress false positives without losing real findings:
+
+```
+Pattern Match → String-Aware Filter → AST Validator → Context Validator → Inline Suppression
+```
+
+| Stage | Scope | Validators |
+|-------|-------|------------|
+| String-Aware | 6 rules | Suppresses matches inside strings/comments (PY-004, PY-006, PY-007, SEC-007, QUAL-007, QUAL-010) |
+| AST Validators | 7 validators | Python AST analysis — `Image.open()`, binary mode, `encoding=` kwarg, argparse `float()`, test files, `os.environ` setting |
+| Context Validators | 6 validators | Language-agnostic — multi-line sanitizer search (SEC-001/002), parameterized SQL (SEC-004), localhost URLs (SEC-005), RegExp `.exec()` (SEC-007), try/catch search (QUAL-010) |
+| Inline Suppression | All rules | `# xray: ignore[RULE-ID]` comments |
+
+Real-world result: **29% FP reduction** on ZenAIos-Dashboard (763 → 542 findings, 221 false positives eliminated).
+
 > **Note:** Both the Python and Rust scanners implement all 42 rules with identical patterns.
 > The Rust scanner additionally provides a full HTTP server mode with **38 API endpoints**
 > producing identical JSON shapes to the Python server (36/36 endpoints verified by

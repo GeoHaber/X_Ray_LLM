@@ -109,13 +109,13 @@ class TestFixerSpec:
 # ── AST Validators ──────────────────────────────────────────────────────
 
 class TestASTValidators:
-    """Validate the 5 AST validators spec."""
+    """Validate the 7 AST validators spec."""
 
-    EXPECTED_AST_RULES: ClassVar[set[str]] = {"PY-001", "PY-005", "PY-006", "QUAL-003", "QUAL-004"}
+    EXPECTED_AST_RULES: ClassVar[set[str]] = {"PY-001", "PY-005", "PY-006", "PY-007", "PY-008", "QUAL-003", "QUAL-004"}
 
-    def test_ast_validator_count_is_5(self):
+    def test_ast_validator_count_is_7(self):
         from xray.scanner import _AST_VALIDATORS
-        assert len(_AST_VALIDATORS) == 5
+        assert len(_AST_VALIDATORS) == 7
 
     def test_ast_validator_rule_ids(self):
         from xray.scanner import _AST_VALIDATORS
