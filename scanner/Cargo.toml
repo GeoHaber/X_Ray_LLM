@@ -42,12 +42,23 @@ which = "7"
 # Error handling
 anyhow = "1"
 
+# Pure-Rust Python AST parser (no C compiler needed)
+rustpython-parser = { version = "0.4", features = ["all-nodes-with-ranges"] }
+rustpython-ast = { version = "0.4", features = ["all-nodes-with-ranges"] }
+
 # Path diff
 pathdiff = "0.2"
 
+# PyO3 — optional, only needed for the Python native extension
+pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
+
+[features]
+default = []
+python = ["pyo3"]
+
 [lib]
 name = "xray_scanner"
-crate-type = ["rlib"]
+crate-type = ["rlib", "cdylib"]
 
 [[bin]]
 name = "xray-scanner"

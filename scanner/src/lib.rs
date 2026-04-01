@@ -18,6 +18,10 @@ pub mod sarif;
 pub mod server;
 pub mod analyzers;
 pub mod types;
+pub mod ast_analysis;
+
+#[cfg(feature = "python")]
+pub mod pybridge;
 
 use fancy_regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -51,6 +55,12 @@ pub struct Finding {
     pub cwe: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub owasp: String,
+    #[serde(default)]
+    pub confidence: f64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub signal_path: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub why_flagged: String,
 }
 
 impl std::fmt::Display for Finding {
@@ -364,6 +374,13 @@ pub fn scan_file(path: &Path, rules: &[Rule]) -> Vec<Finding> {
         HashMap::new()
     };
 
+    // Parse AST once per file using rustpython-parser — fail-open: None skips checks
+    let py_ast = if lang == "python" {
+        ast_analysis::parse_python(&content)
+    } else {
+        None
+    };
+
     for rule in &applicable {
         // Determine which non-code ranges to use for this rule
         let active_ranges = match string_aware_mode(&rule.id) {
@@ -397,6 +414,19 @@ pub fn scan_file(path: &Path, rules: &[Rule]) -> Vec<Finding> {
                         }
                     }
 
+                    // AST-based validation: reduce false positives (ruff parser)
+                    let mut used_ast = false;
+                    if let Some(ref py) = py_ast {
+                        if let Some(validator) = ast_analysis::get_validator(&rule.id) {
+                            used_ast = true;
+                            if !validator(py, &content, line) {
+                                // AST says suppress — skip this finding
+                                start = abs_start + mat.end().max(1) - mat.start();
+                                continue;
+                            }
+                        }
+                    }
+
                     let line_start = content[..abs_start].rfind('\n').map_or(0, |i| i + 1);
                     let col = abs_start - line_start + 1;
 
@@ -406,6 +436,19 @@ pub fn scan_file(path: &Path, rules: &[Rule]) -> Vec<Finding> {
                         &matched[..end]
                     } else {
                         matched
+                    };
+
+                    // Confidence: higher when AST confirmed, lower when regex-only
+                    let confidence = if used_ast { 0.95 } else { 0.7 };
+                    let signal_path = if used_ast {
+                        "regex+ast".to_string()
+                    } else {
+                        "regex".to_string()
+                    };
+                    let why_flagged = if used_ast {
+                        format!("Matched regex pattern and confirmed by AST analysis ({})", rule.id)
+                    } else {
+                        format!("Matched regex pattern ({})", rule.id)
                     };
 
                     findings.push(Finding {
@@ -420,6 +463,9 @@ pub fn scan_file(path: &Path, rules: &[Rule]) -> Vec<Finding> {
                         test_hint: rule.test_hint.clone(),
                         cwe: rule.cwe.clone(),
                         owasp: rule.owasp.clone(),
+                        confidence,
+                        signal_path,
+                        why_flagged,
                     });
 
                     start = abs_start + mat.end().max(1) - mat.start();
