@@ -123,7 +123,10 @@ def handle_typecheck_pyright(body, handler):
     d, err = _dir_from_body(body)
     if err:
         return err, 400
-    return run_typecheck(d), 200
+    result = run_typecheck(d)
+    result["deprecated"] = True
+    result["deprecation_note"] = "Use /api/typecheck (ty) instead."
+    return result, 200
 
 
 def handle_release_readiness(body, handler):

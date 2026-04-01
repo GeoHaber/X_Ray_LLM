@@ -114,7 +114,15 @@ def count_scannable_files(directory: str, exclude_patterns: list[str] | None = N
     return count
 
 
-def scan_with_python(directory: str, severity: str, excludes: list[str], sse_write=None, total_files: int = 0) -> dict:
+def scan_with_python(
+    directory: str,
+    severity: str,
+    excludes: list[str],
+    sse_write=None,
+    total_files: int = 0,
+    policy_profile: str = "balanced",
+    taint_mode: str = "lite",
+) -> dict:
     """Run scan using Python scanner."""
     sys.path.insert(0, str(ROOT))
     from xray.rules import ALL_RULES
@@ -159,7 +167,14 @@ def scan_with_python(directory: str, severity: str, excludes: list[str], sse_wri
     state.abort.clear()
     start = time.perf_counter()
     try:
-        result = scan_directory(directory, rules=rules, exclude_patterns=excludes or None, on_progress=on_progress)
+        result = scan_directory(
+            directory,
+            rules=rules,
+            exclude_patterns=excludes or None,
+            on_progress=on_progress,
+            policy_profile=policy_profile,
+            taint_mode=taint_mode,
+        )
     except _ScanAbortedError:
         logger.debug("Scan aborted by user")
         return {"aborted": True, "engine": "python", "files_scanned": 0, "findings_count": 0}
@@ -233,7 +248,15 @@ def scan_with_rust(directory: str, severity: str, excludes: list[str], sse_write
     return data
 
 
-def background_scan(directory: str, engine: str, severity: str, excludes: list[str], total_files: int):
+def background_scan(
+    directory: str,
+    engine: str,
+    severity: str,
+    excludes: list[str],
+    total_files: int,
+    policy_profile: str = "balanced",
+    taint_mode: str = "lite",
+):
     """Run scan in background thread, updating state.scan_progress."""
     scan_start = time.perf_counter()
     state.set_scan_result(None)  # type: ignore[arg-type]
@@ -252,13 +275,50 @@ def background_scan(directory: str, engine: str, severity: str, excludes: list[s
 
     def progress_writer(_event_type, data):
         if _event_type == "progress":
-            state.set_scan_progress({**data, "status": "scanning"})
+            carry = {}
+            if state.scan_progress:
+                for k in ("engine_requested", "engine_effective"):
+                    if k in state.scan_progress:
+                        carry[k] = state.scan_progress[k]
+            state.set_scan_progress({**carry, **data, "status": "scanning"})
 
     try:
         if engine == "rust":
-            result = scan_with_rust(directory, severity, excludes, sse_write=progress_writer, total_files=total_files)
+            # Rust scanner currently does not support policy/taint filtering.
+            # Fall back to Python scanner when non-default behavior is requested.
+            needs_python_fallback = policy_profile != "balanced" or taint_mode != "lite"
+            if needs_python_fallback:
+                state.set_scan_progress(
+                    {
+                        **(state.scan_progress or {}),
+                        "engine_requested": "rust",
+                        "engine_effective": "python",
+                    }
+                )
+                result = scan_with_python(
+                    directory,
+                    severity,
+                    excludes,
+                    sse_write=progress_writer,
+                    total_files=total_files,
+                    policy_profile=policy_profile,
+                    taint_mode=taint_mode,
+                )
+                result["engine"] = "python"
+                result["engine_requested"] = "rust"
+                result["engine_effective"] = "python"
+            else:
+                result = scan_with_rust(directory, severity, excludes, sse_write=progress_writer, total_files=total_files)
         else:
-            result = scan_with_python(directory, severity, excludes, sse_write=progress_writer, total_files=total_files)
+            result = scan_with_python(
+                directory,
+                severity,
+                excludes,
+                sse_write=progress_writer,
+                total_files=total_files,
+                policy_profile=policy_profile,
+                taint_mode=taint_mode,
+            )
     except Exception as exc:
         if state.debug:
             logger.debug("SCAN CRASHED: %s: %s", type(exc).__name__, exc)

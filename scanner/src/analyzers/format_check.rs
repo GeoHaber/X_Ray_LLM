@@ -129,7 +129,11 @@ pub fn check_types_pyright(directory: &str) -> serde_json::Value {
         .output();
 
     match output {
-        Err(_) => serde_json::json!({"error": "pyright not found. Install: npm install -g pyright"}),
+        Err(_) => serde_json::json!({
+            "error": "pyright not found. Install: npm install -g pyright",
+            "deprecated": true,
+            "deprecation_note": "Use /api/typecheck (ty) instead."
+        }),
         Ok(out) => {
             let stdout = String::from_utf8_lossy(&out.stdout);
             let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
@@ -137,7 +141,11 @@ pub fn check_types_pyright(directory: &str) -> serde_json::Value {
                 Err(_) => {
                     let stderr = String::from_utf8_lossy(&out.stderr);
                     let snippet: String = stderr.chars().take(300).collect();
-                    serde_json::json!({"error": format!("pyright output error: {}", snippet)})
+                    serde_json::json!({
+                        "error": format!("pyright output error: {}", snippet),
+                        "deprecated": true,
+                        "deprecation_note": "Use /api/typecheck (ty) instead."
+                    })
                 }
                 Ok(data) => {
                     let diagnostics = data.get("generalDiagnostics")
@@ -176,6 +184,8 @@ pub fn check_types_pyright(directory: &str) -> serde_json::Value {
                         "errors": errors,
                         "warnings": warnings,
                         "informations": informations,
+                        "deprecated": true,
+                        "deprecation_note": "Use /api/typecheck (ty) instead.",
                     })
                 }
             }
@@ -200,5 +210,13 @@ mod tests {
     #[test]
     fn test_fwd() {
         assert_eq!(fwd("a\\b\\c"), "a/b/c");
+    }
+
+    #[test]
+    fn test_pyright_deprecation_field() {
+        // check_types_pyright always returns deprecated: true regardless of pyright availability
+        let result = check_types_pyright(".");
+        assert_eq!(result.get("deprecated").and_then(|v| v.as_bool()), Some(true));
+        assert!(result.get("deprecation_note").is_some());
     }
 }

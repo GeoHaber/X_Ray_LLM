@@ -178,11 +178,13 @@ pub async fn scan_result(AxumState(state): AxumState<Arc<AppState>>) -> impl Int
                 "severity": f.severity,
                 "file": clean_path(&f.file),
                 "line": f.line,
-                "col": 0,
-                "matched_text": "",
+                "col": f.col,
+                "matched_text": f.matched_text,
                 "description": f.description,
                 "fix_hint": f.fix_hint,
-                "test_hint": "",
+                "test_hint": f.test_hint,
+                "cwe": f.cwe,
+                "owasp": f.owasp,
             })
         }).collect();
         let total = high + medium + low;

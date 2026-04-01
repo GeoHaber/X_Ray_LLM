@@ -57,13 +57,35 @@ def findings_to_sarif(
         # Register rule if not seen
         if rule_id not in seen_rules:
             seen_rules[rule_id] = len(sarif_rules)
+            tags = [_rule_category(rule_id)]
+            cwe = finding.get("cwe", "")
+            owasp = finding.get("owasp", "")
+            if cwe:
+                tags.append(cwe)
+            if owasp:
+                tags.append(owasp)
             rule_entry: dict = {
                 "id": rule_id,
                 "shortDescription": {"text": finding.get("description", rule_id)},
                 "properties": {
-                    "tags": [_rule_category(rule_id)],
+                    "tags": tags,
                 },
             }
+            if cwe:
+                cwe_id = cwe.replace("CWE-", "")
+                rule_entry["relationships"] = [
+                    {
+                        "target": {
+                            "id": cwe,
+                            "guid": cwe,
+                            "toolComponent": {"name": "CWE", "guid": "cwe"},
+                        },
+                        "kinds": ["superset"],
+                    }
+                ]
+                rule_entry.setdefault("properties", {})["cwe"] = cwe
+            if owasp:
+                rule_entry.setdefault("properties", {})["owasp"] = owasp
             if finding.get("fix_hint"):
                 rule_entry["help"] = {"text": finding["fix_hint"]}
             sarif_rules.append(rule_entry)
@@ -119,6 +141,26 @@ def findings_to_sarif(
                         "executionSuccessful": True,
                         "endTimeUtc": datetime.now(timezone.utc).isoformat(),
                     }
+                ],
+                "taxonomies": [
+                    {
+                        "name": "CWE",
+                        "version": "4.13",
+                        "informationUri": "https://cwe.mitre.org/data/published/cwe_latest.pdf",
+                        "organization": "MITRE",
+                        "shortDescription": {
+                            "text": "The MITRE Common Weakness Enumeration"
+                        },
+                    },
+                    {
+                        "name": "OWASP Top Ten 2021",
+                        "version": "2021",
+                        "informationUri": "https://owasp.org/Top10/",
+                        "organization": "OWASP Foundation",
+                        "shortDescription": {
+                            "text": "OWASP Top 10 Web Application Security Risks (2021)"
+                        },
+                    },
                 ],
             }
         ],

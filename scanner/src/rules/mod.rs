@@ -20,6 +20,14 @@ fn make_rule(
     id: &str, severity: &str, langs: &[&str],
     pattern: &str, desc: &str, fix: &str, test: &str,
 ) -> Option<Rule> {
+    make_rule_cwe(id, severity, langs, pattern, desc, fix, test, "", "")
+}
+
+fn make_rule_cwe(
+    id: &str, severity: &str, langs: &[&str],
+    pattern: &str, desc: &str, fix: &str, test: &str,
+    cwe: &str, owasp: &str,
+) -> Option<Rule> {
     let re = Regex::new(pattern).ok()?;
     Some(Rule {
         id: id.to_string(),
@@ -29,6 +37,8 @@ fn make_rule(
         description: desc.to_string(),
         fix_hint: fix.to_string(),
         test_hint: test.to_string(),
+        cwe: cwe.to_string(),
+        owasp: owasp.to_string(),
     })
 }
 
@@ -36,86 +46,66 @@ fn make_rule(
 
 fn security_rules() -> Vec<Rule> {
     [
-        // SEC-001: XSS template literal — negative lookahead for sanitizers
-        make_rule(
-            "SEC-001", "HIGH", &["javascript", "html"],
+        make_rule_cwe("SEC-001", "HIGH", &["javascript", "html"],
             r"\.innerHTML\s*=\s*`[^`]*\$\{(?!.*_escHtml|.*escapeHtml|.*sanitize|.*DOMPurify|.*textContent)",
             "XSS: Template literal injected into innerHTML without sanitization",
             "Wrap all dynamic values with an HTML escape function or use textContent",
             "Verify _escHtml or equivalent sanitizer wraps all dynamic values in innerHTML assignments",
-        ),
-        // SEC-002: XSS string concatenation
-        make_rule(
-            "SEC-002", "HIGH", &["javascript", "html"],
+            "CWE-79", "A03:2021-Injection"),
+        make_rule_cwe("SEC-002", "HIGH", &["javascript", "html"],
             r#"\.innerHTML\s*=\s*['\"][^'\"]*['\"]\s*\+\s*\w+"#,
             "XSS: String concatenation with variable injected into innerHTML",
             "Use textContent or sanitize the variable before injection",
             "Check that no unsanitized variables are concatenated into innerHTML",
-        ),
-        // SEC-003: Command injection subprocess shell=True
-        make_rule(
-            "SEC-003", "HIGH", &["python"],
+            "CWE-79", "A03:2021-Injection"),
+        make_rule_cwe("SEC-003", "HIGH", &["python"],
             r"(subprocess\.(run|call|Popen|check_output)\([^)]*\b(shell\s*=\s*True))",
             "Command injection: subprocess called with shell=True",
             "Use shell=False and pass args as a list",
             "Verify subprocess calls do not use shell=True with user-controlled input",
-        ),
-        // SEC-004: SQL injection via f-string or %s
-        make_rule(
-            "SEC-004", "HIGH", &["python"],
+            "CWE-78", "A03:2021-Injection"),
+        make_rule_cwe("SEC-004", "HIGH", &["python"],
             r#"(execute|executemany)\(\s*(f['\"].*\{.*\}.*['\"]|['\"].*%s)"#,
             "SQL injection: String formatting in SQL query",
             "Use parameterized queries with ? or %s placeholders",
             "Verify SQL queries use parameterized binding, not string formatting",
-        ),
-        // SEC-005: SSRF URL concatenation
-        make_rule(
-            "SEC-005", "MEDIUM", &["python"],
+            "CWE-89", "A03:2021-Injection"),
+        make_rule_cwe("SEC-005", "MEDIUM", &["python"],
             r#"urlopen\(.*\+|urlopen\(f['\"]|requests\.(get|post|put|delete)\(.*\+"#,
             "SSRF: URL constructed from user input without validation",
             "Validate URLs against an allowlist of trusted hosts before making requests",
             "Test that URL validation rejects internal/private IPs and non-allowlisted hosts",
-        ),
-        // SEC-006: CORS wildcard
-        make_rule(
-            "SEC-006", "MEDIUM", &["python"],
+            "CWE-918", "A10:2021-SSRF"),
+        make_rule_cwe("SEC-006", "MEDIUM", &["python"],
             r#"Access-Control-Allow-Origin['\"],?\s*['\"]?\*"#,
             "CORS misconfiguration: wildcard origin allows any site",
             "Restrict CORS to specific trusted origins (e.g., localhost)",
             "Verify CORS headers never return wildcard (*) for credentialed requests",
-        ),
-        // SEC-007: eval/exec
-        make_rule(
-            "SEC-007", "HIGH", &["python", "javascript"],
+            "CWE-942", "A05:2021-Security Misconfiguration"),
+        make_rule_cwe("SEC-007", "HIGH", &["python", "javascript"],
             r"(eval|exec)\s*\(",
             "Code injection: eval/exec with potentially untrusted input",
             "Replace eval/exec with safe alternatives (ast.literal_eval, JSON.parse)",
             "Verify no eval/exec is used on user-controlled data",
-        ),
-        // SEC-008: Hardcoded secrets
-        make_rule(
-            "SEC-008", "MEDIUM", &["python"],
+            "CWE-94", "A03:2021-Injection"),
+        make_rule_cwe("SEC-008", "MEDIUM", &["python"],
             r#"(password|secret|token|api_key)\s*=\s*['\"][^'\"]+['\"]"#,
             "Hardcoded secret: credential embedded in source code",
             "Move secrets to environment variables or a secrets manager",
             "Verify no hardcoded passwords/tokens/keys exist in source code",
-        ),
-        // SEC-009: Unsafe deserialization — negative lookahead for SafeLoader
-        make_rule(
-            "SEC-009", "HIGH", &["python"],
+            "CWE-798", "A07:2021-Identification and Authentication Failures"),
+        make_rule_cwe("SEC-009", "HIGH", &["python"],
             r"pickle\.loads?\(|yaml\.load\([^)]*(?!Loader\s*=\s*yaml\.SafeLoader)",
             "Deserialization attack: unsafe pickle/yaml loading",
             "Use json or yaml.safe_load instead of pickle.loads/yaml.load",
             "Verify no unsafe deserialization is used on untrusted data",
-        ),
-        // SEC-010: Path traversal
-        make_rule(
-            "SEC-010", "MEDIUM", &["python"],
+            "CWE-502", "A08:2021-Software and Data Integrity Failures"),
+        make_rule_cwe("SEC-010", "MEDIUM", &["python"],
             r"os\.path\.join\(.*\.\.\s*/",
             "Path traversal: user input may escape intended directory",
             "Validate and normalize paths, reject '..' components",
             "Verify path inputs are sanitized against directory traversal",
-        ),
+            "CWE-22", "A01:2021-Broken Access Control"),
     ]
     .into_iter()
     .flatten()

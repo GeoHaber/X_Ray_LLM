@@ -40,7 +40,53 @@ python -m xray /path/to/project --severity HIGH --incremental
 
 # Show only new findings vs a baseline
 python -m xray /path/to/project --baseline previous_scan.json
+
+# Taint-aware scan (less noise on injection/SSRF/path traversal)
+python -m xray /path/to/project --taint-mode lite
+
+# Policy profile tuning
+python -m xray /path/to/project --policy-profile strict
 ```
+
+## New in v0.4.4 (2026-04-01)
+
+- Taint modes for SEC-004/SEC-005/SEC-010:
+      - `--taint-mode off|lite|strict`
+- Policy profiles:
+      - `--policy-profile strict|balanced|relaxed-tests`
+- UI settings now include Policy + Taint controls.
+- UI includes multilingual labels (EN/ES/FR) for key scan flows.
+- If Rust is requested with non-default policy/taint behavior, scan execution
+      falls back to Python scanner for parity. The UI now shows this explicitly with
+      an engine switch badge.
+
+## Migration Notes (v0.4.3 -> v0.4.4)
+
+If you are upgrading from `v0.4.3`, review these behavior updates:
+
+1. New scan controls are available and optional:
+      - `--taint-mode off|lite|strict`
+      - `--policy-profile strict|balanced|relaxed-tests`
+
+2. Defaults preserve the previous baseline behavior for most users:
+      - `taint_mode=lite`
+      - `policy_profile=balanced`
+
+3. Rust execution fallback is now explicit when parity requires Python scanner:
+      - Trigger condition: Rust requested + non-default policy/taint behavior
+      - UI now displays an engine switch badge during scan
+
+4. CI pipelines using wrapper test execution no longer require pytest-timeout plugin:
+      - Test runner retries without `--timeout` when plugin support is unavailable
+
+5. Suggested upgrade check command:
+
+```bash
+python -m xray . --dry-run --severity HIGH --policy-profile strict --taint-mode lite --format json
+```
+
+6. If your team previously tuned suppression comments heavily, start with:
+      - `--taint-mode strict` for higher sensitivity and compare output before adopting `lite`.
 
 ## Toolchain
 
@@ -48,9 +94,9 @@ X-Ray LLM v0.3.0+ uses the **Astral toolchain** for fast, Rust-based analysis:
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| [uv](https://docs.astral.sh/uv/) | 0.10+ | Package & tool manager (optional but recommended) |
+| [uv](https://docs.astral.sh/uv/) | 0.11+ | Package & tool manager (optional but recommended) |
 | [ruff](https://docs.astral.sh/ruff/) | 0.15+ | Linter + formatter (replaces flake8/black/isort) |
-| [ty](https://docs.astral.sh/ty/) | 0.0.23+ | Type checker (replaces pyright) |
+| [ty](https://docs.astral.sh/ty/) | 0.0.23+ | **Primary** type checker (replaces pyright) |
 
 ```bash
 python setup_tools.py          # Bootstrap all three tools
@@ -113,6 +159,19 @@ Pattern Match → String-Aware Filter → AST Validator → Context Validator �
 | Inline Suppression | All rules | `# xray: ignore[RULE-ID]` comments |
 
 Real-world result: **29% FP reduction** on ZenAIos-Dashboard (763 → 542 findings, 221 false positives eliminated).
+
+### Signal Controls (v0.4.4)
+
+X-Ray now supports two orthogonal controls for finding quality:
+
+- **Taint mode** (depth of source-to-sink filtering):
+      - `off`: regex/context findings only
+      - `lite`: suppresses low-signal non-tainted matches for selected security rules
+      - `strict`: preserves broader context-validated matches
+- **Policy profile** (environment tuning):
+      - `strict`: maximum sensitivity
+      - `balanced`: default behavior
+      - `relaxed-tests`: reduces expected noise in test paths
 
 > **Note:** Both the Python and Rust scanners implement all 42 rules with identical patterns.
 > The Rust scanner additionally provides a full HTTP server mode with **38 API endpoints**

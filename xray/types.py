@@ -44,6 +44,14 @@ class FindingDict(TypedDict, total=False):
     message: str
     suggestion: str
     category: str
+    confidence: float
+    autofix_tier: str
+    signal_path: str
+    why_flagged: str
+    policy_profile: str
+    taint_mode: str
+    taint_matched: bool | None
+    is_test_file: bool
 
 
 class ScanSummary(TypedDict):

@@ -12,6 +12,8 @@ QUALITY_RULES = [
         "description": "Bare except clause swallows all errors including KeyboardInterrupt",
         "fix_hint": "Catch specific exceptions: except (ValueError, TypeError):",
         "test_hint": "Verify no bare except clauses exist — all should name specific exceptions",
+        "cwe": "CWE-396",
+        "owasp": "",
     },
     {
         "id": "QUAL-002",
@@ -21,6 +23,8 @@ QUALITY_RULES = [
         "description": "Silent exception swallowing — error caught but ignored",
         "fix_hint": "At minimum log the error; better: handle or re-raise",
         "test_hint": "Verify caught exceptions are logged or handled, not silently passed",
+        "cwe": "CWE-391",
+        "owasp": "",
     },
     {
         "id": "QUAL-003",
@@ -30,6 +34,8 @@ QUALITY_RULES = [
         "description": "Unchecked int() on user input — will crash on non-numeric values",
         "fix_hint": "Wrap in try/except ValueError with a sensible default",
         "test_hint": "Test that non-numeric input to this parameter returns a default, not a 500",
+        "cwe": "CWE-20",
+        "owasp": "A03:2021-Injection",
     },
     {
         "id": "QUAL-004",
@@ -39,6 +45,8 @@ QUALITY_RULES = [
         "description": "Unchecked float() on user input — will crash on non-numeric values",
         "fix_hint": "Wrap in try/except ValueError with a sensible default",
         "test_hint": "Test that non-numeric input returns a default, not a crash",
+        "cwe": "CWE-20",
+        "owasp": "A03:2021-Injection",
     },
     {
         "id": "QUAL-005",
@@ -48,6 +56,8 @@ QUALITY_RULES = [
         "description": "Calling .items() on a potentially None return — NoneType has no attribute items",
         "fix_hint": "Ensure the object is not None before calling .items(), or use (x or {}).items()",
         "test_hint": "Verify .items() is not called on functions that may return None",
+        "cwe": "CWE-476",
+        "owasp": "",
     },
     {
         "id": "QUAL-006",
@@ -57,6 +67,8 @@ QUALITY_RULES = [
         "description": "Non-daemon thread may prevent clean shutdown",
         "fix_hint": "Set daemon=True for background worker threads",
         "test_hint": "Verify background threads are daemon threads so process can exit cleanly",
+        "cwe": "CWE-404",
+        "owasp": "",
     },
     {
         "id": "QUAL-007",
@@ -66,6 +78,8 @@ QUALITY_RULES = [
         "description": "TO" + "DO/FIX" + "ME marker left in code",
         "fix_hint": "Address the TO" + "DO or create a tracking issue",
         "test_hint": "Audit that TO" + "DO/FIX" + "ME comments have been addressed before release",
+        "cwe": "CWE-546",
+        "owasp": "",
     },
     {
         "id": "QUAL-008",
@@ -75,6 +89,8 @@ QUALITY_RULES = [
         "description": "Long sleep (10+ seconds) in code — may indicate polling instead of events",
         "fix_hint": "Use threading.Event, asyncio, or callback patterns instead of long sleeps",
         "test_hint": "Verify sleeps are short or replaced with event-driven patterns",
+        "cwe": "CWE-400",
+        "owasp": "",
     },
     {
         "id": "QUAL-009",
@@ -84,6 +100,8 @@ QUALITY_RULES = [
         "description": "Explicit keep-alive header — may cause connection hang in some HTTP servers",
         "fix_hint": "Remove Connection: keep-alive header; let the server/framework handle it",
         "test_hint": "Test that HTTP responses close correctly without hanging",
+        "cwe": "CWE-404",
+        "owasp": "",
     },
     {
         "id": "QUAL-010",
@@ -93,6 +111,8 @@ QUALITY_RULES = [
         "description": "localStorage access without try/catch — fails in private browsing",
         "fix_hint": "Wrap localStorage access in try/catch for Safari private mode compatibility",
         "test_hint": "Test that localStorage failure (quota exceeded, private mode) is handled gracefully",
+        "cwe": "CWE-922",
+        "owasp": "A04:2021-Insecure Design",
     },
     {
         "id": "QUAL-011",
@@ -102,6 +122,8 @@ QUALITY_RULES = [
         "description": "Catching broad Exception — masks bugs and makes debugging hard",
         "fix_hint": "Catch specific exceptions (ValueError, TypeError, OSError) instead of Exception",
         "test_hint": "Verify except clauses catch the narrowest possible exception type",
+        "cwe": "CWE-396",
+        "owasp": "",
     },
     {
         "id": "QUAL-012",
@@ -111,6 +133,8 @@ QUALITY_RULES = [
         "description": "String concatenation in loop — O(n²) performance, use str.join() or list append",
         "fix_hint": "Collect parts in a list, then ''.join(parts) after the loop",
         "test_hint": "Verify string building in loops uses list+join pattern, not += concatenation",
+        "cwe": "CWE-1050",
+        "owasp": "",
     },
     {
         "id": "QUAL-013",
@@ -120,5 +144,7 @@ QUALITY_RULES = [
         "description": "Line exceeds 200 characters — hurts readability and code review",
         "fix_hint": "Break long lines using parentheses, backslash continuation, or extract variables",
         "test_hint": "Verify no source lines exceed 200 characters",
+        "cwe": "CWE-1120",
+        "owasp": "",
     },
 ]

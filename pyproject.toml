@@ -26,7 +26,11 @@ classifiers = [
 dependencies = [
     "llama-cpp-python>=0.3.0",
     "pytest>=7.0",
+    "zen-core-libs",
 ]
+
+[tool.uv.sources]
+zen-core-libs = { workspace = true }
 
 [project.optional-dependencies]
 dev = ["ruff>=0.15", "ty>=0.0.1"]

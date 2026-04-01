@@ -322,7 +322,7 @@ After running a scan or analysis, results appear in tabbed views:
 | Duplicates | Duplicates tool | Identical code block groups |
 | Smells | Smells tool | Code smells by type (complexity, nesting, etc.) |
 | Dead Code | Dead Code tool | Uncalled functions (>5 lines) |
-| Types | Types tool | pyright type checking output |
+| Types | Types tool | ty (Astral) type checking output |
 | Health | Health tool | Project health checks (README, LICENSE, tests, CI, etc.) |
 | Format | Format tool | Files that need ruff formatting |
 | Bandit | Bandit tool | Security findings + hardcoded secrets |
@@ -1138,7 +1138,7 @@ The server listens on **port 8077** (configurable via `--port`) and exposes thes
 | POST | `/api/web-smells` | `{directory}` | Web anti-pattern detection |
 | POST | `/api/test-gen` | `{directory}` | Generate pytest stubs |
 | POST | `/api/remediation-time` | `{findings}` | Estimate fix time per finding |
-| POST | `/api/typecheck-pyright` | `{directory}` | Run pyright type checker (alternative to ty) |
+| POST | `/api/typecheck-pyright` | `{directory}` | Run pyright type checker **(deprecated — use `/api/typecheck`)** |
 | POST | `/api/connection-test` | `{directory}` | Analyze web framework route wiring |
 
 ### PM Dashboard

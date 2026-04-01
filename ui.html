@@ -123,6 +123,10 @@ header h1 span { color: var(--accent); }
 .finding-rule { font-weight: 600; font-size: 13px; }
 .finding-file { color: var(--text2); font-size: 12px; font-family: monospace; margin-left: auto; }
 .finding-desc { font-size: 13px; color: var(--text2); }
+.cwe-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: rgba(88,166,255,0.15);
+  color: #58a6ff; font-weight: 600; font-family: monospace; }
+.owasp-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: rgba(210,153,34,0.15);
+  color: #d29922; font-weight: 600; font-family: monospace; }
 .finding-detail { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .finding.open .finding-detail { display: block; }
 .detail-row { display: flex; gap: 8px; margin-bottom: 6px; font-size: 12px; }
@@ -1128,6 +1132,11 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
     <div class="header-info">
       <span class="kbd-badge" onclick="openCmdPalette()" title="Quick actions">&#x2318;K</span>
       <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark mode">&#127769;</button>
+      <select id="langSelect" onchange="setLanguage(this.value)" style="background:var(--bg2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:2px 6px; font-size:11px;">
+        <option value="en">EN</option>
+        <option value="es">ES</option>
+        <option value="fr">FR</option>
+      </select>
       <span><span class="pulse-dot pulse-dot-green"></span> Python</span>
       <span id="rustStatus"><span class="dot dot-gray"></span> Rust</span>
       <span id="platformInfo"></span>
@@ -1139,15 +1148,15 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
     <!-- Scan Hero -->
     <div class="section" style="padding-bottom:8px;">
       <div style="display:flex; gap:6px;">
-        <button class="btn" id="scanBtn" onclick="runScan()" disabled style="flex:1;">
+        <button class="btn" id="scanBtn" onclick="runScan()" disabled style="flex:1;" data-i18n="scan.button">
           &#9654; Scan Project
         </button>
-        <button class="btn btn-stop" id="abortBtn" onclick="abortScan()" disabled>
+        <button class="btn btn-stop" id="abortBtn" onclick="abortScan()" disabled data-i18n="scan.stop">
           &#x25A0; Stop
         </button>
       </div>
       <div class="path-row">
-        <span class="path-display" id="selectedPath">No directory selected</span>
+        <span class="path-display" id="selectedPath" data-i18n="scan.noDirectory">No directory selected</span>
         <button class="icon-btn" onclick="toggleBrowser()" title="Browse directories">&#128193;</button>
       </div>
       <div id="pipelineStatus" style="margin-top:6px; font-size:12px; color:var(--accent); font-weight:600; text-align:center; min-height:18px;"></div>
@@ -1155,17 +1164,17 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
 
     <!-- Settings Accordion (includes Quality Gate) -->
     <details class="accordion">
-      <summary>&#9881; Settings <span class="badge">Engine &middot; Gate</span></summary>
+      <summary data-i18n="settings.summary">&#9881; Settings <span class="badge">Engine &middot; Gate</span></summary>
       <div class="accordion-body">
         <div class="setting-row">
-          <label>Engine</label>
+          <label data-i18n="settings.engine">Engine</label>
           <select id="engine">
             <option value="python">Python</option>
             <option value="rust">Rust (fast)</option>
           </select>
         </div>
         <div class="setting-row">
-          <label>Severity</label>
+          <label data-i18n="settings.severity">Severity</label>
           <select id="severity">
             <option value="LOW">All (Low+)</option>
             <option value="MEDIUM">Medium+</option>
@@ -1173,11 +1182,53 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
           </select>
         </div>
         <div class="setting-row">
-          <label>Exclude</label>
+          <label data-i18n="settings.policy">Policy</label>
+          <select id="policyProfile">
+            <option value="balanced">Balanced</option>
+            <option value="strict">Strict (prod)</option>
+            <option value="relaxed-tests">Relaxed (tests)</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label data-i18n="settings.taint">Taint Mode</label>
+          <select id="taintMode">
+            <option value="off">Off</option>
+            <option value="lite" selected>Lite</option>
+            <option value="strict">Strict</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label data-i18n="settings.exclude">Exclude</label>
           <input type="text" id="excludes" placeholder="test_.*, vendor/.*" spellcheck="false">
         </div>
+        <div class="setting-row">
+          <label>Recipe</label>
+          <select id="scanPreset">
+            <option value="custom">Custom</option>
+            <option value="quick">&#x26A1; Quick (HIGH only)</option>
+            <option value="code-review">&#x1F50D; Code Review</option>
+            <option value="security-audit">&#x1F6E1; Security Audit</option>
+            <option value="compliance">&#x1F4CB; Compliance (all rules)</option>
+            <option value="pre-commit">&#x1F680; Pre-Commit (fast)</option>
+          </select>
+          <button class="btn btn-sm btn-outline" style="width:auto;" onclick="applySelectedPreset()">Apply</button>
+        </div>
+        <div class="setting-row" style="align-items:flex-start;">
+          <label>Profiles</label>
+          <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; gap:6px;">
+              <input type="text" id="profileName" placeholder="profile name" spellcheck="false">
+              <button class="btn btn-sm btn-outline" style="width:auto;" onclick="saveCurrentProfile()">Save</button>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <select id="savedProfiles" style="flex:1;"><option value="">Saved profiles...</option></select>
+              <button class="btn btn-sm btn-outline" style="width:auto;" onclick="loadSelectedProfile()">Load</button>
+              <button class="btn btn-sm btn-outline" style="width:auto;" onclick="deleteSelectedProfile()">Delete</button>
+            </div>
+          </div>
+        </div>
         <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border);">
-          <div style="font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">Quality Gate</div>
+          <div style="font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;" data-i18n="settings.qualityGate">Quality Gate</div>
           <div class="gate-threshold-row">
             <label>Max High</label>
             <input type="number" id="gateMaxHigh" value="0" min="0" />
@@ -1200,7 +1251,7 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
 
     <!-- Analysis Accordion -->
     <details class="accordion">
-      <summary>&#x1F52C; Analysis <span class="badge">16</span></summary>
+      <summary data-i18n="sidebar.analysis">&#x1F52C; Analysis <span class="badge">16</span></summary>
       <div class="accordion-body">
         <div class="tool-list">
           <button class="btn btn-sm btn-outline" onclick="runRuff()" id="ruffBtn" disabled data-hint="Auto-fix lint issues with Ruff">&#x1F9F9; Ruff Fix</button>
@@ -1225,7 +1276,7 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
 
     <!-- Dashboard Accordion -->
     <details class="accordion">
-      <summary>&#x1F4CA; Dashboard <span class="badge">10</span></summary>
+      <summary data-i18n="sidebar.dashboard">&#x1F4CA; Dashboard <span class="badge">12</span></summary>
       <div class="accordion-body">
         <div class="tool-list">
           <button class="btn btn-sm btn-outline" onclick="runRiskMap()" id="riskBtn" disabled data-hint="Treemap of risk zones by severity">&#x1F3AF; Risk Map</button>
@@ -1238,13 +1289,15 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
           <button class="btn btn-sm btn-outline" onclick="runCoupling()" id="coupBtn" disabled data-hint="Module coupling metrics">&#x1F517; Coupling</button>
           <button class="btn btn-sm btn-outline" onclick="runUnusedImports()" id="uimpBtn" disabled data-hint="Find imports that are never used">&#x1F9F9; Imports</button>
           <button class="btn btn-sm btn-outline btn-cta" onclick="runProjectReview()" id="reviewBtn" disabled style="font-size:11px; padding:8px 12px;" data-hint="Full AI-powered project review">&#x1F4DD; Project Review</button>
+          <button class="btn btn-sm btn-outline" onclick="runImpactGraph()" id="impactBtn" disabled data-hint="Blast radius from risky files">&#x1F4A5; Impact Graph</button>
+          <button class="btn btn-sm btn-outline" onclick="runFeedbackInsights()" id="learnBtn" disabled data-hint="Learn from reviewer feedback">&#x1F9E0; Learnings</button>
         </div>
       </div>
     </details>
 
     <!-- Diagnostics Accordion -->
     <details class="accordion">
-      <summary>&#x1F50C; Diagnostics <span class="badge">3</span></summary>
+      <summary data-i18n="sidebar.diagnostics">&#x1F50C; Diagnostics <span class="badge">3</span></summary>
       <div class="accordion-body">
         <div class="tool-list">
           <button class="btn btn-sm btn-outline" onclick="runConnectionTest()" id="connBtn" disabled data-hint="Map UI→Backend wired connections">&#x1F50C; Connection Test</button>
@@ -1256,17 +1309,17 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
 
     <!-- Recent Scans -->
     <div class="section" style="flex:1;">
-      <h3>&#128337; Recent</h3>
-      <div id="recentList" style="font-size:12px; color:var(--text2);">No scans yet</div>
+      <h3 data-i18n="sidebar.recent">&#128337; Recent</h3>
+      <div id="recentList" style="font-size:12px; color:var(--text2);" data-i18n="sidebar.noScans">No scans yet</div>
     </div>
 
     <!-- Browser Overlay (hidden by default) -->
     <div class="browser-overlay" id="browserOverlay" style="display:none;">
       <div class="browser-ov-header">
-        <h3>&#128193; Browse</h3>
+        <h3 data-i18n="browse.title">&#128193; Browse</h3>
         <div class="path-input-row" style="flex:1; margin-bottom:0;">
           <input type="text" id="pathInput" placeholder="Enter path..." spellcheck="false">
-          <button class="btn btn-sm btn-outline" onclick="goToPath()">Go</button>
+          <button class="btn btn-sm btn-outline" onclick="goToPath()" data-i18n="browse.go">Go</button>
         </div>
         <button class="icon-btn" onclick="toggleBrowser()" title="Close browser">&#x2715;</button>
       </div>
@@ -1278,29 +1331,29 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
   <div class="main" id="mainContent">
     <div class="welcome">
       <div class="icon-large">&#x1F52C;</div>
-      <h2>X-Ray Scanner</h2>
-      <p>AI-powered code quality scanner that finds security vulnerabilities, code smells, dead code, and duplicates &mdash; then helps you fix them.</p>
+      <h2 data-i18n="welcome.title">X-Ray Scanner</h2>
+      <p data-i18n="welcome.desc">AI-powered code quality scanner that finds security vulnerabilities, code smells, dead code, and duplicates &mdash; then helps you fix them.</p>
       <div class="welcome-cards">
         <div class="welcome-card">
           <div class="wc-number" style="color:var(--high);">14</div>
-          <div class="wc-label">Security rules</div>
+          <div class="wc-label" data-i18n="welcome.securityRules">Security rules</div>
         </div>
         <div class="welcome-card">
           <div class="wc-number" style="color:var(--accent);">13</div>
-          <div class="wc-label">Quality rules</div>
+          <div class="wc-label" data-i18n="welcome.qualityRules">Quality rules</div>
         </div>
         <div class="welcome-card">
           <div class="wc-number" style="color:var(--green);">11</div>
-          <div class="wc-label">Python rules</div>
+          <div class="wc-label" data-i18n="welcome.pythonRules">Python rules</div>
         </div>
       </div>
       <div class="welcome-steps">
-        <div class="step"><span class="step-num">1</span><span>Click &#128193; in the sidebar to <b>select a directory</b> to scan</span></div>
-        <div class="step"><span class="step-num">2</span><span>Click <b>&#9654; Scan Project</b> to analyze your code</span></div>
-        <div class="step"><span class="step-num">3</span><span>Review <b>findings &amp; grades</b>, then use <b>Fix Plan</b> for repair steps</span></div>
+        <div class="step"><span class="step-num">1</span><span data-i18n="welcome.step1">Click &#128193; in the sidebar to <b>select a directory</b> to scan</span></div>
+        <div class="step"><span class="step-num">2</span><span data-i18n="welcome.step2">Click <b>&#9654; Scan Project</b> to analyze your code</span></div>
+        <div class="step"><span class="step-num">3</span><span data-i18n="welcome.step3">Review <b>findings &amp; grades</b>, then use <b>Fix Plan</b> for repair steps</span></div>
       </div>
       <div style="margin-top:24px;">
-        <button class="btn-cta" onclick="toggleBrowser()" style="padding:12px 32px; font-size:14px; border-radius:12px;">
+        <button class="btn-cta" onclick="toggleBrowser()" style="padding:12px 32px; font-size:14px; border-radius:12px;" data-i18n="welcome.cta">
           &#128193; Browse Directory to Start
         </button>
       </div>
@@ -1423,12 +1476,354 @@ let circularCallsData = null;
 let couplingData = null;
 let unusedImportsData = null;
 let connectionTestData = null;
+let impactGraphData = null;
+let feedbackInsightsData = null;
+let prCommentsData = null;
 let wireTestData = null;
 let wireTestingActive = false;
+let showAdvancedTabs = false;
+let currentLang = (() => {
+  try { return localStorage.getItem('xray_lang') || 'en'; } catch(e) { return 'en'; }
+})();
+const PROFILE_STORE_KEY = 'xray_scan_profiles';
+
+function getScanSettings() {
+  return {
+    engine: document.getElementById('engine')?.value || 'python',
+    severity: document.getElementById('severity')?.value || 'LOW',
+    policy_profile: document.getElementById('policyProfile')?.value || 'balanced',
+    taint_mode: document.getElementById('taintMode')?.value || 'lite',
+    excludes: document.getElementById('excludes')?.value || '',
+    gateMaxHigh: document.getElementById('gateMaxHigh')?.value || '0',
+    gateMaxMedium: document.getElementById('gateMaxMedium')?.value || '50',
+    gateMinScore: document.getElementById('gateMinScore')?.value || '70',
+    gateMaxDebt: document.getElementById('gateMaxDebt')?.value || '80',
+  };
+}
+
+function applyScanSettings(settings) {
+  if (!settings) return;
+  const map = {
+    engine: 'engine',
+    severity: 'severity',
+    policy_profile: 'policyProfile',
+    taint_mode: 'taintMode',
+    excludes: 'excludes',
+    gateMaxHigh: 'gateMaxHigh',
+    gateMaxMedium: 'gateMaxMedium',
+    gateMinScore: 'gateMinScore',
+    gateMaxDebt: 'gateMaxDebt',
+  };
+  Object.entries(map).forEach(([k, id]) => {
+    const el = document.getElementById(id);
+    if (el && settings[k] !== undefined && settings[k] !== null) el.value = String(settings[k]);
+  });
+}
+
+function _loadProfiles() {
+  try {
+    const v = JSON.parse(localStorage.getItem(PROFILE_STORE_KEY) || '{}');
+    return (v && typeof v === 'object') ? v : {};
+  } catch(e) {
+    return {};
+  }
+}
+
+function _saveProfiles(profiles) {
+  try { localStorage.setItem(PROFILE_STORE_KEY, JSON.stringify(profiles)); } catch(e) {}
+}
+
+function refreshProfileList() {
+  const sel = document.getElementById('savedProfiles');
+  if (!sel) return;
+  const current = sel.value;
+  const profiles = _loadProfiles();
+  const names = Object.keys(profiles).sort((a, b) => a.localeCompare(b));
+  sel.innerHTML = '<option value="">Saved profiles...</option>' + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if (current && profiles[current]) sel.value = current;
+}
+
+function applySelectedPreset() {
+  const preset = document.getElementById('scanPreset')?.value || 'custom';
+  const presets = {
+    'custom': null,
+    'quick': { engine: 'rust', severity: 'HIGH', policy_profile: 'relaxed-tests', taint_mode: 'off' },
+    'code-review': { engine: 'rust', severity: 'MEDIUM', policy_profile: 'balanced', taint_mode: 'lite' },
+    'security-audit': { engine: 'python', severity: 'MEDIUM', policy_profile: 'strict', taint_mode: 'strict', gateMaxHigh: '0', gateMaxMedium: '15', gateMinScore: '80' },
+    'compliance': { engine: 'python', severity: 'LOW', policy_profile: 'strict', taint_mode: 'strict', gateMaxHigh: '0', gateMaxMedium: '25', gateMinScore: '75' },
+    'pre-commit': { engine: 'rust', severity: 'HIGH', policy_profile: 'balanced', taint_mode: 'lite' },
+  };
+  const recipeNames = { 'quick': 'Quick', 'code-review': 'Code Review', 'security-audit': 'Security Audit', 'compliance': 'Compliance', 'pre-commit': 'Pre-Commit' };
+  if (!presets[preset]) return;
+  applyScanSettings(presets[preset]);
+  updatePipelineStatus(`Recipe: ${recipeNames[preset] || preset}`);
+}
+
+function saveCurrentProfile() {
+  const name = (document.getElementById('profileName')?.value || '').trim();
+  if (!name) { showToast('Enter profile name', true); return; }
+  const profiles = _loadProfiles();
+  profiles[name] = getScanSettings();
+  _saveProfiles(profiles);
+  refreshProfileList();
+  const sel = document.getElementById('savedProfiles');
+  if (sel) sel.value = name;
+  showToast(`Profile saved: ${name}`);
+}
+
+function loadSelectedProfile() {
+  const name = document.getElementById('savedProfiles')?.value || '';
+  if (!name) return;
+  const profiles = _loadProfiles();
+  if (!profiles[name]) return;
+  applyScanSettings(profiles[name]);
+  const preset = document.getElementById('scanPreset');
+  if (preset) preset.value = 'custom';
+  showToast(`Profile loaded: ${name}`);
+}
+
+function deleteSelectedProfile() {
+  const name = document.getElementById('savedProfiles')?.value || '';
+  if (!name) return;
+  const profiles = _loadProfiles();
+  if (!profiles[name]) return;
+  delete profiles[name];
+  _saveProfiles(profiles);
+  refreshProfileList();
+  showToast(`Profile deleted: ${name}`);
+}
+
+const I18N = {
+  en: {
+    'settings.summary': '&#9881; Settings <span class="badge">Engine &middot; Gate</span>',
+    'settings.engine': 'Engine',
+    'settings.severity': 'Severity',
+    'settings.policy': 'Policy',
+    'settings.taint': 'Taint Mode',
+    'settings.exclude': 'Exclude',
+    'settings.qualityGate': 'Quality Gate',
+    'policy.balanced': 'Balanced',
+    'policy.strict': 'Strict (prod)',
+    'policy.relaxed': 'Relaxed (tests)',
+    'taint.off': 'Off',
+    'taint.lite': 'Lite',
+    'taint.strict': 'Strict',
+    'scan.button': '&#9654; Scan Project',
+    'scan.stop': '&#x25A0; Stop',
+    'scan.noDirectory': 'No directory selected',
+    'status.starting': 'Starting scan...',
+    'status.scanningFiles': 'Scanning files...',
+    'status.scanComplete': 'Scan complete! Loading results...',
+    'status.downloading': 'Downloading results from server...',
+    'status.rendering': 'Rendering {count} findings...',
+    'status.done': 'Scan complete',
+    'status.stopping': 'Stopping scan...',
+    'error.scan': 'Scan Error',
+    'error.noResults': 'No Results',
+    'error.timeout': 'Scan Timeout',
+    'error.failed': 'Scan Failed',
+    'error.aborted': 'Scan Aborted',
+    'engine.switch': 'Engine switched: {from} -> {to}',
+    'sidebar.analysis': '&#x1F52C; Analysis <span class="badge">16</span>',
+    'sidebar.dashboard': '&#x1F4CA; Dashboard <span class="badge">10</span>',
+    'sidebar.diagnostics': '&#x1F50C; Diagnostics <span class="badge">3</span>',
+    'sidebar.recent': '&#128337; Recent',
+    'sidebar.noScans': 'No scans yet',
+    'browse.title': '&#128193; Browse',
+    'browse.go': 'Go',
+    'welcome.title': 'X-Ray Scanner',
+    'welcome.desc': 'AI-powered code quality scanner that finds security vulnerabilities, code smells, dead code, and duplicates &mdash; then helps you fix them.',
+    'welcome.securityRules': 'Security rules',
+    'welcome.qualityRules': 'Quality rules',
+    'welcome.pythonRules': 'Python rules',
+    'welcome.step1': 'Click &#128193; in the sidebar to <b>select a directory</b> to scan',
+    'welcome.step2': 'Click <b>&#9654; Scan Project</b> to analyze your code',
+    'welcome.step3': 'Review <b>findings &amp; grades</b>, then use <b>Fix Plan</b> for repair steps',
+    'welcome.cta': '&#128193; Browse Directory to Start'
+  },
+  es: {
+    'settings.summary': '&#9881; Configuracion <span class="badge">Motor &middot; Regla</span>',
+    'settings.engine': 'Motor',
+    'settings.severity': 'Severidad',
+    'settings.policy': 'Politica',
+    'settings.taint': 'Modo Taint',
+    'settings.exclude': 'Excluir',
+    'settings.qualityGate': 'Puerta de Calidad',
+    'policy.balanced': 'Balanceado',
+    'policy.strict': 'Estricto (prod)',
+    'policy.relaxed': 'Relajado (tests)',
+    'taint.off': 'Apagado',
+    'taint.lite': 'Ligero',
+    'taint.strict': 'Estricto',
+    'scan.button': '&#9654; Escanear Proyecto',
+    'scan.stop': '&#x25A0; Detener',
+    'scan.noDirectory': 'Ningun directorio seleccionado',
+    'status.starting': 'Iniciando escaneo...',
+    'status.scanningFiles': 'Escaneando archivos...',
+    'status.scanComplete': 'Escaneo completo! Cargando resultados...',
+    'status.downloading': 'Descargando resultados del servidor...',
+    'status.rendering': 'Renderizando {count} hallazgos...',
+    'status.done': 'Escaneo completo',
+    'status.stopping': 'Deteniendo escaneo...',
+    'error.scan': 'Error de Escaneo',
+    'error.noResults': 'Sin Resultados',
+    'error.timeout': 'Tiempo de escaneo agotado',
+    'error.failed': 'Escaneo Fallido',
+    'error.aborted': 'Escaneo Detenido',
+    'engine.switch': 'Motor cambiado: {from} -> {to}',
+    'sidebar.analysis': '&#x1F52C; Analisis <span class="badge">16</span>',
+    'sidebar.dashboard': '&#x1F4CA; Panel <span class="badge">10</span>',
+    'sidebar.diagnostics': '&#x1F50C; Diagnostico <span class="badge">3</span>',
+    'sidebar.recent': '&#128337; Recientes',
+    'sidebar.noScans': 'Aun no hay escaneos',
+    'browse.title': '&#128193; Explorar',
+    'browse.go': 'Ir',
+    'welcome.title': 'Escaner X-Ray',
+    'welcome.desc': 'Escaner de calidad de codigo impulsado por IA que encuentra vulnerabilidades, malos olores, codigo muerto y duplicados, y luego te ayuda a corregirlos.',
+    'welcome.securityRules': 'Reglas de seguridad',
+    'welcome.qualityRules': 'Reglas de calidad',
+    'welcome.pythonRules': 'Reglas de Python',
+    'welcome.step1': 'Haz clic en &#128193; en la barra lateral para <b>seleccionar un directorio</b> a escanear',
+    'welcome.step2': 'Haz clic en <b>&#9654; Escanear Proyecto</b> para analizar tu codigo',
+    'welcome.step3': 'Revisa <b>hallazgos y calificaciones</b>, luego usa <b>Plan de Arreglo</b> para corregir',
+    'welcome.cta': '&#128193; Explorar Directorio para Empezar'
+  },
+  fr: {
+    'settings.summary': '&#9881; Parametres <span class="badge">Moteur &middot; Regle</span>',
+    'settings.engine': 'Moteur',
+    'settings.severity': 'Severite',
+    'settings.policy': 'Profil',
+    'settings.taint': 'Mode Taint',
+    'settings.exclude': 'Exclure',
+    'settings.qualityGate': 'Porte de Qualite',
+    'policy.balanced': 'Equilibre',
+    'policy.strict': 'Strict (prod)',
+    'policy.relaxed': 'Detendu (tests)',
+    'taint.off': 'Off',
+    'taint.lite': 'Leger',
+    'taint.strict': 'Strict',
+    'scan.button': '&#9654; Scanner le Projet',
+    'scan.stop': '&#x25A0; Arreter',
+    'scan.noDirectory': 'Aucun repertoire selectionne',
+    'status.starting': 'Demarrage du scan...',
+    'status.scanningFiles': 'Analyse des fichiers...',
+    'status.scanComplete': 'Scan termine! Chargement des resultats...',
+    'status.downloading': 'Telechargement des resultats du serveur...',
+    'status.rendering': 'Rendu de {count} resultats...',
+    'status.done': 'Scan termine',
+    'status.stopping': 'Arret du scan...',
+    'error.scan': 'Erreur de Scan',
+    'error.noResults': 'Aucun Resultat',
+    'error.timeout': 'Delai de scan depasse',
+    'error.failed': 'Echec du Scan',
+    'error.aborted': 'Scan Interrompu',
+    'engine.switch': 'Moteur change: {from} -> {to}',
+    'sidebar.analysis': '&#x1F52C; Analyse <span class="badge">16</span>',
+    'sidebar.dashboard': '&#x1F4CA; Tableau de Bord <span class="badge">10</span>',
+    'sidebar.diagnostics': '&#x1F50C; Diagnostic <span class="badge">3</span>',
+    'sidebar.recent': '&#128337; Recents',
+    'sidebar.noScans': 'Aucun scan pour le moment',
+    'browse.title': '&#128193; Parcourir',
+    'browse.go': 'Aller',
+    'welcome.title': 'Scanner X-Ray',
+    'welcome.desc': 'Scanner de qualite de code alimente par IA, il detecte vulnerabilites, mauvaises odeurs de code, code mort et doublons puis aide a corriger.',
+    'welcome.securityRules': 'Regles de securite',
+    'welcome.qualityRules': 'Regles de qualite',
+    'welcome.pythonRules': 'Regles Python',
+    'welcome.step1': 'Cliquez sur &#128193; dans la barre laterale pour <b>selectionner un dossier</b> a scanner',
+    'welcome.step2': 'Cliquez sur <b>&#9654; Scanner le Projet</b> pour analyser votre code',
+    'welcome.step3': 'Consultez <b>resultats et notes</b>, puis utilisez le <b>Plan de Correction</b>',
+    'welcome.cta': '&#128193; Parcourir un Dossier pour Commencer'
+  }
+};
+
+function tr(key) {
+  return (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key;
+}
+
+function trf(key, vars = {}) {
+  let msg = tr(key);
+  for (const [k, v] of Object.entries(vars)) {
+    msg = msg.replace(`{${k}}`, String(v));
+  }
+  return msg;
+}
+
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (!key) return;
+    el.innerHTML = tr(key);
+  });
+  const policy = document.getElementById('policyProfile');
+  if (policy) {
+    const balanced = policy.querySelector('option[value="balanced"]');
+    const strict = policy.querySelector('option[value="strict"]');
+    const relaxed = policy.querySelector('option[value="relaxed-tests"]');
+    if (balanced) balanced.textContent = tr('policy.balanced');
+    if (strict) strict.textContent = tr('policy.strict');
+    if (relaxed) relaxed.textContent = tr('policy.relaxed');
+  }
+  const taint = document.getElementById('taintMode');
+  if (taint) {
+    const off = taint.querySelector('option[value="off"]');
+    const lite = taint.querySelector('option[value="lite"]');
+    const strict = taint.querySelector('option[value="strict"]');
+    if (off) off.textContent = tr('taint.off');
+    if (lite) lite.textContent = tr('taint.lite');
+    if (strict) strict.textContent = tr('taint.strict');
+  }
+
+  const toolLabels = {
+    ruffBtn: { en: '&#x1F9F9; Ruff Fix', es: '&#x1F9F9; Arreglo Ruff', fr: '&#x1F9F9; Correction Ruff' },
+    satdBtn: { en: '&#x1F4CB; Scan Debt', es: '&#x1F4CB; Deuda Tecnica', fr: '&#x1F4CB; Dette Technique' },
+    gitBtn: { en: '&#x1F525; Git Hotspots', es: '&#x1F525; Puntos Calientes Git', fr: '&#x1F525; Points Chauds Git' },
+    graphBtn: { en: '&#x1F517; Dep Graph', es: '&#x1F517; Grafo Dep', fr: '&#x1F517; Graphe Dep' },
+    fmtBtn: { en: '&#x1F4D0; Format', es: '&#x1F4D0; Formato', fr: '&#x1F4D0; Format' },
+    healthBtn: { en: '&#x1FA7A; Health', es: '&#x1FA7A; Salud', fr: '&#x1FA7A; Sante' },
+    banditBtn: { en: '&#x1F6E1; Bandit', es: '&#x1F6E1; Bandit', fr: '&#x1F6E1; Bandit' },
+    deadBtn: { en: '&#x1F480; Dead Code', es: '&#x1F480; Codigo Muerto', fr: '&#x1F480; Code Mort' },
+    smellsBtn: { en: '&#x1F443; Smells', es: '&#x1F443; Olores', fr: '&#x1F443; Odeurs' },
+    dupsBtn: { en: '&#x1F4CB; Duplicates', es: '&#x1F4CB; Duplicados', fr: '&#x1F4CB; Doublons' },
+    temporalBtn: { en: '&#x1F4C5; Temporal', es: '&#x1F4C5; Temporal', fr: '&#x1F4C5; Temporel' },
+    typeBtn: { en: '&#x1F50E; Types', es: '&#x1F50E; Tipos', fr: '&#x1F50E; Types' },
+    releaseBtn: { en: '&#x1F680; Release', es: '&#x1F680; Release', fr: '&#x1F680; Release' },
+    aiBtn: { en: '&#x1F916; AI Detect', es: '&#x1F916; Detectar IA', fr: '&#x1F916; Detect IA' },
+    webBtn: { en: '&#x1F310; Web Smells', es: '&#x1F310; Olores Web', fr: '&#x1F310; Odeurs Web' },
+    testGenBtn: { en: '&#x1F9EA; Test Gen', es: '&#x1F9EA; Gen Tests', fr: '&#x1F9EA; Gen Tests' },
+    riskBtn: { en: '&#x1F3AF; Risk Map', es: '&#x1F3AF; Mapa de Riesgo', fr: '&#x1F3AF; Carte Risque' },
+    modBtn: { en: '&#x1F4CA; Modules', es: '&#x1F4CA; Modulos', fr: '&#x1F4CA; Modules' },
+    confBtn: { en: '&#x1F3AF; Confidence', es: '&#x1F3AF; Confianza', fr: '&#x1F3AF; Confiance' },
+    batchBtn: { en: '&#x1F4CB; Batches', es: '&#x1F4CB; Lotes', fr: '&#x1F4CB; Lots' },
+    archBtn: { en: '&#x1F3D7; Arch Map', es: '&#x1F3D7; Mapa Arq', fr: '&#x1F3D7; Carte Arch' },
+    cgBtn: { en: '&#x1F4DE; Call Graph', es: '&#x1F4DE; Grafo Llamadas', fr: '&#x1F4DE; Graphe Appels' },
+    circBtn: { en: '&#x1F300; Circular', es: '&#x1F300; Circular', fr: '&#x1F300; Circulaire' },
+    coupBtn: { en: '&#x1F517; Coupling', es: '&#x1F517; Acoplamiento', fr: '&#x1F517; Couplage' },
+    uimpBtn: { en: '&#x1F9F9; Imports', es: '&#x1F9F9; Imports', fr: '&#x1F9F9; Imports' },
+    reviewBtn: { en: '&#x1F4DD; Project Review', es: '&#x1F4DD; Revision Proyecto', fr: '&#x1F4DD; Revue Projet' },
+    impactBtn: { en: '&#x1F4A5; Impact Graph', es: '&#x1F4A5; Grafo Impacto', fr: '&#x1F4A5; Graphe Impact' },
+    learnBtn: { en: '&#x1F9E0; Learnings', es: '&#x1F9E0; Aprendizajes', fr: '&#x1F9E0; Retours' },
+    connBtn: { en: '&#x1F50C; Connection Test', es: '&#x1F50C; Test Conexion', fr: '&#x1F50C; Test Connexion' },
+    wireBtn: { en: '&#128268; Wire Connector Test', es: '&#128268; Test Conector', fr: '&#128268; Test Connecteur' },
+    monkeyBtn: { en: '&#x1F412; Run Monkey Tests', es: '&#x1F412; Ejecutar Monkey Tests', fr: '&#x1F412; Lancer Monkey Tests' },
+  };
+  const lang = I18N[currentLang] ? currentLang : 'en';
+  Object.entries(toolLabels).forEach(([id, labels]) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = labels[lang] || labels.en;
+  });
+}
+
+function setLanguage(lang) {
+  currentLang = (lang || 'en').toLowerCase();
+  if (!I18N[currentLang]) currentLang = 'en';
+  try { localStorage.setItem('xray_lang', currentLang); } catch(e) {}
+  applyI18n();
+}
 
 // ── View Category Lists (for dropdown active state) ─────────────
-const _analysisViews = ['trend','smells','bandit','dead','dups','satd','git','graph','health','temporal','typecheck','release','aidetect','websmells','testgen','format','connections'];
-const _dashboardViews = ['riskmap','modules','confidence','batches','arch','callgraph','circular','coupling','unusedimports','review'];
+const _analysisViews = ['trend','smells','bandit','dead','dups','satd','git','graph','health','temporal','typecheck','release','aidetect','websmells','testgen','format','connections','prcomments'];
+const _dashboardViews = ['riskmap','modules','confidence','batches','arch','callgraph','circular','coupling','unusedimports','review','impact','learn'];
 
 // ── Browser Overlay ─────────────────────────────────────────────
 function toggleBrowser() {
@@ -1492,6 +1887,14 @@ function toggleTheme() {
 
 // ── Init ─────────────────────────────────────────────────────────
 async function init() {
+  const langSelect = document.getElementById('langSelect');
+  if (langSelect) {
+    langSelect.value = I18N[currentLang] ? currentLang : 'en';
+    currentLang = langSelect.value;
+  }
+  applyI18n();
+  refreshProfileList();
+
   const info = await api('/api/info');
   document.getElementById('platformInfo').textContent = info.platform;
   if (info.rust_available) {
@@ -1503,6 +1906,15 @@ async function init() {
   // Auto-select engine based on server
   if (info.engine === 'rust') {
     document.getElementById('engine').value = 'rust';
+  }
+  updateStatusEngine(document.getElementById('engine')?.value || 'python', document.getElementById('engine')?.value || 'python');
+  const engineSel = document.getElementById('engine');
+  if (engineSel) {
+    engineSel.addEventListener('change', () => {
+      updateStatusEngine(engineSel.value, engineSel.value);
+      const preset = document.getElementById('scanPreset');
+      if (preset) preset.value = 'custom';
+    });
   }
   if (info.fixable_rules) fixableRules = new Set(info.fixable_rules);
   // Start browsing from home
@@ -1619,9 +2031,29 @@ function showScanUI(engine) {
   updatePipelineStatus(`Starting ${engine} scan...`);
   document.getElementById('mainContent').innerHTML = `
     <div style="padding:40px; text-align:center;">
-      <div class="scanning-msg"><div class="spinner"></div><span class="pulse-dot pulse-dot-cyan"></span> Scanning with ${esc(engine)} engine...</div>
+      <div class="scanning-msg"><div class="spinner"></div><span class="pulse-dot pulse-dot-cyan"></span> ${esc(tr('status.scanningFiles'))} (${esc(engine)})</div>
+      <div id="engineFallbackBadge" style="display:none; margin-top:8px; font-size:11px; color:var(--neon-orange); background:rgba(255,170,51,0.12); border:1px solid rgba(255,170,51,0.35); border-radius:999px; padding:4px 10px; width:max-content; margin-left:auto; margin-right:auto;"></div>
       <div id="progressInfo" style="margin-top:16px; color:var(--text2);"></div>
     </div>`;
+}
+
+function setEngineFallbackBadge(requested, effective) {
+  const badge = document.getElementById('engineFallbackBadge');
+  if (!badge) return;
+  if (!requested || !effective || requested === effective) {
+    badge.style.display = 'none';
+    return;
+  }
+  badge.style.display = 'inline-block';
+  badge.textContent = trf('engine.switch', { from: requested, to: effective });
+}
+
+function updateStatusEngine(requested, effective) {
+  const el = document.getElementById('statusEngine');
+  if (!el) return;
+  const req = requested || 'python';
+  const eff = effective || req;
+  el.textContent = req === eff ? `${eff} engine` : `${req} requested -> ${eff} active`;
 }
 
 function updatePipelineStatus(msg) {
@@ -1680,7 +2112,7 @@ async function abortScan() {
   _scanAborted = true;
   const btn = document.getElementById('abortBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Stopping...'; }
-  updatePipelineStatus('Stopping scan...');
+  updatePipelineStatus(tr('status.stopping'));
   try { await api('/api/abort', { method: 'POST' }); } catch(e) {}
 }
 
@@ -1695,6 +2127,8 @@ async function runScan() {
 
   const engine = document.getElementById('engine').value;
   const severity = document.getElementById('severity').value;
+  const policy_profile = document.getElementById('policyProfile').value;
+  const taint_mode = document.getElementById('taintMode').value;
   const excludeStr = document.getElementById('excludes').value.trim();
   const excludes = excludeStr ? excludeStr.split(',').map(s => s.trim()).filter(Boolean) : [];
 
@@ -1715,12 +2149,13 @@ async function runScan() {
   try {
     // ── STEP 1: Start scan ──────────────────────────────────────
     updatePipelineStatus('Starting scan...');
+    updatePipelineStatus(tr('status.starting'));
     let startResp;
     try {
       startResp = await api('/api/scan', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ directory: selectedDir, engine, severity, excludes })
+        body: JSON.stringify({ directory: selectedDir, engine, severity, excludes, policy_profile, taint_mode })
       });
     } catch(e) {
       showFatalError('Cannot reach server', e.message);
@@ -1728,13 +2163,13 @@ async function runScan() {
     }
 
     if (startResp.error) {
-      showFatalError('Scan Error', startResp.error);
+      showFatalError(tr('error.scan'), startResp.error);
       return;
     }
     console.log('[xray] scan started:', startResp);
 
     // ── STEP 2: Poll for progress ───────────────────────────────
-    updatePipelineStatus('Scanning files...');
+    updatePipelineStatus(tr('status.scanningFiles'));
     let done = false;
     let pollCount = 0;
     const maxPolls = 300; // ~2 minutes max
@@ -1748,11 +2183,15 @@ async function runScan() {
           console.log(`[xray] poll #${pollCount}: status=${p.status} files=${p.files_scanned||0}/${p.total_files||0}`);
         }
         if (p.status === 'scanning') {
+          setEngineFallbackBadge(p.engine_requested, p.engine_effective);
+          updateStatusEngine(p.engine_requested, p.engine_effective);
           updateProgressUI(p);
           updatePipelineStatus(`Scanning... ${p.files_scanned||0}/${p.total_files||0} files`);
         } else if (p.status === 'done') {
+          setEngineFallbackBadge(p.engine_requested, p.engine_effective);
+          updateStatusEngine(p.engine_requested, p.engine_effective);
           updateProgressUI(p);
-          updatePipelineStatus('Scan complete! Loading results...');
+          updatePipelineStatus(tr('status.scanComplete'));
           done = true;
         } else if (p.status === 'idle') {
           // On early polls, idle means spawn_blocking hasn't set progress yet — keep waiting
@@ -1761,7 +2200,7 @@ async function runScan() {
           } else {
             // After several polls, assume scan finished without setting progress
             console.log('[xray] got idle — scan may have finished already');
-            updatePipelineStatus('Scan complete! Loading results...');
+            updatePipelineStatus(tr('status.scanComplete'));
             done = true;
           }
         }
@@ -1771,16 +2210,16 @@ async function runScan() {
     }
 
     if (_scanAborted) {
-      showFatalError('Scan Aborted', 'Scan was stopped by user.');
+      showFatalError(tr('error.aborted'), 'Scan was stopped by user.');
       return;
     }
     if (pollCount >= maxPolls) {
-      showFatalError('Scan Timeout', 'Scan took too long (>2 minutes). Try a smaller directory.');
+      showFatalError(tr('error.timeout'), 'Scan took too long (>2 minutes). Try a smaller directory.');
       return;
     }
 
     // ── STEP 3: Fetch full results ──────────────────────────────
-    updatePipelineStatus('Downloading results from server...');
+    updatePipelineStatus(tr('status.downloading'));
     // Small delay to let browser paint the status update
     await new Promise(r => setTimeout(r, 50));
 
@@ -1805,29 +2244,32 @@ async function runScan() {
     }
 
     if (_scanAborted) {
-      showFatalError('Scan Aborted', 'Scan was stopped by user.');
+      showFatalError(tr('error.aborted'), 'Scan was stopped by user.');
       return;
     }
 
     if (!result) {
-      showFatalError('No Results', 'Server completed scan but returned no findings data. Try scanning again.');
+      showFatalError(tr('error.noResults'), 'Server completed scan but returned no findings data. Try scanning again.');
       return;
     }
 
     if (result.aborted) {
-      showFatalError('Scan Aborted', `Stopped after ${result.files_scanned || 0} files.`);
+      showFatalError(tr('error.aborted'), `Stopped after ${result.files_scanned || 0} files.`);
       return;
     }
 
+    setEngineFallbackBadge(result.engine_requested, result.engine_effective);
+    updateStatusEngine(result.engine_requested, result.engine_effective);
+
     if (result.error) {
-      showFatalError('Scan Error', result.error);
+      showFatalError(tr('error.scan'), result.error);
       return;
     }
 
     console.log(`[xray] got ${result.findings.length} findings, preparing to render...`);
 
     // ── STEP 4: Process & render ────────────────────────────────
-    updatePipelineStatus(`Rendering ${result.findings.length} findings...`);
+    updatePipelineStatus(trf('status.rendering', { count: result.findings.length }));
     await new Promise(r => setTimeout(r, 50)); // Let browser paint
 
     scanResults = result;
@@ -1866,7 +2308,7 @@ async function runScan() {
 
     _scanBtnSet(false);
     _hideAbortBtn();
-    updatePipelineStatus('Scan complete \u2714');
+    updatePipelineStatus(`${tr('status.done')} \u2714`);
     addRecent(selectedDir, result);
 
   } catch(e) {
@@ -1874,7 +2316,7 @@ async function runScan() {
     try {
       _scanBtnSet(false);
       _hideAbortBtn();
-      updatePipelineStatus('Scan failed');
+      updatePipelineStatus(tr('error.failed'));
       document.getElementById('mainContent').innerHTML = `
         <div class="welcome"><h2>Scan Failed</h2>
           <p style="color:var(--high);">${esc(String(e.message || e))}</p>
@@ -1959,6 +2401,7 @@ let reviewData = null;
 function renderResults() {
   if (!scanResults) return;
   const r = scanResults;
+  updateStatusEngine(r.engine_requested || r.engine || 'python', r.engine_effective || r.engine || 'python');
   const dims = calcDimensionGrades(r.findings || [], r.files_scanned);
   const grade = dims.overall;
   const gate = evaluateQualityGate(r.summary, grade, satdData ? satdData.total_hours : 0);
@@ -2008,8 +2451,10 @@ function renderResults() {
       <button class="view-tab ${activeView==='fixplan'?'active':''}" onclick="switchView('fixplan')">&#128295; Fix Plan</button>
       <button class="view-tab ${activeView==='files'?'active':''}" onclick="switchView('files')">&#128196; By File</button>
       <button class="view-tab ${activeView==='gate'?'active':''}" onclick="switchView('gate')">&#128678; Gate</button>
-      <div class="tab-divider"></div>
-      <div class="tab-dropdown-wrapper">
+      <button class="view-tab ${activeView==='prcomments'?'active':''}" onclick="switchView('prcomments')">&#x1F4AC; PR Pack</button>
+      <button class="view-tab" onclick="toggleAdvancedTabs()">${showAdvancedTabs ? '&#x2212;' : '&#x2b;'} Advanced</button>
+      <div class="tab-divider" style="${showAdvancedTabs ? '' : 'display:none;'}"></div>
+      <div class="tab-dropdown-wrapper" style="${showAdvancedTabs ? '' : 'display:none;'}">
         <button class="view-tab tab-dropdown-trigger ${_analysisViews.includes(activeView)?'active':''}" onclick="toggleDropdown('analysisMenu')">
           &#x1F52C; Analysis &#x25BE;
         </button>
@@ -2031,9 +2476,10 @@ function renderResults() {
           <button class="view-tab ${activeView==='testgen'?'active':''}" onclick="switchView('testgen')">&#x1F9EA; Test Gen<span class="check">&#x2713;</span></button>
           <button class="view-tab ${activeView==='format'?'active':''}" onclick="switchView('format')">&#x1F4D0; Format<span class="check">&#x2713;</span></button>
           <button class="view-tab ${activeView==='connections'?'active':''}" onclick="switchView('connections')">&#x1F50C; Connections<span class="check">&#x2713;</span></button>
+          <button class="view-tab ${activeView==='prcomments'?'active':''}" onclick="switchView('prcomments')">&#x1F4AC; PR Pack<span class="check">&#x2713;</span></button>
         </div>
       </div>
-      <div class="tab-dropdown-wrapper">
+      <div class="tab-dropdown-wrapper" style="${showAdvancedTabs ? '' : 'display:none;'}">
         <button class="view-tab tab-dropdown-trigger ${_dashboardViews.includes(activeView)?'active':''}" onclick="toggleDropdown('dashboardMenu')">
           &#x1F4CA; Dashboard &#x25BE;
         </button>
@@ -2048,6 +2494,8 @@ function renderResults() {
           <button class="view-tab ${activeView==='coupling'?'active':''}" onclick="switchView('coupling')">&#x1F517; Coupling<span class="check">&#x2713;</span></button>
           <button class="view-tab ${activeView==='unusedimports'?'active':''}" onclick="switchView('unusedimports')">&#x1F9F9; Imports<span class="check">&#x2713;</span></button>
           <button class="view-tab ${activeView==='review'?'active':''}" onclick="switchView('review')">&#x1F4DD; Review<span class="check">&#x2713;</span></button>
+          <button class="view-tab ${activeView==='impact'?'active':''}" onclick="switchView('impact')">&#x1F4A5; Impact<span class="check">&#x2713;</span></button>
+          <button class="view-tab ${activeView==='learn'?'active':''}" onclick="switchView('learn')">&#x1F9E0; Learnings<span class="check">&#x2713;</span></button>
         </div>
       </div>
     </div>
@@ -2107,6 +2555,11 @@ function switchView(view) {
   renderResults();
 }
 
+function toggleAdvancedTabs() {
+  showAdvancedTabs = !showAdvancedTabs;
+  renderResults();
+}
+
 function renderViewContent() {
   const el = document.getElementById('viewContent');
   if (!el) return;
@@ -2139,7 +2592,10 @@ function renderViewContent() {
   if (activeView === 'coupling')    { el.innerHTML = renderCouplingView(); return; }
   if (activeView === 'unusedimports') { el.innerHTML = renderUnusedImportsView(); return; }
   if (activeView === 'connections') { el.innerHTML = renderConnectionTestView(); return; }
+  if (activeView === 'prcomments') { el.innerHTML = renderPRCommentsView(); return; }
   if (activeView === 'review')     { el.innerHTML = renderProjectReviewView(); drawReviewCharts(); return; }
+  if (activeView === 'impact')     { el.innerHTML = renderImpactGraphView(); initImpactGraph(); return; }
+  if (activeView === 'learn')      { el.innerHTML = renderFeedbackInsightsView(); return; }
   el.innerHTML = renderFindingsList();
 }
 
@@ -2186,6 +2642,8 @@ function renderFindingsList() {
         <span class="sev-badge sev-${f.severity}">${f.severity}</span>
         <span class="func-tag ${tagClass}">${tagLabel}</span>
         <span class="finding-rule">${esc(f.rule_id)}</span>
+        ${f.cwe ? `<span class="cwe-badge" title="${esc(f.cwe)}">${esc(f.cwe)}</span>` : ''}
+        ${f.owasp ? `<span class="owasp-badge" title="${esc(f.owasp)}">${esc(f.owasp.split('-')[0])}</span>` : ''}
         <span class="finding-file">${esc(shortFile)}:${f.line}</span>
       </div>
       <div class="finding-desc">${esc(f.description)}</div>
@@ -2199,6 +2657,12 @@ function renderFindingsList() {
               <div class="tier-row"><span class="tier-label">File</span><span class="tier-value">${esc(f.file)}</span></div>
               <div class="tier-row"><span class="tier-label">Line:Col</span><span class="tier-value">${f.line}:${f.col}</span></div>
               <div class="tier-row"><span class="tier-label">Match</span><span class="tier-value">${esc(f.matched_text)}</span></div>
+              ${f.cwe ? `<div class="tier-row"><span class="tier-label">CWE</span><span class="tier-value"><a href="https://cwe.mitre.org/data/definitions/${f.cwe.replace('CWE-','')}.html" target="_blank" rel="noopener">${esc(f.cwe)}</a></span></div>` : ''}
+              ${f.owasp ? `<div class="tier-row"><span class="tier-label">OWASP</span><span class="tier-value">${esc(f.owasp)}</span></div>` : ''}
+              ${f.signal_path ? `<div class="tier-row"><span class="tier-label">Signal</span><span class="tier-value">${esc(f.signal_path)}</span></div>` : ''}
+              ${f.why_flagged ? `<div class="tier-row"><span class="tier-label">Why</span><span class="tier-value">${esc(f.why_flagged)}</span></div>` : ''}
+              ${f.policy_profile ? `<div class="tier-row"><span class="tier-label">Policy</span><span class="tier-value">${esc(f.policy_profile)}</span></div>` : ''}
+              ${f.taint_mode ? `<div class="tier-row"><span class="tier-label">Taint</span><span class="tier-value">${esc(f.taint_mode)}${f.taint_matched === true ? ' (matched)' : f.taint_matched === false ? ' (not matched)' : ''}</span></div>` : ''}
             </div>
           </div>
           <div class="finding-tier">
@@ -2213,6 +2677,10 @@ function renderFindingsList() {
                   ? `<button class="btn btn-sm btn-fix" onclick="event.stopPropagation(); previewFix(${i})">&#128295; Preview Fix</button>
                      <button class="btn-cta" style="padding:6px 14px; font-size:11px;" onclick="event.stopPropagation(); applyFixDirect(${i})">&#x26A1; Apply Fix</button>`
                   : `<span style="color:var(--text2); font-size:12px;">&#x2139; Manual fix required</span>`}
+              </div>
+              <div style="margin-top:8px; display:flex; gap:6px;">
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); sendFindingFeedback(${i}, 'useful')">&#128077; Useful</button>
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); sendFindingFeedback(${i}, 'noisy')">&#128078; Noisy</button>
               </div>
             </div>
           </div>
@@ -3105,6 +3573,80 @@ async function runWebSmells()  { await runTool('webBtn',       '/api/web-smells'
 async function runTestGen()    { await runTool('testGenBtn',   '/api/test-gen',          'testGenData',     '\u{1F9EA} Test Gen',   'testgen'); }
 async function runConnectionTest() { await runTool('connBtn', '/api/connection-test', 'connectionTestData', '\u{1F50C} Connection Test', 'connections'); }
 
+async function runPRComments() {
+  if (!selectedDir || !scanResults) return;
+  try {
+    prCommentsData = await api('/api/pr-comments', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir, findings: scanResults.findings || [], max_items: 30 })
+    });
+    activeView = 'prcomments';
+    renderResults();
+  } catch (e) {
+    showToast('PR comment generation failed', true);
+  }
+}
+
+async function sendFindingFeedback(indexInFiltered, verdict) {
+  if (!selectedDir || !scanResults) return;
+  const findings = filterFindings(scanResults.findings || []);
+  const finding = findings[indexInFiltered];
+  if (!finding) return;
+  try {
+    await api('/api/feedback', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        directory: selectedDir,
+        feedback: {
+          rule_id: finding.rule_id,
+          file: finding.file,
+          line: finding.line,
+          severity: finding.severity,
+          verdict,
+        },
+      }),
+    });
+    showToast(`Feedback saved: ${verdict}`);
+    if (activeView === 'learn') await runFeedbackInsights();
+  } catch (e) {
+    showToast('Failed to save feedback', true);
+  }
+}
+
+async function runFeedbackInsights() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('learnBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
+  try {
+    feedbackInsightsData = await api('/api/feedback-insights', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir })
+    });
+    if (scanResults) { activeView = 'learn'; renderResults(); }
+    else { renderStandalone('learn'); }
+  } catch (e) {
+    showToast('Learning insights failed', true);
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F9E0} Learnings'; }
+}
+
+async function runImpactGraph() {
+  if (!selectedDir) return;
+  const btn = document.getElementById('impactBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  try {
+    impactGraphData = await api('/api/impact-graph', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ directory: selectedDir, findings: scanResults?.findings || [] })
+    });
+    if (scanResults) { activeView = 'impact'; renderResults(); }
+    else { renderStandalone('impact'); }
+  } catch (e) {
+    showToast('Impact graph failed', true);
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '\u{1F4A5} Impact Graph'; }
+}
+
 // ── Trend Chart View ─────────────────────────────────────────────
 function renderTrendView() {
   if (scanHistory.length === 0) return `<div style="padding:40px; text-align:center; color:var(--text2);">
@@ -3883,6 +4425,117 @@ function renderConnectionTestView() {
   }
 
   html += '</div>';
+  return html;
+}
+
+function renderPRCommentsView() {
+  if (!scanResults) {
+    return '<div style="padding:40px; text-align:center; color:var(--text2);">Run a scan first to generate PR comments.</div>';
+  }
+  if (!prCommentsData) {
+    return `<div style="padding:20px;">
+      <h2 style="margin-bottom:12px;">PR Comment Pack</h2>
+      <p style="color:var(--text2); margin-bottom:12px;">Generate reviewer-ready comments plus quick patch suggestions for auto-fixable findings.</p>
+      <button class="btn" style="max-width:260px;" onclick="runPRComments()">&#x1F4AC; Generate PR Comments</button>
+    </div>`;
+  }
+  const d = prCommentsData;
+  let html = `<div style="padding:20px;">
+    <h2 style="margin-bottom:10px;">PR Comment Pack</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val">${d.total_input || 0}</div><div class="lbl">Input Findings</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--accent);">${d.total_comments || 0}</div><div class="lbl">Comments Generated</div></div>
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+      <button class="btn btn-sm" onclick="runPRComments()">&#x21bb; Regenerate</button>
+      <button class="btn btn-sm btn-outline" onclick="copyPRMarkdown()">&#x1F4CB; Copy Markdown</button>
+    </div>`;
+  for (const c of (d.comments || [])) {
+    html += `<div class="finding" style="margin-bottom:8px;">
+      <div class="finding-top">
+        <span class="sev-badge sev-${esc(c.severity)}">${esc(c.severity)}</span>
+        <span class="finding-rule">${esc(c.rule_id)}</span>
+        <span class="finding-file">${esc(c.file)}:${c.line}</span>
+      </div>
+      <div class="finding-desc">${esc(c.description || '')}</div>
+      ${c.fix_hint ? `<div style="margin-top:6px; color:var(--green); font-size:12px;">&#128295; ${esc(c.fix_hint)}</div>` : ''}
+      ${c.patch_diff ? `<div class="code-preview" style="margin-top:8px; max-height:220px;">${esc(c.patch_diff)}</div>` : ''}
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function copyPRMarkdown() {
+  if (!prCommentsData || !prCommentsData.markdown) return;
+  navigator.clipboard.writeText(prCommentsData.markdown).then(() => showToast('PR markdown copied'));
+}
+
+function renderImpactGraphView() {
+  if (!impactGraphData) {
+    return '<div style="padding:40px; text-align:center; color:var(--text2);">Click <b>Impact Graph</b> in Dashboard to see blast radius from risky files.</div>';
+  }
+  const d = impactGraphData;
+  return `<div style="padding:20px;">
+    <h2 style="margin-bottom:12px;">Impact Graph (Connectivity Blast Radius)</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val">${d.seed_count || 0}</div><div class="lbl">Seed Nodes</div></div>
+      <div class="debt-card"><div class="val">${d.node_count || 0}</div><div class="lbl">Impacted Nodes</div></div>
+      <div class="debt-card"><div class="val">${d.edge_count || 0}</div><div class="lbl">Impacted Edges</div></div>
+    </div>
+    <div class="graph-container" id="impactGraphContainer"></div>
+  </div>`;
+}
+
+function initImpactGraph() {
+  const el = document.getElementById('impactGraphContainer');
+  if (!el || !impactGraphData || !window.vis) return;
+  const nodes = new vis.DataSet((impactGraphData.nodes || []).map(n => ({
+    id: n.id,
+    label: n.label,
+    title: `${n.file || n.id}\nimpact=${n.impact} risk=${n.risk}`,
+    color: n.is_seed ? '#f85149' : (n.level === 1 ? '#d29922' : '#58a6ff'),
+    value: Math.max(1, Number(n.impact || 1)),
+    shape: n.external ? 'box' : 'dot',
+  })));
+  const edges = new vis.DataSet((impactGraphData.edges || []).map(e => ({ from: e.from, to: e.to, arrows: 'to' })));
+  new vis.Network(el, { nodes, edges }, {
+    physics: { stabilization: false, barnesHut: { springLength: 120 } },
+    interaction: { hover: true },
+    nodes: { font: { color: '#e6edf3', size: 12 } },
+    edges: { color: { color: '#8b949e' }, smooth: true },
+  });
+}
+
+function renderFeedbackInsightsView() {
+  if (!feedbackInsightsData) {
+    return '<div style="padding:40px; text-align:center; color:var(--text2);">Use Useful/Noisy on findings, then open Learnings to tune your repo profile.</div>';
+  }
+  const d = feedbackInsightsData;
+  let html = `<div style="padding:20px;">
+    <h2 style="margin-bottom:12px;">Feedback Learnings</h2>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val">${d.entries || 0}</div><div class="lbl">Feedback Events</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--medium);">${(d.suppress_rules || []).length}</div><div class="lbl">Suppress Candidates</div></div>
+      <div class="debt-card"><div class="val" style="color:var(--green);">${(d.prioritize_rules || []).length}</div><div class="lbl">Prioritize Candidates</div></div>
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <button class="btn btn-sm" onclick="runFeedbackInsights()">&#x21bb; Refresh</button>
+      <button class="btn btn-sm btn-outline" onclick="navigator.clipboard.writeText(feedbackInsightsData.suggested_yaml || '')">&#x1F4CB; Copy YAML</button>
+    </div>`;
+  if ((d.suppress_rules || []).length > 0) {
+    html += '<h3 style="margin-bottom:8px; color:var(--medium);">Suppress Candidates</h3>';
+    for (const r of d.suppress_rules) {
+      html += `<div class="debt-item"><span class="sev-badge sev-MEDIUM">NOISY</span><span style="font-family:monospace;">${esc(r.rule_id)}</span><span style="color:var(--text2); margin-left:auto;">ratio ${(r.ratio * 100).toFixed(0)}% (${r.noisy}/${r.noisy + r.useful})</span></div>`;
+    }
+  }
+  if ((d.prioritize_rules || []).length > 0) {
+    html += '<h3 style="margin:12px 0 8px; color:var(--green);">Prioritize Candidates</h3>';
+    for (const r of d.prioritize_rules) {
+      html += `<div class="debt-item"><span class="sev-badge sev-LOW">SIGNAL</span><span style="font-family:monospace;">${esc(r.rule_id)}</span><span style="color:var(--text2); margin-left:auto;">ratio ${(r.ratio * 100).toFixed(0)}% (${r.useful}/${r.noisy + r.useful})</span></div>`;
+    }
+  }
+  html += `<h3 style="margin:12px 0 8px;">Suggested YAML</h3><div class="code-preview">${esc(d.suggested_yaml || 'xray:\n  suppress: []\n  prioritize: []')}</div></div>`;
   return html;
 }
 
@@ -4708,6 +5361,9 @@ const _cmdActions = [
   { icon: '\uD83D\uDCCA', label: 'Modules', hint: '', desc: 'Per-module grades', action: () => { if(!document.getElementById('modBtn').disabled) runModuleCards(); } },
   { icon: '\uD83C\uDFAF', label: 'Confidence', hint: '', desc: 'Release score', action: () => { if(!document.getElementById('confBtn').disabled) runConfidence(); } },
   { icon: '\uD83D\uDCDD', label: 'Project Review', hint: '', desc: 'Full AI review', action: () => { if(!document.getElementById('reviewBtn').disabled) runProjectReview(); } },
+  { icon: '\uD83D\uDCA5', label: 'Impact Graph', hint: '', desc: 'Blast radius map', action: () => { if(!document.getElementById('impactBtn').disabled) runImpactGraph(); } },
+  { icon: '\uD83E\uDDE0', label: 'Feedback Learnings', hint: '', desc: 'Tune noisy rules', action: () => { if(!document.getElementById('learnBtn').disabled) runFeedbackInsights(); } },
+  { icon: '\uD83D\uDCAC', label: 'PR Comment Pack', hint: '', desc: 'Reviewer-ready markdown', action: () => runPRComments() },
   { icon: '\u2B07', label: 'Export JSON', hint: '', desc: 'Download results', action: () => { if(scanResults) exportJSON(); } },
   { icon: '\u2B07', label: 'Export Report', hint: '', desc: 'HTML report', action: () => { if(scanResults) exportHTML(); } },
   { icon: '\uD83C\uDF19', label: 'Toggle Theme', hint: '', desc: 'Light/Dark mode', action: () => toggleTheme() },
@@ -4764,9 +5420,9 @@ document.addEventListener('keydown', (e) => {
 let _currentMode = 'scan';
 const _reviewViews = ['findings','fixplan','files','gate','trend','smells','bandit','dead','dups',
   'satd','git','graph','health','temporal','typecheck','release','aidetect','websmells','testgen',
-  'format','connections'];
+  'format','connections','prcomments'];
 const _dashViews = ['riskmap','modules','confidence','batches','arch','callgraph','circular',
-  'coupling','unusedimports','review'];
+  'coupling','unusedimports','review','impact','learn'];
 
 function setMode(mode) {
   _currentMode = mode;

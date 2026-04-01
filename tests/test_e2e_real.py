@@ -952,7 +952,7 @@ class TestRulesIntegrity:
         """Each rule should fire on its own sample pattern."""
         samples = {
             "SEC-003": ("subprocess.run(cmd, shell=True)", ".py"),
-            "SEC-004": ('cursor.execute(f"SELECT * FROM {table}")', ".py"),
+            "SEC-004": ('cursor.execute(f"SELECT * FROM {query_table}")', ".py"),
             "SEC-007": ("result = eval(user_input)", ".py"),
             "SEC-009": ("data = yaml.load(raw)", ".py"),
             "SEC-012": ("DEBUG = True", ".py"),
@@ -1010,3 +1010,80 @@ class TestFullWorkflow:
         parsed = json.loads(json_str)
         assert parsed["version"] == "2.1.0"
         assert len(parsed["runs"][0]["results"]) == len(result.findings)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# TYPE CHECKER TESTS — ty (primary) vs pyright (deprecated)
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class TestTypeCheckers:
+    """Validate that ty is the primary type checker and pyright raises deprecation."""
+
+    def test_check_types_ty_returns_expected_keys(self, vuln_project):
+        """check_types() (ty) returns the canonical response shape."""
+        from analyzers import check_types
+
+        result = check_types(str(vuln_project))
+        if "error" not in result:
+            assert "total_diagnostics" in result
+            assert "errors" in result
+            assert "warnings" in result
+            assert "diagnostics" in result
+            assert "clean" in result
+
+    def test_run_typecheck_pyright_deprecation_warning(self, vuln_project):
+        """run_typecheck() must emit a DeprecationWarning."""
+        import warnings as _warnings
+
+        from analyzers import run_typecheck
+
+        with _warnings.catch_warnings(record=True) as w:
+            _warnings.simplefilter("always")
+            run_typecheck(str(vuln_project))
+            deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+            assert len(deprecation_warnings) >= 1, "run_typecheck should emit DeprecationWarning"
+            assert "deprecated" in str(deprecation_warnings[0].message).lower()
+
+    def test_typecheck_pyright_endpoint_has_deprecated_flag(self, vuln_project):
+        """The /api/typecheck-pyright route must inject 'deprecated': True."""
+        from api.analysis_routes import handle_typecheck_pyright
+
+        body = {"directory": str(vuln_project)}
+        result, status = handle_typecheck_pyright(body, None)
+        assert status == 200
+        assert result.get("deprecated") is True
+        assert "deprecation_note" in result
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# TOOLCHAIN VERSION VALIDATION
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class TestToolchainVersions:
+    """Verify Astral toolchain binaries are available."""
+
+    @staticmethod
+    def _version(cmd):
+        import subprocess
+
+        try:
+            out = subprocess.run(
+                [cmd, "--version"], capture_output=True, text=True, timeout=15
+            )
+            return out.stdout.strip()
+        except FileNotFoundError:
+            pytest.skip(f"{cmd} not installed")
+
+    def test_ruff_available(self):
+        ver = self._version("ruff")
+        assert "ruff" in ver.lower()
+
+    def test_ty_available(self):
+        ver = self._version("ty")
+        assert "ty" in ver.lower()
+
+    def test_uv_available(self):
+        ver = self._version("uv")
+        assert "uv" in ver.lower()

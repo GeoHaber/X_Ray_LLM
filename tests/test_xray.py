@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import tempfile
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -124,6 +125,57 @@ class TestScanner:
         bare = [f for f in findings if f.rule_id == "QUAL-001"]
         assert len(bare) > 0, "Should detect bare except clause"
 
+    def test_scoped_suppression_ignore_next(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
+            f.write("# xray: ignore-next[SEC-007]\nresult = eval(user_input)\n")
+            f.flush()
+            findings = scan_file(f.name)
+        os.unlink(f.name)
+        assert not any(x.rule_id == "SEC-007" for x in findings)
+
+    def test_scoped_suppression_ignore_file(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
+            f.write("# xray: ignore-file[SEC-007]\nresult = eval(user_input)\n")
+            f.flush()
+            findings = scan_file(f.name)
+        os.unlink(f.name)
+        assert not any(x.rule_id == "SEC-007" for x in findings)
+
+    def test_scoped_suppression_ignore_range(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
+            f.write(
+                "# xray: ignore-start[SEC-007]\n"
+                "a = eval(user_input)\n"
+                "# xray: ignore-end[SEC-007]\n"
+                "b = eval(user_input)\n"
+            )
+            f.flush()
+            findings = scan_file(f.name)
+        os.unlink(f.name)
+        sec = [x for x in findings if x.rule_id == "SEC-007"]
+        assert len(sec) == 1
+
+    def test_py008_ast_suppresses_binary_and_encoding(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
+            f.write(
+                "with open('a.bin', 'rb') as fp:\n"
+                "    fp.read()\n"
+                "with open('b.txt', 'r', encoding='utf-8') as fp:\n"
+                "    fp.read()\n"
+            )
+            f.flush()
+            findings = scan_file(f.name)
+        os.unlink(f.name)
+        assert not any(x.rule_id == "PY-008" for x in findings)
+
+    def test_py008_ast_flags_text_without_encoding(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
+            f.write("with open('c.txt', 'r') as fp:\n    fp.read()\n")
+            f.flush()
+            findings = scan_file(f.name)
+        os.unlink(f.name)
+        assert any(x.rule_id == "PY-008" for x in findings)
+
     def test_scan_clean_file_no_findings(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
             f.write("def add(a: int, b: int) -> int:\n    return a + b\n")
@@ -151,6 +203,48 @@ class TestScanner:
             assert isinstance(result, ScanResult)
             assert result.files_scanned >= 1
             assert len(result.findings) >= 1
+
+    def test_taint_lite_suppresses_non_tainted_sec005(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
+            f.write("import requests\nrequests.get('https://api.example.com/v1/status' + '/ping')\n")
+            f.flush()
+            findings = scan_file(f.name, taint_mode="lite")
+        os.unlink(f.name)
+        assert not any(x.rule_id == "SEC-005" for x in findings)
+
+    def test_taint_strict_keeps_non_tainted_sec005(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
+            f.write("import requests\nrequests.get('https://api.example.com/v1/status' + '/ping')\n")
+            f.flush()
+            findings = scan_file(f.name, taint_mode="strict")
+        os.unlink(f.name)
+        assert any(x.rule_id == "SEC-005" for x in findings)
+
+    def test_taint_lite_keeps_tainted_sec005(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
+            f.write(
+                "import requests\n"
+                "def fetch(user_url):\n"
+                "    return requests.get(user_url + '/profile')\n"
+            )
+            f.flush()
+            findings = scan_file(f.name, taint_mode="lite")
+        os.unlink(f.name)
+        assert any(x.rule_id == "SEC-005" for x in findings)
+
+    def test_relaxed_policy_suppresses_test_security_noise(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tests_dir = os.path.join(tmpdir, "tests")
+            os.makedirs(tests_dir)
+            test_file = os.path.join(tests_dir, "test_ssrf.py")
+            with open(test_file, "w", encoding="utf-8") as f:
+                f.write("import requests\nrequests.get(user_url + '/x')\n")
+
+            relaxed = scan_directory(tmpdir, policy_profile="relaxed-tests", taint_mode="lite")
+            strict = scan_directory(tmpdir, policy_profile="strict", taint_mode="lite")
+
+            assert not any(x.rule_id == "SEC-005" for x in relaxed.findings)
+            assert any(x.rule_id == "SEC-005" for x in strict.findings)
 
     def test_scan_respects_skip_dirs(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -232,9 +326,9 @@ class TestLLMConfig:
 
     def test_unload(self):
         engine = LLMEngine(config=LLMConfig(model_path=""))
-        engine._model = "fake"
+        engine._backend._model = "fake"
         engine.unload()
-        assert engine._model is None
+        assert engine._backend._model is None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -281,6 +375,24 @@ class TestTestRunner:
         os.unlink(f.name)
         assert result.total >= 1
         assert result.output
+
+    def test_run_tests_retries_without_timeout_plugin(self):
+        first = MagicMock()
+        first.stdout = ""
+        first.stderr = "error: unrecognized arguments: --timeout\n"
+        first.returncode = 4
+
+        second = MagicMock()
+        second.stdout = "1 passed in 0.01s\n"
+        second.stderr = ""
+        second.returncode = 0
+
+        with patch("xray.runner.subprocess.run", side_effect=[first, second]) as mocked:
+            result = run_tests("tests/test_xray.py", timeout=10)
+
+        assert mocked.call_count == 2
+        assert result.passed == 1
+        assert result.total == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

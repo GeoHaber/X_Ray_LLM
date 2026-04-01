@@ -215,13 +215,13 @@ class TestFindsRealBugs_Security:
         assert not any(f.rule_id == "SEC-003" for f in findings), "SEC-003 false positive on shell=False"
 
     def test_SEC_004_sql_injection_fstring(self):
-        path = _write_temp(".py", 'cursor.execute(f"SELECT * FROM users WHERE id={uid}")\n')
+        path = _write_temp(".py", 'cursor.execute(f"SELECT * FROM users WHERE id={query_param}")\n')
         findings = scan_file(path)
         os.unlink(path)
         assert any(f.rule_id == "SEC-004" for f in findings), "Missed SEC-004 SQL injection f-string"
 
     def test_SEC_004_sql_injection_percent_s(self):
-        path = _write_temp(".py", "cursor.execute('SELECT * FROM t WHERE id=%s' % user_id)\n")
+        path = _write_temp(".py", "cursor.execute('SELECT * FROM t WHERE id=%s' % query_param)\n")
         findings = scan_file(path)
         os.unlink(path)
         assert any(f.rule_id == "SEC-004" for f in findings), "Missed SEC-004 SQL injection %s"

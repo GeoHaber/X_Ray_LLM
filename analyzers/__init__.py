@@ -61,6 +61,7 @@ from analyzers.pm_dashboard import (
     compute_architecture_map,
     compute_call_graph,
     compute_confidence_meter,
+    compute_impact_graph,
     compute_module_cards,
     compute_project_review,
     compute_risk_heatmap,
@@ -110,6 +111,7 @@ __all__ = [
     "compute_call_graph",
     "compute_confidence_meter",
     "compute_coupling_metrics",
+    "compute_impact_graph",
     "compute_module_cards",
     "compute_project_review",
     # PM Dashboard

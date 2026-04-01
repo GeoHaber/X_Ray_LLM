@@ -33,6 +33,8 @@ class XRayConfig:
     rules_dir: str = ""
     suppress_rules: list[str] = field(default_factory=list)
     max_file_size: int = 1_048_576
+    policy_profile: str = "balanced"  # strict | balanced | relaxed-tests
+    taint_mode: str = "lite"  # off | lite | strict
 
     @staticmethod
     def from_pyproject(project_root: str) -> "XRayConfig":
@@ -86,6 +88,16 @@ class XRayConfig:
         if "max-file-size" in xray_config:
             config.max_file_size = int(xray_config["max-file-size"])
 
+        if "policy-profile" in xray_config:
+            profile = str(xray_config["policy-profile"]).lower()
+            if profile in ("strict", "balanced", "relaxed-tests"):
+                config.policy_profile = profile
+
+        if "taint-mode" in xray_config:
+            taint_mode = str(xray_config["taint-mode"]).lower()
+            if taint_mode in ("off", "lite", "strict"):
+                config.taint_mode = taint_mode
+
         return config
 
     def merge_cli(
@@ -96,6 +108,8 @@ class XRayConfig:
         output_format: str = "",
         incremental: bool | None = None,
         parallel: bool | None = None,
+        policy_profile: str = "",
+        taint_mode: str = "",
     ):
         """Merge CLI overrides (CLI takes precedence over pyproject.toml)."""
         if severity:
@@ -108,3 +122,7 @@ class XRayConfig:
             self.incremental = incremental
         if parallel is not None:
             self.parallel = parallel
+        if policy_profile:
+            self.policy_profile = policy_profile
+        if taint_mode:
+            self.taint_mode = taint_mode

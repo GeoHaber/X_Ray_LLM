@@ -38,3 +38,7 @@ xray-scanner
 
 # Ad-hoc scan output
 python_scan.json
+scan_self*.json
+test_results.txt
+*.sarif
+_debug_*.py

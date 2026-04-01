@@ -18,6 +18,13 @@ def handle_scan(body: dict, handler) -> tuple[dict, int]:
     engine = body.get("engine", "python")
     severity = body.get("severity", "LOW")
     excludes = body.get("excludes", [])
+    policy_profile = str(body.get("policy_profile", "balanced") or "balanced").lower()
+    taint_mode = str(body.get("taint_mode", "lite") or "lite").lower()
+
+    if policy_profile not in {"strict", "balanced", "relaxed-tests"}:
+        policy_profile = "balanced"
+    if taint_mode not in {"off", "lite", "strict"}:
+        taint_mode = "lite"
 
     if not directory or not os.path.isdir(directory):
         return {"error": f"Invalid directory: {directory}"}, 400
@@ -30,7 +37,7 @@ def handle_scan(body: dict, handler) -> tuple[dict, int]:
     state.abort.clear()
     t = threading.Thread(
         target=background_scan,
-        args=(directory, engine, severity, excludes, total),
+        args=(directory, engine, severity, excludes, total, policy_profile, taint_mode),
         daemon=True,
     )
     t.start()

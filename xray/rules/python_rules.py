@@ -12,6 +12,8 @@ PYTHON_RULES = [
         "description": "Function annotated as -> None but returns a dict",
         "fix_hint": "Fix the return type annotation to match actual return value",
         "test_hint": "Verify function return types match their annotations",
+        "cwe": "CWE-394",
+        "owasp": "",
     },
     {
         "id": "PY-002",
@@ -21,6 +23,8 @@ PYTHON_RULES = [
         "description": "Calling .items() on method that returns None (common in HTTP handlers)",
         "fix_hint": "Check if the method returns a dict or None before calling .items()",
         "test_hint": "Test that methods returning None are not iterated with .items()",
+        "cwe": "CWE-476",
+        "owasp": "",
     },
     {
         "id": "PY-003",
@@ -30,6 +34,8 @@ PYTHON_RULES = [
         "description": "Wildcard import pollutes namespace and hides dependencies",
         "fix_hint": "Import specific names: from module import func1, func2",
         "test_hint": "Verify no wildcard imports exist in production code",
+        "cwe": "CWE-1108",
+        "owasp": "",
     },
     {
         "id": "PY-004",
@@ -39,6 +45,8 @@ PYTHON_RULES = [
         "description": "Debug " + "print statement left in code — use logging instead",
         "fix_hint": "Replace pri" + "nt() with logging.debug/info/warning as appropriate",
         "test_hint": "Verify production code uses logging module instead of pri" + "nt()",
+        "cwe": "CWE-497",
+        "owasp": "",
     },
     {
         "id": "PY-005",
@@ -48,6 +56,8 @@ PYTHON_RULES = [
         "description": "JSON parsing without error handling — crashes on malformed input",
         "fix_hint": "Wrap json.loads() in try/except json.JSONDecodeError",
         "test_hint": "Test that malformed JSON input returns an error response, not a crash",
+        "cwe": "CWE-755",
+        "owasp": "",
     },
     {
         "id": "PY-006",
@@ -57,6 +67,8 @@ PYTHON_RULES = [
         "description": "Glob" + "al variable mutation — hard to test and reason about",
         "fix_hint": "Pass state through function parameters or use a class",
         "test_hint": "Verify glob" + "al state is minimized and thread-safe if concurrent",
+        "cwe": "CWE-1108",
+        "owasp": "",
     },
     {
         "id": "PY-007",
@@ -66,6 +78,8 @@ PYTHON_RULES = [
         "description": "Direct os.envir" + "on[] access crashes on missing key — use .get() with default",
         "fix_hint": "Use os.envir" + "on.get('KEY', 'default') instead of os.envir" + "on['KEY']",
         "test_hint": "Verify environment variable access has defaults for missing keys",
+        "cwe": "CWE-394",
+        "owasp": "",
     },
     {
         "id": "PY-008",
@@ -75,6 +89,8 @@ PYTHON_RULES = [
         "description": "File opened without explicit encoding — platform-dependent behavior",
         "fix_hint": "Always specify encoding='utf-8' for text file operations",
         "test_hint": "Verify all text file opens specify explicit encoding",
+        "cwe": "CWE-838",
+        "owasp": "",
     },
     {
         "id": "PY-009",
@@ -84,6 +100,8 @@ PYTHON_RULES = [
         "description": "Exception captured into variable but silently ignored",
         "fix_hint": "Log the exception: logging.warning('...', exc_info=True) or re-raise",
         "test_hint": "Verify captured exceptions are logged, handled, or re-raised",
+        "cwe": "CWE-391",
+        "owasp": "",
     },
     {
         "id": "PY-010",
@@ -93,6 +111,8 @@ PYTHON_RULES = [
         "description": "sys.exit() in library code — kills the entire process, prevents reuse",
         "fix_hint": "Raise an exception instead; let the caller decide how to handle failure",
         "test_hint": "Verify library functions raise exceptions instead of calling sys.exit()",
+        "cwe": "CWE-382",
+        "owasp": "",
     },
     {
         "id": "PY-011",
@@ -102,5 +122,7 @@ PYTHON_RULES = [
         "description": "isinstance with too many types — indicates missing polymorphism or protocol",
         "fix_hint": "Use Protocol, ABC, or structural dispatch instead of long isinstance chains",
         "test_hint": "Verify type checking uses protocols or ABC instead of long isinstance tuples",
+        "cwe": "CWE-1120",
+        "owasp": "",
     },
 ]

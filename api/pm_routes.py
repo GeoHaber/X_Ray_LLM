@@ -68,6 +68,15 @@ def handle_call_graph(body, handler):
     return compute_call_graph(d), 200
 
 
+def handle_impact_graph(body, handler):
+    from analyzers import compute_impact_graph
+
+    d, err = _dir_from_body(body)
+    if err:
+        return err, 400
+    return compute_impact_graph(d, body.get("findings")), 200
+
+
 def handle_chat(body, handler):
     from services.chat_engine import chat_reply
 
@@ -182,6 +191,7 @@ POST_ROUTES = {
     "/api/sprint-batches": handle_sprint_batches,
     "/api/architecture": handle_architecture,
     "/api/call-graph": handle_call_graph,
+    "/api/impact-graph": handle_impact_graph,
     "/api/chat": handle_chat,
     "/api/project-review": handle_project_review,
     "/api/circular-calls": handle_circular_calls,

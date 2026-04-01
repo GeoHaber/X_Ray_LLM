@@ -118,7 +118,7 @@ class TestSecurityRulesPositive:
             tmp_path,
             "db.py",
             """
-            cursor.execute(f"SELECT * FROM users WHERE id={uid}")
+            cursor.execute(f"SELECT * FROM users WHERE id={query_param}")
         """,
         )
         assert "SEC-004" in _ids(scan_file(path))

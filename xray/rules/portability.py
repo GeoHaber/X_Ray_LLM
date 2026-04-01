@@ -20,6 +20,8 @@ PORTABILITY_RULES = [
             "For test fixtures use Path(__file__).resolve().parent / 'subdir'"
         ),
         "test_hint": "Verify no C:\\Users\\<username> paths exist in production code",
+        "cwe": "CWE-1059",
+        "owasp": "",
     },
     {
         "id": "PORT-002",
@@ -31,6 +33,8 @@ PORTABILITY_RULES = [
         ),
         "fix_hint": ("Use os.environ.get('ZENAI_MODEL_DIR', str(Path.home() / 'AI' / 'Models'))"),
         "test_hint": "Verify model/binary paths use env vars with home-based fallbacks",
+        "cwe": "CWE-1059",
+        "owasp": "",
     },
     {
         "id": "PORT-003",
@@ -44,6 +48,8 @@ PORTABILITY_RULES = [
         "description": ("Hardcoded absolute Windows path — not portable to Linux/macOS"),
         "fix_hint": ("Use Path(__file__).parent-relative paths or environment variables"),
         "test_hint": "Verify no hardcoded drive-letter paths outside standard system dirs",
+        "cwe": "CWE-1059",
+        "owasp": "",
     },
     {
         "id": "PORT-004",
@@ -53,5 +59,7 @@ PORTABILITY_RULES = [
         "description": ("Windows-only module import — will crash on Linux/macOS unless guarded by platform check"),
         "fix_hint": ("Guard with: if platform.system() == 'Windows': import winreg  or use try/except ImportError"),
         "test_hint": "Verify Windows-only imports are guarded by platform checks or try/except",
+        "cwe": "CWE-1059",
+        "owasp": "",
     },
 ]

@@ -22,10 +22,10 @@ def _make_engine_with_mock():
     config = LLMConfig(model_path="/fake/model.gguf")
     engine = LLMEngine(config=config)
 
-    # Mock the model
+    # Mock the backend's model (LLMEngine delegates to _backend)
     mock_model = MagicMock()
     mock_model.create_chat_completion.return_value = {"choices": [{"message": {"content": "MOCK_RESPONSE"}}]}
-    engine._model = mock_model
+    engine._backend._model = mock_model
     return engine, mock_model
 
 
@@ -49,31 +49,34 @@ class TestGenerate:
         messages = call_args[1]["messages"] if "messages" in call_args[1] else call_args[0][0]
         user_msgs = [m for m in messages if m["role"] == "user"]
         assert len(user_msgs) == 1
-        assert user_msgs[0]["content"] == "test prompt"
+        assert "test prompt" in user_msgs[0]["content"]
 
     def test_generate_with_system_prompt(self):
         engine, mock = _make_engine_with_mock()
         engine.generate("prompt", system="You are helpful")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", call_args[0][0] if call_args[0] else [])
-        system_msgs = [m for m in messages if m["role"] == "system"]
-        assert len(system_msgs) == 1
-        assert system_msgs[0]["content"] == "You are helpful"
+        # System prompt is now concatenated into the user message
+        user_msgs = [m for m in messages if m["role"] == "user"]
+        assert len(user_msgs) == 1
+        assert "You are helpful" in user_msgs[0]["content"]
+        assert "prompt" in user_msgs[0]["content"]
 
     def test_generate_without_system_prompt(self):
         engine, mock = _make_engine_with_mock()
         engine.generate("prompt")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", call_args[0][0] if call_args[0] else [])
-        system_msgs = [m for m in messages if m["role"] == "system"]
-        assert len(system_msgs) == 0
+        user_msgs = [m for m in messages if m["role"] == "user"]
+        assert len(user_msgs) == 1
+        assert user_msgs[0]["content"] == "prompt"
 
     def test_generate_uses_config_temperature(self):
         config = LLMConfig(model_path="/fake.gguf", temperature=0.7)
         engine = LLMEngine(config=config)
         mock = MagicMock()
         mock.create_chat_completion.return_value = {"choices": [{"message": {"content": "ok"}}]}
-        engine._model = mock
+        engine._backend._model = mock
 
         engine.generate("test")
         call_args = mock.create_chat_completion.call_args
@@ -130,8 +133,9 @@ class TestGenerateTest:
         engine.generate_test(finding, "ctx")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", [])
-        system_msg = next(m for m in messages if m["role"] == "system")["content"]
-        assert "pytest" in system_msg
+        # System prompt is concatenated into user message
+        user_msg = next(m for m in messages if m["role"] == "user")["content"]
+        assert "pytest" in user_msg
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -208,8 +212,9 @@ class TestAnalyzeCodebase:
         engine.analyze_codebase("summary")
         call_args = mock.create_chat_completion.call_args
         messages = call_args[1].get("messages", [])
-        system_msg = next(m for m in messages if m["role"] == "system")["content"]
-        assert "auditor" in system_msg.lower()
+        # System prompt is concatenated into user message
+        user_msg = next(m for m in messages if m["role"] == "user")["content"]
+        assert "auditor" in user_msg.lower()
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -223,19 +228,19 @@ class TestEnsureModel:
     def test_ensure_model_raises_without_path(self):
         engine = LLMEngine(config=LLMConfig(model_path=""))
         with pytest.raises(RuntimeError, match="No model path"):
-            engine._ensure_model()
+            engine._backend._ensure_model()
 
     def test_ensure_model_skips_if_loaded(self):
         engine = LLMEngine(config=LLMConfig(model_path=""))
-        engine._model = "already loaded"
+        engine._backend._model = "already loaded"
         # Should return immediately without raising
-        engine._ensure_model()
+        engine._backend._ensure_model()
 
     def test_unload_clears_model(self):
         engine, _ = _make_engine_with_mock()
-        assert engine._model is not None
+        assert engine._backend._model is not None
         engine.unload()
-        assert engine._model is None
+        assert engine._backend._model is None
 
     def test_is_available_false_for_empty_path(self):
         engine = LLMEngine(config=LLMConfig(model_path=""))
@@ -345,35 +350,35 @@ class TestKVCacheQuantization:
                 captured_kwargs.update(kw)
 
         monkeypatch.setattr("xray.llm.Llama", FakeLlama, raising=False)
-        # Need to patch the import path used inside _ensure_model
-
-        original_ensure = LLMEngine._ensure_model
-
-        def patched_ensure(self_engine):
-            if self_engine._model is not None:
-                return
-            with self_engine._lock:
-                if self_engine._model is not None:
-                    return
-                kwargs = {
-                    "model_path": self_engine.config.model_path,
-                    "n_ctx": self_engine.config.n_ctx,
-                    "n_gpu_layers": self_engine.config.n_gpu_layers,
-                    "verbose": False,
-                    "flash_attn": self_engine.config.flash_attn,
-                }
-                if self_engine.config.type_k is not None:
-                    kwargs["type_k"] = self_engine.config.type_k
-                if self_engine.config.type_v is not None:
-                    kwargs["type_v"] = self_engine.config.type_v
-                self_engine._model = FakeLlama(**kwargs)
-                captured_kwargs.update(kwargs)
-
-        monkeypatch.setattr(LLMEngine, "_ensure_model", patched_ensure)
 
         config = LLMConfig(model_path="/fake.gguf", type_k=8, type_v=2, flash_attn=True)
         engine = LLMEngine(config=config)
-        engine._ensure_model()
+        backend = engine._backend
+
+        original_ensure = backend._ensure_model
+
+        def patched_ensure():
+            if backend._model is not None:
+                return
+            with backend._lock:
+                if backend._model is not None:
+                    return
+                kwargs = {
+                    "model_path": backend.config.model_path,
+                    "n_ctx": backend.config.n_ctx,
+                    "n_gpu_layers": backend.config.n_gpu_layers,
+                    "verbose": False,
+                    "flash_attn": backend.config.flash_attn,
+                }
+                if backend.config.type_k is not None:
+                    kwargs["type_k"] = backend.config.type_k
+                if backend.config.type_v is not None:
+                    kwargs["type_v"] = backend.config.type_v
+                backend._model = FakeLlama(**kwargs)
+                captured_kwargs.update(kwargs)
+
+        backend._ensure_model = patched_ensure
+        backend._ensure_model()
 
         assert captured_kwargs["type_k"] == 8
         assert captured_kwargs["type_v"] == 2
@@ -387,29 +392,30 @@ class TestKVCacheQuantization:
             def __init__(self, **kw):
                 captured_kwargs.update(kw)
 
-        def patched_ensure(self_engine):
-            if self_engine._model is not None:
-                return
-            with self_engine._lock:
-                kwargs = {
-                    "model_path": self_engine.config.model_path,
-                    "n_ctx": self_engine.config.n_ctx,
-                    "n_gpu_layers": self_engine.config.n_gpu_layers,
-                    "verbose": False,
-                    "flash_attn": self_engine.config.flash_attn,
-                }
-                if self_engine.config.type_k is not None:
-                    kwargs["type_k"] = self_engine.config.type_k
-                if self_engine.config.type_v is not None:
-                    kwargs["type_v"] = self_engine.config.type_v
-                self_engine._model = FakeLlama(**kwargs)
-                captured_kwargs.update(kwargs)
-
-        monkeypatch.setattr(LLMEngine, "_ensure_model", patched_ensure)
-
         config = LLMConfig(model_path="/fake.gguf")  # type_k=None, type_v=None
         engine = LLMEngine(config=config)
-        engine._ensure_model()
+        backend = engine._backend
+
+        def patched_ensure():
+            if backend._model is not None:
+                return
+            with backend._lock:
+                kwargs = {
+                    "model_path": backend.config.model_path,
+                    "n_ctx": backend.config.n_ctx,
+                    "n_gpu_layers": backend.config.n_gpu_layers,
+                    "verbose": False,
+                    "flash_attn": backend.config.flash_attn,
+                }
+                if backend.config.type_k is not None:
+                    kwargs["type_k"] = backend.config.type_k
+                if backend.config.type_v is not None:
+                    kwargs["type_v"] = backend.config.type_v
+                backend._model = FakeLlama(**kwargs)
+                captured_kwargs.update(kwargs)
+
+        backend._ensure_model = patched_ensure
+        backend._ensure_model()
 
         assert "type_k" not in captured_kwargs
         assert "type_v" not in captured_kwargs

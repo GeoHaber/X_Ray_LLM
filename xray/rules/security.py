@@ -12,6 +12,8 @@ SECURITY_RULES = [
         "description": "XSS: Template literal injected into innerHTML without sanitization",
         "fix_hint": "Wrap all dynamic values with an HTML escape function or use textContent",
         "test_hint": "Verify _escHtml or equivalent sanitizer wraps all dynamic values in innerHTML assignments",
+        "cwe": "CWE-79",
+        "owasp": "A03:2021-Injection",
     },
     {
         "id": "SEC-002",
@@ -21,6 +23,8 @@ SECURITY_RULES = [
         "description": "XSS: String concatenation with variable injected into innerHTML",
         "fix_hint": "Use textContent or sanitize the variable before injection",
         "test_hint": "Check that no unsanitized variables are concatenated into innerHTML",
+        "cwe": "CWE-79",
+        "owasp": "A03:2021-Injection",
     },
     {
         "id": "SEC-003",
@@ -30,6 +34,8 @@ SECURITY_RULES = [
         "description": "Command injection: subprocess called with shell=True",
         "fix_hint": "Use shell=False and pass args as a list",
         "test_hint": "Verify subprocess calls do not use shell=True with user-controlled input",
+        "cwe": "CWE-78",
+        "owasp": "A03:2021-Injection",
     },
     {
         "id": "SEC-004",
@@ -39,6 +45,8 @@ SECURITY_RULES = [
         "description": "SQL injection: String formatting in SQL query",
         "fix_hint": "Use parameterized queries with ? or %s placeholders",
         "test_hint": "Verify SQL queries use parameterized binding, not string formatting",
+        "cwe": "CWE-89",
+        "owasp": "A03:2021-Injection",
     },
     {
         "id": "SEC-005",
@@ -48,6 +56,8 @@ SECURITY_RULES = [
         "description": "SSRF: URL constructed from user input without validation",
         "fix_hint": "Validate URLs against an allowlist of trusted hosts before making requests",
         "test_hint": "Test that URL validation rejects internal/private IPs and non-allowlisted hosts",
+        "cwe": "CWE-918",
+        "owasp": "A10:2021-SSRF",
     },
     {
         "id": "SEC-006",
@@ -57,6 +67,8 @@ SECURITY_RULES = [
         "description": "CORS misconfiguration: wildcard origin allows any site",
         "fix_hint": "Restrict CORS to specific trusted origins (e.g., localhost)",
         "test_hint": "Verify CORS headers never return wildcard (*) for credentialed requests",
+        "cwe": "CWE-942",
+        "owasp": "A05:2021-Security Misconfiguration",
     },
     {
         "id": "SEC-007",
@@ -66,6 +78,8 @@ SECURITY_RULES = [
         "description": "Code injection: eval/exec with potentially untrusted input",
         "fix_hint": "Replace eval/exec with safe alternatives (ast.literal_eval, JSON.parse)",
         "test_hint": "Verify no eval/exec is used on user-controlled data",
+        "cwe": "CWE-94",
+        "owasp": "A03:2021-Injection",
     },
     {
         "id": "SEC-008",
@@ -75,6 +89,8 @@ SECURITY_RULES = [
         "description": "Hardcoded secret: credential embedded in source code",
         "fix_hint": "Move secrets to environment variables or a secrets manager",
         "test_hint": "Verify no hardcoded passwords/tokens/keys exist in source code",
+        "cwe": "CWE-798",
+        "owasp": "A07:2021-Identification and Authentication Failures",
     },
     {
         "id": "SEC-009",
@@ -84,15 +100,19 @@ SECURITY_RULES = [
         "description": "Deserialization attack: unsafe pickle/yaml loading",
         "fix_hint": "Use json or yaml.safe_load instead of pickle.loads/yaml.load",
         "test_hint": "Verify no unsafe deserialization is used on untrusted data",
+        "cwe": "CWE-502",
+        "owasp": "A08:2021-Software and Data Integrity Failures",
     },
     {
         "id": "SEC-010",
         "severity": "MEDIUM",
         "lang": ["python"],
-        "pattern": r"os\.path\.join\(.*\.\.\s*/",
+        "pattern": r"(os\.path\.join\([^\n]*(\.\.|path|file|name|input|request)|open\([^\n]*(\.\.|path|file|name|input|request))",
         "description": "Path traversal: user input may escape intended directory",
         "fix_hint": "Validate and normalize paths, reject '..' components",
         "test_hint": "Verify path inputs are sanitized against directory traversal",
+        "cwe": "CWE-22",
+        "owasp": "A01:2021-Broken Access Control",
     },
     {
         "id": "SEC-011",
@@ -102,6 +122,8 @@ SECURITY_RULES = [
         "description": "Timing attack: comparing secrets with == instead of constant-time compare",
         "fix_hint": "Use hmac.compare_digest() or secrets.compare_digest() for secret comparison",
         "test_hint": "Verify secret comparisons use constant-time comparison functions",
+        "cwe": "CWE-208",
+        "owasp": "A02:2021-Cryptographic Failures",
     },
     {
         "id": "SEC-012",
@@ -111,6 +133,8 @@ SECURITY_RULES = [
         "description": "Debug mode enabled — exposes stack traces, secrets, and internal state",
         "fix_hint": "Set DEBUG=False in production; use environment variable: DEBUG=os.getenv('DEBUG','false')=='true'",
         "test_hint": "Verify debug mode is off in production config and controlled by environment variables",
+        "cwe": "CWE-489",
+        "owasp": "A05:2021-Security Misconfiguration",
     },
     {
         "id": "SEC-013",
@@ -120,6 +144,8 @@ SECURITY_RULES = [
         "description": "Weak hash algorithm: MD5/SHA1 are broken for security purposes",
         "fix_hint": "Use hashlib.sha256() or hashlib.sha3_256() for security-sensitive hashing",
         "test_hint": "Verify cryptographic operations use SHA-256 or stronger",
+        "cwe": "CWE-328",
+        "owasp": "A02:2021-Cryptographic Failures",
     },
     {
         "id": "SEC-014",
@@ -129,5 +155,7 @@ SECURITY_RULES = [
         "description": "TLS verification disabled — allows man-in-the-middle attacks",
         "fix_hint": "Do not disable TLS verification; fix certificates instead of bypassing checks",
         "test_hint": "Verify no HTTP client calls disable TLS certificate verification",
+        "cwe": "CWE-295",
+        "owasp": "A02:2021-Cryptographic Failures",
     },
 ]

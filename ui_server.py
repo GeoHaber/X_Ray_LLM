@@ -78,6 +78,7 @@ from api.pm_routes import (
 from api.pm_routes import (
     POST_ROUTES as _pm_post,
 )
+from api.review_routes import POST_ROUTES as _review_post
 from api.scan_routes import GET_ROUTES as _scan_get
 from api.scan_routes import POST_ROUTES as _scan_post
 
@@ -87,7 +88,7 @@ _POST_ROUTES: dict[str, object] = {}
 for table in (_scan_get, _browse_get, _pm_get):
     _GET_ROUTES.update(table)
 
-for table in (_scan_post, _fix_post, _analysis_post, _pm_post):
+for table in (_scan_post, _fix_post, _analysis_post, _pm_post, _review_post):
     _POST_ROUTES.update(table)
 
 logger = logging.getLogger(__name__)

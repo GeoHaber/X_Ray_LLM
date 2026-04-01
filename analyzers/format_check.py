@@ -5,6 +5,7 @@ X-Ray LLM — Format checking, type checking analyzers.
 import contextlib
 import os
 import subprocess
+import warnings
 
 from analyzers._shared import _fwd
 from xray.types import FormatResult, TypeCheckResult
@@ -101,7 +102,12 @@ def check_types(directory: str) -> TypeCheckResult:
 
 
 def run_typecheck(directory: str) -> dict:
-    """Run pyright type checker if available."""
+    """Run pyright type checker if available (deprecated — use check_types)."""
+    warnings.warn(
+        "run_typecheck() (pyright) is deprecated; use check_types() (ty) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     try:
         result = subprocess.run(
             ["pyright", "--outputjson", directory],

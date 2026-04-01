@@ -47,6 +47,10 @@ pub struct Finding {
     pub description: String,
     pub fix_hint: String,
     pub test_hint: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub cwe: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub owasp: String,
 }
 
 impl std::fmt::Display for Finding {
@@ -69,6 +73,8 @@ pub struct Rule {
     pub description: String,
     pub fix_hint: String,
     pub test_hint: String,
+    pub cwe: String,
+    pub owasp: String,
 }
 
 /// Aggregated scan results.
@@ -412,6 +418,8 @@ pub fn scan_file(path: &Path, rules: &[Rule]) -> Vec<Finding> {
                         description: rule.description.clone(),
                         fix_hint: rule.fix_hint.clone(),
                         test_hint: rule.test_hint.clone(),
+                        cwe: rule.cwe.clone(),
+                        owasp: rule.owasp.clone(),
                     });
 
                     start = abs_start + mat.end().max(1) - mat.start();

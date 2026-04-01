@@ -709,3 +709,110 @@ def compute_project_review(
         "dead_count": len(dead_functions),
         "duplicates_count": duplicates.get("total_groups", 0) if duplicates else 0,
     }
+
+
+def compute_impact_graph(directory: str, findings: list | None = None) -> dict:
+    """Compute a blast-radius graph from risky files using architecture dependencies."""
+    arch = compute_architecture_map(directory)
+    nodes = arch.get("nodes", [])
+    edges = arch.get("edges", [])
+    findings = findings or []
+
+    # Build quick lookups
+    id_to_file = {n.get("id", ""): n.get("file", "") for n in nodes}
+    file_to_ids = {}
+    for nid, file_path in id_to_file.items():
+        if not file_path:
+            continue
+        file_to_ids.setdefault(file_path, set()).add(nid)
+
+    # Rank risk by file (HIGH weighted much more than LOW)
+    file_risk = defaultdict(float)
+    for f in findings:
+        file_path = str(f.get("file", ""))
+        if not file_path:
+            continue
+        weight = {"HIGH": 5.0, "MEDIUM": 2.0, "LOW": 0.5}.get(str(f.get("severity", "LOW")), 1.0)
+        file_risk[file_path] += weight
+
+    seed_ids = set()
+    for file_path, _risk in sorted(file_risk.items(), key=lambda item: -item[1])[:8]:
+        for nid in file_to_ids.get(file_path, set()):
+            seed_ids.add(nid)
+
+    # Fallback: if no findings, pick top local nodes by degree
+    if not seed_ids:
+        degree = defaultdict(int)
+        for e in edges:
+            degree[e.get("from", "")] += 1
+            degree[e.get("to", "")] += 1
+        for nid, _deg in sorted(degree.items(), key=lambda item: -item[1])[:5]:
+            if nid:
+                seed_ids.add(nid)
+
+    # Build adjacency for a 2-hop blast radius
+    out_adj = defaultdict(set)
+    in_adj = defaultdict(set)
+    for e in edges:
+        src = e.get("from", "")
+        dst = e.get("to", "")
+        if not src or not dst:
+            continue
+        out_adj[src].add(dst)
+        in_adj[dst].add(src)
+
+    levels = {}
+    frontier = list(seed_ids)
+    for nid in frontier:
+        levels[nid] = 0
+
+    for depth in (1, 2):
+        next_frontier = []
+        for nid in frontier:
+            neighbors = out_adj.get(nid, set()) | in_adj.get(nid, set())
+            for nb in neighbors:
+                if nb in levels:
+                    continue
+                levels[nb] = depth
+                next_frontier.append(nb)
+        frontier = next_frontier
+
+    sub_nodes = []
+    for n in nodes:
+        nid = n.get("id", "")
+        if nid not in levels:
+            continue
+        file_path = n.get("file", "")
+        base_risk = file_risk.get(file_path, 0.0)
+        in_deg = len(in_adj.get(nid, set()))
+        out_deg = len(out_adj.get(nid, set()))
+        impact = round(base_risk + (in_deg + out_deg) * (2.5 - min(levels[nid], 2)), 2)
+        sub_nodes.append(
+            {
+                "id": nid,
+                "label": n.get("label", nid),
+                "file": file_path,
+                "level": levels[nid],
+                "is_seed": nid in seed_ids,
+                "risk": round(base_risk, 2),
+                "impact": impact,
+                "external": bool(n.get("external", False)),
+            }
+        )
+
+    sub_node_ids = {n["id"] for n in sub_nodes}
+    sub_edges = [
+        e
+        for e in edges
+        if e.get("from", "") in sub_node_ids and e.get("to", "") in sub_node_ids
+    ]
+
+    sub_nodes.sort(key=lambda n: (-n["impact"], n["id"]))
+
+    return {
+        "nodes": sub_nodes,
+        "edges": sub_edges,
+        "seed_count": len(seed_ids),
+        "node_count": len(sub_nodes),
+        "edge_count": len(sub_edges),
+    }

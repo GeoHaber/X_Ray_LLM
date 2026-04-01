@@ -1,5 +1,130 @@
 # Changelog
 
+## v0.4.5 — 2026-04-01
+
+### Added — ty Integration, Pyright Deprecation, Test Suite Hardening
+
+#### Type Checking Migration
+- Replaced pyright with **ty** (Astral's Rust-native type checker) as the primary
+  type checking engine across CLI, API, and UI.
+- `/api/typecheck` now invokes `ty check` instead of pyright.
+- `/api/typecheck-pyright` still available but returns `deprecated: true` with a
+  deprecation note directing users to `/api/typecheck`.
+- Rust server updated with matching `typecheck-pyright` deprecation response.
+- CI workflow (`.github/workflows/quality.yml`) updated to use `ty` instead of pyright.
+
+#### LLM Engine Refactor
+- `LLMEngine` now delegates to `_backend` (GGUFBackend) for model management,
+  improving separation of concerns.
+- `generate()` concatenates system+prompt into a single user message for simpler
+  backend interaction.
+
+#### Test Suite (1485+ tests)
+- Fixed 30 test failures from LLM backend refactor, taint validation, and
+  Finding dataclass expansion.
+- All LLM mock tests updated for `_backend._model` delegation pattern.
+- SEC-004 test samples updated with taint-identifiable variable names.
+- Finding dataclass `to_dict()` now returns 23 fields (added confidence,
+  autofix_tier, signal_path, llm_verdict, etc.).
+- PY-008 self-match false positive fixed in scanner.py (string-split technique).
+
+#### Documentation Cleanup
+- Moved 7 analysis/audit/report docs from root to `docs/`.
+- Removed generated scan JSON artifacts and session backup files.
+- Updated `.gitignore` for scan output patterns.
+
+---
+
+## v0.4.4 — 2026-04-01
+
+### Added — Taint-Lite, Policy Profiles, UI Controls, and Scan Engine Transparency
+
+This release adds a smarter signal pipeline for high-noise security rules, exposes
+new scan controls in both CLI and UI, introduces lightweight multilingual UX, and
+documents engine fallback behavior explicitly during scans.
+
+#### Scanner Enhancements
+
+- Added **taint-aware filtering** for `SEC-004`, `SEC-005`, and `SEC-010` in
+  `xray/scanner.py`.
+  - `taint_mode=lite`: suppresses non-tainted low-signal matches.
+  - `taint_mode=strict`: keeps context-validated matches (higher sensitivity).
+  - `taint_mode=off`: disables taint-based filtering.
+- Added **policy profiles**:
+  - `strict`
+  - `balanced`
+  - `relaxed-tests` (reduces expected test-path noise for selected rules)
+- Added `SEC-010` context validator and expanded path-traversal matching coverage.
+- Added scoped suppression support already introduced in scanner pipeline:
+  - `ignore`, `ignore-next`, `ignore-file`, `ignore-start`, `ignore-end`
+
+#### Config / CLI / API Wiring
+
+- `xray/config.py` now supports:
+  - `policy-profile`
+  - `taint-mode`
+- CLI (`python -m xray`) now supports:
+  - `--policy-profile {strict,balanced,relaxed-tests}`
+  - `--taint-mode {off,lite,strict}`
+- API `/api/scan` now accepts:
+  - `policy_profile`
+  - `taint_mode`
+
+#### Rust Request Fallback Transparency
+
+- `services/scan_manager.py` now performs explicit fallback:
+  - If Rust is requested but non-default policy/taint behavior is selected,
+    scan execution falls back to Python scanner for parity.
+- Progress/result metadata includes:
+  - `engine_requested`
+  - `engine_effective`
+
+#### UI/UX Improvements
+
+- Settings now expose:
+  - Policy profile selector
+  - Taint mode selector
+- Added language selector and expanded multilingual labels (EN/ES/FR) for:
+  - Settings labels
+  - Scan statuses and errors
+  - Sidebar section headers
+  - Welcome panel content
+  - Tool/action button labels
+- Added **tiny engine switch badge** during scan when fallback occurs:
+  - Example: `Engine switched: rust -> python`
+
+#### Test Runner Compatibility Fix
+
+- `xray/runner.py` now retries pytest invocation **without `--timeout`** when
+  pytest-timeout plugin is not installed (detects `unrecognized arguments: --timeout`).
+
+#### Tests Added / Updated
+
+- `tests/test_xray.py` additions:
+  - taint-lite suppression behavior
+  - taint strict-vs-lite behavior
+  - relaxed-tests policy behavior
+  - runner fallback behavior without pytest-timeout plugin
+
+#### Verification
+
+- Targeted scanner and runner suites pass for updated paths.
+- CLI smoke test passes with strict policy and lite taint mode:
+  - `python -m xray . --dry-run --severity HIGH --policy-profile strict --taint-mode lite --format json`
+
+#### Migration Notes (from v0.4.3)
+
+- New optional controls:
+  - `--taint-mode off|lite|strict`
+  - `--policy-profile strict|balanced|relaxed-tests`
+- Default behavior:
+  - `taint_mode=lite`
+  - `policy_profile=balanced`
+- Rust-requested scans with non-default policy/taint values now fallback to Python scanner for parity.
+- Test runner now auto-retries without `--timeout` when pytest-timeout plugin is not installed.
+
+---
+
 ## v0.4.3 — 2026-03-28
 
 ### Added — Context Validation Pipeline & False-Positive Elimination

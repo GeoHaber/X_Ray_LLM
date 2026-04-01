@@ -36,17 +36,16 @@ class TestResult:
 def run_tests(test_path: str, timeout: int = 120, python_exe: str | None = None) -> TestResult:
     """Run pytest on the given path and return structured results."""
     exe = python_exe or sys.executable
-    cmd = [
+    base_cmd = [
         exe,
         "-m",
         "pytest",
         test_path,
         "-v",
-        "--timeout",
-        str(timeout),
         "--tb=short",
         "-q",
     ]
+    cmd = [*base_cmd[:5], "--timeout", str(timeout), *base_cmd[5:]]
 
     try:
         proc = subprocess.run(
@@ -57,6 +56,15 @@ def run_tests(test_path: str, timeout: int = 120, python_exe: str | None = None)
             cwd=str(Path(test_path).parent.parent) if "/" in test_path or "\\" in test_path else ".",
         )
         output = proc.stdout + proc.stderr
+        if "unrecognized arguments: --timeout" in output:
+            proc = subprocess.run(
+                base_cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout + 30,
+                cwd=str(Path(test_path).parent.parent) if "/" in test_path or "\\" in test_path else ".",
+            )
+            output = proc.stdout + proc.stderr
     except subprocess.TimeoutExpired:
         logger.debug("Test run timed out for %s", test_path)
         return TestResult(output="TIMEOUT: Tests exceeded time limit")

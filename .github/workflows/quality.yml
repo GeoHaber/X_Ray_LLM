@@ -27,7 +27,13 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
 
-    - name: Pyright type check
+    - name: ty type check (primary)
+      run: |
+        pip install ty
+        ty check --output-format concise .
+      continue-on-error: true
+
+    - name: Pyright type check (legacy — will be removed)
       run: pyright .
       continue-on-error: true
 

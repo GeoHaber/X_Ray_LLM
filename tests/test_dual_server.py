@@ -335,6 +335,16 @@ class TestAnalysisEndpoints:
     def test_typecheck_pyright(self):
         self._compare_post("/api/typecheck-pyright")
 
+    def test_typecheck_pyright_deprecated_field(self):
+        """Both Python and Rust must return 'deprecated': true for pyright."""
+        b = DIR_BODY
+        py_r = post(PYTHON_BASE, "/api/typecheck-pyright", b).json()
+        rs_r = post(RUST_BASE, "/api/typecheck-pyright", b).json()
+        assert py_r.get("deprecated") is True, "Python missing deprecated flag"
+        assert rs_r.get("deprecated") is True, "Rust missing deprecated flag"
+        assert "deprecation_note" in py_r, "Python missing deprecation_note"
+        assert "deprecation_note" in rs_r, "Rust missing deprecation_note"
+
 
 # ─── PM Dashboard POST endpoint tests ────────────────────────────────────────
 

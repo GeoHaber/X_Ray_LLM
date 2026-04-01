@@ -76,7 +76,7 @@ _TOOLS_LIST = [
     "Code Smells",
     "Duplicates",
     "Formatting (ruff)",
-    "Type Check (pyright)",
+    "Type Check (ty)",
     "Bandit (security)",
     "Ruff --fix",
     "Import Graph",

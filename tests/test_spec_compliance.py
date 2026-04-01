@@ -164,8 +164,12 @@ class TestScannerSpec:
             fix_hint="fix", test_hint="test"
         )
         d = f.to_dict()
-        assert set(d.keys()) == {"rule_id", "severity", "file", "line", "col",
-                                  "matched_text", "description", "fix_hint", "test_hint"}
+        expected_keys = {"rule_id", "severity", "file", "line", "col",
+                        "matched_text", "description", "fix_hint", "test_hint",
+                        "confidence", "autofix_tier", "signal_path", "why_flagged",
+                        "policy_profile", "taint_mode", "taint_matched", "is_test_file",
+                        "cwe", "owasp", "llm_verdict", "llm_reason", "llm_suppressed"}
+        assert set(d.keys()) == expected_keys
         f2 = Finding.from_dict(d)
         assert f2.rule_id == f.rule_id
 
@@ -597,7 +601,7 @@ class TestLLMSpec:
     def test_llm_thread_safe_lock_exists(self):
         from xray.llm import LLMEngine
         engine = LLMEngine()
-        assert hasattr(engine, "_lock")
+        assert hasattr(engine._backend, "_lock")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -760,7 +764,7 @@ class TestEachRuleDetects:
         "SEC-001": ("test.js", '.innerHTML = `${userInput}`;'),
         "SEC-002": ("test.js", '.innerHTML = "<b>" + userInput;'),
         "SEC-003": ("test.py", "subprocess.run('ls', shell=True)"),
-        "SEC-004": ("test.py", 'cursor.execute(f"SELECT * FROM users WHERE id={uid}")'),
+        "SEC-004": ("test.py", 'cursor.execute(f"SELECT * FROM users WHERE id={query_param}")'),
         "SEC-005": ("test.py", "requests.get('http://evil.com' + path)"),
         "SEC-006": ("test.py", "self.send_header('Access-Control-Allow-Origin', '*')"),
         "SEC-007": ("test.py", "eval(user_input)"),
