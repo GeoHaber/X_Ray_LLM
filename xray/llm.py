@@ -307,11 +307,18 @@ class ZenCoreBackend(LLMBackend):
 
     def generate(self, prompt: str, max_tokens: int = 2048) -> str:
         self._ensure_running()
-        result = self._adapter.generate_text(
-            prompt=prompt,
-            system_prompt="You are a careful software quality and security engineer.",
-            max_tokens=max_tokens,
-        )
+        # Use longer timeout for code generation (14B models need 60-120s)
+        import zen_core_libs.llm.local_adapter as _la
+        old_timeout = _la.LLM_REQUEST_TIMEOUT
+        _la.LLM_REQUEST_TIMEOUT = max(120, old_timeout)
+        try:
+            result = self._adapter.generate_text(
+                prompt=prompt,
+                system_prompt="You are an expert Rust programmer. Return ONLY code, no explanations.",
+                max_tokens=max_tokens,
+            )
+        finally:
+            _la.LLM_REQUEST_TIMEOUT = old_timeout
         # LocalLLMAdapter returns "Brain Offline" if server is down
         if result in ("Brain Offline", "Brain Offline (Start ZenAI)"):
             raise RuntimeError("zen_core llama-server is not responding")
@@ -464,6 +471,33 @@ class AnthropicBackend(LLMBackend):
 # Backend factory
 # ═══════════════════════════════════════════════════════════════════════════
 
+def create_backend_for_task(task: str, **kwargs) -> LLMBackend:
+    """Create a ZenCore backend with the best model for a given task type.
+
+    Parameters
+    ----------
+    task : one of "code_translation", "code_review", "documentation",
+           "test_generation", "summarization", "reasoning", "general"
+    **kwargs : forwarded to ZenCoreBackend (port, gpu_layers, ctx_size)
+
+    Falls back to ``create_backend("auto")`` if task-based selection
+    fails (e.g. zen_core_libs not installed).
+    """
+    try:
+        from zen_core_libs.acquire.model_hub import pick_model_for_task
+        model_path = pick_model_for_task(task)
+        if model_path:
+            log.info("Task '%s' → model: %s", task, Path(model_path).name)
+            zen_kwargs = {k: v for k, v in kwargs.items()
+                         if k in ("port", "gpu_layers", "ctx_size")}
+            return ZenCoreBackend(model_path=model_path, **zen_kwargs)
+    except ImportError:
+        log.debug("zen_core_libs not available for task-based model selection")
+    except Exception as exc:
+        log.warning("Task-based model selection failed: %s", exc)
+    return create_backend("auto", **kwargs)
+
+
 def create_backend(backend_type: str = "auto", **kwargs) -> LLMBackend:
     """Instantiate an LLM backend by name.
 
@@ -607,9 +641,13 @@ class LLMEngine:
         self,
         config: LLMConfig | None = None,
         backend: LLMBackend | None = None,
+        task: str | None = None,
     ):
         if backend is not None:
             self._backend = backend
+        elif task:
+            # Task-based: auto-pick the best model for the job
+            self._backend = create_backend_for_task(task)
         else:
             # Legacy path: build a GGUF backend from config / env.
             self._backend = GGUFBackend(config=config or LLMConfig.from_env())

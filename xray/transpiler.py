@@ -3137,7 +3137,23 @@ class Transpiler:
 
     @staticmethod
     def _pick_coder_model() -> str:
-        """Auto-discover the best coding model available locally."""
+        """Auto-discover the best coding model available locally.
+
+        Uses task-based selection from MODEL_CATALOG first, then falls
+        back to name-based discovery from local .gguf files.
+        """
+        # Try catalog-based task selection first
+        try:
+            from zen_core_libs.acquire.model_hub import pick_model_for_task
+            path = pick_model_for_task("code_translation")
+            if path:
+                from pathlib import Path as _P
+                log.info("Auto-selected coder model (catalog): %s", _P(path).name)
+                return path
+        except ImportError:
+            pass
+
+        # Fallback: scan local models by name
         try:
             from zen_core_libs.llm import discover_models
         except ImportError:
@@ -3145,7 +3161,6 @@ class Transpiler:
         models = discover_models()
         if not models:
             return ""
-        # Prefer coding models by name (best first)
         coder_prefs = ["qwen2.5-coder-14b", "qwen2.5-coder-7b", "deepseek-coder",
                         "codestral", "nerdsking-python-coder", "phi-3.5"]
         for pref in coder_prefs:
@@ -3506,20 +3521,32 @@ class Transpiler:
 
     @staticmethod
     def _parse_compile_errors(error_lines: list[str]) -> list[dict]:
-        """Parse cargo check error output into structured entries."""
+        """Parse cargo check error output into structured entries.
+
+        Each error in cargo output spans multiple lines:
+          error[E0425]: cannot find value `x` in this scope
+           --> src/file.rs:42:5
+            |
+          42 |     let y = x;
+            |             ^ not found in this scope
+
+        We scan ahead from each error line to find the location.
+        """
         entries: list[dict] = []
         i = 0
         while i < len(error_lines):
-            line = error_lines[i]
-            # Match: error[E0425]: cannot find value `x` in this scope
-            code_match = re.search(r'error\[(E\d+)\]:\s*(.+)', line)
+            line = error_lines[i].strip()
+            # Match: error[E0425]: message
+            code_match = re.match(r'error\[(E\d+)\]:\s*(.+)', line)
             if code_match:
                 code = code_match.group(1)
                 message = code_match.group(2)
-                # Next line often has: --> src/file.rs:NN:CC
+                # Scan next few lines for location: --> src/file.rs:NN
                 loc_match = None
-                if i + 1 < len(error_lines):
-                    loc_match = re.search(r'-->\s*src/(\w+\.rs):(\d+)', error_lines[i + 1])
+                for j in range(i + 1, min(i + 5, len(error_lines))):
+                    loc_match = re.search(r'-->\s*src[/\\](\w+\.rs):(\d+)', error_lines[j])
+                    if loc_match:
+                        break
                 if loc_match:
                     entries.append({
                         "code": code,
@@ -3527,15 +3554,17 @@ class Transpiler:
                         "file": loc_match.group(1),
                         "line": int(loc_match.group(2)),
                     })
-                    i += 2
-                    continue
-            # Also match: error: description (parse errors without code)
-            parse_match = re.search(r'^error:\s*(.+)', line)
-            if parse_match and not line.startswith('error['):
+                i += 1
+                continue
+            # Match: error: description (parse errors without code)
+            parse_match = re.match(r'error:\s*(.+)', line)
+            if parse_match:
                 message = parse_match.group(1)
                 loc_match = None
-                if i + 1 < len(error_lines):
-                    loc_match = re.search(r'-->\s*src/(\w+\.rs):(\d+)', error_lines[i + 1])
+                for j in range(i + 1, min(i + 5, len(error_lines))):
+                    loc_match = re.search(r'-->\s*src[/\\](\w+\.rs):(\d+)', error_lines[j])
+                    if loc_match:
+                        break
                 if loc_match:
                     entries.append({
                         "code": "E0000",
@@ -3543,8 +3572,6 @@ class Transpiler:
                         "file": loc_match.group(1),
                         "line": int(loc_match.group(2)),
                     })
-                    i += 2
-                    continue
             i += 1
         return entries
 
