@@ -81,14 +81,16 @@ from api.pm_routes import (
 from api.review_routes import POST_ROUTES as _review_post
 from api.scan_routes import GET_ROUTES as _scan_get
 from api.scan_routes import POST_ROUTES as _scan_post
+from api.transpile_routes import GET_ROUTES as _transpile_get
+from api.transpile_routes import POST_ROUTES as _transpile_post
 
 _GET_ROUTES: dict[str, object] = {}
 _POST_ROUTES: dict[str, object] = {}
 
-for table in (_scan_get, _browse_get, _pm_get):
+for table in (_scan_get, _browse_get, _pm_get, _transpile_get):
     _GET_ROUTES.update(table)
 
-for table in (_scan_post, _fix_post, _analysis_post, _pm_post, _review_post):
+for table in (_scan_post, _fix_post, _analysis_post, _pm_post, _review_post, _transpile_post):
     _POST_ROUTES.update(table)
 
 logger = logging.getLogger(__name__)

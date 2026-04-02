@@ -22,7 +22,6 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from xray.llm import LLMBackend, create_backend
 from xray.scanner import Finding, ScanResult, scan_directory, scan_file
@@ -38,6 +37,8 @@ STAGE_AST_VALIDATION = "ast_validation"
 STAGE_TAINT_ANALYSIS = "taint_analysis"
 STAGE_LLM_CLASSIFICATION = "llm_classification"
 STAGE_LLM_TAINT_INFERENCE = "llm_taint_inference"
+STAGE_AUTO_FIX = "auto_fix"
+STAGE_TRANSPILE = "transpile"
 
 ALL_STAGES: list[str] = [
     STAGE_PATTERN_SCAN,
@@ -45,10 +46,12 @@ ALL_STAGES: list[str] = [
     STAGE_TAINT_ANALYSIS,
     STAGE_LLM_CLASSIFICATION,
     STAGE_LLM_TAINT_INFERENCE,
+    STAGE_AUTO_FIX,
+    STAGE_TRANSPILE,
 ]
 
 # Stages that require an LLM backend to be available.
-_LLM_STAGES: set[str] = {STAGE_LLM_CLASSIFICATION, STAGE_LLM_TAINT_INFERENCE}
+_LLM_STAGES: set[str] = {STAGE_LLM_CLASSIFICATION, STAGE_LLM_TAINT_INFERENCE, STAGE_TRANSPILE}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -203,7 +206,10 @@ def _extract_json(text: str) -> object:
     fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", text, re.DOTALL)
     if fence_match:
         text = fence_match.group(1).strip()
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -246,9 +252,9 @@ class ModelPipeline:
             print(f)
     """
 
-    def __init__(self, config: Optional[PipelineConfig] = None) -> None:
+    def __init__(self, config: PipelineConfig | None = None) -> None:
         self.config: PipelineConfig = config or PipelineConfig()
-        self._backend: Optional[LLMBackend] = None
+        self._backend: LLMBackend | None = None
         self._llm_calls: int = 0
         self._taint_spec_cache: dict[str, TaintSpec] = {}
 

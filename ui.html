@@ -1470,6 +1470,8 @@ let riskMapData = null;
 let moduleCardsData = null;
 let confidenceData = null;
 let batchesData = null;
+let transpileData = null;
+let transpilePolling = null;
 let architectureData = null;
 let callGraphData = null;
 let circularCallsData = null;
@@ -1822,7 +1824,7 @@ function setLanguage(lang) {
 }
 
 // ── View Category Lists (for dropdown active state) ─────────────
-const _analysisViews = ['trend','smells','bandit','dead','dups','satd','git','graph','health','temporal','typecheck','release','aidetect','websmells','testgen','format','connections','prcomments'];
+const _analysisViews = ['trend','smells','bandit','dead','dups','satd','git','graph','health','temporal','typecheck','release','aidetect','websmells','testgen','format','connections','prcomments','transpile'];
 const _dashboardViews = ['riskmap','modules','confidence','batches','arch','callgraph','circular','coupling','unusedimports','review','impact','learn'];
 
 // ── Browser Overlay ─────────────────────────────────────────────
@@ -2477,6 +2479,7 @@ function renderResults() {
           <button class="view-tab ${activeView==='format'?'active':''}" onclick="switchView('format')">&#x1F4D0; Format<span class="check">&#x2713;</span></button>
           <button class="view-tab ${activeView==='connections'?'active':''}" onclick="switchView('connections')">&#x1F50C; Connections<span class="check">&#x2713;</span></button>
           <button class="view-tab ${activeView==='prcomments'?'active':''}" onclick="switchView('prcomments')">&#x1F4AC; PR Pack<span class="check">&#x2713;</span></button>
+          <button class="view-tab ${activeView==='transpile'?'active':''}" onclick="switchView('transpile')">&#x1F980; Transpile<span class="check">&#x2713;</span></button>
         </div>
       </div>
       <div class="tab-dropdown-wrapper" style="${showAdvancedTabs ? '' : 'display:none;'}">
@@ -2596,6 +2599,7 @@ function renderViewContent() {
   if (activeView === 'review')     { el.innerHTML = renderProjectReviewView(); drawReviewCharts(); return; }
   if (activeView === 'impact')     { el.innerHTML = renderImpactGraphView(); initImpactGraph(); return; }
   if (activeView === 'learn')      { el.innerHTML = renderFeedbackInsightsView(); return; }
+  if (activeView === 'transpile')  { el.innerHTML = renderTranspileView(); return; }
   el.innerHTML = renderFindingsList();
 }
 
@@ -4537,6 +4541,137 @@ function renderFeedbackInsightsView() {
   }
   html += `<h3 style="margin:12px 0 8px;">Suggested YAML</h3><div class="code-preview">${esc(d.suggested_yaml || 'xray:\n  suppress: []\n  prioritize: []')}</div></div>`;
   return html;
+}
+
+// ── Transpile View ──────────────────────────────────────────────
+function renderTranspileView() {
+  const dir = (scanResults && scanResults.directory) || currentDirectory || '';
+  let html = `<div style="padding:20px;">
+    <h2 style="margin-bottom:12px;">Python &rarr; Rust Transpiler</h2>
+    <p style="color:var(--text2); margin-bottom:16px;">Transpile Python code to Rust using AST-based analysis with optional LLM assistance.</p>
+    <div class="debt-summary">
+      <div class="debt-card"><div class="val" style="font-size:24px;">&#x1F980;</div><div class="lbl">AST Engine</div></div>
+      <div class="debt-card"><div class="val" style="font-size:24px;">60+</div><div class="lbl">Builtins</div></div>
+      <div class="debt-card"><div class="val" style="font-size:24px;">30+</div><div class="lbl">Methods</div></div>
+      <div class="debt-card"><div class="val" style="font-size:24px;">20+</div><div class="lbl">Rewrite Rules</div></div>
+    </div>
+
+    <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
+      <div style="flex:1; min-width:300px;">
+        <label style="font-size:12px; color:var(--text2); display:block; margin-bottom:4px;">Target Directory</label>
+        <input id="transpileDir" type="text" value="${esc(dir)}" style="width:100%; padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--text1); font-family:monospace; font-size:13px;" />
+      </div>
+      <div>
+        <label style="font-size:12px; color:var(--text2); display:block; margin-bottom:4px;">Output Dir</label>
+        <input id="transpileOut" type="text" value="rust_output" style="width:160px; padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--text1); font-family:monospace; font-size:13px;" />
+      </div>
+      <div>
+        <label style="font-size:12px; color:var(--text2); display:block; margin-bottom:4px;">Crate Name</label>
+        <input id="transpileCrate" type="text" value="transpiled" style="width:140px; padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--text1); font-family:monospace; font-size:13px;" />
+      </div>
+      <div style="display:flex; gap:4px; align-items:center;">
+        <input id="transpileLLM" type="checkbox" /><label for="transpileLLM" style="font-size:12px; color:var(--text2);">Use LLM</label>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-bottom:16px;">
+      <button class="btn-cta" onclick="startTranspile('directory')" style="padding:8px 20px;">&#x25B6; Transpile Directory</button>
+      <button class="btn btn-sm btn-outline" onclick="startTranspile('pipeline')" style="padding:8px 16px;">&#x1F680; Full Pipeline</button>
+    </div>`;
+
+  // Status area
+  if (transpileData) {
+    const d = transpileData;
+    if (d.running) {
+      html += `<div style="background:var(--bg2); border-radius:10px; padding:16px; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="spinner" style="display:inline-block; width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite;"></span>
+          <span style="font-weight:600;">Transpiling&hellip;</span>
+          <span style="color:var(--text2);">${esc(d.phase)}</span>
+        </div>
+        <div style="margin-top:8px; height:4px; background:var(--border); border-radius:2px;">
+          <div style="height:100%; width:${d.progress}%; background:var(--accent); border-radius:2px; transition:width 0.3s;"></div>
+        </div>
+      </div>`;
+    } else if (d.error) {
+      html += `<div style="background:rgba(255,70,70,0.1); border:1px solid var(--high); border-radius:10px; padding:16px; margin-bottom:12px;">
+        <strong style="color:var(--high);">Error:</strong> ${esc(d.error)}
+      </div>`;
+    } else if (d.result) {
+      const r = d.result;
+      html += `<div style="background:var(--bg2); border-radius:10px; padding:16px; margin-bottom:12px;">
+        <h3 style="margin-bottom:10px; color:${r.compile_success ? 'var(--green)' : 'var(--medium)'};">
+          ${r.compile_success ? '&#x2705; Compilation Succeeded' : '&#x26A0; Transpilation Complete (with errors)'}
+        </h3>
+        <div class="debt-summary">
+          <div class="debt-card"><div class="val">${r.modules_transpiled}</div><div class="lbl">Modules</div></div>
+          <div class="debt-card"><div class="val">${(r.files_written || []).length}</div><div class="lbl">Files Written</div></div>
+          <div class="debt-card"><div class="val" style="color:${r.compile_errors.length ? 'var(--high)' : 'var(--green)'};">${r.compile_errors.length}</div><div class="lbl">Compile Errors</div></div>
+          <div class="debt-card"><div class="val">${r.llm_calls_made || 0}</div><div class="lbl">LLM Calls</div></div>
+        </div>`;
+
+      if ((r.files_written || []).length > 0) {
+        html += `<h4 style="margin:12px 0 6px;">Generated Files</h4>
+          <div style="max-height:150px; overflow-y:auto; font-family:monospace; font-size:12px; color:var(--text2);">
+          ${r.files_written.map(f => `<div style="padding:2px 0;">${esc(f)}</div>`).join('')}
+          </div>`;
+      }
+
+      if ((r.compile_errors || []).length > 0) {
+        html += `<h4 style="margin:12px 0 6px; color:var(--high);">Compile Errors (first ${Math.min(r.compile_errors.length, 20)})</h4>
+          <div style="max-height:300px; overflow-y:auto; font-family:monospace; font-size:11px; background:var(--bg1); padding:10px; border-radius:6px; white-space:pre-wrap; color:var(--text2);">${esc(r.compile_errors.slice(0, 20).join('\n'))}</div>`;
+      }
+
+      if ((r.warnings || []).length > 0) {
+        html += `<h4 style="margin:12px 0 6px; color:var(--medium);">Warnings</h4>
+          <div style="max-height:150px; overflow-y:auto; font-family:monospace; font-size:11px; color:var(--text2);">
+          ${r.warnings.map(w => `<div style="padding:2px 0;">${esc(w)}</div>`).join('')}
+          </div>`;
+      }
+      html += `</div>`;
+    }
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+async function startTranspile(mode) {
+  const dir = document.getElementById('transpileDir')?.value;
+  if (!dir) { alert('Please enter a target directory.'); return; }
+  const config = {
+    output_dir: document.getElementById('transpileOut')?.value || 'rust_output',
+    crate_name: document.getElementById('transpileCrate')?.value || 'transpiled',
+    use_llm: document.getElementById('transpileLLM')?.checked || false,
+  };
+  const endpoint = mode === 'pipeline' ? '/api/transpile-pipeline' : '/api/transpile-directory';
+  try {
+    const resp = await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ directory: dir, config }) });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    transpileData = { running: true, phase: 'starting', progress: 0, result: null, error: null };
+    renderViewContent();
+    pollTranspileStatus();
+  } catch (e) { alert('Failed to start transpilation: ' + e.message); }
+}
+
+function pollTranspileStatus() {
+  if (transpilePolling) clearInterval(transpilePolling);
+  transpilePolling = setInterval(async () => {
+    try {
+      const resp = await fetch('/api/transpile-status');
+      const data = await resp.json();
+      transpileData = data;
+      if (activeView === 'transpile') renderViewContent();
+      if (!data.running) {
+        clearInterval(transpilePolling);
+        transpilePolling = null;
+      }
+    } catch (e) {
+      clearInterval(transpilePolling);
+      transpilePolling = null;
+    }
+  }, 1500);
 }
 
 // ── PM Dashboard: Risk Map View ──────────────────────────────────
