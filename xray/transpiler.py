@@ -126,6 +126,7 @@ class TranspileConfig:
     crate_name: str = "transpiled"
     use_llm: bool = True
     llm_backend: str = "auto"
+    llm_model_path: str = ""             # Path to .gguf model (auto-picks coder model)
     generate_tests: bool = True
     generate_cargo_toml: bool = True
     preserve_comments: bool = True
@@ -3107,13 +3108,24 @@ class Transpiler:
 
     @property
     def llm_helper(self) -> LLMTranspileHelper | None:
-        """Lazily initialize the LLM helper when first needed."""
+        """Lazily initialize the LLM helper when first needed.
+
+        Prefers coding-specialized models (Qwen-Coder, DeepSeek-Coder)
+        when available via zen_core auto-discovery.
+        """
         if self._llm_helper is not None:
             return self._llm_helper
         if not self.config.use_llm:
             return None
         try:
-            backend = create_backend(self.config.llm_backend)
+            model_path = self.config.llm_model_path
+            # Auto-pick a coder model if none specified
+            if not model_path:
+                model_path = self._pick_coder_model()
+            kwargs = {}
+            if model_path:
+                kwargs["model_path"] = model_path
+            backend = create_backend(self.config.llm_backend, **kwargs)
             if backend.is_available:
                 self._llm_helper = LLMTranspileHelper(backend)
                 log.info("LLM backend initialized: %s", backend.backend_name)
@@ -3122,6 +3134,26 @@ class Transpiler:
         except Exception as exc:
             log.warning("Failed to initialize LLM backend: %s", exc)
         return None
+
+    @staticmethod
+    def _pick_coder_model() -> str:
+        """Auto-discover the best coding model available locally."""
+        try:
+            from zen_core_libs.llm import discover_models
+        except ImportError:
+            return ""
+        models = discover_models()
+        if not models:
+            return ""
+        # Prefer coding models by name (best first)
+        coder_prefs = ["qwen2.5-coder-14b", "qwen2.5-coder-7b", "deepseek-coder",
+                        "codestral", "nerdsking-python-coder", "phi-3.5"]
+        for pref in coder_prefs:
+            for m in models:
+                if pref in m["name"].lower():
+                    log.info("Auto-selected coder model: %s (%.1f GB)", m["name"], m["size_gb"])
+                    return m["path"]
+        return ""
 
     # ------------------------------------------------------------------
     # Public API
@@ -3360,65 +3392,161 @@ class Transpiler:
     def _llm_fix_compile_errors(
         self, result: TranspileResult, modules: list[PythonModule],
     ) -> TranspileResult:
-        """Use the LLM to fix compilation errors, up to 3 retries."""
+        """Use the local LLM to fix compilation errors iteratively.
+
+        Strategy for small local models:
+        - Parse individual errors from cargo output
+        - Extract the ±10-line code context around each error
+        - Send focused prompt per error (fits in small context window)
+        - Apply fixes surgically (line replacement, not whole-file)
+        - Recompile after each batch of fixes
+        """
         if not self.llm_helper:
             return result
-        max_retries = 3
-        for attempt in range(1, max_retries + 1):
+
+        max_rounds = min(3, self.config.max_llm_calls // 10 or 1)
+        fixes_applied = 0
+
+        for round_num in range(1, max_rounds + 1):
             if self._llm_calls >= self.config.max_llm_calls:
                 result.warnings.append("LLM call budget exhausted during compile-fix")
                 break
-
-            log.info("LLM compile-fix attempt %d/%d", attempt, max_retries)
-            errors_text = "\n".join(result.compile_errors[:50])
-
-            prompt = (
-                "The following Rust code has compilation errors. Fix the errors and "
-                "return the corrected Rust source. Only return the code, no explanations.\n\n"
-                f"Errors:\n```\n{errors_text}\n```\n\n"
-            )
-
-            # Find the file with the most errors and fix it
-            error_files: dict[str, int] = {}
-            for err_line in result.compile_errors:
-                m = re.search(r'--> src/(\w+\.rs)', err_line)
-                if m:
-                    error_files[m.group(1)] = error_files.get(m.group(1), 0) + 1
-
-            if not error_files:
+            if result.compile_success:
                 break
 
-            worst_file = max(error_files, key=error_files.get)
-            src_path = f"src/{worst_file}"
-            if src_path not in result.files_written:
+            log.info("LLM compile-fix round %d/%d (%d errors)",
+                     round_num, max_rounds, len(result.compile_errors))
+
+            # Parse individual errors: file, line, code, message
+            error_entries = self._parse_compile_errors(result.compile_errors)
+            if not error_entries:
                 break
 
-            full_prompt = prompt + f"Source ({worst_file}):\n```rust\n{result.files_written[src_path]}\n```"
-            try:
-                fixed = self.llm_helper.transpile_complex_function(
-                    result.files_written[src_path],
-                    context=f"Fixing compile errors in {worst_file}: {errors_text[:500]}",
+            # Group by file and fix up to 10 errors per round
+            files_modified: set[str] = set()
+            for entry in error_entries[:10]:
+                if self._llm_calls >= self.config.max_llm_calls:
+                    break
+
+                src_path = f"src/{entry['file']}"
+                if src_path not in result.files_written:
+                    continue
+
+                source = result.files_written[src_path]
+                lines = source.splitlines()
+                err_line = entry["line"] - 1  # 0-indexed
+
+                # Extract context: ±10 lines around error
+                start = max(0, err_line - 10)
+                end = min(len(lines), err_line + 11)
+                context_lines = lines[start:end]
+                context_with_numbers = "\n".join(
+                    f"{'>>>' if i + start == err_line else '   '} {i + start + 1:4d} | {l}"
+                    for i, l in enumerate(context_lines)
                 )
-                self._llm_calls += 1
-                fixed = self._extract_code_block(fixed)
-                if fixed:
-                    result.files_written[src_path] = fixed
-                    # Write and re-check
+
+                prompt = (
+                    "Fix this Rust compilation error. Return ONLY the corrected line(s), "
+                    "no explanations, no markdown fences.\n\n"
+                    f"Error: {entry['code']} — {entry['message']}\n"
+                    f"File: {entry['file']}, line {entry['line']}\n\n"
+                    f"Code context:\n{context_with_numbers}\n\n"
+                    f"The line marked with >>> has the error. "
+                    f"Return ONLY the fixed version of lines {start + 1}-{end} "
+                    f"(the same {end - start} lines, corrected):"
+                )
+
+                try:
+                    raw = self.llm_helper.backend.generate(prompt, max_tokens=512)
+                    self._llm_calls += 1
+                    self.llm_helper.calls_made += 1
+
+                    # Parse the fix: extract lines from response
+                    fix_text = self._extract_code_block(raw) or raw.strip()
+                    fix_lines = fix_text.splitlines()
+
+                    # Apply fix — replace the context region
+                    if fix_lines and len(fix_lines) >= 1:
+                        # Strip line numbers if the LLM echoed them
+                        cleaned: list[str] = []
+                        for fl in fix_lines:
+                            # Remove leading ">>> NNN |" or "    NNN |" prefixes
+                            stripped = re.sub(r'^(?:>>>|   )\s*\d+\s*\|\s?', '', fl)
+                            cleaned.append(stripped)
+
+                        lines[start:end] = cleaned
+                        result.files_written[src_path] = "\n".join(lines)
+                        files_modified.add(src_path)
+                        fixes_applied += 1
+
+                except Exception as exc:
+                    log.debug("LLM fix failed for %s:%d — %s",
+                              entry["file"], entry["line"], exc)
+                    continue
+
+            # Write modified files and recompile
+            if files_modified:
+                for src_path in files_modified:
                     output_path = Path(self.config.output_dir) / src_path
-                    output_path.write_text(fixed, encoding="utf-8")
-                    success, errors = self._try_compile()
-                    result.compile_success = success
-                    result.compile_errors = errors
-                    if success:
-                        log.info("Compile fix succeeded on attempt %d", attempt)
-                        break
-            except Exception as exc:
-                log.debug("LLM compile-fix failed: %s", exc)
-                break
+                    output_path.write_text(
+                        result.files_written[src_path], encoding="utf-8",
+                    )
+                success, errors = self._try_compile()
+                result.compile_success = success
+                result.compile_errors = errors
+                log.info("After round %d: %d errors (fixed %d this round)",
+                         round_num, len(errors), fixes_applied)
+                if success:
+                    log.info("Compile fix succeeded on round %d", round_num)
+                    break
 
         if self._llm_helper:
             result.llm_calls_made = self._llm_helper.calls_made
         return result
+
+    @staticmethod
+    def _parse_compile_errors(error_lines: list[str]) -> list[dict]:
+        """Parse cargo check error output into structured entries."""
+        entries: list[dict] = []
+        i = 0
+        while i < len(error_lines):
+            line = error_lines[i]
+            # Match: error[E0425]: cannot find value `x` in this scope
+            code_match = re.search(r'error\[(E\d+)\]:\s*(.+)', line)
+            if code_match:
+                code = code_match.group(1)
+                message = code_match.group(2)
+                # Next line often has: --> src/file.rs:NN:CC
+                loc_match = None
+                if i + 1 < len(error_lines):
+                    loc_match = re.search(r'-->\s*src/(\w+\.rs):(\d+)', error_lines[i + 1])
+                if loc_match:
+                    entries.append({
+                        "code": code,
+                        "message": message,
+                        "file": loc_match.group(1),
+                        "line": int(loc_match.group(2)),
+                    })
+                    i += 2
+                    continue
+            # Also match: error: description (parse errors without code)
+            parse_match = re.search(r'^error:\s*(.+)', line)
+            if parse_match and not line.startswith('error['):
+                message = parse_match.group(1)
+                loc_match = None
+                if i + 1 < len(error_lines):
+                    loc_match = re.search(r'-->\s*src/(\w+\.rs):(\d+)', error_lines[i + 1])
+                if loc_match:
+                    entries.append({
+                        "code": "E0000",
+                        "message": message,
+                        "file": loc_match.group(1),
+                        "line": int(loc_match.group(2)),
+                    })
+                    i += 2
+                    continue
+            i += 1
+        return entries
 
     def _post_rewrite_pass(
         self, sources: dict[str, str], module_names: set[str],
@@ -3470,6 +3598,17 @@ class Transpiler:
                     rf'{full_name}.\1',
                     src,
                 )
+            # Post-alias-expansion filter: stub out flet-heavy files
+            flet_refs = len(_re.findall(r'\bflet[.:]', src))
+            if flet_refs > 20:
+                mod_name = path.replace('src/', '').replace('.rs', '')
+                result[path] = (
+                    f"// Module `{mod_name}` — flet GUI code ({flet_refs} flet references)\n"
+                    f"// Transpilation of flet UI modules is not supported.\n"
+                    f"// Use a native Rust GUI framework (egui, iced, tauri) instead.\n"
+                )
+                continue
+
             # Rule 1: module.func() → module::func() or just func()
             # If the file has `use crate::module::*;`, remove the module prefix
             # If it has `use crate::module as alias;`, use alias::
@@ -3690,6 +3829,214 @@ class Transpiler:
                 r'Box<dyn Fn(\1)>',
                 src,
             )
+
+            # Rule 21: unittest assertions → Rust macros
+            # self.assertEqual(a, b) → assert_eq!(a, b)
+            src = _re.sub(r'self\.assertEqual\(', 'assert_eq!(', src)
+            src = _re.sub(r'self\.assertNotEqual\(', 'assert_ne!(', src)
+            src = _re.sub(r'self\.assertTrue\(', 'assert!(', src)
+            src = _re.sub(r'self\.assertFalse\(', 'assert!(!', src)
+            src = _re.sub(r'self\.assertIsNone\(', 'assert!(Option::is_none(&', src)
+            src = _re.sub(r'self\.assertIsNotNone\(', 'assert!(Option::is_some(&', src)
+            # self.assertIn(a, b) → assert!(b.contains(&a))
+            # Use balanced matching for nested parens
+            def _rewrite_assert_in(src_text):
+                pattern = 'self.assertIn('
+                out = []
+                i = 0
+                while i < len(src_text):
+                    pos = src_text.find(pattern, i)
+                    if pos == -1:
+                        out.append(src_text[i:])
+                        break
+                    out.append(src_text[i:pos])
+                    # Find balanced closing paren
+                    start = pos + len(pattern)
+                    depth = 1
+                    j = start
+                    while j < len(src_text) and depth > 0:
+                        if src_text[j] == '(':
+                            depth += 1
+                        elif src_text[j] == ')':
+                            depth -= 1
+                        j += 1
+                    args = src_text[start:j - 1]
+                    # Split on first comma not inside parens
+                    comma_depth = 0
+                    comma_pos = -1
+                    for k, ch in enumerate(args):
+                        if ch == '(':
+                            comma_depth += 1
+                        elif ch == ')':
+                            comma_depth -= 1
+                        elif ch == ',' and comma_depth == 0:
+                            comma_pos = k
+                            break
+                    if comma_pos >= 0:
+                        a = args[:comma_pos].strip()
+                        b = args[comma_pos + 1:].strip()
+                        out.append(f'assert!({b}.contains({a}))')
+                    else:
+                        out.append(f'assert!(/* assertIn({args}) */)')
+                    i = j
+                return ''.join(out)
+            src = _rewrite_assert_in(src)
+            # let _ctx = self.assertRaises(Exc); → comment out entire line
+            src = _re.sub(
+                r'let\s+(?:mut\s+)?(\w+)\s*=\s*self\.assertRaises\([^;]+;',
+                r'/* assertRaises — use #[should_panic] or catch_unwind */;',
+                src,
+            )
+            # Standalone self.assertRaises(Exc) → comment
+            src = _re.sub(
+                r'self\.assertRaises\(([^)]+)\)',
+                r'/* assertRaises(\1) */',
+                src,
+            )
+            # unittest.mock.patch → comment out entire let statement
+            src = _re.sub(
+                r'let\s+(?:mut\s+)?(\w+)\s*=\s*(?:unittest\.mock\.)?patch\([^;]+;',
+                r'/* let \1 = mock::patch(...) — use mockall crate */;',
+                src,
+            )
+            # Standalone patch() calls (not in let)
+            src = _re.sub(
+                r'(?:unittest\.mock\.)?patch\(([^)]+)\)',
+                r'/* mock::patch(\1) */',
+                src,
+            )
+            # Remove `@patch(...)` decorator lines (leftover from Python)
+            src = _re.sub(r'\s*#\[.*patch.*\]\s*\n', '\n', src)
+
+            # Rule 22: pathlib.Path attributes → PathBuf methods
+            # Apply ONLY to code lines, not inside string constants
+            new_src_lines: list[str] = []
+            for line in src.split('\n'):
+                stripped = line.strip()
+                # Skip lines that are const string definitions or inside quotes
+                if stripped.startswith('pub const') and '= "' in stripped:
+                    new_src_lines.append(line)
+                    continue
+                if stripped.startswith('pub static') and '"' in stripped:
+                    new_src_lines.append(line)
+                    continue
+                line = _re.sub(r'\.stem\b(?!\()', '.file_stem().unwrap_or_default().to_str().unwrap_or("")', line)
+                line = _re.sub(r'\.suffix\b(?!\()', '.extension().unwrap_or_default().to_str().unwrap_or("")', line)
+                line = _re.sub(r'((?:PathBuf|Path|path|filepath|file_path)\w*)\.name\b',
+                              r'\1.file_name().unwrap_or_default().to_str().unwrap_or("")', line)
+                line = _re.sub(r'\.parent\b(?!\()', '.parent().unwrap_or(std::path::Path::new(""))', line)
+                line = _re.sub(r'\.mkdir\(([^)]*)\)', '.create_dir_all()', line)
+                line = _re.sub(r'\.read_text\([^)]*\)', '.read_to_string()', line)
+                line = _re.sub(r'\.write_text\(([^,)]+)[^)]*\)',
+                              r'std::fs::write(&\1)', line)
+                line = _re.sub(r'\.with_suffix\(([^)]+)\)', r'.with_extension(\1)', line)
+                line = _re.sub(r'\.joinpath\(', '.join(', line)
+                line = _re.sub(r'\.resolve\(\)', '.canonicalize().unwrap_or_default()', line)
+                line = _re.sub(r'\.unlink\(\)', '.remove_file().ok()', line)
+                new_src_lines.append(line)
+            src = '\n'.join(new_src_lines)
+
+            # Rule 23: Ok() wrapping for Result-returning functions
+            # Functions ending with bare value before `}` when signature has -> Result
+            # This is tricky — we handle the most common case:
+            # functions declared `-> Result<...>` that end with `}`
+            # but don't have `Ok(` or `Err(` at the return point.
+            # We'll fix this at a line level: if a fn has `-> Result<` in its sig,
+            # ensure the last statement before `}` is wrapped in Ok().
+            lines = src.split('\n')
+            new_lines: list[str] = []
+            in_result_fn = False
+            brace_depth = 0
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if _re.search(r'->\s*Result<', line) and '{' in line:
+                    in_result_fn = True
+                    brace_depth = 0
+                if in_result_fn:
+                    brace_depth += stripped.count('{') - stripped.count('}')
+                    if brace_depth <= 0 and stripped == '}':
+                        # Check the previous non-empty line
+                        for j in range(len(new_lines) - 1, -1, -1):
+                            prev = new_lines[j].strip()
+                            if prev and prev != '{' and not prev.startswith('//'):
+                                # If it doesn't already return Ok/Err
+                                if (not prev.startswith('Ok(') and
+                                    not prev.startswith('Err(') and
+                                    not prev.startswith('return Ok(') and
+                                    not prev.startswith('return Err(') and
+                                    not prev.endswith('?') and
+                                    prev != '}'):
+                                    indent = new_lines[j][:len(new_lines[j]) - len(new_lines[j].lstrip())]
+                                    inner = prev.rstrip(';')
+                                    new_lines[j] = f'{indent}Ok({inner})'
+                                break
+                        in_result_fn = False
+                new_lines.append(line)
+            src = '\n'.join(new_lines)
+
+            # Rule 24: String concatenation with +
+            # "str" + "str" → format!("{}{}", a, b) is complex.
+            # Simpler: x + &y for String concat, and .to_string() + &other
+            # We'll target the common pattern: `str_var + "literal"` → `format!("{}{}", str_var, "literal")`
+            # For now, just ensure & is added for RHS of string concat
+            src = _re.sub(r'(\w+\.to_string\(\))\s*\+\s*(")', r'\1 + \2', src)
+
+            # Rule 25: Third-party module stubs
+            # Comment out entire lines that are flet assignments
+            src = _re.sub(
+                r'^(\s*)((?:let\s+(?:mut\s+)?)?[^=]+=\s*)flet(?:\.|::)\w+[^;]*;',
+                r'\1/* \2flet::... */;',
+                src,
+                flags=_re.MULTILINE,
+            )
+            # flet.X.Y.Z → /* flet::X::Y::Z */ (remaining references)
+            src = _re.sub(r'\bflet(?:\.|::)(\w+(?:(?:\.|::)\w+)*)', r'/* flet::\1 */', src)
+            # Clean up double-nested comments
+            src = _re.sub(r'/\*\s*/\*\s*', '/* ', src)
+            src = _re.sub(r'\s*\*/\s*\*/', ' */', src)
+            # pysrt, moviepy, etc.
+            src = _re.sub(r'\bpysrt\.(\w+)', r'/* pysrt::\1 */', src)
+            src = _re.sub(r'\bmoviepy\.(\w+)', r'/* moviepy::\1 */', src)
+            src = _re.sub(r'\bpillow\.(\w+)', r'/* pillow::\1 */', src)
+            src = _re.sub(r'\brequests\.(get|post|put|delete|patch|head)\(',
+                          r'/* reqwest::\1( */', src)
+
+            # Rule 26: Fix struct construction — ClassName(args) → ClassName::new(args)
+            # for known struct patterns (classes defined in this crate)
+            for mod_name in module_names:
+                # Find struct definitions in all sources
+                pass  # handled below
+
+            # Rule 27: Python `isinstance(x, Type)` leftover → comment
+            src = _re.sub(
+                r'isinstance\(([^,]+),\s*([^)]+)\)',
+                r'/* isinstance(\1, \2) */',
+                src,
+            )
+
+            # Rule 28: `super().__init__()` → comment
+            src = _re.sub(
+                r'super\(\)\.__init__\([^)]*\)',
+                r'/* super().__init__() */',
+                src,
+            )
+
+            # Rule 29: `self.__class__.__name__` → type_name
+            src = _re.sub(
+                r'self\.__class__\.__name__',
+                r'std::any::type_name::<Self>()',
+                src,
+            )
+
+            # Rule 30: Struct.method → Struct::method (for known structs in crate)
+            for mod_name in module_names:
+                san = RustCodegen._sanitize_ident(mod_name)
+                # StructName.static_method( → StructName::static_method(
+                src = _re.sub(
+                    rf'\b{_re.escape(san)}\.(\w+)\(',
+                    rf'{san}::\1(',
+                    src,
+                )
 
             result[path] = src
 
