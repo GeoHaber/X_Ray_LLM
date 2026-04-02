@@ -10,9 +10,21 @@ echo "Starting server on http://localhost:8077"
 echo "Press Ctrl+C to stop"
 echo ""
 
-# Use uv if available for managed dependencies, otherwise plain python
-if command -v uv >/dev/null 2>&1; then
-    uv run python ui_server.py "$@"
-else
-    python3 ui_server.py "$@"
+VENV_DIR=".venv"
+
+# Create virtualenv if it doesn't exist
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Creating virtual environment in $VENV_DIR ..."
+    python3 -m venv "$VENV_DIR"
+    echo "Installing dependencies ..."
+    "$VENV_DIR/bin/pip" install --quiet -r requirements.txt
 fi
+
+# Activate the virtual environment
+# shellcheck disable=SC1091
+. "$VENV_DIR/bin/activate"
+
+echo "Using Python: $(which python3)"
+echo ""
+
+python3 ui_server.py "$@"
