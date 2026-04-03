@@ -42,3 +42,11 @@ scan_self*.json
 test_results.txt
 *.sarif
 _debug_*.py
+
+# Transpile output (generated Rust code per-repo)
+rust_output/
+transpile_results.json
+
+# Benchmark results (regenerated on each run)
+benchmark_results.json
+benchmarks/results/

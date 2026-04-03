@@ -19,6 +19,12 @@ import sys
 import time
 from dataclasses import dataclass, field
 
+# Fix Windows console encoding for Unicode output (ruff, emoji, etc.)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 logger = logging.getLogger(__name__)
 
 from .llm import LLMConfig, LLMEngine, create_backend, list_backends
@@ -232,7 +238,33 @@ class XRayAgent:
 
         return tests
 
-    # ── Step 3: GENERATE FIXES ──────────────────────────────────────────────
+    # ── Step 2b: DETERMINISTIC FIXES ──────────────────────────────────────
+
+    def apply_deterministic_fixes(self, findings: list[Finding]) -> tuple[int, list[Finding]]:
+        """Apply rule-based auto-fixes (no LLM needed). Returns (count_fixed, remaining)."""
+        from .fixer import FIXABLE_RULES, apply_fix
+
+        fixable = [f for f in findings if f.rule_id in FIXABLE_RULES]
+        if not fixable:
+            return 0, findings
+
+        self.log(f"\n🔧 Step 2b: DETERMINISTIC fixes for {len(fixable)} findings...")
+        fixed_count = 0
+        for finding in fixable:
+            result = apply_fix(finding.to_dict())
+            if result.get("ok"):
+                fixed_count += 1
+                self.report.fixes_applied += 1
+                self.log(f"  ✅ Fixed {finding.rule_id} at {finding.file}:{finding.line} — {result.get('description', '')}")
+            else:
+                self.log(f"  ⏭  {finding.rule_id} at {finding.file}:{finding.line} — {result.get('error', 'not fixable')}")
+
+        remaining = [f for f in findings if f.rule_id not in FIXABLE_RULES or f not in fixable]
+        if fixed_count:
+            self.log(f"  Applied {fixed_count}/{len(fixable)} deterministic fixes")
+        return fixed_count, remaining
+
+    # ── Step 3: GENERATE FIXES (LLM) ──────────────────────────────────────
 
     def generate_fixes(self, findings: list[Finding], test_error: str = "") -> list[dict]:
         """Generate code fixes for findings using the LLM."""
@@ -241,10 +273,10 @@ class XRayAgent:
             return []
 
         if not self.llm.is_available:
-            self.log("⚠️  LLM not available — skipping fix generation")
+            self.log("⚠️  LLM not available — skipping LLM fix generation")
             return []
 
-        self.log(f"\n🔧 Step 3: GENERATING fixes for {len(findings)} findings...")
+        self.log(f"\n🔧 Step 3: LLM fixes for {len(findings)} findings...")
         fixes = []
         for finding in findings:
             context = extract_code_slice(finding.file, finding.line)
@@ -315,6 +347,11 @@ class XRayAgent:
 
         # Steps 2-5: Generate tests, fix, verify, loop
         remaining = list(scan_result.findings)
+
+        # Step 2b: Apply deterministic fixes first (no LLM needed)
+        if self.config.auto_fix:
+            det_fixed, remaining = self.apply_deterministic_fixes(remaining)
+
         retries = 0
         last_error = ""
 
@@ -329,7 +366,7 @@ class XRayAgent:
             # Generate tests
             self.generate_tests(remaining)
 
-            # Generate fixes
+            # Generate LLM fixes for remaining findings
             self.generate_fixes(remaining, test_error=last_error)
 
             # Verify
@@ -384,12 +421,18 @@ def _run_ruff_autofix(project_root: str, mode: str) -> bool:
         encoding="utf-8",
         errors="replace",
     )
-    out = proc.stdout or ""
-    err = proc.stderr or ""
-    if out.strip():
-        print(out.strip())
-    if err.strip():
-        print(err.strip(), file=sys.stderr)
+    out = (proc.stdout or "").strip()
+    err = (proc.stderr or "").strip()
+    if out:
+        try:
+            print(out)
+        except UnicodeEncodeError:
+            print(out.encode("ascii", errors="replace").decode("ascii"))
+    if err:
+        try:
+            print(err, file=sys.stderr)
+        except UnicodeEncodeError:
+            print(err.encode("ascii", errors="replace").decode("ascii"), file=sys.stderr)
 
     # In dry-run mode, non-zero means findings exist, not a pipeline failure.
     if mode == "dry-run":
