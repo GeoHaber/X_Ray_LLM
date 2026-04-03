@@ -12,6 +12,7 @@ tests that validate real problems rather than generic stubs:
 from __future__ import annotations
 
 import os
+import re
 import textwrap
 from pathlib import Path
 
@@ -22,9 +23,18 @@ from analyzers.coverage_map import compute_coverage_map
 
 def _sanitize_fn(name: str) -> str:
     """Make a string safe for use as a Python function name."""
-    s = name.replace("/", "_").replace("-", "_").replace(".", "_").replace(":", "_")
+    # Remove route parameters like <id>, :id, {id}
+    s = re.sub(r"[<{][\w:]+[>}]", "param", name)
+    s = re.sub(r":(\w+)", r"_\1", s)
+    s = s.replace("/", "_").replace("-", "_").replace(".", "_").replace(":", "_")
+    s = re.sub(r"[^a-zA-Z0-9_]", "", s)
     s = s.strip("_")
     return s or "unnamed"
+
+
+def _safe_docstring(text: str) -> str:
+    """Escape backslashes in docstrings to prevent unicode escape errors."""
+    return text.replace("\\", "/")
 
 
 # ── Schema Contract Tests ────────────────────────────────────────────
@@ -50,29 +60,27 @@ def _gen_schema_tests(drift_data: dict, base_url: str) -> tuple[str, int]:
                 continue
 
             fn_name = f"test_schema_{_sanitize_fn(model_name)}_{_sanitize_fn(url)}"
-            field_list = sorted(fields.keys())
+            field_list = [f for f in sorted(fields.keys()) if not f.startswith("_")]
             field_checks = "\n".join(
-                '        assert "{f}" in item, '
+                '            assert "{f}" in item, '
                 '"Missing field \'{f}\' ({ft}) in {m} response"'.format(
                     f=f, ft=fields[f], m=model_name)
-                for f in field_list if not f.startswith("_")
+                for f in field_list
             )
 
-            block = textwrap.dedent(f'''\
-                def {fn_name}(api):
-                    """Schema contract: {url} must return {model_name} fields."""
-                    resp = api.post(f"{{BASE_URL}}{url}", json={{"directory": "."}})
-                    if resp.status_code != 200:
-                        pytest.skip(f"Endpoint returned {{resp.status_code}}")
-                    data = resp.json()
-                    # Handle both single object and list responses
-                    items = data if isinstance(data, list) else [data]
-                    for item in items[:5]:
-                        if not isinstance(item, dict):
-                            continue
-            {field_checks}
-
-            ''')
+            block = (
+                f"def {fn_name}(api):\n"
+                f'    """Schema contract: {url} must return {model_name} fields."""\n'
+                f'    resp = api.post(f"{{BASE_URL}}{url}", json={{"directory": "."}})\n'
+                f"    if resp.status_code != 200:\n"
+                f'        pytest.skip(f"Endpoint returned {{resp.status_code}}")\n'
+                f"    data = resp.json()\n"
+                f"    items = data if isinstance(data, list) else [data]\n"
+                f"    for item in items[:5]:\n"
+                f"        if not isinstance(item, dict):\n"
+                f"            continue\n"
+                f"{field_checks}\n\n\n"
+            )
             blocks.append(block)
             count += 1
 
@@ -156,7 +164,7 @@ def _gen_orphan_tests(orphan_data: dict, base_url: str) -> tuple[str, int]:
         block = textwrap.dedent(f'''\
             def {fn_name}(api):
                 """Orphan: UI calls {method.upper()} {url} but no backend handler exists.
-                Source: {file}:{line}
+                Source: {_safe_docstring(file)}:{line}
                 Fix: implement the handler or remove the dead UI call."""
                 resp = api.{method}(f"{{BASE_URL}}{url}")
                 assert resp.status_code == 404, (
@@ -186,7 +194,7 @@ def _gen_orphan_tests(orphan_data: dict, base_url: str) -> tuple[str, int]:
         block = textwrap.dedent(f'''\
             def {fn_name}(api):
                 """Orphan: {method.upper()} {url} exists in backend but no UI calls it.
-                Source: {file}
+                Source: {_safe_docstring(file)}
                 Fix: wire it into the UI or deprecate the endpoint."""
                 resp = {call}
                 # Endpoint should at least respond (not 500)
@@ -254,7 +262,7 @@ def _gen_coverage_tests(coverage_data: dict) -> tuple[str, int]:
         block = textwrap.dedent(f'''\
             @pytest.mark.skip(reason="Coverage gap — no existing test for this endpoint")
             def {fn_name}(api):
-                """UNTESTED endpoint: {url} (from {file})
+                """UNTESTED endpoint: {url} (from {_safe_docstring(file)})
                 TODO: implement proper test with expected inputs/outputs."""
                 resp = api.get(f"{{BASE_URL}}{url}")
                 assert resp.status_code in (200, 400, 404)
@@ -270,21 +278,22 @@ def _gen_coverage_tests(coverage_data: dict) -> tuple[str, int]:
         by_file.setdefault(fn.get("file", "?"), []).append(fn)
 
     for file, fns in by_file.items():
+        safe_file = _safe_docstring(file)
         module = file.replace(os.sep, ".").replace("/", ".").replace(".py", "")
         class_name = f"Test{_sanitize_fn(os.path.basename(file).replace('.py', '')).title()}"
 
         block = textwrap.dedent(f'''\
             class {class_name}:
-                """Coverage gaps in {file} — {len(fns)} untested functions."""
+                """Coverage gaps in {safe_file} -- {len(fns)} untested functions."""
 
         ''')
         for fn in fns[:15]:
             name = fn.get("name", "")
             line = fn.get("line", 0)
             block += textwrap.dedent(f'''\
-                    @pytest.mark.skip(reason="Coverage gap — stub for {module}.{name}")
+                    @pytest.mark.skip(reason="Coverage gap -- stub for {module}.{name}")
                     def test_{_sanitize_fn(name)}(self):
-                        """UNTESTED: {name}() at {file}:{line}"""
+                        """UNTESTED: {name}() at {safe_file}:{line}"""
                         # from {module} import {name}
                         # result = {name}(...)
                         # assert result is not None
@@ -328,6 +337,7 @@ def _gen_regression_tests(scan_data: dict | None) -> tuple[str, int]:
     ''')
 
     for file, file_findings in list(by_file.items())[:15]:
+        safe_file = _safe_docstring(file)
         for finding in file_findings[:5]:
             rule = finding.get("rule_id", "")
             line = finding.get("line", 0)
@@ -335,10 +345,10 @@ def _gen_regression_tests(scan_data: dict | None) -> tuple[str, int]:
             fn_name = f"test_fix_{_sanitize_fn(rule)}_{_sanitize_fn(os.path.basename(file))}_{line}"
             block += textwrap.dedent(f'''\
                     def {fn_name}(self):
-                        """Verify {rule} at {os.path.basename(file)}:{line} is fixed.
+                        """Verify {rule} at {_safe_docstring(os.path.basename(file))}:{line} is fixed.
                         Original: {desc}"""
                         import re
-                        filepath = "{file}"
+                        filepath = "{safe_file}"
                         try:
                             with open(filepath, encoding="utf-8", errors="replace") as f:
                                 lines = f.readlines()

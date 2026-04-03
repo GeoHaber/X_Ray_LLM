@@ -54,7 +54,7 @@ def test_orphan_frontend_api_transpile_status(api):
 
 def test_orphan_backend_api_fix(api):
     """Orphan: GET /api/fix exists in backend but no UI calls it.
-    Source: tests\test_connection_analyzer.py
+    Source: tests/test_connection_analyzer.py
     Fix: wire it into the UI or deprecate the endpoint."""
     resp = api.get(f"{BASE_URL}/api/fix")
     # Endpoint should at least respond (not 500)
@@ -65,7 +65,7 @@ def test_orphan_backend_api_fix(api):
 
 def test_orphan_backend_api_items(api):
     """Orphan: GET /api/items exists in backend but no UI calls it.
-    Source: tests\test_connection_analyzer.py
+    Source: tests/test_connection_analyzer.py
     Fix: wire it into the UI or deprecate the endpoint."""
     resp = api.get(f"{BASE_URL}/api/items")
     # Endpoint should at least respond (not 500)
@@ -76,7 +76,7 @@ def test_orphan_backend_api_items(api):
 
 def test_orphan_backend_api_items_71(api):
     """Orphan: POST /api/items exists in backend but no UI calls it.
-    Source: tests\test_connection_analyzer.py
+    Source: tests/test_connection_analyzer.py
     Fix: wire it into the UI or deprecate the endpoint."""
     resp = api.post(f"{BASE_URL}/api/items", json={})
     # Endpoint should at least respond (not 500)
@@ -87,7 +87,7 @@ def test_orphan_backend_api_items_71(api):
 
 def test_orphan_backend_api_items__id(api):
     """Orphan: DELETE /api/items/:id exists in backend but no UI calls it.
-    Source: tests\test_connection_analyzer.py
+    Source: tests/test_connection_analyzer.py
     Fix: wire it into the UI or deprecate the endpoint."""
     resp = api.delete(f"{BASE_URL}/api/items/:id")
     # Endpoint should at least respond (not 500)
@@ -98,7 +98,7 @@ def test_orphan_backend_api_items__id(api):
 
 def test_orphan_backend_api_orphan_endpoint(api):
     """Orphan: GET /api/orphan-endpoint exists in backend but no UI calls it.
-    Source: tests\test_connection_analyzer.py
+    Source: tests/test_connection_analyzer.py
     Fix: wire it into the UI or deprecate the endpoint."""
     resp = api.get(f"{BASE_URL}/api/orphan-endpoint")
     # Endpoint should at least respond (not 500)
@@ -109,7 +109,7 @@ def test_orphan_backend_api_orphan_endpoint(api):
 
 def test_orphan_backend_api_scan(api):
     """Orphan: GET /api/scan exists in backend but no UI calls it.
-    Source: tests\test_connection_analyzer.py
+    Source: tests/test_connection_analyzer.py
     Fix: wire it into the UI or deprecate the endpoint."""
     resp = api.get(f"{BASE_URL}/api/scan")
     # Endpoint should at least respond (not 500)
@@ -120,7 +120,7 @@ def test_orphan_backend_api_scan(api):
 
 def test_orphan_backend_api_users(api):
     """Orphan: GET /api/users exists in backend but no UI calls it.
-    Source: tests\test_connection_analyzer.py
+    Source: tests/test_connection_analyzer.py
     Fix: wire it into the UI or deprecate the endpoint."""
     resp = api.get(f"{BASE_URL}/api/users")
     # Endpoint should at least respond (not 500)
@@ -131,7 +131,7 @@ def test_orphan_backend_api_users(api):
 
 def test_orphan_backend_api_users_36(api):
     """Orphan: GET /api/users exists in backend but no UI calls it.
-    Source: tests\test_connection_analyzer.py
+    Source: tests/test_connection_analyzer.py
     Fix: wire it into the UI or deprecate the endpoint."""
     resp = api.get(f"{BASE_URL}/api/users")
     # Endpoint should at least respond (not 500)
@@ -142,7 +142,7 @@ def test_orphan_backend_api_users_36(api):
 
 def test_orphan_backend_api_users__id(api):
     """Orphan: GET /api/users/:id exists in backend but no UI calls it.
-    Source: tests\test_connection_analyzer.py
+    Source: tests/test_connection_analyzer.py
     Fix: wire it into the UI or deprecate the endpoint."""
     resp = api.get(f"{BASE_URL}/api/users/:id")
     # Endpoint should at least respond (not 500)
@@ -152,437 +152,357 @@ def test_orphan_backend_api_users__id(api):
 
 
 # ======================================================================
-# Coverage Gap Tests (50 tests)
+# Coverage Gap Tests (37 tests)
 # ======================================================================
 
-class TestBenchmark_Models:
-    """Coverage gaps in benchmark_models.py — 6 untested functions."""
-
-@pytest.mark.skip(reason="Coverage gap — stub for benchmark_models.start_server")
-def test_start_server(self):
-    """UNTESTED: start_server() at benchmark_models.py:120"""
-    # from benchmark_models import start_server
-    # result = start_server(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for benchmark_models.stop_server")
-def test_stop_server(self):
-    """UNTESTED: stop_server() at benchmark_models.py:154"""
-    # from benchmark_models import stop_server
-    # result = stop_server(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for benchmark_models.generate")
-def test_generate(self):
-    """UNTESTED: generate() at benchmark_models.py:165"""
-    # from benchmark_models import generate
-    # result = generate(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for benchmark_models.build_prompt")
-def test_build_prompt(self):
-    """UNTESTED: build_prompt() at benchmark_models.py:188"""
-    # from benchmark_models import build_prompt
-    # result = build_prompt(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for benchmark_models.score_response")
-def test_score_response(self):
-    """UNTESTED: score_response() at benchmark_models.py:200"""
-    # from benchmark_models import score_response
-    # result = score_response(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for benchmark_models.main")
-def test_main(self):
-    """UNTESTED: main() at benchmark_models.py:226"""
-    # from benchmark_models import main
-    # result = main(...)
-    # assert result is not None
-    pass
-
-
-class TestBuild:
-    """Coverage gaps in build.py — 11 untested functions."""
-
-@pytest.mark.skip(reason="Coverage gap — stub for build.detect_target")
-def test_detect_target(self):
-    """UNTESTED: detect_target() at build.py:70"""
-    # from build import detect_target
-    # result = detect_target(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for build.resolve_target")
-def test_resolve_target(self):
-    """UNTESTED: resolve_target() at build.py:90"""
-    # from build import resolve_target
-    # result = resolve_target(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for build.get_binary_path")
-def test_get_binary_path(self):
-    """UNTESTED: get_binary_path() at build.py:104"""
-    # from build import get_binary_path
-    # result = get_binary_path(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for build.show_info")
-def test_show_info(self):
-    """UNTESTED: show_info() at build.py:110"""
-    # from build import show_info
-    # result = show_info(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for build.ensure_target_installed")
-def test_ensure_target_installed(self):
-    """UNTESTED: ensure_target_installed() at build.py:147"""
-    # from build import ensure_target_installed
-    # result = ensure_target_installed(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for build.run_cmd")
-def test_run_cmd(self):
-    """UNTESTED: run_cmd() at build.py:167"""
-    # from build import run_cmd
-    # result = run_cmd(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for build.step_generate_rules")
-def test_step_generate_rules(self):
-    """UNTESTED: step_generate_rules() at build.py:184"""
-    # from build import step_generate_rules
-    # result = step_generate_rules(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for build.step_test")
-def test_step_test(self):
-    """UNTESTED: step_test() at build.py:194"""
-    # from build import step_test
-    # result = step_test(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for build.step_build_release")
-def test_step_build_release(self):
-    """UNTESTED: step_build_release() at build.py:205"""
-    # from build import step_build_release
-    # result = step_build_release(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for build.step_cross_validate")
-def test_step_cross_validate(self):
-    """UNTESTED: step_cross_validate() at build.py:224"""
-    # from build import step_cross_validate
-    # result = step_cross_validate(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for build.main")
-def test_main(self):
-    """UNTESTED: main() at build.py:328"""
-    # from build import main
-    # result = main(...)
-    # assert result is not None
-    pass
-
-
-class TestBuild_Native:
-    """Coverage gaps in build_native.py — 1 untested functions."""
-
-@pytest.mark.skip(reason="Coverage gap — stub for build_native.main")
-def test_main(self):
-    """UNTESTED: main() at build_native.py:8"""
-    # from build_native import main
-    # result = main(...)
-    # assert result is not None
-    pass
-
-
-class TestDownload_Model:
-    """Coverage gaps in download_model.py — 4 untested functions."""
-
-@pytest.mark.skip(reason="Coverage gap — stub for download_model.resolve_repo_and_file")
-def test_resolve_repo_and_file(self):
-    """UNTESTED: resolve_repo_and_file() at download_model.py:250"""
-    # from download_model import resolve_repo_and_file
-    # result = resolve_repo_and_file(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for download_model.main")
-def test_main(self):
-    """UNTESTED: main() at download_model.py:270"""
-    # from download_model import main
-    # result = main(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for download_model.isatty")
-def test_isatty(self):
-    """UNTESTED: isatty() at download_model.py:59"""
-    # from download_model import isatty
-    # result = isatty(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for download_model.update")
-def test_update(self):
-    """UNTESTED: update() at download_model.py:200"""
-    # from download_model import update
-    # result = update(...)
-    # assert result is not None
-    pass
-
-
-class TestGenerate_Rust_Rules:
-    """Coverage gaps in generate_rust_rules.py — 10 untested functions."""
-
-@pytest.mark.skip(reason="Coverage gap — stub for generate_rust_rules.python_pattern_to_rust_literal")
-def test_python_pattern_to_rust_literal(self):
-    """UNTESTED: python_pattern_to_rust_literal() at generate_rust_rules.py:35"""
-    # from generate_rust_rules import python_pattern_to_rust_literal
-    # result = python_pattern_to_rust_literal(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for generate_rust_rules.rust_langs")
-def test_rust_langs(self):
-    """UNTESTED: rust_langs() at generate_rust_rules.py:67"""
-    # from generate_rust_rules import rust_langs
-    # result = rust_langs(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for generate_rust_rules.rust_string")
-def test_rust_string(self):
-    """UNTESTED: rust_string() at generate_rust_rules.py:73"""
-    # from generate_rust_rules import rust_string
-    # result = rust_string(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for generate_rust_rules.validate_pattern_compiles")
-def test_validate_pattern_compiles(self):
-    """UNTESTED: validate_pattern_compiles() at generate_rust_rules.py:78"""
-    # from generate_rust_rules import validate_pattern_compiles
-    # result = validate_pattern_compiles(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for generate_rust_rules.generate_rule_block")
-def test_generate_rule_block(self):
-    """UNTESTED: generate_rule_block() at generate_rust_rules.py:88"""
-    # from generate_rust_rules import generate_rule_block
-    # result = generate_rule_block(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for generate_rust_rules.generate_fn")
-def test_generate_fn(self):
-    """UNTESTED: generate_fn() at generate_rust_rules.py:150"""
-    # from generate_rust_rules import generate_fn
-    # result = generate_fn(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for generate_rust_rules.generate_tests")
-def test_generate_tests(self):
-    """UNTESTED: generate_tests() at generate_rust_rules.py:171"""
-    # from generate_rust_rules import generate_tests
-    # result = generate_tests(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for generate_rust_rules.generate_mod_rs")
-def test_generate_mod_rs(self):
-    """UNTESTED: generate_mod_rs() at generate_rust_rules.py:223"""
-    # from generate_rust_rules import generate_mod_rs
-    # result = generate_mod_rs(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for generate_rust_rules.check_parity")
-def test_check_parity(self):
-    """UNTESTED: check_parity() at generate_rust_rules.py:281"""
-    # from generate_rust_rules import check_parity
-    # result = check_parity(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for generate_rust_rules.main")
-def test_main(self):
-    """UNTESTED: main() at generate_rust_rules.py:312"""
-    # from generate_rust_rules import main
-    # result = main(...)
-    # assert result is not None
-    pass
-
-
-class TestRun_Fix_Loop:
-    """Coverage gaps in run_fix_loop.py — 6 untested functions."""
-
-@pytest.mark.skip(reason="Coverage gap — stub for run_fix_loop.try_compile")
-def test_try_compile(self):
-    """UNTESTED: try_compile() at run_fix_loop.py:27"""
-    # from run_fix_loop import try_compile
-    # result = try_compile(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for run_fix_loop.parse_errors")
-def test_parse_errors(self):
-    """UNTESTED: parse_errors() at run_fix_loop.py:41"""
-    # from run_fix_loop import parse_errors
-    # result = parse_errors(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for run_fix_loop.create_llm")
-def test_create_llm(self):
-    """UNTESTED: create_llm() at run_fix_loop.py:99"""
-    # from run_fix_loop import create_llm
-    # result = create_llm(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for run_fix_loop.extract_code_block")
-def test_extract_code_block(self):
-    """UNTESTED: extract_code_block() at run_fix_loop.py:108"""
-    # from run_fix_loop import extract_code_block
-    # result = extract_code_block(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for run_fix_loop.main")
-def test_main(self):
-    """UNTESTED: main() at run_fix_loop.py:116"""
-    # from run_fix_loop import main
-    # result = main(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for run_fix_loop.generate")
-def test_generate(self):
-    """UNTESTED: generate() at run_fix_loop.py:80"""
-    # from run_fix_loop import generate
-    # result = generate(...)
-    # assert result is not None
-    pass
-
-
-class TestSetup_Tools:
-    """Coverage gaps in setup_tools.py — 3 untested functions."""
-
-@pytest.mark.skip(reason="Coverage gap — stub for setup_tools.has")
-def test_has(self):
-    """UNTESTED: has() at setup_tools.py:22"""
-    # from setup_tools import has
-    # result = has(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for setup_tools.install_uv_standalone")
-def test_install_uv_standalone(self):
-    """UNTESTED: install_uv_standalone() at setup_tools.py:26"""
-    # from setup_tools import install_uv_standalone
-    # result = install_uv_standalone(...)
-    # assert result is not None
-    pass
-
-@pytest.mark.skip(reason="Coverage gap — stub for setup_tools.main")
-def test_main(self):
-    """UNTESTED: main() at setup_tools.py:40"""
-    # from setup_tools import main
-    # result = main(...)
-    # assert result is not None
-    pass
-
-
 class TestTranspile_All:
-    """Coverage gaps in transpile_all.py — 9 untested functions."""
+    """Coverage gaps in transpile_all.py -- 2 untested functions."""
 
-@pytest.mark.skip(reason="Coverage gap — stub for transpile_all.count_py_files")
-def test_count_py_files(self):
-    """UNTESTED: count_py_files() at transpile_all.py:210"""
-    # from transpile_all import count_py_files
-    # result = count_py_files(...)
+@pytest.mark.skip(reason="Coverage gap -- stub for transpile_all.stop")
+def test_stop(self):
+    """UNTESTED: stop() at transpile_all.py:127"""
+    # from transpile_all import stop
+    # result = stop(...)
     # assert result is not None
     pass
 
-@pytest.mark.skip(reason="Coverage gap — stub for transpile_all.transpile_repo")
-def test_transpile_repo(self):
-    """UNTESTED: transpile_repo() at transpile_all.py:218"""
-    # from transpile_all import transpile_repo
-    # result = transpile_repo(...)
+@pytest.mark.skip(reason="Coverage gap -- stub for transpile_all.stop")
+def test_stop(self):
+    """UNTESTED: stop() at transpile_all.py:197"""
+    # from transpile_all import stop
+    # result = stop(...)
     # assert result is not None
     pass
 
-@pytest.mark.skip(reason="Coverage gap — stub for transpile_all.try_compile")
-def test_try_compile(self):
-    """UNTESTED: try_compile() at transpile_all.py:252"""
-    # from transpile_all import try_compile
-    # result = try_compile(...)
+
+class TestUi_Server:
+    """Coverage gaps in ui_server.py -- 5 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for ui_server.log_message")
+def test_log_message(self):
+    """UNTESTED: log_message() at ui_server.py:114"""
+    # from ui_server import log_message
+    # result = log_message(...)
     # assert result is not None
     pass
 
-@pytest.mark.skip(reason="Coverage gap — stub for transpile_all.parse_errors")
-def test_parse_errors(self):
-    """UNTESTED: parse_errors() at transpile_all.py:265"""
-    # from transpile_all import parse_errors
-    # result = parse_errors(...)
+@pytest.mark.skip(reason="Coverage gap -- stub for ui_server.handle")
+def test_handle(self):
+    """UNTESTED: handle() at ui_server.py:117"""
+    # from ui_server import handle
+    # result = handle(...)
     # assert result is not None
     pass
 
-@pytest.mark.skip(reason="Coverage gap — stub for transpile_all.extract_code_block")
-def test_extract_code_block(self):
-    """UNTESTED: extract_code_block() at transpile_all.py:289"""
-    # from transpile_all import extract_code_block
-    # result = extract_code_block(...)
+@pytest.mark.skip(reason="Coverage gap -- stub for ui_server.do_OPTIONS")
+def test_do_OPTIONS(self):
+    """UNTESTED: do_OPTIONS() at ui_server.py:129"""
+    # from ui_server import do_OPTIONS
+    # result = do_OPTIONS(...)
     # assert result is not None
     pass
 
-@pytest.mark.skip(reason="Coverage gap — stub for transpile_all.fix_loop")
-def test_fix_loop(self):
-    """UNTESTED: fix_loop() at transpile_all.py:296"""
-    # from transpile_all import fix_loop
-    # result = fix_loop(...)
+@pytest.mark.skip(reason="Coverage gap -- stub for ui_server.do_GET")
+def test_do_GET(self):
+    """UNTESTED: do_GET() at ui_server.py:180"""
+    # from ui_server import do_GET
+    # result = do_GET(...)
     # assert result is not None
     pass
 
-@pytest.mark.skip(reason="Coverage gap — stub for transpile_all.main")
-def test_main(self):
-    """UNTESTED: main() at transpile_all.py:413"""
-    # from transpile_all import main
-    # result = main(...)
+@pytest.mark.skip(reason="Coverage gap -- stub for ui_server.do_POST")
+def test_do_POST(self):
+    """UNTESTED: do_POST() at ui_server.py:206"""
+    # from ui_server import do_POST
+    # result = do_POST(...)
     # assert result is not None
     pass
 
-@pytest.mark.skip(reason="Coverage gap — stub for transpile_all.start")
-def test_start(self):
-    """UNTESTED: start() at transpile_all.py:108"""
-    # from transpile_all import start
-    # result = start(...)
+
+class TestUpdate_Tools:
+    """Coverage gaps in update_tools.py -- 2 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for update_tools.run")
+def test_run(self):
+    """UNTESTED: run() at update_tools.py:16"""
+    # from update_tools import run
+    # result = run(...)
     # assert result is not None
     pass
 
-@pytest.mark.skip(reason="Coverage gap — stub for transpile_all.generate")
-def test_generate(self):
-    """UNTESTED: generate() at transpile_all.py:115"""
-    # from transpile_all import generate
-    # result = generate(...)
+@pytest.mark.skip(reason="Coverage gap -- stub for update_tools.show_versions")
+def test_show_versions(self):
+    """UNTESTED: show_versions() at update_tools.py:31"""
+    # from update_tools import show_versions
+    # result = show_versions(...)
+    # assert result is not None
+    pass
+
+
+class TestValidate_Flet_Api:
+    """Coverage gaps in .github/scripts/validate_flet_api.py -- 2 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for .github.scripts.validate_flet_api.get_widget_params")
+def test_get_widget_params(self):
+    """UNTESTED: get_widget_params() at .github/scripts/validate_flet_api.py:39"""
+    # from .github.scripts.validate_flet_api import get_widget_params
+    # result = get_widget_params(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for .github.scripts.validate_flet_api.check_file")
+def test_check_file(self):
+    """UNTESTED: check_file() at .github/scripts/validate_flet_api.py:49"""
+    # from .github.scripts.validate_flet_api import check_file
+    # result = check_file(...)
+    # assert result is not None
+    pass
+
+
+class TestContracts:
+    """Coverage gaps in analyzers/contracts.py -- 1 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for analyzers.contracts.verify_contract")
+def test_verify_contract(self):
+    """UNTESTED: verify_contract() at analyzers/contracts.py:116"""
+    # from analyzers.contracts import verify_contract
+    # result = verify_contract(...)
+    # assert result is not None
+    pass
+
+
+class TestCoverage_Map:
+    """Coverage gaps in analyzers/coverage_map.py -- 1 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for analyzers.coverage_map.compute_coverage_map")
+def test_compute_coverage_map(self):
+    """UNTESTED: compute_coverage_map() at analyzers/coverage_map.py:151"""
+    # from analyzers.coverage_map import compute_coverage_map
+    # result = compute_coverage_map(...)
+    # assert result is not None
+    pass
+
+
+class TestDesign_Review:
+    """Coverage gaps in analyzers/design_review.py -- 1 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for analyzers.design_review.design_review")
+def test_design_review(self):
+    """UNTESTED: design_review() at analyzers/design_review.py:202"""
+    # from analyzers.design_review import design_review
+    # result = design_review(...)
+    # assert result is not None
+    pass
+
+
+class TestIntegration_Tests:
+    """Coverage gaps in analyzers/integration_tests.py -- 1 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for analyzers.integration_tests.generate_integration_tests")
+def test_generate_integration_tests(self):
+    """UNTESTED: generate_integration_tests() at analyzers/integration_tests.py:118"""
+    # from analyzers.integration_tests import generate_integration_tests
+    # result = generate_integration_tests(...)
+    # assert result is not None
+    pass
+
+
+class TestOrphan_Map:
+    """Coverage gaps in analyzers/orphan_map.py -- 2 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for analyzers.orphan_map.analyze_orphan_map")
+def test_analyze_orphan_map(self):
+    """UNTESTED: analyze_orphan_map() at analyzers/orphan_map.py:135"""
+    # from analyzers.orphan_map import analyze_orphan_map
+    # result = analyze_orphan_map(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for analyzers.orphan_map.to_dict")
+def test_to_dict(self):
+    """UNTESTED: to_dict() at analyzers/orphan_map.py:53"""
+    # from analyzers.orphan_map import to_dict
+    # result = to_dict(...)
+    # assert result is not None
+    pass
+
+
+class TestPm_Dashboard:
+    """Coverage gaps in analyzers/pm_dashboard.py -- 2 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for analyzers.pm_dashboard.compute_impact_graph")
+def test_compute_impact_graph(self):
+    """UNTESTED: compute_impact_graph() at analyzers/pm_dashboard.py:714"""
+    # from analyzers.pm_dashboard import compute_impact_graph
+    # result = compute_impact_graph(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for analyzers.pm_dashboard.add")
+def test_add(self):
+    """UNTESTED: add() at analyzers/pm_dashboard.py:395"""
+    # from analyzers.pm_dashboard import add
+    # result = add(...)
+    # assert result is not None
+    pass
+
+
+class TestSchema_Drift:
+    """Coverage gaps in analyzers/schema_drift.py -- 1 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for analyzers.schema_drift.detect_schema_drift")
+def test_detect_schema_drift(self):
+    """UNTESTED: detect_schema_drift() at analyzers/schema_drift.py:198"""
+    # from analyzers.schema_drift import detect_schema_drift
+    # result = detect_schema_drift(...)
+    # assert result is not None
+    pass
+
+
+class TestSmart_Test_Gen:
+    """Coverage gaps in analyzers/smart_test_gen.py -- 1 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for analyzers.smart_test_gen.generate_smart_tests")
+def test_generate_smart_tests(self):
+    """UNTESTED: generate_smart_tests() at analyzers/smart_test_gen.py:373"""
+    # from analyzers.smart_test_gen import generate_smart_tests
+    # result = generate_smart_tests(...)
+    # assert result is not None
+    pass
+
+
+class TestTemporal:
+    """Coverage gaps in analyzers/temporal.py -- 1 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for analyzers.temporal.analyze_temporal_coupling")
+def test_analyze_temporal_coupling(self):
+    """UNTESTED: analyze_temporal_coupling() at analyzers/temporal.py:9"""
+    # from analyzers.temporal import analyze_temporal_coupling
+    # result = analyze_temporal_coupling(...)
+    # assert result is not None
+    pass
+
+
+class TestAnalysis_Routes:
+    """Coverage gaps in api/analysis_routes.py -- 28 untested functions."""
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_satd")
+def test_handle_satd(self):
+    """UNTESTED: handle_satd() at api/analysis_routes.py:20"""
+    # from api.analysis_routes import handle_satd
+    # result = handle_satd(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_git_hotspots")
+def test_handle_git_hotspots(self):
+    """UNTESTED: handle_git_hotspots() at api/analysis_routes.py:27"""
+    # from api.analysis_routes import handle_git_hotspots
+    # result = handle_git_hotspots(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_imports")
+def test_handle_imports(self):
+    """UNTESTED: handle_imports() at api/analysis_routes.py:34"""
+    # from api.analysis_routes import handle_imports
+    # result = handle_imports(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_ruff")
+def test_handle_ruff(self):
+    """UNTESTED: handle_ruff() at api/analysis_routes.py:41"""
+    # from api.analysis_routes import handle_ruff
+    # result = handle_ruff(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_format")
+def test_handle_format(self):
+    """UNTESTED: handle_format() at api/analysis_routes.py:48"""
+    # from api.analysis_routes import handle_format
+    # result = handle_format(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_typecheck")
+def test_handle_typecheck(self):
+    """UNTESTED: handle_typecheck() at api/analysis_routes.py:57"""
+    # from api.analysis_routes import handle_typecheck
+    # result = handle_typecheck(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_health")
+def test_handle_health(self):
+    """UNTESTED: handle_health() at api/analysis_routes.py:66"""
+    # from api.analysis_routes import handle_health
+    # result = handle_health(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_bandit")
+def test_handle_bandit(self):
+    """UNTESTED: handle_bandit() at api/analysis_routes.py:75"""
+    # from api.analysis_routes import handle_bandit
+    # result = handle_bandit(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_dead_code")
+def test_handle_dead_code(self):
+    """UNTESTED: handle_dead_code() at api/analysis_routes.py:84"""
+    # from api.analysis_routes import handle_dead_code
+    # result = handle_dead_code(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_smells")
+def test_handle_smells(self):
+    """UNTESTED: handle_smells() at api/analysis_routes.py:93"""
+    # from api.analysis_routes import handle_smells
+    # result = handle_smells(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_duplicates")
+def test_handle_duplicates(self):
+    """UNTESTED: handle_duplicates() at api/analysis_routes.py:102"""
+    # from api.analysis_routes import handle_duplicates
+    # result = handle_duplicates(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_temporal_coupling")
+def test_handle_temporal_coupling(self):
+    """UNTESTED: handle_temporal_coupling() at api/analysis_routes.py:111"""
+    # from api.analysis_routes import handle_temporal_coupling
+    # result = handle_temporal_coupling(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_release_readiness")
+def test_handle_release_readiness(self):
+    """UNTESTED: handle_release_readiness() at api/analysis_routes.py:132"""
+    # from api.analysis_routes import handle_release_readiness
+    # result = handle_release_readiness(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_ai_detect")
+def test_handle_ai_detect(self):
+    """UNTESTED: handle_ai_detect() at api/analysis_routes.py:141"""
+    # from api.analysis_routes import handle_ai_detect
+    # result = handle_ai_detect(...)
+    # assert result is not None
+    pass
+
+@pytest.mark.skip(reason="Coverage gap -- stub for api.analysis_routes.handle_web_smells")
+def test_handle_web_smells(self):
+    """UNTESTED: handle_web_smells() at api/analysis_routes.py:150"""
+    # from api.analysis_routes import handle_web_smells
+    # result = handle_web_smells(...)
     # assert result is not None
     pass
 
