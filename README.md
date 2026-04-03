@@ -48,7 +48,21 @@ python -m xray /path/to/project --taint-mode lite
 python -m xray /path/to/project --policy-profile strict
 ```
 
-## New in v0.4.4 (2026-04-01)
+## New in v0.5 (2026-04-03)
+
+- **21 JavaScript/TypeScript rules** — security (innerHTML XSS, eval, document.write, localStorage secrets, prototype pollution), React (dangerouslySetInnerHTML, stale state, missing AbortController), quality (empty catch, console.log, var declarations, loose equality), dead code (unused React imports)
+- **7 new analyzers:**
+  - **Orphan Map** — bidirectional UI↔Backend connectivity audit with Mermaid diagrams
+  - **Schema Drift** — detects mismatches between Pydantic models and frontend field usage
+  - **Coverage Map** — maps tested vs untested endpoints, functions, and components
+  - **Smart Test Gen** — generates targeted pytest tests from schema drift, orphan map, and coverage gaps
+  - **Design Review** — LLM-powered (with rule-based fallback) architecture review
+  - **Contract Verify** — validates code against YAML/JSON design contracts
+  - **File Watcher** — polling-based incremental scan on file changes
+- **GitHub Actions CI** — `.github/workflows/xray-scan.yml` with SARIF upload and PR commenting
+- **Total: 63 rules, 29 API endpoints, 7 auto-fixers**
+
+
 
 - Taint modes for SEC-004/SEC-005/SEC-010:
       - `--taint-mode off|lite|strict`
@@ -108,8 +122,8 @@ python update_tools.py         # Update all tools to latest
 
 ```
   ┌───────────┐
-  │   SCAN    │  42 rules (security / quality / python / portability)
-  └─────┬─────┘  Python regex scanner (42 rules) + Rust scanner (42 rules, 102 tests)
+  │   SCAN    │  63 rules (security / quality / python / portability / javascript)
+  └─────┬─────┘  Python regex scanner (63 rules) + Rust scanner (42 rules, 102 tests)
         │
   ┌─────▼─────┐
   │   TEST    │  Auto-generate pytest tests for each finding
@@ -132,7 +146,7 @@ python update_tools.py         # Update all tools to latest
   └───────────┘
 ```
 
-## Pattern Rules (42 total)
+## Pattern Rules (63 total)
 
 | Category | Count | Examples |
 |----------|-------|---------|
@@ -140,6 +154,10 @@ python update_tools.py         # Update all tools to latest
 | Quality | 13 | Bare except, silent swallow, unchecked int(), non-daemon threads, TODO markers, broad Exception, string concat in loops, long lines |
 | Python | 11 | Wildcard imports, print debug, JSON without try, global mutation, os.environ[], captured-but-ignored exception, sys.exit in lib, long isinstance |
 | Portability | 4 | Hardcoded user paths, hardcoded C:\AI\ paths, Windows-only imports without guards |
+| JS Security | 8 | innerHTML XSS, document.write, eval(), localStorage secrets, postMessage wildcard, prototype pollution, CSRF, dynamic Function() |
+| JS React | 4 | dangerouslySetInnerHTML, useEffect missing cleanup, unstable useState, stale state closure |
+| JS Quality | 8 | Empty .catch(), async without try/catch, console.log, loose equality, var usage, TODO markers, zero-delay timers, re-throw without cause |
+| JS Dead Code | 1 | Unused React imports |
 
 All rules sourced from real bugs found in real projects.
 
@@ -173,10 +191,22 @@ X-Ray now supports two orthogonal controls for finding quality:
       - `balanced`: default behavior
       - `relaxed-tests`: reduces expected noise in test paths
 
-> **Note:** Both the Python and Rust scanners implement all 42 rules with identical patterns.
-> The Rust scanner additionally provides a full HTTP server mode with **38 API endpoints**
-> producing identical JSON shapes to the Python server (36/36 endpoints verified by
-> `tests/test_dual_server.py`).
+> **Note:** The Python scanner implements all 63 rules. The Rust scanner implements 42 core rules.
+> Both scanners provide full HTTP server mode — Python with **29 API endpoints**,
+> Rust with **38 API endpoints** (36/36 verified by `tests/test_dual_server.py`).
+
+### Integration Analyzers (v0.5)
+
+| Analyzer | Endpoint | What It Does |
+|----------|----------|--------------|
+| Orphan Map | `/api/orphan-map` | Bidirectional UI↔Backend orphan detection with Mermaid diagrams |
+| Schema Drift | `/api/schema-drift` | Pydantic model vs frontend field mismatch detection |
+| Coverage Map | `/api/coverage-map` | Maps tested vs untested endpoints, functions, components |
+| Smart Test Gen | `/api/smart-test-gen` | Generates targeted pytest tests from analysis results |
+| Design Review | `/api/design-review` | LLM-powered or rule-based architecture review |
+| Contract Verify | `/api/contract-verify` | Validates code against YAML/JSON design contracts |
+| Integration Tests | `/api/integration-tests` | Generates API endpoint integration tests |
+| Watch Mode | `/api/watch-start` | File watcher with incremental scanning |
 
 ## Recommended Models
 
@@ -233,6 +263,18 @@ python -m pytest tests/test_dual_server.py -v
 
 Includes: 42 scan rules, 7 auto-fixers, 38 REST endpoints, 102 unit/integration tests,
 code analyzers (smells, dead code, duplicates, coupling, connections, health), and the full web UI.
+
+## Portfolio Scan Results (v0.5, 19 repos)
+
+```
+Total files scanned:   2,836 (production only, tests excluded)
+Total findings:       10,997
+  HIGH:                 464
+  MEDIUM:             4,109
+  LOW:                6,450
+Auto-fixed:              28
+Smart tests generated: 1,078 (schema: 188, orphan: 193, coverage: 697)
+```
 
 ## License
 
