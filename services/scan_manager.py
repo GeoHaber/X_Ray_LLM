@@ -242,7 +242,10 @@ def scan_with_rust(directory: str, severity: str, excludes: list[str], sse_write
     if proc.returncode != 0:
         return {"error": f"Rust scanner failed: {stderr[:500]}"}
 
-    data = json.loads(stdout)
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError:
+        data = {}
     data["engine"] = "rust"
     data["elapsed_ms"] = elapsed_ms
     return data
