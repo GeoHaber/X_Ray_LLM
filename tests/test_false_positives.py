@@ -62,6 +62,17 @@ class TestSecurityFalsePositives:
         os.unlink(path)
         assert not any(f.rule_id == "SEC-003" for f in findings)
 
+    def test_create_subprocess_exec_no_sec007(self):
+        """asyncio.create_subprocess_exec() should not trigger SEC-007."""
+        code = (
+            "import asyncio\n"
+            "proc = asyncio.create_subprocess_exec('python', '-V')\n"
+        )
+        path = _write_temp(".py", code)
+        findings = scan_file(path)
+        os.unlink(path)
+        assert not any(f.rule_id == "SEC-007" for f in findings)
+
     def test_parameterized_sql_no_fire(self):
         """Parameterized SQL queries are safe."""
         code = "cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))\n"
