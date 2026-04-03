@@ -83,7 +83,7 @@ fn security_rules() -> Vec<Rule> {
             "Verify CORS headers never return wildcard (*) for credentialed requests",
             "CWE-942", "A05:2021-Security Misconfiguration"),
         make_rule_cwe("SEC-007", "HIGH", &["python", "javascript"],
-            r"(eval|exec)\s*\(",
+            r"\b(eval|exec)\s*\(",
             "Code injection: eval/exec with potentially untrusted input",
             "Replace eval/exec with safe alternatives (ast.literal_eval, JSON.parse)",
             "Verify no eval/exec is used on user-controlled data",

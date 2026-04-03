@@ -666,6 +666,20 @@ mod tests {
     }
 
     #[test]
+    fn test_scan_file_does_not_flag_create_subprocess_exec() {
+        let rules = rules::get_all_rules();
+        let (_f, path) = write_temp(
+            ".py",
+            "import asyncio\nproc = asyncio.create_subprocess_exec('python', '-V')\n",
+        );
+        let findings = scan_file(&path, &rules);
+        assert!(
+            !findings.iter().any(|f| f.rule_id == "SEC-007"),
+            "SEC-007 should not fire for asyncio.create_subprocess_exec()"
+        );
+    }
+
+    #[test]
     fn test_sec001_xss_template() {
         let rules = rules::get_all_rules();
         let (_f, path) = write_temp(".html", "<script>el.innerHTML = `<b>${name}</b>`;</script>");

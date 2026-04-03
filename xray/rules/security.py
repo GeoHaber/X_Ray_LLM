@@ -74,7 +74,7 @@ SECURITY_RULES = [
         "id": "SEC-007",
         "severity": "HIGH",
         "lang": ["python", "javascript"],
-        "pattern": r"(eval|exec)\s*\(",
+        "pattern": r"\b(eval|exec)\s*\(",
         "description": "Code injection: eval/exec with potentially untrusted input",
         "fix_hint": "Replace eval/exec with safe alternatives (ast.literal_eval, JSON.parse)",
         "test_hint": "Verify no eval/exec is used on user-controlled data",
