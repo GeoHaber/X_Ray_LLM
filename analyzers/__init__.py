@@ -89,6 +89,7 @@ from analyzers.integration_tests import generate_integration_tests
 from analyzers.schema_drift import detect_schema_drift
 from analyzers.coverage_map import compute_coverage_map
 from analyzers.design_review import design_review
+from analyzers.smart_test_gen import generate_smart_tests
 
 __all__ = [
     "_PY_EXTS",
@@ -146,5 +147,6 @@ __all__ = [
     "design_review",
     "detect_schema_drift",
     "generate_integration_tests",
+    "generate_smart_tests",
     "verify_contract",
 ]

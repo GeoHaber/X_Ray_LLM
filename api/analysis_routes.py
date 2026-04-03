@@ -243,6 +243,25 @@ def handle_design_review(body, handler):
     return design_review(d, findings=findings, use_llm=use_llm), 200
 
 
+def handle_smart_test_gen(body, handler):
+    from analyzers import generate_smart_tests
+
+    d, err = _dir_from_body(body)
+    if err:
+        return err, 400
+    base_url = body.get("base_url", "http://localhost:8077")
+    scan_data = body.get("scan_data")
+    return generate_smart_tests(
+        d,
+        base_url=base_url,
+        scan_data=scan_data,
+        include_schema=body.get("include_schema", True),
+        include_orphans=body.get("include_orphans", True),
+        include_coverage=body.get("include_coverage", True),
+        include_regression=body.get("include_regression", bool(scan_data)),
+    ), 200
+
+
 def handle_watch_start(body, handler):
     from xray.watcher import start_watcher
 
@@ -292,6 +311,7 @@ POST_ROUTES = {
     "/api/schema-drift": handle_schema_drift,
     "/api/coverage-map": handle_coverage_map,
     "/api/design-review": handle_design_review,
+    "/api/smart-test-gen": handle_smart_test_gen,
     "/api/watch-start": handle_watch_start,
     "/api/watch-stop": handle_watch_stop,
 }
