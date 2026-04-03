@@ -70,7 +70,7 @@ REPOS = [
 SKIP_PATTERNS = [
     "__pycache__", "node_modules", "venv", ".venv", ".git",
     "rust_output", "__N_tmp", "migrations", ".tox", "dist", "build",
-    "egg-info",
+    "egg-info", "site-packages", ".eggs",
 ]
 
 MAX_FIX_ROUNDS = 5

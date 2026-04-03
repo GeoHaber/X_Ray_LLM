@@ -245,9 +245,12 @@ class PythonAnalyzer:
         modules: list[PythonModule] = []
         root_path = Path(root)
         skip_dirs = {"__pycache__", ".git", "node_modules", ".venv", "venv",
-                     ".tox", ".mypy_cache", ".pytest_cache", "dist", "build"}
+                     ".tox", ".mypy_cache", ".pytest_cache", "dist", "build",
+                     "site-packages", ".eggs", "egg-info"}
+        skip_prefixes = (".venv", "venv", "__pycache__")
         for py_file in sorted(root_path.rglob("*.py")):
-            if any(part in skip_dirs for part in py_file.parts):
+            if any(part in skip_dirs or part.startswith(skip_prefixes)
+                   for part in py_file.parts):
                 continue
             try:
                 modules.append(self.analyze_file(str(py_file)))

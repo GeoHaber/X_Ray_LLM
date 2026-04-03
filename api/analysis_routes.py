@@ -181,6 +181,90 @@ def handle_remediation_time(body, handler):
     return estimate_remediation_time(findings), 200
 
 
+# ── v0.5 Endpoints ───────────────────────────────────────────────────
+
+
+def handle_orphan_map(body, handler):
+    from analyzers import analyze_orphan_map
+
+    d, err = _dir_from_body(body)
+    if err:
+        return err, 400
+    return analyze_orphan_map(d), 200
+
+
+def handle_contract_verify(body, handler):
+    from analyzers import verify_contract
+
+    d, err = _dir_from_body(body)
+    if err:
+        return err, 400
+    contract_path = body.get("contract_path")
+    contract_data = body.get("contract")
+    return verify_contract(d, contract_path=contract_path, contract_data=contract_data), 200
+
+
+def handle_integration_tests(body, handler):
+    from analyzers import generate_integration_tests
+
+    d, err = _dir_from_body(body)
+    if err:
+        return err, 400
+    base_url = body.get("base_url", "http://localhost:8077")
+    return generate_integration_tests(d, base_url=base_url), 200
+
+
+def handle_schema_drift(body, handler):
+    from analyzers import detect_schema_drift
+
+    d, err = _dir_from_body(body)
+    if err:
+        return err, 400
+    return detect_schema_drift(d), 200
+
+
+def handle_coverage_map(body, handler):
+    from analyzers import compute_coverage_map
+
+    d, err = _dir_from_body(body)
+    if err:
+        return err, 400
+    return compute_coverage_map(d), 200
+
+
+def handle_design_review(body, handler):
+    from analyzers import design_review
+
+    d, err = _dir_from_body(body)
+    if err:
+        return err, 400
+    findings = body.get("findings")
+    use_llm = body.get("use_llm", True)
+    return design_review(d, findings=findings, use_llm=use_llm), 200
+
+
+def handle_watch_start(body, handler):
+    from xray.watcher import start_watcher
+
+    d, err = _dir_from_body(body)
+    if err:
+        return err, 400
+    interval = body.get("poll_interval", 2.0)
+    return start_watcher(d, poll_interval=interval), 200
+
+
+def handle_watch_stop(body, handler):
+    from xray.watcher import stop_watcher
+
+    return stop_watcher(), 200
+
+
+def handle_watch_status(params, handler):
+    from xray.watcher import get_watcher_status
+
+    return get_watcher_status(), 200
+
+
 POST_ROUTES = {
     "/api/satd": handle_satd,
     "/api/git-hotspots": handle_git_hotspots,
@@ -201,4 +285,17 @@ POST_ROUTES = {
     "/api/connection-test": handle_connection_test,
     "/api/test-gen": handle_test_gen,
     "/api/remediation-time": handle_remediation_time,
+    # v0.5 endpoints
+    "/api/orphan-map": handle_orphan_map,
+    "/api/contract-verify": handle_contract_verify,
+    "/api/integration-tests": handle_integration_tests,
+    "/api/schema-drift": handle_schema_drift,
+    "/api/coverage-map": handle_coverage_map,
+    "/api/design-review": handle_design_review,
+    "/api/watch-start": handle_watch_start,
+    "/api/watch-stop": handle_watch_stop,
+}
+
+GET_ROUTES = {
+    "/api/watch-status": handle_watch_status,
 }

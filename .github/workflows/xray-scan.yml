@@ -1,0 +1,172 @@
+name: X-Ray LLM Scan
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      severity:
+        description: 'Minimum severity (HIGH, MEDIUM, LOW)'
+        default: 'HIGH'
+        required: false
+      policy_profile:
+        description: 'Policy profile (strict, balanced, relaxed-tests)'
+        default: 'balanced'
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  xray-scan:
+    name: X-Ray Code Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git hotspot analysis
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install X-Ray LLM
+        run: |
+          pip install --upgrade pip
+          # Install from the X_Ray_LLM directory or PyPI when published
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          # Core dependencies only (no LLM needed for scanning)
+          pip install ruff || true
+
+      - name: Run X-Ray scan
+        id: scan
+        env:
+          XRAY_SEVERITY: ${{ github.event.inputs.severity || 'HIGH' }}
+          XRAY_POLICY: ${{ github.event.inputs.policy_profile || 'balanced' }}
+        run: |
+          python -c "
+          import sys, json, os
+          sys.path.insert(0, '.')
+
+          from xray.scanner import scan_directory
+
+          severity = os.environ.get('XRAY_SEVERITY', 'HIGH')
+          policy = os.environ.get('XRAY_POLICY', 'balanced')
+
+          result = scan_directory(
+              '.',
+              severity_threshold=severity,
+              policy_profile=policy,
+              output_format='sarif',
+          )
+
+          # Write SARIF for GitHub Code Scanning
+          if hasattr(result, 'sarif') and result.sarif:
+              with open('xray-results.sarif', 'w') as f:
+                  json.dump(result.sarif, f, indent=2)
+
+          # Write JSON for PR comments
+          findings = []
+          if hasattr(result, 'findings'):
+              findings = [f.to_dict() if hasattr(f, 'to_dict') else f for f in result.findings]
+          elif isinstance(result, dict):
+              findings = result.get('findings', [])
+
+          with open('xray-findings.json', 'w') as f:
+              json.dump(findings, f, indent=2)
+
+          # Summary for step output
+          high = sum(1 for f in findings if (f.get('severity') if isinstance(f, dict) else getattr(f, 'severity', '')) == 'HIGH')
+          medium = sum(1 for f in findings if (f.get('severity') if isinstance(f, dict) else getattr(f, 'severity', '')) == 'MEDIUM')
+
+          print(f'Total findings: {len(findings)} (HIGH: {high}, MEDIUM: {medium})')
+
+          with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
+              f.write(f'total={len(findings)}\n')
+              f.write(f'high={high}\n')
+              f.write(f'medium={medium}\n')
+              f.write(f'has_high={\"true\" if high > 0 else \"false\"}\n')
+          "
+
+      - name: Upload SARIF results
+        if: always() && hashFiles('xray-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: xray-results.sarif
+          category: xray-llm
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            let findings = [];
+            try {
+              findings = JSON.parse(fs.readFileSync('xray-findings.json', 'utf8'));
+            } catch (e) {
+              console.log('No findings file found');
+              return;
+            }
+
+            if (findings.length === 0) {
+              // Post success comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '## X-Ray Scan Results\n\n:white_check_mark: **No issues found!** Code passes all X-Ray checks.'
+              });
+              return;
+            }
+
+            const high = findings.filter(f => f.severity === 'HIGH').length;
+            const medium = findings.filter(f => f.severity === 'MEDIUM').length;
+            const low = findings.filter(f => f.severity === 'LOW').length;
+
+            let body = `## X-Ray Scan Results\n\n`;
+            body += `| Severity | Count |\n|----------|-------|\n`;
+            body += `| :red_circle: HIGH | ${high} |\n`;
+            body += `| :orange_circle: MEDIUM | ${medium} |\n`;
+            body += `| :yellow_circle: LOW | ${low} |\n\n`;
+
+            // Top 15 findings
+            const top = findings.slice(0, 15);
+            if (top.length > 0) {
+              body += `### Top Findings\n\n`;
+              for (const f of top) {
+                const sev = f.severity === 'HIGH' ? ':red_circle:' :
+                            f.severity === 'MEDIUM' ? ':orange_circle:' : ':yellow_circle:';
+                const file = f.file || 'unknown';
+                const line = f.line || 0;
+                body += `- ${sev} **${f.rule_id}** \`${file}:${line}\` — ${f.description}\n`;
+              }
+            }
+
+            if (findings.length > 15) {
+              body += `\n_...and ${findings.length - 15} more findings_\n`;
+            }
+
+            body += `\n---\n_Scanned by [X-Ray LLM](https://github.com/GeorgeHaber/X_Ray_LLM)_`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+
+      - name: Fail on HIGH severity
+        if: steps.scan.outputs.has_high == 'true'
+        run: |
+          echo "::error::X-Ray found HIGH severity issues. See PR comments for details."
+          exit 1

@@ -69,6 +69,7 @@ def __getattr__(name):
 
 # ── Collect route tables from api/ modules ───────────────────────────────
 
+from api.analysis_routes import GET_ROUTES as _analysis_get
 from api.analysis_routes import POST_ROUTES as _analysis_post
 from api.browse_routes import GET_ROUTES as _browse_get
 from api.fix_routes import POST_ROUTES as _fix_post
@@ -87,7 +88,7 @@ from api.transpile_routes import POST_ROUTES as _transpile_post
 _GET_ROUTES: dict[str, object] = {}
 _POST_ROUTES: dict[str, object] = {}
 
-for table in (_scan_get, _browse_get, _pm_get, _transpile_get):
+for table in (_scan_get, _browse_get, _pm_get, _transpile_get, _analysis_get):
     _GET_ROUTES.update(table)
 
 for table in (_scan_post, _fix_post, _analysis_post, _pm_post, _review_post, _transpile_post):

@@ -80,6 +80,7 @@ header h1 span { color: var(--accent); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
 .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.btn-active { background: rgba(0,240,255,0.15) !important; border-color: var(--accent) !important; color: var(--accent) !important; }
 .btn-sm { padding: 6px 12px; font-size: 12px; width: auto; }
 
 /* ── Main Content ─── */
@@ -1295,6 +1296,22 @@ body.light .finding-tier-header { background: rgba(0,0,0,0.03); }
       </div>
     </details>
 
+    <!-- Integration & Design Accordion -->
+    <details class="accordion">
+      <summary data-i18n="sidebar.integration">&#x1F4D0; Integration <span class="badge">7</span></summary>
+      <div class="accordion-body">
+        <div class="tool-list">
+          <button class="btn btn-sm btn-outline" onclick="runOrphanMap()" id="orphanBtn" disabled data-hint="Bidirectional UI↔Backend orphan audit with Mermaid diagram">&#x1F6F0; Orphan Map</button>
+          <button class="btn btn-sm btn-outline" onclick="runContractVerify()" id="contractBtn" disabled data-hint="Verify code against design contract (YAML/JSON spec)">&#x1F4DC; Contract Verify</button>
+          <button class="btn btn-sm btn-outline" onclick="runSchemaDrift()" id="driftBtn" disabled data-hint="Detect Pydantic model vs frontend field mismatches">&#x1F504; Schema Drift</button>
+          <button class="btn btn-sm btn-outline" onclick="runCoverageMap()" id="covBtn" disabled data-hint="Map tested vs untested endpoints and functions">&#x1F4CA; Coverage Map</button>
+          <button class="btn btn-sm btn-outline" onclick="runIntegrationTests()" id="integBtn" disabled data-hint="Generate API integration tests (pytest)">&#x1F9EA; Gen Integ Tests</button>
+          <button class="btn btn-sm btn-outline btn-cta" onclick="runDesignReview()" id="designBtn" disabled style="font-size:11px; padding:8px 12px;" data-hint="LLM-powered architecture & design review">&#x1F3D7; Design Review</button>
+          <button class="btn btn-sm btn-outline" onclick="toggleWatcher()" id="watchBtn" disabled data-hint="Watch files for changes, auto-scan incrementally">&#x1F440; Watch Mode</button>
+        </div>
+      </div>
+    </details>
+
     <!-- Diagnostics Accordion -->
     <details class="accordion">
       <summary data-i18n="sidebar.diagnostics">&#x1F50C; Diagnostics <span class="badge">3</span></summary>
@@ -1484,6 +1501,15 @@ let prCommentsData = null;
 let wireTestData = null;
 let wireTestingActive = false;
 let showAdvancedTabs = false;
+// v0.5 state
+let orphanMapData = null;
+let contractData = null;
+let integrationTestsData = null;
+let schemaDriftData = null;
+let coverageMapData = null;
+let designReviewData = null;
+let watcherStatus = null;
+let watcherPolling = null;
 let currentLang = (() => {
   try { return localStorage.getItem('xray_lang') || 'en'; } catch(e) { return 'en'; }
 })();
@@ -1826,6 +1852,7 @@ function setLanguage(lang) {
 // ── View Category Lists (for dropdown active state) ─────────────
 const _analysisViews = ['trend','smells','bandit','dead','dups','satd','git','graph','health','temporal','typecheck','release','aidetect','websmells','testgen','format','connections','prcomments','transpile'];
 const _dashboardViews = ['riskmap','modules','confidence','batches','arch','callgraph','circular','coupling','unusedimports','review','impact','learn'];
+const _integrationViews = ['orphanmap','contractverify','integtests','schemadrift','coveragemap','designreview','watcher'];
 
 // ── Browser Overlay ─────────────────────────────────────────────
 function toggleBrowser() {
@@ -2501,6 +2528,20 @@ function renderResults() {
           <button class="view-tab ${activeView==='learn'?'active':''}" onclick="switchView('learn')">&#x1F9E0; Learnings<span class="check">&#x2713;</span></button>
         </div>
       </div>
+      <div class="tab-dropdown-wrapper" style="${showAdvancedTabs ? '' : 'display:none;'}">
+        <button class="view-tab tab-dropdown-trigger ${_integrationViews.includes(activeView)?'active':''}" onclick="toggleDropdown('integrationMenu')">
+          &#x1F4D0; Integration &#x25BE;
+        </button>
+        <div class="dropdown-menu" id="integrationMenu">
+          <button class="view-tab ${activeView==='orphanmap'?'active':''}" onclick="switchView('orphanmap')">&#x1F6F0; Orphan Map<span class="check">&#x2713;</span></button>
+          <button class="view-tab ${activeView==='contractverify'?'active':''}" onclick="switchView('contractverify')">&#x1F4DC; Contract<span class="check">&#x2713;</span></button>
+          <button class="view-tab ${activeView==='schemadrift'?'active':''}" onclick="switchView('schemadrift')">&#x1F504; Schema Drift<span class="check">&#x2713;</span></button>
+          <button class="view-tab ${activeView==='coveragemap'?'active':''}" onclick="switchView('coveragemap')">&#x1F4CA; Coverage<span class="check">&#x2713;</span></button>
+          <button class="view-tab ${activeView==='integtests'?'active':''}" onclick="switchView('integtests')">&#x1F9EA; Integ Tests<span class="check">&#x2713;</span></button>
+          <button class="view-tab ${activeView==='designreview'?'active':''}" onclick="switchView('designreview')">&#x1F3D7; Design Review<span class="check">&#x2713;</span></button>
+          <button class="view-tab ${activeView==='watcher'?'active':''}" onclick="switchView('watcher')">&#x1F440; Watcher<span class="check">&#x2713;</span></button>
+        </div>
+      </div>
     </div>
     <div class="toolbar-right">
       <input class="search-box" type="text" placeholder="Search findings..." value="${esc(searchQuery)}" oninput="searchQuery=this.value; renderViewContent();" />
@@ -2600,6 +2641,14 @@ function renderViewContent() {
   if (activeView === 'impact')     { el.innerHTML = renderImpactGraphView(); initImpactGraph(); return; }
   if (activeView === 'learn')      { el.innerHTML = renderFeedbackInsightsView(); return; }
   if (activeView === 'transpile')  { el.innerHTML = renderTranspileView(); return; }
+  // v0.5 Integration views
+  if (activeView === 'orphanmap')      { el.innerHTML = renderOrphanMapView(); return; }
+  if (activeView === 'contractverify') { el.innerHTML = renderContractView(); return; }
+  if (activeView === 'integtests')     { el.innerHTML = renderIntegTestsView(); return; }
+  if (activeView === 'schemadrift')    { el.innerHTML = renderSchemaDriftView(); return; }
+  if (activeView === 'coveragemap')    { el.innerHTML = renderCoverageMapView(); return; }
+  if (activeView === 'designreview')   { el.innerHTML = renderDesignReviewView(); return; }
+  if (activeView === 'watcher')        { el.innerHTML = renderWatcherView(); return; }
   el.innerHTML = renderFindingsList();
 }
 
@@ -3576,6 +3625,40 @@ async function runAiDetect()   { await runTool('aiBtn',        '/api/ai-detect',
 async function runWebSmells()  { await runTool('webBtn',       '/api/web-smells',        'webSmellsData',   '\u{1F310} Web Smells', 'websmells'); }
 async function runTestGen()    { await runTool('testGenBtn',   '/api/test-gen',          'testGenData',     '\u{1F9EA} Test Gen',   'testgen'); }
 async function runConnectionTest() { await runTool('connBtn', '/api/connection-test', 'connectionTestData', '\u{1F50C} Connection Test', 'connections'); }
+
+// ── v0.5 Integration Run Functions ──────────────────────────────
+async function runOrphanMap()       { await runTool('orphanBtn',   '/api/orphan-map',        'orphanMapData',        '\u{1F6F0} Orphan Map',    'orphanmap'); }
+async function runContractVerify()  { await runTool('contractBtn', '/api/contract-verify',   'contractData',         '\u{1F4DC} Contract',      'contractverify'); }
+async function runSchemaDrift()     { await runTool('driftBtn',    '/api/schema-drift',      'schemaDriftData',      '\u{1F504} Schema Drift',  'schemadrift'); }
+async function runCoverageMap()     { await runTool('covBtn',      '/api/coverage-map',      'coverageMapData',      '\u{1F4CA} Coverage Map',  'coveragemap'); }
+async function runIntegrationTests(){ await runTool('integBtn',    '/api/integration-tests', 'integrationTestsData', '\u{1F9EA} Gen Integ Tests','integtests'); }
+async function runDesignReview()    { await runTool('designBtn',   '/api/design-review',     'designReviewData',     '\u{1F3D7} Design Review', 'designreview'); }
+
+async function toggleWatcher() {
+  const btn = document.getElementById('watchBtn');
+  if (watcherPolling) {
+    clearInterval(watcherPolling); watcherPolling = null;
+    try { await api('/api/watch-stop', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' }); } catch(e) {}
+    if (btn) { btn.textContent = '\u{1F440} Watch Mode'; btn.classList.remove('btn-active'); }
+    watcherStatus = null;
+    showToast('Watcher stopped');
+  } else {
+    if (!selectedDir) return;
+    try {
+      await api('/api/watch-start', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ directory: selectedDir, poll_interval: 2.0 }) });
+      if (btn) { btn.textContent = '\u{1F7E2} Watching...'; btn.classList.add('btn-active'); }
+      watcherPolling = setInterval(async () => {
+        try {
+          watcherStatus = await api('/api/watch-status');
+          if (activeView === 'watcher') renderViewContent();
+        } catch(e) {}
+      }, 3000);
+      activeView = 'watcher'; renderResults();
+      showToast('Watcher started');
+    } catch(e) { showToast('Failed to start watcher', true); }
+  }
+}
 
 async function runPRComments() {
   if (!selectedDir || !scanResults) return;
@@ -5301,6 +5384,295 @@ function chatLocalReply(text) {
 setTimeout(loadChatHistory, 500);
 
 init();
+
+// ── v0.5 Integration Render Functions ────────────────────────────
+
+function renderOrphanMapView() {
+  const d = orphanMapData;
+  if (!d) return '<div class="empty-state"><h3>Run Orphan Map first</h3><p>Click the Orphan Map button in the sidebar to analyze UI\u2194Backend connectivity.</p></div>';
+  const s = d.summary || {};
+  let html = `<h2 style="margin-bottom:12px;">\u{1F6F0} Bidirectional Orphan Map</h2>
+  <div class="summary">
+    <div class="card total"><div class="value">${s.connectivity_score || 0}%</div><div class="label">Connectivity</div></div>
+    <div class="card files"><div class="value">${s.wired_count || 0}</div><div class="label">Wired</div></div>
+    <div class="card high"><div class="value">${s.orphan_frontend_count || 0}</div><div class="label">Orphan UI</div></div>
+    <div class="card medium"><div class="value">${s.orphan_backend_count || 0}</div><div class="label">Orphan Backend</div></div>
+    <div class="card low"><div class="value">${s.ws_emit_orphans || 0}</div><div class="label">WS Emit Orphans</div></div>
+    <div class="card low"><div class="value">${s.param_mismatches || 0}</div><div class="label">Param Mismatches</div></div>
+  </div>`;
+
+  if ((d.orphan_frontend || []).length) {
+    html += '<h3 style="margin:16px 0 8px; color:var(--high);">Frontend Orphans (no backend handler)</h3><div class="findings-list">';
+    for (const o of d.orphan_frontend.slice(0, 50)) {
+      html += `<div class="finding-item" style="border-left:3px solid var(--high);"><div class="finding-header">
+        <span class="sev-badge sev-${o.severity}">${o.severity}</span>
+        <span class="rule-id">${o.method}</span> <code>${esc(o.url)}</code>
+        <span class="file-ref">${esc(o.file)}:${o.line}</span></div></div>`;
+    }
+    html += '</div>';
+  }
+  if ((d.orphan_backend || []).length) {
+    html += '<h3 style="margin:16px 0 8px; color:var(--medium);">Backend Orphans (no frontend caller)</h3><div class="findings-list">';
+    for (const o of d.orphan_backend.slice(0, 50)) {
+      html += `<div class="finding-item" style="border-left:3px solid var(--medium);"><div class="finding-header">
+        <span class="sev-badge sev-LOW">LOW</span>
+        <span class="rule-id">${o.method}</span> <code>${esc(o.url)}</code>
+        <span class="file-ref">${esc(o.file)}:${o.line}</span></div></div>`;
+    }
+    html += '</div>';
+  }
+  if ((d.param_mismatches || []).length) {
+    html += '<h3 style="margin:16px 0 8px; color:var(--medium);">Parameter Mismatches</h3><div class="findings-list">';
+    for (const m of d.param_mismatches) {
+      html += `<div class="finding-item" style="border-left:3px solid var(--medium);"><div class="finding-header">
+        <code>${esc(m.url)}</code></div>
+        <div style="padding:8px 12px; font-size:13px; color:var(--text2);">
+          Frontend: <code>${(m.frontend_params||[]).join(', ')}</code> \u2192 Backend: <code>${(m.backend_params||[]).join(', ')}</code>
+        </div></div>`;
+    }
+    html += '</div>';
+  }
+  if (d.mermaid) {
+    html += `<h3 style="margin:16px 0 8px;">Connectivity Diagram</h3>
+    <pre style="background:var(--bg3); padding:12px; border-radius:var(--radius); overflow-x:auto; font-size:12px;">${esc(d.mermaid)}</pre>`;
+  }
+  return html;
+}
+
+function renderContractView() {
+  const d = contractData;
+  if (!d) return '<div class="empty-state"><h3>Run Contract Verify first</h3><p>Validates your code against a design contract (xray-contract.yaml).</p></div>';
+  if (d.error) {
+    let html = `<h2 style="margin-bottom:12px;">\u{1F4DC} Contract Verification</h2>
+    <div class="finding-item" style="border-left:3px solid var(--medium); padding:16px;">
+      <p style="color:var(--medium); font-weight:600;">${esc(d.error)}</p>`;
+    if (d.template) {
+      html += `<h4 style="margin:12px 0 6px;">Starter Template (xray-contract.yaml):</h4>
+      <pre style="background:var(--bg3); padding:12px; border-radius:var(--radius); font-size:12px; overflow-x:auto;">${esc(JSON.stringify(d.template, null, 2))}</pre>`;
+    }
+    return html + '</div>';
+  }
+  const s = d.summary || {};
+  let html = `<h2 style="margin-bottom:12px;">\u{1F4DC} Contract Verification</h2>
+  <div class="summary">
+    <div class="card ${s.compliance_pct >= 80 ? 'files' : 'high'}"><div class="value">${s.compliance_pct || 0}%</div><div class="label">Compliance</div></div>
+    <div class="card files"><div class="value">${s.verified || 0}</div><div class="label">Verified</div></div>
+    <div class="card high"><div class="value">${s.violations || 0}</div><div class="label">Violations</div></div>
+    <div class="card high"><div class="value">${s.high_violations || 0}</div><div class="label">HIGH</div></div>
+  </div>`;
+  if ((d.violations || []).length) {
+    html += '<h3 style="margin:16px 0 8px; color:var(--high);">Violations</h3><div class="findings-list">';
+    for (const v of d.violations) {
+      html += `<div class="finding-item" style="border-left:3px solid var(--${v.severity === 'HIGH' ? 'high' : 'medium'});"><div class="finding-header">
+        <span class="sev-badge sev-${v.severity}">${v.severity}</span>
+        <span class="rule-id">${esc(v.type)}</span> ${esc(v.description || '')}
+        ${v.file ? `<span class="file-ref">${esc(v.file)}:${v.line||''}</span>` : ''}
+      </div></div>`;
+    }
+    html += '</div>';
+  }
+  if ((d.verified || []).length) {
+    html += `<h3 style="margin:16px 0 8px; color:var(--green);">Verified (${d.verified.length})</h3><div class="findings-list">`;
+    for (const v of d.verified.slice(0, 30)) {
+      html += `<div class="finding-item" style="border-left:3px solid var(--green);"><div class="finding-header">
+        \u2705 ${esc(v.type)} <code>${esc(v.url || v.name || '')}</code>
+        <span class="file-ref">${esc(v.file||'')}:${v.line||''}</span></div></div>`;
+    }
+    html += '</div>';
+  }
+  return html;
+}
+
+function renderSchemaDriftView() {
+  const d = schemaDriftData;
+  if (!d) return '<div class="empty-state"><h3>Run Schema Drift first</h3><p>Detects mismatches between Pydantic models and frontend field usage.</p></div>';
+  const s = d.summary || {};
+  let html = `<h2 style="margin-bottom:12px;">\u{1F504} Schema / Contract Drift</h2>
+  <div class="summary">
+    <div class="card total"><div class="value">${s.total_models || 0}</div><div class="label">Models Found</div></div>
+    <div class="card high"><div class="value">${s.missing_field_count || 0}</div><div class="label">Missing Fields</div></div>
+    <div class="card medium"><div class="value">${s.unused_field_count || 0}</div><div class="label">Unused Fields</div></div>
+    <div class="card files"><div class="value">${s.endpoints_with_models || 0}</div><div class="label">Endpoints + Models</div></div>
+  </div>`;
+  if ((d.missing_fields || []).length) {
+    html += '<h3 style="margin:16px 0 8px; color:var(--high);">Missing Fields (frontend expects, backend lacks)</h3><div class="findings-list">';
+    for (const f of d.missing_fields.slice(0, 40)) {
+      html += `<div class="finding-item" style="border-left:3px solid var(--high);"><div class="finding-header">
+        <span class="sev-badge sev-HIGH">HIGH</span>
+        <code>${esc(f.model)}.${esc(f.field)}</code> \u2014 ${esc(f.description || '')}
+        <span class="file-ref">${esc(f.model_file||'')}:${f.model_line||''}</span></div></div>`;
+    }
+    html += '</div>';
+  }
+  if ((d.unused_fields || []).length) {
+    html += '<h3 style="margin:16px 0 8px; color:var(--medium);">Unused Fields (in model, not used by frontend)</h3><div class="findings-list">';
+    for (const f of d.unused_fields.slice(0, 40)) {
+      html += `<div class="finding-item" style="border-left:3px solid var(--medium);"><div class="finding-header">
+        <span class="sev-badge sev-LOW">LOW</span>
+        <code>${esc(f.model)}.${esc(f.field)}</code> : ${esc(f.field_type||'')}
+        <span class="file-ref">${esc(f.model_file||'')}:${f.model_line||''}</span></div></div>`;
+    }
+    html += '</div>';
+  }
+  if ((d.models || []).length) {
+    html += `<h3 style="margin:16px 0 8px;">Models (${d.models.length})</h3>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px;">`;
+    for (const m of d.models.slice(0, 20)) {
+      const fields = Object.entries(m.fields || {}).map(([k,v]) => `${k}: ${v}`).join(', ');
+      html += `<div class="card" style="text-align:left; padding:10px;"><strong>${esc(m.name)}</strong>
+        <span style="color:var(--text2); font-size:11px;"> (${esc(m.base)})</span><br>
+        <code style="font-size:11px; color:var(--text2);">${esc(fields).substring(0, 120)}</code><br>
+        <span class="file-ref" style="font-size:11px;">${esc(m.file)}:${m.line}</span></div>`;
+    }
+    html += '</div>';
+  }
+  return html;
+}
+
+function renderCoverageMapView() {
+  const d = coverageMapData;
+  if (!d) return '<div class="empty-state"><h3>Run Coverage Map first</h3><p>Maps which endpoints, functions and components are tested vs untested.</p></div>';
+  const s = d.summary || {};
+  const score = s.coverage_score || 0;
+  const scoreColor = score >= 70 ? 'var(--green)' : score >= 40 ? 'var(--medium)' : 'var(--high)';
+  let html = `<h2 style="margin-bottom:12px;">\u{1F4CA} Component Coverage Map</h2>
+  <div class="summary">
+    <div class="card"><div class="value" style="color:${scoreColor}">${score}%</div><div class="label">Coverage Score</div></div>
+    <div class="card files"><div class="value">${s.tested_endpoints||0}/${s.total_endpoints||0}</div><div class="label">Endpoints</div></div>
+    <div class="card files"><div class="value">${s.tested_functions||0}/${s.total_functions||0}</div><div class="label">Functions</div></div>
+    <div class="card files"><div class="value">${s.tested_components||0}/${s.total_components||0}</div><div class="label">Components</div></div>
+    <div class="card total"><div class="value">${s.test_file_count||0}</div><div class="label">Test Files</div></div>
+  </div>`;
+  // Coverage bar
+  html += `<div style="margin:16px 0; background:var(--bg3); border-radius:var(--radius); height:24px; overflow:hidden; position:relative;">
+    <div style="background:${scoreColor}; height:100%; width:${score}%; transition:width .3s;"></div>
+    <span style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:12px; font-weight:600;">${score}% covered</span>
+  </div>`;
+  if ((d.untested_endpoints || []).length) {
+    html += `<h3 style="margin:16px 0 8px; color:var(--high);">Untested Endpoints (${d.untested_endpoints.length})</h3><div class="findings-list">`;
+    for (const ep of d.untested_endpoints.slice(0, 30)) {
+      html += `<div class="finding-item" style="border-left:3px solid var(--high);"><div class="finding-header">
+        \u274C <code>${esc(ep.url)}</code> <span class="file-ref">${esc(ep.file)}:${ep.line}</span></div></div>`;
+    }
+    html += '</div>';
+  }
+  if ((d.untested_functions || []).length) {
+    html += `<h3 style="margin:16px 0 8px; color:var(--medium);">Untested Functions (${Math.min(d.untested_functions.length, 50)} of ${d.untested_functions.length})</h3><div class="findings-list">`;
+    for (const fn of d.untested_functions.slice(0, 50)) {
+      html += `<div class="finding-item" style="border-left:3px solid var(--medium);"><div class="finding-header">
+        <code>${esc(fn.name)}</code> <span class="file-ref">${esc(fn.file)}:${fn.line}</span></div></div>`;
+    }
+    html += '</div>';
+  }
+  return html;
+}
+
+function renderIntegTestsView() {
+  const d = integrationTestsData;
+  if (!d) return '<div class="empty-state"><h3>Run Gen Integ Tests first</h3><p>Auto-generates pytest integration tests for all discovered endpoints.</p></div>';
+  let html = `<h2 style="margin-bottom:12px;">\u{1F9EA} Integration Test Generator</h2>
+  <div class="summary">
+    <div class="card files"><div class="value">${d.tests_generated || 0}</div><div class="label">Tests Generated</div></div>
+    <div class="card total"><div class="value">${d.endpoints_found || 0}</div><div class="label">Endpoints</div></div>
+    <div class="card total"><div class="value">${d.modules_found || 0}</div><div class="label">Modules</div></div>
+    <div class="card total"><div class="value">${d.cross_imports_found || 0}</div><div class="label">Cross Imports</div></div>
+  </div>`;
+  if (d.output_suggestion) {
+    html += `<div style="margin:12px 0; padding:10px; background:rgba(0,240,255,0.06); border:1px solid rgba(0,240,255,0.15); border-radius:var(--radius); font-size:13px;">
+      Output: <code>${esc(d.output_suggestion)}</code>
+      <button class="btn btn-sm" style="margin-left:12px;" onclick="copyToClipboard(integrationTestsData.test_code)">Copy Code</button>
+    </div>`;
+  }
+  if (d.test_code) {
+    html += `<h3 style="margin:16px 0 8px;">Generated Test Code</h3>
+    <pre style="background:var(--bg3); padding:16px; border-radius:var(--radius); overflow-x:auto; font-size:12px; max-height:600px; overflow-y:auto;">${esc(d.test_code)}</pre>`;
+  }
+  return html;
+}
+
+function renderDesignReviewView() {
+  const d = designReviewData;
+  if (!d) return '<div class="empty-state"><h3>Run Design Review first</h3><p>LLM-powered (or rule-based) architecture analysis with recommendations.</p></div>';
+  const source = d.source === 'llm' ? '\u{1F916} LLM-Powered' : '\u{1F4CB} Rule-Based';
+  let html = `<h2 style="margin-bottom:12px;">\u{1F3D7} Design Review <span style="font-size:13px; color:var(--text2); font-weight:400;">(${source})</span></h2>`;
+  // Architecture summary cards
+  const arch = d.architecture_summary || {};
+  const fc = d.file_counts || {};
+  html += `<div class="summary">`;
+  if (arch.health) html += `<div class="card ${(arch.health.score||0) >= 70 ? 'files' : 'high'}"><div class="value">${arch.health.score||'?'}%</div><div class="label">Health</div></div>`;
+  if (arch.connections) {
+    html += `<div class="card files"><div class="value">${arch.connections.wired||0}</div><div class="label">Wired</div></div>`;
+    html += `<div class="card high"><div class="value">${arch.connections.orphan_ui||0}</div><div class="label">Orphan UI</div></div>`;
+  }
+  if (arch.smells) html += `<div class="card medium"><div class="value">${arch.smells.total||0}</div><div class="label">Smells</div></div>`;
+  if (arch.dead_code) html += `<div class="card medium"><div class="value">${arch.dead_code.count||0}</div><div class="label">Dead Code</div></div>`;
+  html += `</div>`;
+  // Findings
+  if ((d.findings || []).length) {
+    html += '<div class="findings-list" style="margin-top:16px;">';
+    for (const f of d.findings) {
+      const sev = f.severity || 'MEDIUM';
+      const col = sev === 'HIGH' ? 'high' : sev === 'MEDIUM' ? 'medium' : 'low';
+      html += `<div class="finding-item" style="border-left:3px solid var(--${col}); margin-bottom:8px;">
+        <div class="finding-header"><span class="sev-badge sev-${sev}">${sev}</span>
+          <strong>${esc(f.title || '')}</strong>
+          <span style="color:var(--text2); font-size:12px; margin-left:8px;">${esc(f.category || '')}</span></div>
+        <div style="padding:8px 12px; font-size:13px; color:var(--text2);">${esc(f.detail || '')}</div>
+        <div style="padding:4px 12px 8px; font-size:12px; color:var(--accent);">\u{1F4A1} ${esc(f.recommendation || '')}</div>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  if (d.recommendation) {
+    html += `<div style="margin:16px 0; padding:14px; background:rgba(0,240,255,0.06); border:1px solid rgba(0,240,255,0.15); border-radius:var(--radius);">
+      <strong>Overall Recommendation:</strong><br><span style="font-size:14px;">${esc(d.recommendation)}</span></div>`;
+  }
+  return html;
+}
+
+function renderWatcherView() {
+  const d = watcherStatus;
+  const running = d && d.running;
+  let html = `<h2 style="margin-bottom:12px;">\u{1F440} File Watcher</h2>`;
+  if (!running && !d) {
+    html += `<div class="empty-state"><h3>Watcher not running</h3><p>Click "Watch Mode" in the sidebar to start monitoring files for changes.</p></div>`;
+    return html;
+  }
+  html += `<div class="summary">
+    <div class="card ${running ? 'files' : 'total'}"><div class="value">${running ? '\u{1F7E2} ON' : '\u{1F534} OFF'}</div><div class="label">Status</div></div>
+    <div class="card total"><div class="value">${d.watched_files || 0}</div><div class="label">Files Watched</div></div>
+    <div class="card total"><div class="value">${d.scan_count || 0}</div><div class="label">Scans Run</div></div>
+    <div class="card total"><div class="value">${(d.recent_events||[]).length}</div><div class="label">Recent Events</div></div>
+  </div>`;
+  const events = (d.recent_events || []).slice(-20).reverse();
+  if (events.length) {
+    html += '<h3 style="margin:16px 0 8px;">Recent Changes</h3><div class="findings-list">';
+    for (const e of events) {
+      const icon = e.type === 'created' ? '\u{2795}' : e.type === 'deleted' ? '\u{274C}' : '\u{270F}';
+      const col = e.type === 'created' ? 'green' : e.type === 'deleted' ? 'high' : 'accent';
+      html += `<div class="finding-item" style="border-left:3px solid var(--${col});"><div class="finding-header">
+        ${icon} <code>${esc(e.file)}</code>
+        <span style="color:var(--text2); font-size:11px; margin-left:auto;">${e.type}</span></div></div>`;
+    }
+    html += '</div>';
+  }
+  const scans = (d.recent_scans || []).slice(-10).reverse();
+  if (scans.length) {
+    html += '<h3 style="margin:16px 0 8px;">Recent Incremental Scans</h3><div class="findings-list">';
+    for (const s of scans) {
+      html += `<div class="finding-item" style="border-left:3px solid var(--accent);"><div class="finding-header">
+        Scan #${s.scan_number}: ${s.files_scanned} files \u2192 ${s.findings} findings
+        <span style="color:var(--text2); font-size:11px; margin-left:auto;">${(s.changed_files||[]).join(', ')}</span></div></div>`;
+    }
+    html += '</div>';
+  }
+  return html;
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard'));
+}
+
 // ── Wire Connector Test ──────────────────────────────────────────
 async function runWireTest() {
   if (!selectedDir || wireTestingActive) return;

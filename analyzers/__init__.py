@@ -82,6 +82,14 @@ from analyzers.smells import (
 # ── Temporal coupling ──
 from analyzers.temporal import analyze_temporal_coupling
 
+# ── New v0.5 analyzers ──
+from analyzers.orphan_map import analyze_orphan_map
+from analyzers.contracts import verify_contract
+from analyzers.integration_tests import generate_integration_tests
+from analyzers.schema_drift import detect_schema_drift
+from analyzers.coverage_map import compute_coverage_map
+from analyzers.design_review import design_review
+
 __all__ = [
     "_PY_EXTS",
     # Shared
@@ -132,4 +140,11 @@ __all__ = [
     # Security
     "run_bandit",
     "run_typecheck",
+    # v0.5 analyzers
+    "analyze_orphan_map",
+    "compute_coverage_map",
+    "design_review",
+    "detect_schema_drift",
+    "generate_integration_tests",
+    "verify_contract",
 ]
